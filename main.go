@@ -14,8 +14,19 @@
 
 package main
 
-import "github.com/awslabs/ssosync/cmd"
+import (
+	"fmt"
+
+	"github.com/awslabs/ssosync/cmd"
+)
+
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
+	builtBy = "unknown"
+)
 
 func main() {
-	cmd.Execute()
+	cmd.Execute(fmt.Sprintf("%s, commit %s, built at %s by %s\n", version, commit, date, builtBy))
 }

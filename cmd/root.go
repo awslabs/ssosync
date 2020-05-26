@@ -38,11 +38,12 @@ var (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "ssosync",
-	Short: "SSO Sync, making AWS SSO be populated automagically",
+	Version: "dev",
+	Use:     "ssosync",
+	Short:   "SSO Sync, making AWS SSO be populated automagically",
 	Long: `A command line tool to enable you to synchronise your Google
 Apps (G-Suite) users to AWS Single Sign-on (AWS SSO)
-Complete documentation is available at http://xxx`,
+Complete documentation is available at https://github.com/awslabs/ssosync`,
 	Run: func(cmd *cobra.Command, args []string) {
 		config := zap.NewDevelopmentConfig()
 		config.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
@@ -94,7 +95,8 @@ Complete documentation is available at http://xxx`,
 }
 
 // Execute is the entry point of the command
-func Execute() {
+func Execute(v string) {
+	rootCmd.SetVersionTemplate(v)
 	rootCmd.AddCommand(googleCmd)
 
 	if err := rootCmd.Execute(); err != nil {
