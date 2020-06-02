@@ -17,16 +17,12 @@ package cmd
 import (
 	"fmt"
 	"log"
-	"net/http"
 	"os"
 
-	"github.com/spf13/cobra"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
-
 	"github.com/awslabs/ssosync/internal"
-	"github.com/awslabs/ssosync/internal/aws"
-	"github.com/awslabs/ssosync/internal/google"
+
+	"github.com/aws/aws-lambda-go/lambda"
+	"github.com/spf13/cobra"
 )
 
 var (
@@ -45,63 +41,27 @@ var rootCmd = &cobra.Command{
 Apps (G-Suite) users to AWS Single Sign-on (AWS SSO)
 Complete documentation is available at https://github.com/awslabs/ssosync`,
 	Run: func(cmd *cobra.Command, args []string) {
-		config := zap.NewDevelopmentConfig()
-		config.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
-		if logDebug {
-			config.Level.SetLevel(zap.DebugLevel)
-		} else {
-			config.Level.SetLevel(zap.InfoLevel)
-		}
-
-		logger, _ := config.Build()
-		defer quietLogSync(logger)
-
-		logger.Info("Creating the Google and AWS Clients needed")
-
-		googleAuthClient, err := google.NewAuthClient(logger, googleCredPath, googleTokenPath)
-		if err != nil {
-			logger.Fatal("Failed to create Google Auth Client", zap.Error(err))
-		}
-
-		googleClient, err := google.NewClient(logger, googleAuthClient)
-		if err != nil {
-			logger.Fatal("Failed to create Google Client", zap.Error(err))
-		}
-
-		awsConfig, err := aws.ReadConfigFromFile(scimConfig)
-		if err != nil {
-			logger.Fatal("Failed to read AWS Config", zap.Error(err))
-		}
-
-		awsClient, err := aws.NewClient(
-			logger,
-			&http.Client{},
-			awsConfig)
-		if err != nil {
-			logger.Fatal("Failed to create awsClient", zap.Error(err))
-		}
-
-		c := internal.New(logger, awsClient, googleClient)
-		err = c.SyncUsers()
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		err = c.SyncGroups()
+		err := internal.DoSync(logDebug, googleCredPath, googleTokenPath, scimConfig)
 		if err != nil {
 			log.Fatal(err)
 		}
 	},
 }
 
-// Execute is the entry point of the command
+// Execute is the entry point of the command. If we are
+// running inside of AWS Lambda, we use the Lambda
+// execution path.
 func Execute(v string) {
-	rootCmd.SetVersionTemplate(v)
-	rootCmd.AddCommand(googleCmd)
+	if !inLambda() {
+		rootCmd.SetVersionTemplate(v)
+		rootCmd.AddCommand(googleCmd)
 
-	if err := rootCmd.Execute(); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+		if err := rootCmd.Execute(); err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+	} else {
+		lambda.Start(lambdaHandler)
 	}
 }
 
@@ -110,11 +70,4 @@ func init() {
 	rootCmd.Flags().StringVarP(&googleTokenPath, "googleTokenPath", "t", "token.json", "set the path to find token for Google")
 	rootCmd.Flags().StringVarP(&scimConfig, "scimConfig", "s", "aws.toml", "AWS SSO SCIM Configuration")
 	rootCmd.Flags().BoolVarP(&logDebug, "debug", "d", false, "Enable verbose / debug logging")
-}
-
-func quietLogSync(l *zap.Logger) {
-	err := l.Sync()
-	if err != nil {
-		return
-	}
 }

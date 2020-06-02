@@ -15,7 +15,10 @@
 package internal
 
 import (
+	"net/http"
+
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	admin "google.golang.org/api/admin/directory/v1"
 
 	"github.com/awslabs/ssosync/internal/aws"
@@ -195,5 +198,67 @@ func (s *SyncGSuite) SyncGroups() error {
 	}
 
 	s.logger.Info("Done sync groups")
+	return nil
+}
+
+// QuietLogSync will squash logging errors when calling
+// sync on the logger.
+func QuietLogSync(l *zap.Logger) {
+	err := l.Sync()
+	if err != nil {
+		return
+	}
+}
+
+// DoSync will create a logger and run the sync with the paths
+// given to do the sync.
+func DoSync(debug bool, credPath string, tokenPath string, awsTomlPath string) error {
+	config := zap.NewDevelopmentConfig()
+	config.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
+	if debug {
+		config.Level.SetLevel(zap.DebugLevel)
+	} else {
+		config.Level.SetLevel(zap.InfoLevel)
+	}
+
+	logger, _ := config.Build()
+	defer QuietLogSync(logger)
+
+	logger.Info("Creating the Google and AWS Clients needed")
+
+	googleAuthClient, err := google.NewAuthClient(logger, credPath, tokenPath)
+	if err != nil {
+		logger.Fatal("Failed to create Google Auth Client", zap.Error(err))
+	}
+
+	googleClient, err := google.NewClient(logger, googleAuthClient)
+	if err != nil {
+		logger.Fatal("Failed to create Google Client", zap.Error(err))
+	}
+
+	awsConfig, err := aws.ReadConfigFromFile(awsTomlPath)
+	if err != nil {
+		logger.Fatal("Failed to read AWS Config", zap.Error(err))
+	}
+
+	awsClient, err := aws.NewClient(
+		logger,
+		&http.Client{},
+		awsConfig)
+	if err != nil {
+		logger.Fatal("Failed to create awsClient", zap.Error(err))
+	}
+
+	c := New(logger, awsClient, googleClient)
+	err = c.SyncUsers()
+	if err != nil {
+		return err
+	}
+
+	err = c.SyncGroups()
+	if err != nil {
+		return err
+	}
+
 	return nil
 }

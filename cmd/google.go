@@ -15,6 +15,7 @@
 package cmd
 
 import (
+	"github.com/awslabs/ssosync/internal"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -31,7 +32,7 @@ var googleCmd = &cobra.Command{
 		config.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
 		config.Level.SetLevel(zap.DebugLevel)
 		logger, _ := config.Build()
-		defer quietLogSync(logger)
+		defer internal.QuietLogSync(logger)
 
 		credPath, err := cmd.Flags().GetString("path")
 		if err != nil {
