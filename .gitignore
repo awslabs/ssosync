@@ -17,5 +17,8 @@
 aws.toml
 credentials.json
 token.json
-.idea/
 dist/
+
+# IDE
+.idea/
+.vscode/

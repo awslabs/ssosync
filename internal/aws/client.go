@@ -25,7 +25,7 @@ import (
 	"path"
 	"strconv"
 
-	"go.uber.org/zap"
+	log "github.com/sirupsen/logrus"
 )
 
 // OperationType handle patch operations for add/remove
@@ -56,7 +56,6 @@ type IClient interface {
 
 // Client represents an AWS SSO SCIM client
 type Client struct {
-	logger      *zap.Logger
 	httpClient  IHttpClient
 	endpointURL *url.URL
 	bearerToken string
@@ -65,13 +64,12 @@ type Client struct {
 // NewClient creates a new client to talk with AWS SSO's SCIM endpoint. It
 // required a http.Client{} as well as the URL and bearer token from the
 /// console. If the URL is not parsable, an error will be thrown.
-func NewClient(logger *zap.Logger, client IHttpClient, config *Config) (IClient, error) {
+func NewClient(client IHttpClient, config *Config) (IClient, error) {
 	u, err := url.Parse(config.Endpoint)
 	if err != nil {
 		return nil, err
 	}
 	return &Client{
-		logger:      logger,
 		httpClient:  client,
 		endpointURL: u,
 		bearerToken: config.Token,
@@ -93,7 +91,7 @@ func (c *Client) sendRequestWithBody(method string, url string, body interface{}
 		return
 	}
 
-	c.logger.Debug("sendRequestWithBody", zap.String("url", url), zap.String("method", method))
+	log.WithFields(log.Fields{"url": url, "method": method})
 
 	// Set the content-type and authorization headers
 	r.Header.Set("Content-Type", "application/scim+json")
@@ -126,7 +124,7 @@ func (c *Client) sendRequest(method string, url string) (response []byte, err er
 		return
 	}
 
-	c.logger.Debug("sendRequest", zap.String("url", url), zap.String("method", method))
+	log.WithFields(log.Fields{"url": url, "method": method})
 
 	r.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.bearerToken))
 
@@ -194,20 +192,21 @@ func (c *Client) GetUsers() (results *map[string]User, err error) {
 
 	si := 1
 	for {
-		c.logger.Debug("Getting Users Page", zap.Int("startIndex", si))
+		log.WithFields(log.Fields{"startIndex": si}).Debug("Getting Users Page")
+
 		r, err := c.getUserPage(startURL, si)
 		if err != nil {
 			return nil, err
 		}
 
 		for _, user := range r.Resources {
-			c.logger.Debug("Add user to map", zap.String("username", user.Username))
+			log.WithFields(log.Fields{"username": user.Username}).Debug("Add user to map")
 			resultMap[user.Username] = user
 		}
 
 		si = si + 10
 		if si > r.TotalResults {
-			c.logger.Debug("Last Page obtained", zap.Int("totalResults", r.TotalResults))
+			log.WithFields(log.Fields{"totalResults": r.TotalResults}).Debug("Last Page obtained")
 			break
 		}
 	}
@@ -256,7 +255,7 @@ func (c *Client) GetGroups() (results *map[string]Group, err error) {
 
 	si := 1
 	for {
-		c.logger.Debug("Getting Groups Page", zap.Int("startIndex", si))
+		log.WithFields(log.Fields{"startIndex": si}).Debug("Getting Groups Page")
 
 		r, err := c.getGroupPage(startURL, si)
 		if err != nil {
@@ -264,13 +263,13 @@ func (c *Client) GetGroups() (results *map[string]Group, err error) {
 		}
 
 		for _, group := range r.Resources {
-			c.logger.Debug("Add group to map", zap.String("group", group.DisplayName))
+			log.WithFields(log.Fields{"group": group.DisplayName}).Debug("Add group to map")
 			resultGroup[group.DisplayName] = group
 		}
 
 		si = si + 10
 		if si > r.TotalResults {
-			c.logger.Debug("Last Page obtained", zap.Int("totalResults", r.TotalResults))
+			log.WithFields(log.Fields{"totalResults": r.TotalResults}).Debug("Last Page obtained")
 			break
 		}
 	}
@@ -325,11 +324,7 @@ func (c *Client) groupChangeOperation(op OperationType, u *User, g *Group) error
 		return errors.New("no user specified")
 	}
 
-	c.logger.Debug("groupChangeOperation",
-		zap.String("operation", string(op)),
-		zap.String("user", u.Username),
-		zap.String("group", g.DisplayName),
-	)
+	log.WithFields(log.Fields{"operations": op, "user": u.Username, "group": g.DisplayName}).Debug("Group Change")
 
 	gc := &GroupMemberChange{
 		Schemas: []string{"urn:ietf:params:scim:api:messages:2.0:PatchOp"},

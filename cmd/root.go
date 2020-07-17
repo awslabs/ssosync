@@ -16,22 +16,25 @@ package cmd
 
 import (
 	"fmt"
-	"log"
-	"os"
 
 	"github.com/awslabs/ssosync/internal"
+	"github.com/awslabs/ssosync/internal/config"
+	"github.com/pkg/errors"
 
 	"github.com/aws/aws-lambda-go/lambda"
+	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 var (
-	googleCredPath  string
-	googleTokenPath string
-	scimConfig      string
-
-	logDebug bool
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
+	builtBy = "unknown"
 )
+
+var cfg *config.Config
 
 var rootCmd = &cobra.Command{
 	Version: "dev",
@@ -40,34 +43,85 @@ var rootCmd = &cobra.Command{
 	Long: `A command line tool to enable you to synchronise your Google
 Apps (G-Suite) users to AWS Single Sign-on (AWS SSO)
 Complete documentation is available at https://github.com/awslabs/ssosync`,
-	Run: func(cmd *cobra.Command, args []string) {
-		err := internal.DoSync(logDebug, googleCredPath, googleTokenPath, scimConfig)
+	RunE: func(cmd *cobra.Command, args []string) error {
+		err := internal.DoSync(cfg)
 		if err != nil {
-			log.Fatal(err)
+			return err
 		}
+
+		return nil
 	},
 }
 
 // Execute is the entry point of the command. If we are
 // running inside of AWS Lambda, we use the Lambda
 // execution path.
-func Execute(v string) {
-	if !inLambda() {
-		rootCmd.SetVersionTemplate(v)
-		rootCmd.AddCommand(googleCmd)
-
-		if err := rootCmd.Execute(); err != nil {
-			fmt.Println(err)
-			os.Exit(1)
-		}
-	} else {
+func Execute() {
+	if inLambda() {
 		lambda.Start(lambdaHandler)
+	}
+
+	if err := rootCmd.Execute(); err != nil {
+		log.Fatal(err)
 	}
 }
 
 func init() {
-	rootCmd.Flags().StringVarP(&googleCredPath, "googleCredentialsPath", "c", "credentials.json", "set the path to find credentials for Google")
-	rootCmd.Flags().StringVarP(&googleTokenPath, "googleTokenPath", "t", "token.json", "set the path to find token for Google")
-	rootCmd.Flags().StringVarP(&scimConfig, "scimConfig", "s", "aws.toml", "AWS SSO SCIM Configuration")
-	rootCmd.Flags().BoolVarP(&logDebug, "debug", "d", false, "Enable verbose / debug logging")
+	// init config
+	cfg = config.New()
+
+	// initialize cobra
+	cobra.OnInitialize(initConfig)
+
+	addFlags(rootCmd, cfg)
+
+	rootCmd.SetVersionTemplate(fmt.Sprintf("%s, commit %s, built at %s by %s\n", version, commit, date, builtBy))
+	rootCmd.AddCommand(googleCmd)
+
+	// silence on the root cmd
+	rootCmd.SilenceUsage = true
+	rootCmd.SilenceErrors = true
+}
+
+// initConfig reads in config file and ENV variables if set.
+func initConfig() {
+	// allow to read in from environment
+	viper.SetEnvPrefix("ssosync")
+	viper.AutomaticEnv()
+
+	viper.BindEnv("google_credentials")
+	viper.BindEnv("google_token")
+	viper.BindEnv("aws_toml")
+
+	if err := viper.Unmarshal(&cfg); err != nil {
+		log.Fatalf(errors.Wrap(err, "cannot unmarshal config").Error())
+	}
+
+	// config logger
+	logConfig(cfg)
+}
+
+func addFlags(cmd *cobra.Command, cfg *config.Config) {
+	rootCmd.PersistentFlags().StringVarP(&cfg.GoogleCredentialsPath, "googleCredentialsPath", "c", config.DefaultGoogleCredentialsPath, "set the path to find credentials for Google")
+	rootCmd.PersistentFlags().StringVarP(&cfg.GoogleTokenPath, "googleTokenPath", "t", config.DefaultGoogleTokenPath, "set the path to find token for Google")
+	rootCmd.PersistentFlags().BoolVarP(&cfg.Debug, "debug", "d", config.DefaultDebug, "Enable verbose / debug logging")
+	rootCmd.PersistentFlags().StringVarP(&cfg.LogFormat, "log-format", "", config.DefaultLogFormat, "log format")
+	rootCmd.PersistentFlags().StringVarP(&cfg.LogLevel, "log-level", "", config.DefaultLogLevel, "log level")
+	rootCmd.Flags().StringVarP(&cfg.SCIMConfig, "scimConfig", "s", config.DefaultSCIMConfig, "AWS SSO SCIM Configuration")
+}
+
+func logConfig(cfg *config.Config) {
+	// reset log format
+	if cfg.LogFormat == "json" {
+		log.SetFormatter(&log.JSONFormatter{})
+	}
+
+	if cfg.Debug {
+		cfg.LogLevel = "debug"
+	}
+
+	// set the configured log level
+	if level, err := log.ParseLevel(cfg.LogLevel); err == nil {
+		log.SetLevel(level)
+	}
 }

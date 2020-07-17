@@ -22,7 +22,6 @@ import (
 	"net/http"
 	"os"
 
-	"go.uber.org/zap"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	admin "google.golang.org/api/admin/directory/v1"
@@ -31,7 +30,6 @@ import (
 // AuthClient is for authenticating with Google and optionally
 // getting a token from the web interface interactively
 type AuthClient struct {
-	logger          *zap.Logger
 	credentialsPath string
 	tokenPath       string
 
@@ -39,10 +37,9 @@ type AuthClient struct {
 }
 
 // NewAuthClient creates a new AuthClient with the paths given
-func NewAuthClient(logger *zap.Logger, credPath string, tokenPath string) (*AuthClient, error) {
+func NewAuthClient(credPath string, tokenPath string) (*AuthClient, error) {
 	b, err := ioutil.ReadFile(credPath)
 	if err != nil {
-		logger.Error("Unable to read client secret file", zap.Error(err))
 		return nil, err
 	}
 
@@ -53,12 +50,10 @@ func NewAuthClient(logger *zap.Logger, credPath string, tokenPath string) (*Auth
 	)
 
 	if err != nil {
-		logger.Error("unable to parse config from JSON", zap.Error(err))
 		return nil, err
 	}
 
 	return &AuthClient{
-		logger:          logger,
 		credentialsPath: credPath,
 		tokenPath:       tokenPath,
 		config:          config,
@@ -75,35 +70,37 @@ func (a *AuthClient) GetClient() (*http.Client, error) {
 }
 
 // GetTokenFromWeb will interactively get a token from Google
-func (a *AuthClient) GetTokenFromWeb() *oauth2.Token {
+func (a *AuthClient) GetTokenFromWeb() (*oauth2.Token, error) {
 	authURL := a.config.AuthCodeURL("state-token", oauth2.AccessTypeOffline)
 	fmt.Printf("Go to the following link in your browser then type the "+
 		"authorization code: \n%v\nAuth Code: ", authURL)
 
 	var authCode string
 	if _, err := fmt.Scan(&authCode); err != nil {
-		a.logger.Fatal("Unable to read authorization code", zap.Error(err))
+		return nil, err
 	}
 
 	tok, err := a.config.Exchange(context.TODO(), authCode)
 	if err != nil {
-		a.logger.Fatal("Unable to retrieve token from web", zap.Error(err))
+		return nil, err
 	}
 
 	a.saveToken(tok)
 
-	return tok
+	return tok, nil
 }
 
 // saveToken will save the token to the token.json file
-func (a *AuthClient) saveToken(token *oauth2.Token) {
+func (a *AuthClient) saveToken(token *oauth2.Token) error {
 	fmt.Printf("Saving credential file to: %s\n", a.tokenPath)
 	f, err := os.OpenFile(a.tokenPath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
-		a.logger.Fatal("Unable to cache oauth token", zap.Error(err))
+		return err
 	}
 	defer f.Close()
 	_ = json.NewEncoder(f).Encode(token)
+
+	return nil
 }
 
 // tokenFromFile retrieves a token from a local file.

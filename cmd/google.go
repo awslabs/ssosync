@@ -15,10 +15,7 @@
 package cmd
 
 import (
-	"github.com/awslabs/ssosync/internal"
 	"github.com/spf13/cobra"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 
 	"github.com/awslabs/ssosync/internal/google"
 )
@@ -27,32 +24,16 @@ var googleCmd = &cobra.Command{
 	Use:   "google",
 	Short: "Log in to Google",
 	Long:  `Log in to Google - use me to generate the files needed for the main command`,
-	Run: func(cmd *cobra.Command, args []string) {
-		config := zap.NewDevelopmentConfig()
-		config.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
-		config.Level.SetLevel(zap.DebugLevel)
-		logger, _ := config.Build()
-		defer internal.QuietLogSync(logger)
-
-		credPath, err := cmd.Flags().GetString("path")
+	RunE: func(cmd *cobra.Command, args []string) error {
+		g, err := google.NewAuthClient(cfg.GoogleCredentialsPath, cfg.GoogleTokenPath)
 		if err != nil {
-			logger.Fatal("No path available", zap.Error(err))
-		}
-		tokenPath, err := cmd.Flags().GetString("tokenPath")
-		if err != nil {
-			logger.Fatal("No tokenPath available", zap.Error(err))
+			return err
 		}
 
-		g, err := google.NewAuthClient(logger, credPath, tokenPath)
-		if err != nil {
-			logger.Fatal("Unable to create google auth client", zap.Error(err))
+		if _, err := g.GetTokenFromWeb(); err != nil {
+			return err
 		}
 
-		g.GetTokenFromWeb()
+		return nil
 	},
-}
-
-func init() {
-	googleCmd.Flags().String("path", "credentials.json", "set the path to find credentials")
-	googleCmd.Flags().String("tokenPath", "token.json", "set the path to put token.json output into")
 }

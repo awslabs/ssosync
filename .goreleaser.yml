@@ -20,6 +20,8 @@ builds:
       goarch: 386
 checksum:
   name_template: '{{ .ProjectName }}_checksums.txt'
+ldflags:
+     - -s -w -X github.com/awslabs/ssosync/cmd.version={{.Version}} -X github.com/awslabs/ssosync/cmd.commit={{.Commit}} -X github.com/awslabs/ssosync/cmd.date={{.Date}} -X github.com/awslabs/ssosync/cmd.builtBy=goreleaser
 changelog:
   sort: asc
   filters:

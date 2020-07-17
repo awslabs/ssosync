@@ -24,12 +24,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/secretsmanager"
 	"github.com/awslabs/ssosync/internal"
-)
-
-const (
-	envSecretGoogleCredentials = "SSOSYNC_GOOGLE_CREDENTIALS"
-	envSecretGoogleToken       = "SSOSYNC_GOOGLE_TOKEN"
-	envSecretAwsToml           = "SSOSYNC_AWS_TOML"
+	"github.com/awslabs/ssosync/internal/config"
 )
 
 // inLambda detects if we are running Lambda and will
@@ -91,29 +86,12 @@ func removeFileSilently(name string) {
 }
 
 // lambdaHandler is the Lambda entry point
-func lambdaHandler() error {
-	cred, err := writeSecretToFile(os.Getenv(envSecretGoogleCredentials), "gcredentials")
-	if err != nil {
-		return err
-	}
-	defer removeFileSilently(cred)
+func lambdaHandler(cfg *config.Config) func() error {
+	return func() error {
+		if err := internal.DoSync(cfg); err != nil {
+			return err
+		}
 
-	t, err := writeSecretToFile(os.Getenv(envSecretGoogleToken), "gtoken")
-	if err != nil {
-		return err
+		return nil
 	}
-	defer removeFileSilently(t)
-
-	a, err := writeSecretToFile(os.Getenv(envSecretAwsToml), "awstoml")
-	if err != nil {
-		return err
-	}
-	defer removeFileSilently(a)
-
-	err = internal.DoSync(true, cred, t, a)
-	if err != nil {
-		return err
-	}
-
-	return nil
 }

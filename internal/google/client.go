@@ -18,7 +18,6 @@ import (
 	"context"
 	"net/http"
 
-	"go.uber.org/zap"
 	admin "google.golang.org/api/admin/directory/v1"
 	"google.golang.org/api/option"
 )
@@ -32,13 +31,12 @@ type IClient interface {
 
 // Client is the Google Apps for Domains Client
 type Client struct {
-	logger  *zap.Logger
 	client  *http.Client
 	service *admin.Service
 }
 
 // NewClient creates a new client for Google's Admin API
-func NewClient(logger *zap.Logger, client *AuthClient) (IClient, error) {
+func NewClient(client *AuthClient) (IClient, error) {
 	c, err := client.GetClient()
 	if err != nil {
 		return nil, err
@@ -50,7 +48,6 @@ func NewClient(logger *zap.Logger, client *AuthClient) (IClient, error) {
 	}
 
 	return &Client{
-		logger:  logger,
 		client:  c,
 		service: srv,
 	}, nil
