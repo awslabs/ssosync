@@ -29,12 +29,15 @@ Parameters:
   GoogleCredentials:
     Type: String
     Description: Credentials to log into Google
-  GoogleToken:
+  GoogleAdminEmail:
     Type: String
-    Description: Token to use Google APIs
-  AWSToml:
+    Description: Google Admin email
+  SCIMEndpointUrl:
     Type: String
-    Description: TOML file from AWS SSO
+    Description: AWS SSO SCIM Endpoint Url
+  SCIMEndpointAccessToken:
+    Type: String
+    Description: AWS SSO SCIM AccessToken
 
 Resources:
   SSOSyncFunction:
@@ -46,30 +49,46 @@ Resources:
         Variables:
           SSOSYNC_LOG_LEVEL: !Ref LogLevel
           SSOSYNC_LOG_FORMAT: !Ref LogFormat
-          SSOSYNC_GOOGLE_CREDENTIALS: !Ref GoogleCredentials
-          SSOSYNC_GOOGLE_TOKEN: !Ref GoogleToken
-          SSOSYNC_AWS_TOML: !Ref AWSToml
-    Events:
-      SyncScheduledEvent:
-        Type: Schedule
-        Properties:
-          Schedule: rate(30 minutes)
+          SSOSYNC_GOOGLE_CREDENTIALS: !Ref AWSGoogleCredentialsSecret
+          SSOSYNC_GOOGLE_ADMIN: !Ref AWSGoogleAdminEamil
+          SSOSYNC_SCIM_ENDPOINT: !Ref AWSSCIMEndpointSecret
+          SSOSYNC_SCIM_ACCESS_TOKEN: !Ref AWSSCIMAccessTokenSecret
+      Policies:
+        - Statement:
+          - Sid: SSMGetParameterPolicy
+            Effect: Allow
+            Action:
+              - "secretsmanager:Get*"
+            Resource: '*'
+      Events:
+        SyncScheduledEvent:
+          Type: Schedule
+          Name: AWSSyncSchedule
+          Properties:
+            Enabled: true
+            Schedule: 'rate(15 minutes)'
 
-  GoogleCredentialsSecret:
+  AWSGoogleCredentialsSecret:
     Type: 'AWS::SecretsManager::Secret'
     Properties:
       Name: SSOSyncGoogleCredentials
       SecretString: !Ref GoogleCredentials
 
-  GoogleTokenSecret:
+  AWSGoogleAdminEamil:
     Type: 'AWS::SecretsManager::Secret'
     Properties:
-      Name: SSOSyncGoogleToken
-      SecretString: !Ref GoogleToken
+      Name: SSOSyncGoogleAdminEmail
+      SecretString: !Ref GoogleAdminEmail
 
-  AWSTomlSecret: # This can be moved to custom provider
+  AWSSCIMEndpointSecret: # This can be moved to custom provider
     Type: 'AWS::SecretsManager::Secret'
     Properties:
-      Name: SSOSyncAWSToml
-      SecretString: !Ref AWSToml
+      Name: SSOSyncSCIMEndpointUrl
+      SecretString: !Ref SCIMEndpointUrl
+
+  AWSSCIMAccessTokenSecret: # This can be moved to custom provider
+    Type: 'AWS::SecretsManager::Secret'
+    Properties:
+      Name: SSOSyncSCIMAccessToken
+      SecretString: !Ref SCIMEndpointAccessToken
 

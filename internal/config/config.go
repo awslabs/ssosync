@@ -1,6 +1,6 @@
 package config
 
-// Config contains a configuration for Autobot
+// Config ...
 type Config struct {
 	// Verbose toggles the verbosity
 	Debug bool
@@ -16,6 +16,8 @@ type Config struct {
 	SCIMEndpoint string `mapstructure:"scim_endpoint"`
 	// SCIMAccessToken ...
 	SCIMAccessToken string `mapstructure:"scim_access_token"`
+	// IsLambda ...
+	IsLambda bool
 }
 
 const (

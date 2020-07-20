@@ -16,12 +16,15 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/awslabs/ssosync/internal"
 	"github.com/awslabs/ssosync/internal/config"
-	"github.com/pkg/errors"
 
 	"github.com/aws/aws-lambda-go/lambda"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/secretsmanager"
+	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -57,8 +60,8 @@ Complete documentation is available at https://github.com/awslabs/ssosync`,
 // running inside of AWS Lambda, we use the Lambda
 // execution path.
 func Execute() {
-	if inLambda() {
-		lambda.Start(lambdaHandler(cfg))
+	if cfg.IsLambda {
+		lambda.Start(rootCmd.Execute)
 	}
 
 	if err := rootCmd.Execute(); err != nil {
@@ -69,6 +72,7 @@ func Execute() {
 func init() {
 	// init config
 	cfg = config.New()
+	cfg.IsLambda = len(os.Getenv("_LAMBDA_SERVER_PORT")) > 0
 
 	// initialize cobra
 	cobra.OnInitialize(initConfig)
@@ -87,12 +91,11 @@ func initConfig() {
 	viper.SetEnvPrefix("ssosync")
 	viper.AutomaticEnv()
 
-	viper.BindEnv("google_admin")
-	viper.BindEnv("google_credentials")
-	viper.BindEnv("scim_access_token")
-	viper.BindEnv("scim_endpoint")
-	viper.BindEnv("log_level")
-	viper.BindEnv("log_format")
+	for _, e := range []string{"google_admin", "google_credentials", "scim_access_token", "scim_endpoint", "log_level", "log_format"} {
+		if err := viper.BindEnv(e); err != nil {
+			log.Fatalf(errors.Wrap(err, "cannot bind environment variable").Error())
+		}
+	}
 
 	if err := viper.Unmarshal(&cfg); err != nil {
 		log.Fatalf(errors.Wrap(err, "cannot unmarshal config").Error())
@@ -100,6 +103,40 @@ func initConfig() {
 
 	// config logger
 	logConfig(cfg)
+
+	if cfg.IsLambda {
+		configLambda()
+	}
+}
+
+func configLambda() {
+	s := session.Must(session.NewSession())
+	svc := secretsmanager.New(s)
+	secrets := config.NewSecrets(svc)
+
+	unwrap, err := secrets.GoogleAdminEmail()
+	if err != nil {
+		log.Fatalf(errors.Wrap(err, "cannot read config").Error())
+	}
+	cfg.GoogleAdmin = unwrap
+
+	unwrap, err = secrets.GoogleCredentials()
+	if err != nil {
+		log.Fatalf(errors.Wrap(err, "cannot read config").Error())
+	}
+	cfg.GoogleCredentials = unwrap
+
+	unwrap, err = secrets.SCIMAccessToken()
+	if err != nil {
+		log.Fatalf(errors.Wrap(err, "cannot read config").Error())
+	}
+	cfg.SCIMAccessToken = unwrap
+
+	unwrap, err = secrets.SCIMEndpointUrl()
+	if err != nil {
+		log.Fatalf(errors.Wrap(err, "cannot read config").Error())
+	}
+	cfg.SCIMEndpoint = unwrap
 }
 
 func addFlags(cmd *cobra.Command, cfg *config.Config) {

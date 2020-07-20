@@ -5,7 +5,7 @@ go 1.14
 require (
 	github.com/BurntSushi/toml v0.3.1
 	github.com/aws/aws-lambda-go v1.17.0
-	github.com/aws/aws-sdk-go v1.31.7
+	github.com/aws/aws-sdk-go v1.33.7
 	github.com/golang/mock v1.4.3
 	github.com/golang/protobuf v1.4.1 // indirect
 	github.com/pkg/errors v0.9.1

@@ -210,12 +210,17 @@ func (s *SyncGSuite) SyncGroups() error {
 func DoSync(cfg *config.Config) error {
 	log.Info("Creating the Google and AWS Clients needed")
 
-	b, err := ioutil.ReadFile(cfg.GoogleCredentials)
-	if err != nil {
-		return err
+	creds := []byte(cfg.GoogleCredentials)
+
+	if !cfg.IsLambda {
+		b, err := ioutil.ReadFile(cfg.GoogleCredentials)
+		if err != nil {
+			return err
+		}
+		creds = b
 	}
 
-	googleClient, err := google.NewClient(cfg.GoogleAdmin, b)
+	googleClient, err := google.NewClient(cfg.GoogleAdmin, creds)
 	if err != nil {
 		return err
 	}

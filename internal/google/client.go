@@ -16,7 +16,6 @@ package google
 
 import (
 	"context"
-	"fmt"
 
 	"golang.org/x/oauth2/google"
 	admin "google.golang.org/api/admin/directory/v1"
@@ -69,8 +68,6 @@ func (c *client) GetUsers() (u []*admin.User, err error) {
 		u = append(u, users.Users...)
 		return nil
 	})
-
-	fmt.Println(err)
 
 	return u, err
 }

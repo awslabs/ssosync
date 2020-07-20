@@ -126,6 +126,16 @@ AWS SSO. To sync. regularly, you can run ssosync via AWS Lambda.
 You will find using the provided CDK deployment scripts the easiest method. Install
 the [AWS CDK](https://aws.amazon.com/cdk/) before you start.
 
+## SAM
+
+You can use the AWS Serverless Application Model (SAM) to deploy this to your account.
+
+> Please, install the [AWS SAM CLI](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-install.html).
+
+Specify an Amazon S3 Bucket for the upload with `export S3_BUCKET=<YOUR_BUCKET>`.
+
+Execute `make package` in the console. Which will package and upload the function to the bucket. You can then use the `packaged.yaml` to configure and deploy the stack in [AWS CloudFormation Console](https://console.aws.amazon.com/cloudformation).
+
 ### Using the right binary for AWS Lambda
 
 You require the AMD64 binary for AWS Lambda. This can be either downloaded from the

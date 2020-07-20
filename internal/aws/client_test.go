@@ -57,7 +57,6 @@ func (r *httpReqMatcher) Matches(req interface{}) bool {
 	if m.Body != nil {
 		got, _ := ioutil.ReadAll(m.Body)
 		if string(got) != r.body {
-			fmt.Println(string(got))
 			return false
 		}
 	}
