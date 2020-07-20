@@ -16,8 +16,9 @@ package google
 
 import (
 	"context"
-	"net/http"
+	"fmt"
 
+	"golang.org/x/oauth2/google"
 	admin "google.golang.org/api/admin/directory/v1"
 	"google.golang.org/api/option"
 )
@@ -30,24 +31,33 @@ type Client interface {
 }
 
 type client struct {
-	client  *http.Client
+	ctx     context.Context
 	service *admin.Service
 }
 
 // NewClient creates a new client for Google's Admin API
-func NewClient(auth *AuthClient) (Client, error) {
-	c, err := auth.GetClient()
+func NewClient(adminEmail string, serviceAccountKey []byte) (Client, error) {
+	ctx := context.Background()
+
+	config, err := google.JWTConfigFromJSON(serviceAccountKey, admin.AdminDirectoryGroupReadonlyScope,
+		admin.AdminDirectoryGroupMemberReadonlyScope,
+		admin.AdminDirectoryUserReadonlyScope)
+
+	config.Subject = adminEmail
+
 	if err != nil {
 		return nil, err
 	}
 
-	srv, err := admin.NewService(context.TODO(), option.WithHTTPClient(c))
+	ts := config.TokenSource(ctx)
+
+	srv, err := admin.NewService(ctx, option.WithTokenSource(ts))
 	if err != nil {
 		return nil, err
 	}
 
 	return &client{
-		client:  c,
+		ctx:     ctx,
 		service: srv,
 	}, nil
 }
@@ -55,12 +65,14 @@ func NewClient(auth *AuthClient) (Client, error) {
 // GetUsers will get the users from Google's Admin API
 func (c *client) GetUsers() (u []*admin.User, err error) {
 	u = make([]*admin.User, 0)
-	err = c.service.Users.List().Customer("my_customer").Pages(context.TODO(), func(users *admin.Users) error {
+	err = c.service.Users.List().Customer("my_customer").Pages(c.ctx, func(users *admin.Users) error {
 		u = append(u, users.Users...)
 		return nil
 	})
 
-	return
+	fmt.Println(err)
+
+	return u, err
 }
 
 // GetGroups will get the groups from Google's Admin API
@@ -71,7 +83,7 @@ func (c *client) GetGroups() (g []*admin.Group, err error) {
 		return nil
 	})
 
-	return
+	return g, err
 }
 
 // GetGroupMembers will get the members of the group specified
@@ -82,5 +94,5 @@ func (c *client) GetGroupMembers(g *admin.Group) (m []*admin.Member, err error) 
 		return nil
 	})
 
-	return
+	return m, err
 }

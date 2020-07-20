@@ -72,11 +72,9 @@ func init() {
 
 	// initialize cobra
 	cobra.OnInitialize(initConfig)
-
 	addFlags(rootCmd, cfg)
 
 	rootCmd.SetVersionTemplate(fmt.Sprintf("%s, commit %s, built at %s by %s\n", version, commit, date, builtBy))
-	rootCmd.AddCommand(googleCmd)
 
 	// silence on the root cmd
 	rootCmd.SilenceUsage = true
@@ -90,8 +88,8 @@ func initConfig() {
 	viper.AutomaticEnv()
 
 	viper.BindEnv("google_credentials")
-	viper.BindEnv("google_token")
-	viper.BindEnv("aws_toml")
+	viper.BindEnv("scim_access_token")
+	viper.BindEnv("scim_endpoint")
 	viper.BindEnv("log_level")
 	viper.BindEnv("log_format")
 
@@ -104,12 +102,14 @@ func initConfig() {
 }
 
 func addFlags(cmd *cobra.Command, cfg *config.Config) {
-	rootCmd.PersistentFlags().StringVarP(&cfg.GoogleCredentialsPath, "googleCredentialsPath", "c", config.DefaultGoogleCredentialsPath, "set the path to find credentials for Google")
-	rootCmd.PersistentFlags().StringVarP(&cfg.GoogleTokenPath, "googleTokenPath", "t", config.DefaultGoogleTokenPath, "set the path to find token for Google")
+	rootCmd.PersistentFlags().StringVarP(&cfg.GoogleCredentials, "google-admin", "a", config.DefaultGoogleCredentials, "set the path to find credentials for Google")
 	rootCmd.PersistentFlags().BoolVarP(&cfg.Debug, "debug", "d", config.DefaultDebug, "Enable verbose / debug logging")
 	rootCmd.PersistentFlags().StringVarP(&cfg.LogFormat, "log-format", "", config.DefaultLogFormat, "log format")
 	rootCmd.PersistentFlags().StringVarP(&cfg.LogLevel, "log-level", "", config.DefaultLogLevel, "log level")
-	rootCmd.Flags().StringVarP(&cfg.SCIMConfig, "scimConfig", "s", config.DefaultSCIMConfig, "AWS SSO SCIM Configuration")
+	rootCmd.Flags().StringVarP(&cfg.SCIMAccessToken, "access-token", "t", "", "SCIM Access Token")
+	rootCmd.Flags().StringVarP(&cfg.SCIMEndpoint, "endpoint", "e", "", "SCIM Endpoint")
+	rootCmd.Flags().StringVarP(&cfg.GoogleCredentials, "google-credentials", "c", config.DefaultGoogleCredentials, "set the path to find credentials for Google")
+	rootCmd.Flags().StringVarP(&cfg.GoogleAdmin, "google-admin", "u", "", "Google Admin Email")
 }
 
 func logConfig(cfg *config.Config) {

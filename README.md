@@ -41,7 +41,7 @@ for regular synchronization.
 ## Configuration
 
 You need a few items of configuration. One side from AWS, and the other
-from Google Cloud / Apps to allow for API access to each. You should have configured
+from Google Cloud to allow for API access to each. You should have configured
 Google as your Identity Provider for AWS SSO already.
 
 You will need the files produced by these steps for AWS Lambda deployment as well
@@ -49,40 +49,15 @@ as locally running the ssosync tool.
 
 ### Google
 
-Head to the [Google Cloud Console](https://console.cloud.google.com/) for your Domain
-(Specifically API & Services ->
-[Credentials](https://console.cloud.google.com/projectselector2/apis/credentials))
-and Create a Project.
+First, you have to setup your API. In the project you want to use go to the [Console](https://console.developers.google.com/apis) and select *API & Services* > *Enable APIs and Services*. Search for *Admin SDK* and *Enable* the API. 
 
-Creating a project will take a few seconds. Once it is complete, you can then Configure the Consent
-Screen (there will be a clear warning and button for it). Click Through and select "Internal". Give
-a name and press Save as you don't need the rest.
+You have to perform this [tutorial](https://developers.google.com/admin-sdk/directory/v1/guides/delegation) to create a service account that you use to sync your users. Save the JSON file your create during the process and rename it to `credentials.json`. 
 
-Now go back to Credentials, Click Create Credentials and then select OAuth client ID. Select Other and
-provide a name. You will be displayed credentials, press okay and then use the download button, and a
-JSON file will download.
+> you can also use the `--google-credentials` parameter to explicitly specify the file with the service credentials. Please, keep this file safe, or store it in the AWS Secrets Manager
 
-**THIS FILE IS IMPORTANT AND SECRET - KEEP IT SAFE**
+In the domain-wide delegation for the Admin API, you have to specificy the following scopes for user.
 
-With this done, you can log in and generate a token.json file. To create the file, use the
-`ssosync google` command. With help output, it looks like this:
-
-```text
-Log in to Google - use me to generate the files needed for the main command
-
-Usage:
-  ssosync google [flags]
-
-Flags:
-  -h, --help               help for google
-      --path string        set the path to find credentials (default "credentials.json")
-      --tokenPath string   set the path to put token.json output into (default "token.json")
-```
-
-When you run the command correctly, it will give a URL to load in your browser. Go to it, and you'll get
-a string to paste back and enter. Once you paste the line in, the file generates.
-
-The Token file is useless without the Credentials File - but keep it safe.
+`https://www.googleapis.com/auth/admin.directory.group.readonly,https://www.googleapis.com/auth/admin.directory.group.member.readonly,https://www.googleapis.com/auth/admin.directory.user.readonly`
 
 Back in the Console go to the Dashboard for the API & Services and select "Enable API and Services".
 In the Search box type `Admin` and select the `Admin SDK` option. Click the `Enable` button.
@@ -93,12 +68,13 @@ Go to the AWS Single Sign-On console in the region you have set up AWS SSO and s
 Settings. Click `Enable automatic provisioning`.
 
 A pop up will appear with URL and the Access Token. The Access Token will only appear
-at this stage. You want to copy both of these into a text file which ends in the extension
-`.toml`.
+at this stage. You want to copy both of these as a parameter to the `ssosync` command.
 
-```toml
-Token    = "tokenHere"
-Endpoint = "https://scim.eu-west-1.amazonaws.com/a-guid-would-be-here/scim/v2/"
+Or you specifc these as environment variables.
+
+```
+SSOSYNC_SCIM_ACCESS_TOKEN=<YOUR_TOKEN>
+SSOSYNC_SCIM_ENDPOINT=<YOUR_ENDPOINT>
 ```
 
 ## Local Usage
@@ -110,23 +86,21 @@ The default for ssosync is to run through the sync.
 ```text
 A command line tool to enable you to synchronise your Google
 Apps (G-Suite) users to AWS Single Sign-on (AWS SSO)
+Complete documentation is available at https://github.com/awslabs/ssosync
 
 Usage:
   ssosync [flags]
-  ssosync [command]
-
-Available Commands:
-  google      Log in to Google
-  help        Help about any command
 
 Flags:
-  -d, --debug                          Enable verbose / debug logging
-  -c, --googleCredentialsPath string   set the path to find credentials for Google (default "credentials.json")
-  -t, --googleTokenPath string         set the path to find token for Google (default "token.json")
-  -h, --help                           help for ssosync
-  -s, --scimConfig string              AWS SSO SCIM Configuration (default "aws.toml")
-
-Use "ssosync [command] --help" for more information about a command.
+  -t, --access-token string         SCIM Access Token
+  -d, --debug                       Enable verbose / debug logging
+  -e, --endpoint string             SCIM Endpoint
+  -u, --google-admin string         Google Admin Email
+  -c, --google-credentials string   set the path to find credentials for Google (default "credentials.json")
+  -h, --help                        help for ssosync
+      --log-format string           log format (default "text")
+      --log-level string            log level (default "warn")
+  -v, --version                     version for ssosync
 ```
 
 The output of the command when run without 'debug' turned on looks like this:

@@ -8,12 +8,14 @@ type Config struct {
 	LogLevel string `mapstructure:"log_level"`
 	// LogFormat is the format that is used for logging
 	LogFormat string `mapstructure:"log_format"`
-	// GoogleCredentialsPath is the path to the credentials
-	GoogleCredentialsPath string `mapstructure:"google_credentials"`
-	// GoogleTokenPath is the path to the token
-	GoogleTokenPath string `mapstructure:"google_token"`
-	// SCIMConfig is the path to the AWS SSO SCIM Config
-	SCIMConfig string `mapstructure:"aws_toml"`
+	// GoogleCredentials ...
+	GoogleCredentials string `mapstructure:"google_credentials"`
+	// GoogleAdmin ...
+	GoogleAdmin string `mapstructure:"google_admin"`
+	// SCIMEndpoint ....
+	SCIMEndpoint string `mapstructure:"scim_endpoint"`
+	// SCIMAccessToken ...
+	SCIMAccessToken string `mapstructure:"scim_access_token"`
 }
 
 const (
@@ -23,22 +25,16 @@ const (
 	DefaultLogFormat = "text"
 	// DefaultDebug is the default debug status.
 	DefaultDebug = false
-	// DefaultGoogleCredentialsPath is the default credentials path
-	DefaultGoogleCredentialsPath = "credentials.json"
-	// DefaultGoogleTokenPath is the default token path
-	DefaultGoogleTokenPath = "token.json"
-	// DefaultSCIMConfig is the default for the AWS SSO SCIM Configuraiton
-	DefaultSCIMConfig = "aws.toml"
+	// DefaultGoogleCredentials is the default credentials path
+	DefaultGoogleCredentials = "credentials.json"
 )
 
 // New returns a new Config
 func New() *Config {
 	return &Config{
-		Debug:                 DefaultDebug,
-		LogLevel:              DefaultLogLevel,
-		LogFormat:             DefaultLogFormat,
-		GoogleCredentialsPath: DefaultGoogleCredentialsPath,
-		GoogleTokenPath:       DefaultGoogleTokenPath,
-		SCIMConfig:            DefaultSCIMConfig,
+		Debug:             DefaultDebug,
+		LogLevel:          DefaultLogLevel,
+		LogFormat:         DefaultLogFormat,
+		GoogleCredentials: DefaultGoogleCredentials,
 	}
 }

@@ -85,7 +85,7 @@ func removeFileSilently(name string) {
 	_ = os.Remove(name)
 }
 
-// lambdaHandler is the Lambda entry point
+// lambdaHandler is the Lambda entry point.
 func lambdaHandler(cfg *config.Config) func() error {
 	return func() error {
 		if err := internal.DoSync(cfg); err != nil {

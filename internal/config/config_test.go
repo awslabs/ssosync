@@ -18,7 +18,5 @@ func TestConfig(t *testing.T) {
 	assert.Equal(cfg.LogLevel, DefaultLogLevel)
 	assert.Equal(cfg.LogFormat, DefaultLogFormat)
 	assert.Equal(cfg.Debug, DefaultDebug)
-	assert.Equal(cfg.GoogleCredentialsPath, DefaultGoogleCredentialsPath)
-	assert.Equal(cfg.GoogleTokenPath, DefaultGoogleTokenPath)
-	assert.Equal(cfg.SCIMConfig, DefaultSCIMConfig)
+	assert.Equal(cfg.GoogleCredentials, DefaultGoogleCredentials)
 }

@@ -15,6 +15,7 @@
 package internal
 
 import (
+	"io/ioutil"
 	"net/http"
 
 	"github.com/awslabs/ssosync/internal/aws"
@@ -209,24 +210,22 @@ func (s *SyncGSuite) SyncGroups() error {
 func DoSync(cfg *config.Config) error {
 	log.Info("Creating the Google and AWS Clients needed")
 
-	googleAuthClient, err := google.NewAuthClient(cfg.GoogleCredentialsPath, cfg.GoogleTokenPath)
+	b, err := ioutil.ReadFile(cfg.GoogleCredentials)
 	if err != nil {
 		return err
 	}
 
-	googleClient, err := google.NewClient(googleAuthClient)
-	if err != nil {
-		return err
-	}
-
-	awsConfig, err := aws.ReadConfigFromFile(cfg.SCIMConfig)
+	googleClient, err := google.NewClient(cfg.GoogleAdmin, b)
 	if err != nil {
 		return err
 	}
 
 	awsClient, err := aws.NewClient(
 		&http.Client{},
-		awsConfig)
+		&aws.Config{
+			Endpoint: cfg.SCIMEndpoint,
+			Token:    cfg.SCIMAccessToken,
+		})
 	if err != nil {
 		return err
 	}
