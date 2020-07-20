@@ -87,6 +87,7 @@ func initConfig() {
 	viper.SetEnvPrefix("ssosync")
 	viper.AutomaticEnv()
 
+	viper.BindEnv("google_admin")
 	viper.BindEnv("google_credentials")
 	viper.BindEnv("scim_access_token")
 	viper.BindEnv("scim_endpoint")
