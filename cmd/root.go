@@ -58,7 +58,7 @@ Complete documentation is available at https://github.com/awslabs/ssosync`,
 // execution path.
 func Execute() {
 	if inLambda() {
-		lambda.Start(lambdaHandler)
+		lambda.Start(lambdaHandler(cfg))
 	}
 
 	if err := rootCmd.Execute(); err != nil {

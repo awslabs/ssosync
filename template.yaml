@@ -37,7 +37,7 @@ Parameters:
     Description: TOML file from AWS SSO
 
 Resources:
-  SSOSync:
+  SSOSyncFunction:
     Type: AWS::Serverless::Function
     Properties:
       Runtime: go1.x
