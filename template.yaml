@@ -1,0 +1,75 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
+Metadata:
+  AWS::ServerlessRepo::Application:
+    Name: ssosync
+    Description: Helping you populate AWS SSO directly with your Google Apps users.
+    Author: Sebastian Doell
+    SpdxLicenseId: Apache-2.0
+    # paths are relative to .aws-sam/build directory
+    LicenseUrl: LICENSE
+    ReadmeUrl: README.md
+    Labels: [serverless,sso,lambda]
+    HomePageUrl: https://github.com/awslabs/ssosync
+    # Update the semantic version and run sam publish to publish a new version of your app
+    SemanticVersion: 1.0.0
+    # best practice is to use git tags for each release and link to the version tag as your source code URL
+    SourceCodeUrl: https://github.com/awslabs/ssosync/tree/1.0.0
+
+Parameters:
+  LogLevel:
+    Type: String
+    Description: Log level for Lambda function logging, e.g., error, info, debug, etc
+    Default: warn
+  LogFormat:
+    Type: String
+    Description: Log format for Lambda function logging, e.g., text, json
+    Default: json
+  GoogleCredentials:
+    Type: String
+    Description: Credentials to log into Google
+  GoogleToken:
+    Type: String
+    Description: Token to use Google APIs
+  AWSToml:
+    Type: String
+    Description: TOML file from AWS SSO
+
+Resources:
+  SSOSync:
+    Type: AWS::Serverless::Function
+    Properties:
+      Runtime: go1.x
+      Handler: main
+      Environment:
+        Variables:
+          SSOSYNC_LOG_LEVEL: !Ref LogLevel
+          SSOSYNC_LOG_FORMAT: !Ref LogFormat
+          SSOSYNC_GOOGLE_CREDENTIALS: !Ref GoogleCredentials
+          SSOSYNC_GOOGLE_TOKEN: !Ref GoogleToken
+          SSOSYNC_AWS_TOML: !Ref AWSToml
+    Events:
+      SyncScheduledEvent:
+        Type: Schedule
+        Properties:
+          Schedule: rate(30 minutes)
+
+  GoogleCredentialsSecret:
+    Type: 'AWS::SecretsManager::Secret'
+    Properties:
+      Name: SSOSyncGoogleCredentials
+      SecretString: !Ref GoogleCredentials
+
+  GoogleTokenSecret:
+    Type: 'AWS::SecretsManager::Secret'
+    Properties:
+      Name: SSOSyncGoogleToken
+      SecretString: !Ref GoogleToken
+
+  AWSTomlSecret: # This can be moved to custom provider
+    Type: 'AWS::SecretsManager::Secret'
+    Properties:
+      Name: SSOSyncAWSToml
+      SecretString: !Ref AWSToml
+

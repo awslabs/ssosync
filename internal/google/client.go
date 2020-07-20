@@ -22,22 +22,21 @@ import (
 	"google.golang.org/api/option"
 )
 
-// IClient is the Interface for the Client
-type IClient interface {
+// Client is the Interface for the Client
+type Client interface {
 	GetUsers() ([]*admin.User, error)
 	GetGroups() ([]*admin.Group, error)
 	GetGroupMembers(*admin.Group) ([]*admin.Member, error)
 }
 
-// Client is the Google Apps for Domains Client
-type Client struct {
+type client struct {
 	client  *http.Client
 	service *admin.Service
 }
 
 // NewClient creates a new client for Google's Admin API
-func NewClient(client *AuthClient) (IClient, error) {
-	c, err := client.GetClient()
+func NewClient(auth *AuthClient) (Client, error) {
+	c, err := auth.GetClient()
 	if err != nil {
 		return nil, err
 	}
@@ -47,14 +46,14 @@ func NewClient(client *AuthClient) (IClient, error) {
 		return nil, err
 	}
 
-	return &Client{
+	return &client{
 		client:  c,
 		service: srv,
 	}, nil
 }
 
 // GetUsers will get the users from Google's Admin API
-func (c *Client) GetUsers() (u []*admin.User, err error) {
+func (c *client) GetUsers() (u []*admin.User, err error) {
 	u = make([]*admin.User, 0)
 	err = c.service.Users.List().Customer("my_customer").Pages(context.TODO(), func(users *admin.Users) error {
 		u = append(u, users.Users...)
@@ -65,7 +64,7 @@ func (c *Client) GetUsers() (u []*admin.User, err error) {
 }
 
 // GetGroups will get the groups from Google's Admin API
-func (c *Client) GetGroups() (g []*admin.Group, err error) {
+func (c *client) GetGroups() (g []*admin.Group, err error) {
 	g = make([]*admin.Group, 0)
 	err = c.service.Groups.List().Customer("my_customer").Pages(context.TODO(), func(groups *admin.Groups) error {
 		g = append(g, groups.Groups...)
@@ -76,7 +75,7 @@ func (c *Client) GetGroups() (g []*admin.Group, err error) {
 }
 
 // GetGroupMembers will get the members of the group specified
-func (c *Client) GetGroupMembers(g *admin.Group) (m []*admin.Member, err error) {
+func (c *client) GetGroupMembers(g *admin.Group) (m []*admin.Member, err error) {
 	m = make([]*admin.Member, 0)
 	err = c.service.Members.List(g.Id).Pages(context.TODO(), func(members *admin.Members) error {
 		m = append(m, members.Members...)

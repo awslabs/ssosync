@@ -92,6 +92,8 @@ func initConfig() {
 	viper.BindEnv("google_credentials")
 	viper.BindEnv("google_token")
 	viper.BindEnv("aws_toml")
+	viper.BindEnv("log_level")
+	viper.BindEnv("log_format")
 
 	if err := viper.Unmarshal(&cfg); err != nil {
 		log.Fatalf(errors.Wrap(err, "cannot unmarshal config").Error())

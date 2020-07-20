@@ -35,13 +35,13 @@ type ISyncGSuite interface {
 // SyncGSuite is an object type that will synchronise real users and groups
 type SyncGSuite struct {
 	aws    aws.IClient
-	google google.IClient
+	google google.Client
 
 	users map[string]*aws.User
 }
 
 // New will create a new SyncGSuite object
-func New(a aws.IClient, g google.IClient) ISyncGSuite {
+func New(a aws.IClient, g google.Client) ISyncGSuite {
 	return &SyncGSuite{
 		aws:    a,
 		google: g,
