@@ -28,14 +28,14 @@ import (
 	admin "google.golang.org/api/admin/directory/v1"
 )
 
-// ISyncGSuite is the interface for synchronising users/groups
-type ISyncGSuite interface {
+// SyncGSuite is the interface for synchronising users/groups
+type SyncGSuite interface {
 	SyncUsers() error
 	SyncGroups() error
 }
 
 // SyncGSuite is an object type that will synchronise real users and groups
-type SyncGSuite struct {
+type syncGSuite struct {
 	aws    aws.IClient
 	google google.Client
 
@@ -43,8 +43,8 @@ type SyncGSuite struct {
 }
 
 // New will create a new SyncGSuite object
-func New(a aws.IClient, g google.Client) ISyncGSuite {
-	return &SyncGSuite{
+func New(a aws.IClient, g google.Client) SyncGSuite {
+	return &syncGSuite{
 		aws:    a,
 		google: g,
 		users:  make(map[string]*aws.User),
@@ -52,7 +52,7 @@ func New(a aws.IClient, g google.Client) ISyncGSuite {
 }
 
 // SyncUsers will Sync Google Users to AWS SSO SCIM
-func (s *SyncGSuite) SyncUsers() error {
+func (s *syncGSuite) SyncUsers() error {
 	log.Debug("get deleted users")
 	deletedUsers, err := s.google.GetDeletedUsers()
 	if err != nil {
@@ -88,11 +88,12 @@ func (s *SyncGSuite) SyncUsers() error {
 		ll.Debug("finding user")
 		uu, _ := s.aws.FindUserByEmail(u.PrimaryEmail)
 		if uu != nil {
+			s.users[uu.Username] = uu
 			continue
 		}
 
 		ll.Info("creating user")
-		_, err := s.aws.CreateUser(aws.NewUser(
+		uu, err := s.aws.CreateUser(aws.NewUser(
 			u.Name.GivenName,
 			u.Name.FamilyName,
 			u.PrimaryEmail,
@@ -100,22 +101,22 @@ func (s *SyncGSuite) SyncUsers() error {
 		if err != nil {
 			return err
 		}
+
+		s.users[uu.Username] = uu
 	}
 
 	return nil
 }
 
 // SyncGroups will sync groups from Google -> AWS SSO
-func (s *SyncGSuite) SyncGroups() error {
-	log.Info("Start group sync")
-
-	log.Debug("Get AWS Groups")
+func (s *syncGSuite) SyncGroups() error {
+	log.Debug("get sso groups")
 	awsGroups, err := s.aws.GetGroups()
 	if err != nil {
 		return err
 	}
 
-	log.Debug("Get Google Groups")
+	log.Debug("get google groups")
 	googleGroups, err := s.google.GetGroups()
 	if err != nil {
 		return err
@@ -198,8 +199,6 @@ func (s *SyncGSuite) SyncGroups() error {
 			}
 		}
 	}
-
-	log.Info("Done sync groups")
 
 	return nil
 }
