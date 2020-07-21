@@ -4,6 +4,8 @@
 
 SSO Sync will run on any platform that Go can build for.
 
+> :warning: There are breaking changes for versions `>= 0.02`
+
 ## Why?
 
 As per the [AWS SSO](https://aws.amazon.com/single-sign-on/) Homepage:
@@ -123,8 +125,7 @@ the pricing for AWS Lambda and CloudWatch before continuing.
 Running ssosync once means that any changes to your Google directory will not appear in
 AWS SSO. To sync. regularly, you can run ssosync via AWS Lambda. 
 
-You will find using the provided CDK deployment scripts the easiest method. Install
-the [AWS CDK](https://aws.amazon.com/cdk/) before you start.
+You will find ssosync in the [AWS Serverless Application Repository](https://aws.amazon.com/serverless/serverlessrepo/).
 
 ## SAM
 
@@ -193,99 +194,4 @@ $ goreleaser build --snapshot
       • building                  binary=/Users/leepac/go/src/github.com/awslabs/ssosync/dist/ssosync_linux_amd64/ssosync
       • building                  binary=/Users/leepac/go/src/github.com/awslabs/ssosync/dist/ssosync_darwin_amd64/ssosync
    • build succeeded after 7.31s
-```
-
-### Deploying using the AWS CDK
-
-You need to know the locations of the credentials.json, token.json and aws.toml files
-that you used for the configuration of ssosync. You also need the binary folder location.
-
-With these files in hand, head into the `deployments/cdk` folder and then run the cdk
-deploy command with the AWS_TOML, GOOGLE_CREDENTIALS, GOOGLE_TOKEN and SSOSYNC_PATH
-variables set:
-
-NOTE: You might get a warning showing you need to execute `cdk bootstrap` if you have
-never used the AWS CDK in the account/region before. You can just run that command
-beforehand to solve this.
-
-#### *nix
-
-```
-AWS_TOML=../../aws.toml GOOGLE_CREDENTIALS=../../credentials.json GOOGLE_TOKEN=../../token.json SSOSYNC_PATH=../../dist/ssosync_linux_amd64 cdk deploy
-```
-
-#### Windows (PowerShell)
-
-```
-$env:AWS_TOML = '../../aws.toml'
-$env:GOOGLE_CREDENTIALS = '../../credentials.json'
-$env:GOOGLE_TOKEN = '../../token.json'
-$env:SSOSYNC_PATH = '../../dist/ssosync_linux_amd64'
-cdk deploy
-```
-
-```
-$ AWS_TOML=../../aws.toml GOOGLE_CREDENTIALS=../../credentials.json GOOGLE_TOKEN=../../token.json SSOSYNC_PATH=../../dist/ssosync_linux_amd64 cdk deploy
-  This deployment will make potentially sensitive changes according to your current security approval level (--require-approval broadening).
-  Please confirm you intend to make the following modifications:
-  
-  IAM Statement Changes
-  ┌───┬──────────────────────────────────┬────────┬──────────────────────────────────┬──────────────────────────────────┬────────────────────────────────────┐
-  │   │ Resource                         │ Effect │ Action                           │ Principal                        │ Condition                          │
-  ├───┼──────────────────────────────────┼────────┼──────────────────────────────────┼──────────────────────────────────┼────────────────────────────────────┤
-  │ + │ ${AwsToml}                       │ Allow  │ secretsmanager:GetSecretValue    │ AWS:${SsoSync/ServiceRole}       │                                    │
-  │   │ ${GoogleCred}                    │        │                                  │                                  │                                    │
-  │   │ ${GoogleToken}                   │        │                                  │                                  │                                    │
-  ├───┼──────────────────────────────────┼────────┼──────────────────────────────────┼──────────────────────────────────┼────────────────────────────────────┤
-  │ + │ ${SsoSync.Arn}                   │ Allow  │ lambda:InvokeFunction            │ Service:events.amazonaws.com     │ "ArnLike": {                       │
-  │   │                                  │        │                                  │                                  │   "AWS:SourceArn": "${Rule.Arn}"   │
-  │   │                                  │        │                                  │                                  │ }                                  │
-  ├───┼──────────────────────────────────┼────────┼──────────────────────────────────┼──────────────────────────────────┼────────────────────────────────────┤
-  │ + │ ${SsoSync/ServiceRole.Arn}       │ Allow  │ sts:AssumeRole                   │ Service:lambda.amazonaws.com     │                                    │
-  └───┴──────────────────────────────────┴────────┴──────────────────────────────────┴──────────────────────────────────┴────────────────────────────────────┘
-  IAM Policy Changes
-  ┌───┬────────────────────────┬────────────────────────────────────────────────────────────────────────────────┐
-  │   │ Resource               │ Managed Policy ARN                                                             │
-  ├───┼────────────────────────┼────────────────────────────────────────────────────────────────────────────────┤
-  │ + │ ${SsoSync/ServiceRole} │ arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole │
-  └───┴────────────────────────┴────────────────────────────────────────────────────────────────────────────────┘
-  (NOTE: There may be security-related changes not in this list. See https://github.com/aws/aws-cdk/issues/1299)
-  
-  Do you wish to deploy these changes (y/n)? y
-  SsoSyncStack: deploying...
-  [0%] start: Publishing d5e2919f38e8204910b42413d033318f5f422a8489e3bbe706bb21458622971e:current
-  [100%] success: Published d5e2919f38e8204910b42413d033318f5f422a8489e3bbe706bb21458622971e:current
-  SsoSyncStack: creating CloudFormation changeset...
-   0/10 | 13:22:57 | CREATE_IN_PROGRESS   | AWS::SecretsManager::Secret | AwsToml
-   0/10 | 13:22:57 | CREATE_IN_PROGRESS   | AWS::CDK::Metadata          | CDKMetadata
-   0/10 | 13:22:57 | CREATE_IN_PROGRESS   | AWS::SecretsManager::Secret | GoogleCred
-   0/10 | 13:22:57 | CREATE_IN_PROGRESS   | AWS::SecretsManager::Secret | GoogleToken
-   0/10 | 13:22:57 | CREATE_IN_PROGRESS   | AWS::IAM::Role              | SsoSync/ServiceRole (SsoSyncServiceRoleE85B4FFE)
-   0/10 | 13:22:57 | CREATE_IN_PROGRESS   | AWS::IAM::Role              | SsoSync/ServiceRole (SsoSyncServiceRoleE85B4FFE) Resource creation Initiated
-   0/10 | 13:22:59 | CREATE_IN_PROGRESS   | AWS::SecretsManager::Secret | GoogleCred Resource creation Initiated
-   0/10 | 13:22:59 | CREATE_IN_PROGRESS   | AWS::SecretsManager::Secret | AwsToml Resource creation Initiated
-   1/10 | 13:22:59 | CREATE_COMPLETE      | AWS::SecretsManager::Secret | GoogleCred
-   1/10 | 13:22:59 | CREATE_IN_PROGRESS   | AWS::SecretsManager::Secret | GoogleToken Resource creation Initiated
-   2/10 | 13:22:59 | CREATE_COMPLETE      | AWS::SecretsManager::Secret | AwsToml
-   2/10 | 13:22:59 | CREATE_IN_PROGRESS   | AWS::CDK::Metadata          | CDKMetadata Resource creation Initiated
-   3/10 | 13:22:59 | CREATE_COMPLETE      | AWS::SecretsManager::Secret | GoogleToken
-   4/10 | 13:22:59 | CREATE_COMPLETE      | AWS::CDK::Metadata          | CDKMetadata
-   5/10 | 13:23:11 | CREATE_COMPLETE      | AWS::IAM::Role              | SsoSync/ServiceRole (SsoSyncServiceRoleE85B4FFE)
-   5/10 | 13:23:13 | CREATE_IN_PROGRESS   | AWS::IAM::Policy            | SsoSync/ServiceRole/DefaultPolicy (SsoSyncServiceRoleDefaultPolicy1A9D4C1C)
-   5/10 | 13:23:14 | CREATE_IN_PROGRESS   | AWS::IAM::Policy            | SsoSync/ServiceRole/DefaultPolicy (SsoSyncServiceRoleDefaultPolicy1A9D4C1C) Resource creation Initiated
-   6/10 | 13:23:27 | CREATE_COMPLETE      | AWS::IAM::Policy            | SsoSync/ServiceRole/DefaultPolicy (SsoSyncServiceRoleDefaultPolicy1A9D4C1C)
-   6/10 | 13:23:30 | CREATE_IN_PROGRESS   | AWS::Lambda::Function       | SsoSync (SsoSync48C335B6)
-   6/10 | 13:23:31 | CREATE_IN_PROGRESS   | AWS::Lambda::Function       | SsoSync (SsoSync48C335B6) Resource creation Initiated
-   7/10 | 13:23:31 | CREATE_COMPLETE      | AWS::Lambda::Function       | SsoSync (SsoSync48C335B6)
-   7/10 | 13:23:34 | CREATE_IN_PROGRESS   | AWS::Events::Rule           | Rule (Rule4C995B7F)
-   7/10 | 13:23:34 | CREATE_IN_PROGRESS   | AWS::Events::Rule           | Rule (Rule4C995B7F) Resource creation Initiated
-  7/10 Currently in progress: Rule4C995B7F
-   8/10 | 13:24:35 | CREATE_COMPLETE      | AWS::Events::Rule           | Rule (Rule4C995B7F)
-   8/10 | 13:24:37 | CREATE_IN_PROGRESS   | AWS::Lambda::Permission     | SsoSync/AllowEventRuleSsoSyncStackRule051D4243 (SsoSyncAllowEventRuleSsoSyncStackRule051D4243FDBD7EFC)
-   8/10 | 13:24:38 | CREATE_IN_PROGRESS   | AWS::Lambda::Permission     | SsoSync/AllowEventRuleSsoSyncStackRule051D4243 (SsoSyncAllowEventRuleSsoSyncStackRule051D4243FDBD7EFC) Resource creation Initiated
-  
-   ✅  SsoSyncStack
-  
-  Stack ARN:
-  arn:aws:cloudformation:us-east-1:xxxx:stack/SsoSyncStack/b2297840-xxxx-xxxx-xxxx-0ea20f614b35
 ```
