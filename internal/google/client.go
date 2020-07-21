@@ -25,6 +25,7 @@ import (
 // Client is the Interface for the Client
 type Client interface {
 	GetUsers() ([]*admin.User, error)
+	GetDeletedUsers() ([]*admin.User, error)
 	GetGroups() ([]*admin.Group, error)
 	GetGroupMembers(*admin.Group) ([]*admin.Member, error)
 }
@@ -35,9 +36,7 @@ type client struct {
 }
 
 // NewClient creates a new client for Google's Admin API
-func NewClient(adminEmail string, serviceAccountKey []byte) (Client, error) {
-	ctx := context.Background()
-
+func NewClient(ctx context.Context, adminEmail string, serviceAccountKey []byte) (Client, error) {
 	config, err := google.JWTConfigFromJSON(serviceAccountKey, admin.AdminDirectoryGroupReadonlyScope,
 		admin.AdminDirectoryGroupMemberReadonlyScope,
 		admin.AdminDirectoryUserReadonlyScope)
@@ -61,10 +60,21 @@ func NewClient(adminEmail string, serviceAccountKey []byte) (Client, error) {
 	}, nil
 }
 
+// GetDeletedUsers will get the deleted users from the Google's Admin API.
+func (c *client) GetDeletedUsers() ([]*admin.User, error) {
+	u := make([]*admin.User, 0)
+	err := c.service.Users.List().Customer("my_customer").ShowDeleted("true").Pages(c.ctx, func(users *admin.Users) error {
+		u = append(u, users.Users...)
+		return nil
+	})
+
+	return u, err
+}
+
 // GetUsers will get the users from Google's Admin API
-func (c *client) GetUsers() (u []*admin.User, err error) {
-	u = make([]*admin.User, 0)
-	err = c.service.Users.List().Customer("my_customer").Pages(c.ctx, func(users *admin.Users) error {
+func (c *client) GetUsers() ([]*admin.User, error) {
+	u := make([]*admin.User, 0)
+	err := c.service.Users.List().Customer("my_customer").Pages(c.ctx, func(users *admin.Users) error {
 		u = append(u, users.Users...)
 		return nil
 	})
@@ -73,9 +83,9 @@ func (c *client) GetUsers() (u []*admin.User, err error) {
 }
 
 // GetGroups will get the groups from Google's Admin API
-func (c *client) GetGroups() (g []*admin.Group, err error) {
-	g = make([]*admin.Group, 0)
-	err = c.service.Groups.List().Customer("my_customer").Pages(context.TODO(), func(groups *admin.Groups) error {
+func (c *client) GetGroups() ([]*admin.Group, error) {
+	g := make([]*admin.Group, 0)
+	err := c.service.Groups.List().Customer("my_customer").Pages(context.TODO(), func(groups *admin.Groups) error {
 		g = append(g, groups.Groups...)
 		return nil
 	})
@@ -84,9 +94,9 @@ func (c *client) GetGroups() (g []*admin.Group, err error) {
 }
 
 // GetGroupMembers will get the members of the group specified
-func (c *client) GetGroupMembers(g *admin.Group) (m []*admin.Member, err error) {
-	m = make([]*admin.Member, 0)
-	err = c.service.Members.List(g.Id).Pages(context.TODO(), func(members *admin.Members) error {
+func (c *client) GetGroupMembers(g *admin.Group) ([]*admin.Member, error) {
+	m := make([]*admin.Member, 0)
+	err := c.service.Members.List(g.Id).Pages(context.TODO(), func(members *admin.Members) error {
 		m = append(m, members.Members...)
 		return nil
 	})

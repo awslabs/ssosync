@@ -42,7 +42,6 @@ const (
 // IClient represents an interface of methods used
 // to communicate with AWS SSO
 type IClient interface {
-	GetUsers() (*map[string]User, error)
 	GetGroups() (*map[string]Group, error)
 	IsUserInGroup(*User, *Group) (bool, error)
 	FindUserByEmail(string) (*User, error)
@@ -364,10 +363,10 @@ func (c *Client) RemoveUserFromGroup(u *User, g *Group) error {
 }
 
 // FindUserByEmail will find the user by the email address specified
-func (c *Client) FindUserByEmail(email string) (user *User, err error) {
+func (c *Client) FindUserByEmail(email string) (*User, error) {
 	startURL, err := url.Parse(c.endpointURL.String())
 	if err != nil {
-		return
+		return nil, err
 	}
 
 	filter := fmt.Sprintf("userName eq \"%s\"", email)
@@ -380,23 +379,21 @@ func (c *Client) FindUserByEmail(email string) (user *User, err error) {
 
 	resp, err := c.sendRequest(http.MethodGet, startURL.String())
 	if err != nil {
-		return
+		return nil, err
 	}
 
 	var r UserFilterResults
 	err = json.Unmarshal(resp, &r)
 	if err != nil {
-		return
+		return nil, err
 	}
 
 	if r.TotalResults != 1 {
 		err = fmt.Errorf("%s not found in AWS SSO", email)
-		return
+		return nil, err
 	}
 
-	user = &r.Resources[0]
-
-	return
+	return &r.Resources[0], nil
 }
 
 // CreateUser will create the user specified

@@ -15,6 +15,7 @@
 package internal
 
 import (
+	"context"
 	"io/ioutil"
 	"net/http"
 
@@ -52,54 +53,52 @@ func New(a aws.IClient, g google.Client) ISyncGSuite {
 
 // SyncUsers will Sync Google Users to AWS SSO SCIM
 func (s *SyncGSuite) SyncUsers() error {
-	log.Info("Start user sync")
-	log.Info("Get AWS Users")
-
-	awsUsers, err := s.aws.GetUsers()
+	log.Debug("get deleted users")
+	deletedUsers, err := s.google.GetDeletedUsers()
 	if err != nil {
 		return err
 	}
 
-	log.Debug("Get Google Users")
+	for _, u := range deletedUsers {
+		uu, _ := s.aws.FindUserByEmail(u.PrimaryEmail)
+		if uu == nil {
+			continue
+		}
+
+		log.WithFields(log.Fields{
+			"email": u.PrimaryEmail,
+		}).Info("deleting google user")
+
+		if err := s.aws.DeleteUser(uu); err != nil {
+			return err
+		}
+	}
+
+	log.Debug("get active google users")
 	googleUsers, err := s.google.GetUsers()
 	if err != nil {
 		return err
 	}
 
 	for _, u := range googleUsers {
-		log := log.WithFields(log.Fields{
+		ll := log.WithFields(log.Fields{
 			"email": u.PrimaryEmail,
 		})
 
-		log.Debug("Check user")
-
-		if awsUser, ok := (*awsUsers)[u.PrimaryEmail]; ok {
-			log.Debug("Found user")
-			s.users[awsUser.Username] = &awsUser
-		} else {
-			log.Info("Create user in AWS")
-			newUser, err := s.aws.CreateUser(aws.NewUser(
-				u.Name.GivenName,
-				u.Name.FamilyName,
-				u.PrimaryEmail,
-			))
-			if err != nil {
-				return err
-			}
-
-			s.users[newUser.Username] = newUser
+		ll.Debug("finding user")
+		uu, _ := s.aws.FindUserByEmail(u.PrimaryEmail)
+		if uu != nil {
+			continue
 		}
-	}
 
-	log.Info("Clean up AWS Users")
-	for _, u := range *awsUsers {
-		if _, ok := s.users[u.Username]; !ok {
-			log.WithField("email", u.Username).Info("Delete User in AWS")
-
-			err := s.aws.DeleteUser(&u)
-			if err != nil {
-				return err
-			}
+		ll.Info("creating user")
+		_, err := s.aws.CreateUser(aws.NewUser(
+			u.Name.GivenName,
+			u.Name.FamilyName,
+			u.PrimaryEmail,
+		))
+		if err != nil {
+			return err
 		}
 	}
 
@@ -207,7 +206,7 @@ func (s *SyncGSuite) SyncGroups() error {
 
 // DoSync will create a logger and run the sync with the paths
 // given to do the sync.
-func DoSync(cfg *config.Config) error {
+func DoSync(ctx context.Context, cfg *config.Config) error {
 	log.Info("Creating the Google and AWS Clients needed")
 
 	creds := []byte(cfg.GoogleCredentials)
@@ -220,7 +219,7 @@ func DoSync(cfg *config.Config) error {
 		creds = b
 	}
 
-	googleClient, err := google.NewClient(cfg.GoogleAdmin, creds)
+	googleClient, err := google.NewClient(ctx, cfg.GoogleAdmin, creds)
 	if err != nil {
 		return err
 	}

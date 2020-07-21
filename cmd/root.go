@@ -15,6 +15,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -47,7 +48,10 @@ var rootCmd = &cobra.Command{
 Apps (G-Suite) users to AWS Single Sign-on (AWS SSO)
 Complete documentation is available at https://github.com/awslabs/ssosync`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		err := internal.DoSync(cfg)
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		err := internal.DoSync(ctx, cfg)
 		if err != nil {
 			return err
 		}
