@@ -1,5 +1,12 @@
 # SSO Sync
 
+<a href='https://github.com/jpoles1/gopherbadger' target='_blank'>![gopherbadger-tag-do-not-edit](https://img.shields.io/badge/Go%20Coverage-42%25-brightgreen.svg?longCache=true&style=flat)</a>
+![Github Action](https://github.com/awslabs/ssosync/workflows/main/badge.svg)
+[![Go Report Card](https://goreportcard.com/badge/github.com/awslabs/ssosync)](https://goreportcard.com/report/github.com/awslabs/ssosync)
+[![License Apache 2](https://img.shields.io/badge/License-Apache2-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
+[![Taylor Swift](https://img.shields.io/badge/secured%20by-taylor%20swift-brightgreen.svg)](https://twitter.com/SwiftOnSecurity)
+[![Volkswagen](https://auchenberg.github.io/volkswagen/volkswargen_ci.svg?v=1)](https://github.com/auchenberg/volkswagen)
+
 > Helping you populate AWS SSO directly with your Google Apps users
 
 SSO Sync will run on any platform that Go can build for.
@@ -53,7 +60,7 @@ as locally running the ssosync tool.
 
 First, you have to setup your API. In the project you want to use go to the [Console](https://console.developers.google.com/apis) and select *API & Services* > *Enable APIs and Services*. Search for *Admin SDK* and *Enable* the API. 
 
-You have to perform this [tutorial](https://developers.google.com/admin-sdk/directory/v1/guides/delegation) to create a service account that you use to sync your users. Save the JSON file your create during the process and rename it to `credentials.json`. 
+You have to perform this [tutorial](https://developers.google.com/admin-sdk/directory/v1/guides/delegation) to create a service account that you use to sync your users. Save the JSON file you create during the process and rename it to `credentials.json`. 
 
 > you can also use the `--google-credentials` parameter to explicitly specify the file with the service credentials. Please, keep this file safe, or store it in the AWS Secrets Manager
 
@@ -63,6 +70,8 @@ In the domain-wide delegation for the Admin API, you have to specificy the follo
 
 Back in the Console go to the Dashboard for the API & Services and select "Enable API and Services".
 In the Search box type `Admin` and select the `Admin SDK` option. Click the `Enable` button.
+
+You will have to specifiy the email address of an admin via `--google-admin` to assume this users role in the Directory.
 
 ### AWS
 
@@ -125,73 +134,14 @@ the pricing for AWS Lambda and CloudWatch before continuing.
 Running ssosync once means that any changes to your Google directory will not appear in
 AWS SSO. To sync. regularly, you can run ssosync via AWS Lambda. 
 
-You will find ssosync in the [AWS Serverless Application Repository](https://aws.amazon.com/serverless/serverlessrepo/).
+:warning: You will find ssosync in the [AWS Serverless Application Repository](https://aws.amazon.com/serverless/serverlessrepo/) in the future.
 
 ## SAM
 
 You can use the AWS Serverless Application Model (SAM) to deploy this to your account.
 
-> Please, install the [AWS SAM CLI](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-install.html).
+> Please, install the [AWS SAM CLI](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-install.html) and [GoReleaser](https://goreleaser.com/install/).
 
 Specify an Amazon S3 Bucket for the upload with `export S3_BUCKET=<YOUR_BUCKET>`.
 
 Execute `make package` in the console. Which will package and upload the function to the bucket. You can then use the `packaged.yaml` to configure and deploy the stack in [AWS CloudFormation Console](https://console.aws.amazon.com/cloudformation).
-
-### Using the right binary for AWS Lambda
-
-You require the AMD64 binary for AWS Lambda. This can be either downloaded from the
-Releases page, or built locally. A great way to do this to use
-[goreleaser](https://goreleaser.com/) in Snapshot mode which will build the various
-system binaries.
-
-Whichever route you take, the CDK stack for deployment requires a folder which only
-contains the binary and nothing else. goreleaser will take care of this for you; just
-be aware if you are obtaining a binary from any other route.
-
-NOTE: The binaries tagged v0.0.1 on GitHub are not suitable for AWS Lambda usage.
-
-To build with goreleaser you can expect the following kind of output:
-
-```
-$ goreleaser build --snapshot
-
-   • building...
-   • loading config file       file=.goreleaser.yml
-   • running before hooks
-      • running go mod download
-   • loading environment variables
-   • getting and validating git state
-      • releasing v0.0.1, commit fcc9977a10ae24a92417b00472267ec9bc40aada
-      • pipe skipped              error=disabled during snapshot mode
-   • parsing tag
-   • setting defaults
-      • snapshotting
-      • github/gitlab/gitea releases
-      • project name
-      • building binaries
-      • creating source archive
-      • archives
-      • linux packages
-      • snapcraft packages
-      • calculating checksums
-      • signing artifacts
-      • docker images
-      • artifactory
-      • blobs
-      • homebrew tap formula
-      • scoop manifests
-   • snapshotting
-   • checking ./dist
-   • writing effective config file
-      • writing                   config=dist/config.yaml
-   • generating changelog
-      • pipe skipped              error=not available for snapshots
-   • building binaries
-      • building                  binary=/Users/leepac/go/src/github.com/awslabs/ssosync/dist/ssosync_windows_amd64/ssosync.exe
-      • building                  binary=/Users/leepac/go/src/github.com/awslabs/ssosync/dist/ssosync_linux_arm64/ssosync
-      • building                  binary=/Users/leepac/go/src/github.com/awslabs/ssosync/dist/ssosync_linux_386/ssosync
-      • building                  binary=/Users/leepac/go/src/github.com/awslabs/ssosync/dist/ssosync_linux_arm_6/ssosync
-      • building                  binary=/Users/leepac/go/src/github.com/awslabs/ssosync/dist/ssosync_linux_amd64/ssosync
-      • building                  binary=/Users/leepac/go/src/github.com/awslabs/ssosync/dist/ssosync_darwin_amd64/ssosync
-   • build succeeded after 7.31s
-```

@@ -41,7 +41,7 @@ const (
 
 // IClient represents an interface of methods used
 // to communicate with AWS SSO
-type IClient interface {
+type Client interface {
 	GetGroups() (*map[string]Group, error)
 	IsUserInGroup(*User, *Group) (bool, error)
 	FindUserByEmail(string) (*User, error)
@@ -53,9 +53,8 @@ type IClient interface {
 	RemoveUserFromGroup(*User, *Group) error
 }
 
-// Client represents an AWS SSO SCIM client
-type Client struct {
-	httpClient  IHttpClient
+type client struct {
+	httpClient  HttpClient
 	endpointURL *url.URL
 	bearerToken string
 }
@@ -63,13 +62,13 @@ type Client struct {
 // NewClient creates a new client to talk with AWS SSO's SCIM endpoint. It
 // required a http.Client{} as well as the URL and bearer token from the
 /// console. If the URL is not parsable, an error will be thrown.
-func NewClient(client IHttpClient, config *Config) (IClient, error) {
+func NewClient(c HttpClient, config *Config) (Client, error) {
 	u, err := url.Parse(config.Endpoint)
 	if err != nil {
 		return nil, err
 	}
-	return &Client{
-		httpClient:  client,
+	return &client{
+		httpClient:  c,
 		endpointURL: u,
 		bearerToken: config.Token,
 	}, nil
@@ -77,7 +76,7 @@ func NewClient(client IHttpClient, config *Config) (IClient, error) {
 
 // sendRequestWithBody will send the body given to the url/method combination
 // with the right Bearer token as well as the correct content type for SCIM.
-func (c *Client) sendRequestWithBody(method string, url string, body interface{}) (response []byte, err error) {
+func (c *client) sendRequestWithBody(method string, url string, body interface{}) (response []byte, err error) {
 	// Convert the body to JSON
 	d, err := json.Marshal(body)
 	if err != nil {
@@ -117,7 +116,7 @@ func (c *Client) sendRequestWithBody(method string, url string, body interface{}
 	return
 }
 
-func (c *Client) sendRequest(method string, url string) (response []byte, err error) {
+func (c *client) sendRequest(method string, url string) (response []byte, err error) {
 	r, err := http.NewRequest(method, url, nil)
 	if err != nil {
 		return
@@ -145,75 +144,7 @@ func (c *Client) sendRequest(method string, url string) (response []byte, err er
 	return
 }
 
-// getUserPage will retrieve a page of users from AWS SSO using the base URL (sURL)
-// and adding the query parameters to it. startIndex declares where to start in
-// the pagination.
-func (c *Client) getUserPage(sURL *url.URL, startIndex int) (results *UserFilterResults, err error) {
-	startURL, err := url.Parse(sURL.String())
-	if err != nil {
-		return
-	}
-
-	// Build query parameters of a count of 10, and the startIndex
-	q := startURL.Query()
-	q.Add("count", "10")
-	q.Add("startIndex", strconv.Itoa(startIndex))
-	startURL.RawQuery = q.Encode()
-
-	// Send query to AWS SSO
-	resp, err := c.sendRequest(http.MethodGet, startURL.String())
-	if err != nil {
-		return
-	}
-
-	// Convert body back to the filtered results object type
-	var r UserFilterResults
-	err = json.Unmarshal(resp, &r)
-	if err != nil {
-		return
-	}
-
-	// Return the results
-	results = &r
-	return
-}
-
-// GetUsers will get a map of users, keyed by username, from AWS SSO
-func (c *Client) GetUsers() (results *map[string]User, err error) {
-	startURL, err := url.Parse(c.endpointURL.String())
-	if err != nil {
-		return
-	}
-
-	startURL.Path = path.Join(startURL.Path, "/Users")
-
-	var resultMap = make(map[string]User)
-
-	si := 1
-	for {
-		log.WithFields(log.Fields{"startIndex": si}).Debug("Getting Users Page")
-
-		r, err := c.getUserPage(startURL, si)
-		if err != nil {
-			return nil, err
-		}
-
-		for _, user := range r.Resources {
-			log.WithFields(log.Fields{"username": user.Username}).Debug("Add user to map")
-			resultMap[user.Username] = user
-		}
-
-		si = si + 10
-		if si > r.TotalResults {
-			log.WithFields(log.Fields{"totalResults": r.TotalResults}).Debug("Last Page obtained")
-			break
-		}
-	}
-
-	return &resultMap, nil
-}
-
-func (c *Client) getGroupPage(sURL *url.URL, startIndex int) (results *GroupFilterResults, err error) {
+func (c *client) getGroupPage(sURL *url.URL, startIndex int) (results *GroupFilterResults, err error) {
 	startURL, err := url.Parse(sURL.String())
 	if err != nil {
 		return
@@ -242,7 +173,7 @@ func (c *Client) getGroupPage(sURL *url.URL, startIndex int) (results *GroupFilt
 
 // GetGroups will retrieve a map of Groups from AWS SSO. The map
 // is keyed by the Display Name of the group.
-func (c *Client) GetGroups() (results *map[string]Group, err error) {
+func (c *client) GetGroups() (results *map[string]Group, err error) {
 	startURL, err := url.Parse(c.endpointURL.String())
 	if err != nil {
 		return
@@ -277,7 +208,7 @@ func (c *Client) GetGroups() (results *map[string]Group, err error) {
 }
 
 // IsUserInGroup will determine if user (u) is in group (g)
-func (c *Client) IsUserInGroup(u *User, g *Group) (present bool, err error) {
+func (c *client) IsUserInGroup(u *User, g *Group) (present bool, err error) {
 	if g == nil {
 		return false, errors.New("no group specified")
 	}
@@ -314,7 +245,7 @@ func (c *Client) IsUserInGroup(u *User, g *Group) (present bool, err error) {
 	return
 }
 
-func (c *Client) groupChangeOperation(op OperationType, u *User, g *Group) error {
+func (c *client) groupChangeOperation(op OperationType, u *User, g *Group) error {
 	if g == nil {
 		return errors.New("no group specified")
 	}
@@ -353,17 +284,17 @@ func (c *Client) groupChangeOperation(op OperationType, u *User, g *Group) error
 }
 
 // AddUserToGroup will add the user specified to the group specified
-func (c *Client) AddUserToGroup(u *User, g *Group) error {
+func (c *client) AddUserToGroup(u *User, g *Group) error {
 	return c.groupChangeOperation(OperationAdd, u, g)
 }
 
 // RemoveUserFromGroup will remove the user specified from the group specified
-func (c *Client) RemoveUserFromGroup(u *User, g *Group) error {
+func (c *client) RemoveUserFromGroup(u *User, g *Group) error {
 	return c.groupChangeOperation(OperationRemove, u, g)
 }
 
 // FindUserByEmail will find the user by the email address specified
-func (c *Client) FindUserByEmail(email string) (*User, error) {
+func (c *client) FindUserByEmail(email string) (*User, error) {
 	startURL, err := url.Parse(c.endpointURL.String())
 	if err != nil {
 		return nil, err
@@ -397,7 +328,7 @@ func (c *Client) FindUserByEmail(email string) (*User, error) {
 }
 
 // CreateUser will create the user specified
-func (c *Client) CreateUser(u *User) (user *User, err error) {
+func (c *client) CreateUser(u *User) (user *User, err error) {
 	startURL, err := url.Parse(c.endpointURL.String())
 	if err != nil {
 		return
@@ -429,7 +360,7 @@ func (c *Client) CreateUser(u *User) (user *User, err error) {
 }
 
 // DeleteUser will remove the current user from the directory
-func (c *Client) DeleteUser(u *User) error {
+func (c *client) DeleteUser(u *User) error {
 	startURL, err := url.Parse(c.endpointURL.String())
 	if err != nil {
 		return err
@@ -449,7 +380,7 @@ func (c *Client) DeleteUser(u *User) error {
 }
 
 // CreateGroup will create a group given
-func (c *Client) CreateGroup(g *Group) (group *Group, err error) {
+func (c *client) CreateGroup(g *Group) (group *Group, err error) {
 	startURL, err := url.Parse(c.endpointURL.String())
 	if err != nil {
 		return
@@ -477,7 +408,7 @@ func (c *Client) CreateGroup(g *Group) (group *Group, err error) {
 }
 
 // DeleteGroup will delete the group specified
-func (c *Client) DeleteGroup(g *Group) error {
+func (c *client) DeleteGroup(g *Group) error {
 	startURL, err := url.Parse(c.endpointURL.String())
 	if err != nil {
 		return err

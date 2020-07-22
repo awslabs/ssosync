@@ -2,6 +2,24 @@ AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 
 Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      -
+        Label:
+          default: "General"
+        Parameters:
+          - GoogleCredentials
+          - GoogleAdminEmail
+          - SCIMEndpointUrl
+          - SCIMEndpointAccessToken
+      -
+        Label:
+          default: "Advanced Configuration"
+        Parameters:
+          - LogLevel
+          - LogFormat
+          - ScheduleExpression
+
   AWS::ServerlessRepo::Application:
     Name: ssosync
     Description: Helping you populate AWS SSO directly with your Google Apps users.
@@ -15,9 +33,13 @@ Metadata:
     # Update the semantic version and run sam publish to publish a new version of your app
     SemanticVersion: 1.0.0
     # best practice is to use git tags for each release and link to the version tag as your source code URL
-    SourceCodeUrl: https://github.com/awslabs/ssosync/tree/1.0.0
+    SourceCodeUrl: https://github.com/awslabs/ssosync/tree/1.0.0-rc.1
 
 Parameters:
+  ScheduleExpression:
+    Type: String
+    Description: Schedule for trigger the execution of ssosync (see CloudWatch schedule expressions)
+    Default: rate(15 minutes)
   LogLevel:
     Type: String
     Description: Log level for Lambda function logging, e.g., error, info, debug, etc
@@ -28,7 +50,7 @@ Parameters:
     Default: json
   GoogleCredentials:
     Type: String
-    Description: Credentials to log into Google
+    Description: Credentials to log into Google (content of credentials.json)
   GoogleAdminEmail:
     Type: String
     Description: Google Admin email
@@ -44,7 +66,8 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       Runtime: go1.x
-      Handler: main
+      Handler: dist/ssosync_linux_amd64/ssosync
+      Timeout: 300
       Environment:
         Variables:
           SSOSYNC_LOG_LEVEL: !Ref LogLevel
@@ -66,7 +89,7 @@ Resources:
           Name: AWSSyncSchedule
           Properties:
             Enabled: true
-            Schedule: 'rate(15 minutes)'
+            Schedule: !Ref ScheduleExpression
 
   AWSGoogleCredentialsSecret:
     Type: 'AWS::SecretsManager::Secret'

@@ -36,14 +36,14 @@ type SyncGSuite interface {
 
 // SyncGSuite is an object type that will synchronise real users and groups
 type syncGSuite struct {
-	aws    aws.IClient
+	aws    aws.Client
 	google google.Client
 
 	users map[string]*aws.User
 }
 
 // New will create a new SyncGSuite object
-func New(a aws.IClient, g google.Client) SyncGSuite {
+func New(a aws.Client, g google.Client) SyncGSuite {
 	return &syncGSuite{
 		aws:    a,
 		google: g,

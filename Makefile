@@ -1,4 +1,5 @@
 OUTPUT = main # Referenced as Handler in template.yaml
+RELEASER = goreleaser
 PACKAGED_TEMPLATE = packaged.yaml
 STACK_NAME := $(STACK_NAME)
 S3_BUCKET := $(S3_BUCKET)
@@ -17,12 +18,12 @@ install:
 	go get ./...
 
 main: main.go
-	go build -o $(OUTPUT) main.go
+	goreleaser build --snapshot --rm-dist
 
 # compile the code to run in Lambda (local or real)
 .PHONY: lambda
 lambda:
-	GOOS=linux GOARCH=amd64 $(MAKE) main
+	$(MAKE) main
 
 .PHONY: build
 build: clean lambda

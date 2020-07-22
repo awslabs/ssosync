@@ -180,7 +180,7 @@ func TestSendRequestBadUrl(t *testing.T) {
 		Token:    "bearerToken",
 	})
 	assert.NoError(t, err)
-	cc := c.(*Client)
+	cc := c.(*client)
 
 	r, err := cc.sendRequest(http.MethodGet, ":foo")
 	assert.Error(t, err)
@@ -198,7 +198,7 @@ func TestSendRequestBadStatusCode(t *testing.T) {
 		Token:    "bearerToken",
 	})
 	assert.NoError(t, err)
-	cc := c.(*Client)
+	cc := c.(*client)
 
 	calledURL, _ := url.Parse("https://scim.example.com/")
 
@@ -228,7 +228,7 @@ func TestSendRequestCheckAuthHeader(t *testing.T) {
 		Token:    "bearerToken",
 	})
 	assert.NoError(t, err)
-	cc := c.(*Client)
+	cc := c.(*client)
 
 	calledURL, _ := url.Parse("https://scim.example.com/")
 
@@ -263,7 +263,7 @@ func TestSendRequestWithBodyCheckHeaders(t *testing.T) {
 		Token:    "bearerToken",
 	})
 	assert.NoError(t, err)
-	cc := c.(*Client)
+	cc := c.(*client)
 
 	calledURL, _ := url.Parse("https://scim.example.com/")
 
