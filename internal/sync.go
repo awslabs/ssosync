@@ -131,7 +131,7 @@ func (s *syncGSuite) SyncGroups() error {
 		var group *aws.Group
 
 		gg, err := s.aws.FindGroupByDisplayName(g.Name)
-		if err != aws.ErrGroupNotFound {
+		if err != nil && err != aws.ErrGroupNotFound {
 			return err
 		}
 
