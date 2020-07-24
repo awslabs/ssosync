@@ -22,7 +22,6 @@ import (
 	"github.com/awslabs/ssosync/internal/aws"
 	"github.com/awslabs/ssosync/internal/config"
 	"github.com/awslabs/ssosync/internal/google"
-	"go.uber.org/zap"
 
 	log "github.com/sirupsen/logrus"
 	admin "google.golang.org/api/admin/directory/v1"
@@ -110,12 +109,6 @@ func (s *syncGSuite) SyncUsers() error {
 
 // SyncGroups will sync groups from Google -> AWS SSO
 func (s *syncGSuite) SyncGroups() error {
-	log.Debug("get sso groups")
-	awsGroups, err := s.aws.GetGroups()
-	if err != nil {
-		return err
-	}
-
 	log.Debug("get google groups")
 	googleGroups, err := s.google.GetGroups()
 	if err != nil {
@@ -133,10 +126,15 @@ func (s *syncGSuite) SyncGroups() error {
 
 		var group *aws.Group
 
-		if awsGroup, ok := (*awsGroups)[g.Name]; ok {
+		gg, err := s.aws.FindGroupByDisplayName(g.Name)
+		if err != nil {
+			return err
+		}
+
+		if gg != nil {
 			log.Debug("Found group")
-			correlatedGroups[awsGroup.DisplayName] = &awsGroup
-			group = &awsGroup
+			correlatedGroups[gg.DisplayName] = gg
+			group = gg
 		} else {
 			log.Info("Creating group in AWS")
 			newGroup, err := s.aws.CreateGroup(aws.NewGroup(g.Name))
@@ -189,16 +187,16 @@ func (s *syncGSuite) SyncGroups() error {
 		}
 	}
 
-	log.Info("Clean up AWS groups")
-	for _, g := range *awsGroups {
-		if _, ok := correlatedGroups[g.DisplayName]; !ok {
-			log.Info("Delete Group in AWS", zap.String("group", g.DisplayName))
-			err := s.aws.DeleteGroup(&g)
-			if err != nil {
-				return err
-			}
-		}
-	}
+	// log.Info("Clean up AWS groups")
+	// for _, g := range awsGroups {
+	// 	if _, ok := correlatedGroups[g.DisplayName]; !ok {
+	// 		log.Info("Delete Group in AWS", zap.String("group", g.DisplayName))
+	// 		err := s.aws.DeleteGroup(&g)
+	// 		if err != nil {
+	// 			return err
+	// 		}
+	// 	}
+	// }
 
 	return nil
 }

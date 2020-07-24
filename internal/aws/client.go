@@ -23,7 +23,6 @@ import (
 	"net/http"
 	"net/url"
 	"path"
-	"strconv"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -42,7 +41,7 @@ const (
 // IClient represents an interface of methods used
 // to communicate with AWS SSO
 type Client interface {
-	GetGroups() (*map[string]Group, error)
+	FindGroupByDisplayName(string) (*Group, error)
 	IsUserInGroup(*User, *Group) (bool, error)
 	FindUserByEmail(string) (*User, error)
 	CreateUser(*User) (*User, error)
@@ -142,69 +141,6 @@ func (c *client) sendRequest(method string, url string) (response []byte, err er
 	}
 
 	return
-}
-
-func (c *client) getGroupPage(sURL *url.URL, startIndex int) (results *GroupFilterResults, err error) {
-	startURL, err := url.Parse(sURL.String())
-	if err != nil {
-		return
-	}
-
-	q := startURL.Query()
-	q.Add("count", "10")
-	q.Add("startIndex", strconv.Itoa(startIndex))
-	startURL.RawQuery = q.Encode()
-
-	resp, err := c.sendRequest(http.MethodGet, startURL.String())
-	if err != nil {
-		return
-	}
-
-	var r GroupFilterResults
-	err = json.Unmarshal(resp, &r)
-	if err != nil {
-		return
-	}
-
-	results = &r
-
-	return
-}
-
-// GetGroups will retrieve a map of Groups from AWS SSO. The map
-// is keyed by the Display Name of the group.
-func (c *client) GetGroups() (results *map[string]Group, err error) {
-	startURL, err := url.Parse(c.endpointURL.String())
-	if err != nil {
-		return
-	}
-
-	startURL.Path = path.Join(startURL.Path, "/Groups")
-
-	var resultGroup = make(map[string]Group)
-
-	si := 1
-	for {
-		log.WithFields(log.Fields{"startIndex": si}).Debug("Getting Groups Page")
-
-		r, err := c.getGroupPage(startURL, si)
-		if err != nil {
-			return nil, err
-		}
-
-		for _, group := range r.Resources {
-			log.WithFields(log.Fields{"group": group.DisplayName}).Debug("Add group to map")
-			resultGroup[group.DisplayName] = group
-		}
-
-		si = si + 10
-		if si > r.TotalResults {
-			log.WithFields(log.Fields{"totalResults": r.TotalResults}).Debug("Last Page obtained")
-			break
-		}
-	}
-
-	return &resultGroup, nil
 }
 
 // IsUserInGroup will determine if user (u) is in group (g)
@@ -321,6 +257,40 @@ func (c *client) FindUserByEmail(email string) (*User, error) {
 
 	if r.TotalResults != 1 {
 		err = fmt.Errorf("%s not found in AWS SSO", email)
+		return nil, err
+	}
+
+	return &r.Resources[0], nil
+}
+
+// FindGroupByDisplayName will find the group by its displayname.
+func (c *client) FindGroupByDisplayName(name string) (*Group, error) {
+	startURL, err := url.Parse(c.endpointURL.String())
+	if err != nil {
+		return nil, err
+	}
+
+	filter := fmt.Sprintf("displayName eq \"%s\"", name)
+
+	startURL.Path = path.Join(startURL.Path, "/Groups")
+	q := startURL.Query()
+	q.Add("filter", filter)
+
+	startURL.RawQuery = q.Encode()
+
+	resp, err := c.sendRequest(http.MethodGet, startURL.String())
+	if err != nil {
+		return nil, err
+	}
+
+	var r GroupFilterResults
+	err = json.Unmarshal(resp, &r)
+	if err != nil {
+		return nil, err
+	}
+
+	if r.TotalResults != 1 {
+		err = fmt.Errorf("%s not found in AWS SSO", name)
 		return nil, err
 	}
 
