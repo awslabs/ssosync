@@ -24,6 +24,7 @@ import (
 	"net/url"
 	"path"
 	"strconv"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -390,6 +391,9 @@ func (c *client) CreateGroup(g *Group) (group *Group, err error) {
 		err = errors.New("no group defined")
 		return
 	}
+
+	// this is only an obscure fix
+	time.Sleep(time.Second)
 
 	startURL.Path = path.Join(startURL.Path, "/Groups")
 	resp, err := c.sendRequestWithBody(http.MethodPost, startURL.String(), *g)
