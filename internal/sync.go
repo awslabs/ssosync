@@ -59,8 +59,12 @@ func (s *syncGSuite) SyncUsers() error {
 	}
 
 	for _, u := range deletedUsers {
-		uu, _ := s.aws.FindUserByEmail(u.PrimaryEmail)
-		if uu == nil {
+		uu, err := s.aws.FindUserByEmail(u.PrimaryEmail)
+		if err != aws.ErrUserNotFound {
+			return err
+		}
+
+		if err == aws.ErrUserNotFound {
 			continue
 		}
 
@@ -127,7 +131,7 @@ func (s *syncGSuite) SyncGroups() error {
 		var group *aws.Group
 
 		gg, err := s.aws.FindGroupByDisplayName(g.Name)
-		if err != nil {
+		if err != aws.ErrGroupNotFound {
 			return err
 		}
 

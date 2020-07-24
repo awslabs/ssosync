@@ -27,6 +27,11 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+var (
+	ErrUserNotFound  = errors.New("user no found")
+	ErrGroupNotFound = errors.New("group not found")
+)
+
 // OperationType handle patch operations for add/remove
 type OperationType string
 
@@ -41,14 +46,14 @@ const (
 // IClient represents an interface of methods used
 // to communicate with AWS SSO
 type Client interface {
-	FindGroupByDisplayName(string) (*Group, error)
-	IsUserInGroup(*User, *Group) (bool, error)
-	FindUserByEmail(string) (*User, error)
-	CreateUser(*User) (*User, error)
-	DeleteUser(*User) error
-	CreateGroup(*Group) (*Group, error)
-	DeleteGroup(*Group) error
 	AddUserToGroup(*User, *Group) error
+	CreateGroup(*Group) (*Group, error)
+	CreateUser(*User) (*User, error)
+	DeleteGroup(*Group) error
+	DeleteUser(*User) error
+	FindGroupByDisplayName(string) (*Group, error)
+	FindUserByEmail(string) (*User, error)
+	IsUserInGroup(*User, *Group) (bool, error)
 	RemoveUserFromGroup(*User, *Group) error
 }
 
@@ -256,8 +261,7 @@ func (c *client) FindUserByEmail(email string) (*User, error) {
 	}
 
 	if r.TotalResults != 1 {
-		err = fmt.Errorf("%s not found in AWS SSO", email)
-		return nil, err
+		return nil, ErrUserNotFound
 	}
 
 	return &r.Resources[0], nil
@@ -290,8 +294,7 @@ func (c *client) FindGroupByDisplayName(name string) (*Group, error) {
 	}
 
 	if r.TotalResults != 1 {
-		err = fmt.Errorf("%s not found in AWS SSO", name)
-		return nil, err
+		return nil, ErrGroupNotFound
 	}
 
 	return &r.Resources[0], nil
