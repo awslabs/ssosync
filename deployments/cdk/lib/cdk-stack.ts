@@ -54,6 +54,7 @@ export class CdkStack extends cdk.Stack {
       code: new lambda.AssetCode(props.lambdaPath),
       runtime: lambda.Runtime.GO_1_X,
       handler: 'ssosync',
+      timeout: cdk.Duration.seconds(30),
       environment: {
         "SSOSYNC_GOOGLE_CREDENTIALS": googleCredSecret.ref,
         "SSOSYNC_GOOGLE_TOKEN": googleTokenSecret.ref,
