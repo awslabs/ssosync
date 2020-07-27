@@ -8,7 +8,7 @@
 
 > Helping you populate AWS SSO directly with your Google Apps users
 
-SSO Sync will run on any platform that Go can build for.
+SSO Sync will run on any platform that Go can build for. It is available in the [AWS Serverless Application Repository](https://console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:eu-west-1:084703771460:applications/ssosync).
 
 > :warning: there are breaking changes for versions `>= 0.02`
 
@@ -67,7 +67,7 @@ You have to perform this [tutorial](https://developers.google.com/admin-sdk/dire
 
 > you can also use the `--google-credentials` parameter to explicitly specify the file with the service credentials. Please, keep this file safe, or store it in the AWS Secrets Manager
 
-In the domain-wide delegation for the Admin API, you have to specificy the following scopes for user.
+In the domain-wide delegation for the Admin API, you have to specificy the following scopes for the user.
 
 `https://www.googleapis.com/auth/admin.directory.group.readonly,https://www.googleapis.com/auth/admin.directory.group.member.readonly,https://www.googleapis.com/auth/admin.directory.user.readonly`
 
@@ -137,7 +137,7 @@ the pricing for AWS Lambda and CloudWatch before continuing.
 Running ssosync once means that any changes to your Google directory will not appear in
 AWS SSO. To sync. regularly, you can run ssosync via AWS Lambda. 
 
-:warning: You will find ssosync in the [AWS Serverless Application Repository](https://aws.amazon.com/serverless/serverlessrepo/) in the future.
+:warning: You find it in the [AWS Serverless Application Repository](https://console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:eu-west-1:084703771460:applications/ssosync).
 
 ## SAM
 

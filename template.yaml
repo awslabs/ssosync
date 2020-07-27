@@ -27,13 +27,13 @@ Metadata:
     SpdxLicenseId: Apache-2.0
     # paths are relative to .aws-sam/build directory
     LicenseUrl: LICENSE
-    ReadmeUrl: README.md
+    ReadmeUrl: SAR.md
     Labels: [serverless,sso,lambda]
     HomePageUrl: https://github.com/awslabs/ssosync
     # Update the semantic version and run sam publish to publish a new version of your app
-    SemanticVersion: 1.0.0
+    SemanticVersion: 1.0.0-rc.4
     # best practice is to use git tags for each release and link to the version tag as your source code URL
-    SourceCodeUrl: https://github.com/awslabs/ssosync/tree/1.0.0
+    SourceCodeUrl: https://github.com/awslabs/ssosync/tree/1.0.0-rc.4
 
 Parameters:
   ScheduleExpression:

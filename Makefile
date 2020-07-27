@@ -32,6 +32,10 @@ build: clean lambda
 api: build
 	sam local start-api
 
+.PHONY: publish
+publish:
+	sam publish -t packaged.yaml
+
 .PHONY: package
 package: build
 	sam package --template-file $(TEMPLATE) --s3-bucket $(S3_BUCKET) --output-template-file $(PACKAGED_TEMPLATE)
