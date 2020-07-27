@@ -17,6 +17,7 @@ package internal
 import (
 	"context"
 	"io/ioutil"
+	"regexp"
 
 	"github.com/awslabs/ssosync/internal/aws"
 	"github.com/awslabs/ssosync/internal/config"
@@ -30,7 +31,7 @@ import (
 // SyncGSuite is the interface for synchronising users/groups
 type SyncGSuite interface {
 	SyncUsers() error
-	SyncGroups() error
+	SyncGroups(string) error
 }
 
 // SyncGSuite is an object type that will synchronise real users and groups
@@ -142,13 +143,14 @@ func (s *syncGSuite) SyncUsers() error {
 }
 
 // SyncGroups will sync groups from Google -> AWS SSO
-func (s *syncGSuite) SyncGroups() error {
+func (s *syncGSuite) SyncGroups(groupMatchSrc string) error {
 	log.Debug("get google groups")
 	googleGroups, err := s.google.GetGroups()
 	if err != nil {
 		return err
 	}
 
+	groupMatch := regexp.MustCompile(groupMatchSrc)
 	correlatedGroups := make(map[string]*aws.Group)
 
 	for _, g := range googleGroups {
@@ -161,6 +163,11 @@ func (s *syncGSuite) SyncGroups() error {
 		})
 
 		log.Debug("Check group")
+
+		if !groupMatch.MatchString(g.Name) {
+			log.Debug("Group doesn't match, skipping")
+			continue
+		}
 
 		var group *aws.Group
 
@@ -269,7 +276,7 @@ func DoSync(ctx context.Context, cfg *config.Config) error {
 		return err
 	}
 
-	err = c.SyncGroups()
+	err = c.SyncGroups(cfg.GroupMatch)
 	if err != nil {
 		return err
 	}
