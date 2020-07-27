@@ -11,7 +11,9 @@
 
 SSO Sync will run on any platform that Go can build for.
 
-> :warning: There are breaking changes for versions `>= 0.02`
+> :warning: there are breaking changes for versions `>= 0.02`
+> :warning: `>= 1.0.0-rc.2` groups to do not get deleted in AWS SSO when deleted in the Google Directory
+> 🤔 we hope to support other providers in the future
 
 ## Why?
 

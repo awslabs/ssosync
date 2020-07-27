@@ -366,6 +366,82 @@ func TestClient_FindUserByEmail(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestClient_FindGroupByDisplayName(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	x := mock.NewMockIHttpClient(ctrl)
+
+	c, err := NewClient(x, &Config{
+		Endpoint: "https://scim.example.com/",
+		Token:    "bearerToken",
+	})
+	assert.NoError(t, err)
+
+	calledURL, _ := url.Parse("https://scim.example.com/Groups")
+
+	filter := "displayName eq \"testGroup\""
+
+	q := calledURL.Query()
+	q.Add("filter", filter)
+
+	calledURL.RawQuery = q.Encode()
+
+	req := httpReqMatcher{
+		httpReq: &http.Request{
+			URL:    calledURL,
+			Method: http.MethodGet,
+		},
+	}
+
+	// Error in response
+	x.EXPECT().Do(&req).MaxTimes(1).Return(&http.Response{
+		Status:     "OK",
+		StatusCode: 200,
+		Body:       nopCloser{bytes.NewBufferString("")},
+	}, nil)
+
+	u, err := c.FindGroupByDisplayName("testGroup")
+	assert.Nil(t, u)
+	assert.Error(t, err)
+
+	// False
+	r := &GroupFilterResults{
+		TotalResults: 0,
+	}
+	falseResult, _ := json.Marshal(r)
+
+	x.EXPECT().Do(&req).MaxTimes(1).Return(&http.Response{
+		Status:     "OK",
+		StatusCode: 200,
+		Body:       nopCloser{bytes.NewBuffer(falseResult)},
+	}, nil)
+
+	u, err = c.FindGroupByDisplayName("testGroup")
+	assert.Nil(t, u)
+	assert.Error(t, err)
+
+	// True
+	r = &GroupFilterResults{
+		TotalResults: 1,
+		Resources: []Group{
+			{
+				DisplayName: "testGroup",
+			},
+		},
+	}
+	trueResult, _ := json.Marshal(r)
+	x.EXPECT().Do(&req).MaxTimes(1).Return(&http.Response{
+		Status:     "OK",
+		StatusCode: 200,
+		Body:       nopCloser{bytes.NewBuffer(trueResult)},
+	}, nil)
+
+	u, err = c.FindGroupByDisplayName("testGroup")
+	assert.NotNil(t, u)
+	assert.NoError(t, err)
+}
+
 func TestClient_DeleteGroup(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
