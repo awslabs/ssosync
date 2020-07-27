@@ -15,103 +15,105 @@
 package internal
 
 import (
+	"context"
+	"io/ioutil"
 	"net/http"
 
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
-	admin "google.golang.org/api/admin/directory/v1"
-
 	"github.com/awslabs/ssosync/internal/aws"
+	"github.com/awslabs/ssosync/internal/config"
 	"github.com/awslabs/ssosync/internal/google"
+
+	log "github.com/sirupsen/logrus"
+	admin "google.golang.org/api/admin/directory/v1"
 )
 
-// ISyncGSuite is the interface for synchronising users/groups
-type ISyncGSuite interface {
+// SyncGSuite is the interface for synchronising users/groups
+type SyncGSuite interface {
 	SyncUsers() error
 	SyncGroups() error
 }
 
 // SyncGSuite is an object type that will synchronise real users and groups
-type SyncGSuite struct {
-	aws    aws.IClient
-	google google.IClient
-	logger *zap.Logger
+type syncGSuite struct {
+	aws    aws.Client
+	google google.Client
 
 	users map[string]*aws.User
 }
 
 // New will create a new SyncGSuite object
-func New(logger *zap.Logger, a aws.IClient, g google.IClient) ISyncGSuite {
-	return &SyncGSuite{
+func New(a aws.Client, g google.Client) SyncGSuite {
+	return &syncGSuite{
 		aws:    a,
 		google: g,
-		logger: logger,
 		users:  make(map[string]*aws.User),
 	}
 }
 
 // SyncUsers will Sync Google Users to AWS SSO SCIM
-func (s *SyncGSuite) SyncUsers() error {
-	s.logger.Info("Start user sync")
-	s.logger.Debug("Get AWS Users")
-	awsUsers, err := s.aws.GetUsers()
+func (s *syncGSuite) SyncUsers() error {
+	log.Debug("get deleted users")
+	deletedUsers, err := s.google.GetDeletedUsers()
 	if err != nil {
 		return err
 	}
-	s.logger.Debug("Get Google Users")
+
+	for _, u := range deletedUsers {
+		uu, err := s.aws.FindUserByEmail(u.PrimaryEmail)
+		if err != aws.ErrUserNotFound {
+			return err
+		}
+
+		if err == aws.ErrUserNotFound {
+			continue
+		}
+
+		log.WithFields(log.Fields{
+			"email": u.PrimaryEmail,
+		}).Info("deleting google user")
+
+		if err := s.aws.DeleteUser(uu); err != nil {
+			return err
+		}
+	}
+
+	log.Debug("get active google users")
 	googleUsers, err := s.google.GetUsers()
 	if err != nil {
 		return err
 	}
 
 	for _, u := range googleUsers {
-		logUser := []zap.Field{
-			zap.String("email", u.PrimaryEmail),
+		ll := log.WithFields(log.Fields{
+			"email": u.PrimaryEmail,
+		})
+
+		ll.Debug("finding user")
+		uu, _ := s.aws.FindUserByEmail(u.PrimaryEmail)
+		if uu != nil {
+			s.users[uu.Username] = uu
+			continue
 		}
 
-		s.logger.Debug("Check user", logUser...)
-		if awsUser, ok := (*awsUsers)[u.PrimaryEmail]; ok {
-			s.logger.Debug("Found user", logUser...)
-			s.users[awsUser.Username] = &awsUser
-		} else {
-			s.logger.Info("Create user in AWS", logUser...)
-			newUser, err := s.aws.CreateUser(aws.NewUser(
-				u.Name.GivenName,
-				u.Name.FamilyName,
-				u.PrimaryEmail,
-			))
-			if err != nil {
-				return err
-			}
-			s.users[newUser.Username] = newUser
+		ll.Info("creating user")
+		uu, err := s.aws.CreateUser(aws.NewUser(
+			u.Name.GivenName,
+			u.Name.FamilyName,
+			u.PrimaryEmail,
+		))
+		if err != nil {
+			return err
 		}
-	}
 
-	s.logger.Info("Clean up AWS Users")
-	for _, u := range *awsUsers {
-		if _, ok := s.users[u.Username]; !ok {
-			s.logger.Info("Delete User in AWS", zap.String("email", u.Username))
-			err := s.aws.DeleteUser(&u)
-			if err != nil {
-				return err
-			}
-		}
+		s.users[uu.Username] = uu
 	}
 
 	return nil
 }
 
 // SyncGroups will sync groups from Google -> AWS SSO
-func (s *SyncGSuite) SyncGroups() error {
-	s.logger.Info("Start group sync")
-
-	s.logger.Debug("Get AWS Groups")
-	awsGroups, err := s.aws.GetGroups()
-	if err != nil {
-		return err
-	}
-
-	s.logger.Debug("Get Google Groups")
+func (s *syncGSuite) SyncGroups() error {
+	log.Debug("get google groups")
 	googleGroups, err := s.google.GetGroups()
 	if err != nil {
 		return err
@@ -120,20 +122,25 @@ func (s *SyncGSuite) SyncGroups() error {
 	correlatedGroups := make(map[string]*aws.Group)
 
 	for _, g := range googleGroups {
-		logGroup := []zap.Field{
-			zap.String("group", g.Name),
-		}
+		log := log.WithFields(log.Fields{
+			"group": g.Name,
+		})
 
-		s.logger.Debug("Check group", logGroup...)
+		log.Debug("Check group")
 
 		var group *aws.Group
 
-		if awsGroup, ok := (*awsGroups)[g.Name]; ok {
-			s.logger.Debug("Found group", logGroup...)
-			correlatedGroups[awsGroup.DisplayName] = &awsGroup
-			group = &awsGroup
+		gg, err := s.aws.FindGroupByDisplayName(g.Name)
+		if err != nil && err != aws.ErrGroupNotFound {
+			return err
+		}
+
+		if gg != nil {
+			log.Debug("Found group")
+			correlatedGroups[gg.DisplayName] = gg
+			group = gg
 		} else {
-			s.logger.Info("Creating group in AWS", logGroup...)
+			log.Info("Creating group in AWS")
 			newGroup, err := s.aws.CreateGroup(aws.NewGroup(g.Name))
 			if err != nil {
 				return err
@@ -149,7 +156,7 @@ func (s *SyncGSuite) SyncGroups() error {
 
 		memberList := make(map[string]*admin.Member)
 
-		s.logger.Info("Start group user sync", logGroup...)
+		log.Info("Start group user sync")
 
 		for _, m := range groupMembers {
 			if _, ok := s.users[m.Email]; ok {
@@ -158,9 +165,7 @@ func (s *SyncGSuite) SyncGroups() error {
 		}
 
 		for _, u := range s.users {
-			logDetail := append(logGroup, zap.String("user", u.Username))
-
-			s.logger.Debug("Checking user is in group already", logDetail...)
+			log.WithField("user", u.Username).Debug("Checking user is in group already")
 			b, err := s.aws.IsUserInGroup(u, group)
 			if err != nil {
 				return err
@@ -168,7 +173,7 @@ func (s *SyncGSuite) SyncGroups() error {
 
 			if _, ok := memberList[u.Username]; ok {
 				if !b {
-					s.logger.Info("Adding user to group", logDetail...)
+					log.WithField("user", u.Username).Info("Adding user to group")
 					err := s.aws.AddUserToGroup(u, group)
 					if err != nil {
 						return err
@@ -176,7 +181,7 @@ func (s *SyncGSuite) SyncGroups() error {
 				}
 			} else {
 				if b {
-					s.logger.Info("Removing user from group", logDetail...)
+					log.WithField("user", u.Username).Info("Removing user from group")
 					err := s.aws.RemoveUserFromGroup(u, group)
 					if err != nil {
 						return err
@@ -186,70 +191,51 @@ func (s *SyncGSuite) SyncGroups() error {
 		}
 	}
 
-	s.logger.Info("Clean up AWS groups")
-	for _, g := range *awsGroups {
-		if _, ok := correlatedGroups[g.DisplayName]; !ok {
-			s.logger.Info("Delete Group in AWS", zap.String("group", g.DisplayName))
-			err := s.aws.DeleteGroup(&g)
-			if err != nil {
-				return err
-			}
-		}
-	}
+	// log.Info("Clean up AWS groups")
+	// for _, g := range awsGroups {
+	// 	if _, ok := correlatedGroups[g.DisplayName]; !ok {
+	// 		log.Info("Delete Group in AWS", zap.String("group", g.DisplayName))
+	// 		err := s.aws.DeleteGroup(&g)
+	// 		if err != nil {
+	// 			return err
+	// 		}
+	// 	}
+	// }
 
-	s.logger.Info("Done sync groups")
 	return nil
-}
-
-// QuietLogSync will squash logging errors when calling
-// sync on the logger.
-func QuietLogSync(l *zap.Logger) {
-	err := l.Sync()
-	if err != nil {
-		return
-	}
 }
 
 // DoSync will create a logger and run the sync with the paths
 // given to do the sync.
-func DoSync(debug bool, credPath string, tokenPath string, awsTomlPath string) error {
-	config := zap.NewDevelopmentConfig()
-	config.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
-	if debug {
-		config.Level.SetLevel(zap.DebugLevel)
-	} else {
-		config.Level.SetLevel(zap.InfoLevel)
+func DoSync(ctx context.Context, cfg *config.Config) error {
+	log.Info("Creating the Google and AWS Clients needed")
+
+	creds := []byte(cfg.GoogleCredentials)
+
+	if !cfg.IsLambda {
+		b, err := ioutil.ReadFile(cfg.GoogleCredentials)
+		if err != nil {
+			return err
+		}
+		creds = b
 	}
 
-	logger, _ := config.Build()
-	defer QuietLogSync(logger)
-
-	logger.Info("Creating the Google and AWS Clients needed")
-
-	googleAuthClient, err := google.NewAuthClient(logger, credPath, tokenPath)
+	googleClient, err := google.NewClient(ctx, cfg.GoogleAdmin, creds)
 	if err != nil {
-		logger.Fatal("Failed to create Google Auth Client", zap.Error(err))
-	}
-
-	googleClient, err := google.NewClient(logger, googleAuthClient)
-	if err != nil {
-		logger.Fatal("Failed to create Google Client", zap.Error(err))
-	}
-
-	awsConfig, err := aws.ReadConfigFromFile(awsTomlPath)
-	if err != nil {
-		logger.Fatal("Failed to read AWS Config", zap.Error(err))
+		return err
 	}
 
 	awsClient, err := aws.NewClient(
-		logger,
 		&http.Client{},
-		awsConfig)
+		&aws.Config{
+			Endpoint: cfg.SCIMEndpoint,
+			Token:    cfg.SCIMAccessToken,
+		})
 	if err != nil {
-		logger.Fatal("Failed to create awsClient", zap.Error(err))
+		return err
 	}
 
-	c := New(logger, awsClient, googleClient)
+	c := New(awsClient, googleClient)
 	err = c.SyncUsers()
 	if err != nil {
 		return err

@@ -1,0 +1,117 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      -
+        Label:
+          default: "General"
+        Parameters:
+          - GoogleCredentials
+          - GoogleAdminEmail
+          - SCIMEndpointUrl
+          - SCIMEndpointAccessToken
+      -
+        Label:
+          default: "Advanced Configuration"
+        Parameters:
+          - LogLevel
+          - LogFormat
+          - ScheduleExpression
+
+  AWS::ServerlessRepo::Application:
+    Name: ssosync
+    Description: Helping you populate AWS SSO directly with your Google Apps users.
+    Author: Sebastian Doell
+    SpdxLicenseId: Apache-2.0
+    # paths are relative to .aws-sam/build directory
+    LicenseUrl: LICENSE
+    ReadmeUrl: README.md
+    Labels: [serverless,sso,lambda]
+    HomePageUrl: https://github.com/awslabs/ssosync
+    # Update the semantic version and run sam publish to publish a new version of your app
+    SemanticVersion: 1.0.0
+    # best practice is to use git tags for each release and link to the version tag as your source code URL
+    SourceCodeUrl: https://github.com/awslabs/ssosync/tree/1.0.0-rc.1
+
+Parameters:
+  ScheduleExpression:
+    Type: String
+    Description: Schedule for trigger the execution of ssosync (see CloudWatch schedule expressions)
+    Default: rate(15 minutes)
+  LogLevel:
+    Type: String
+    Description: Log level for Lambda function logging, e.g., error, info, debug, etc
+    Default: warn
+  LogFormat:
+    Type: String
+    Description: Log format for Lambda function logging, e.g., text, json
+    Default: json
+  GoogleCredentials:
+    Type: String
+    Description: Credentials to log into Google (content of credentials.json)
+  GoogleAdminEmail:
+    Type: String
+    Description: Google Admin email
+  SCIMEndpointUrl:
+    Type: String
+    Description: AWS SSO SCIM Endpoint Url
+  SCIMEndpointAccessToken:
+    Type: String
+    Description: AWS SSO SCIM AccessToken
+
+Resources:
+  SSOSyncFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Runtime: go1.x
+      Handler: dist/ssosync_linux_amd64/ssosync
+      Timeout: 300
+      Environment:
+        Variables:
+          SSOSYNC_LOG_LEVEL: !Ref LogLevel
+          SSOSYNC_LOG_FORMAT: !Ref LogFormat
+          SSOSYNC_GOOGLE_CREDENTIALS: !Ref AWSGoogleCredentialsSecret
+          SSOSYNC_GOOGLE_ADMIN: !Ref AWSGoogleAdminEamil
+          SSOSYNC_SCIM_ENDPOINT: !Ref AWSSCIMEndpointSecret
+          SSOSYNC_SCIM_ACCESS_TOKEN: !Ref AWSSCIMAccessTokenSecret
+      Policies:
+        - Statement:
+          - Sid: SSMGetParameterPolicy
+            Effect: Allow
+            Action:
+              - "secretsmanager:Get*"
+            Resource: '*'
+      Events:
+        SyncScheduledEvent:
+          Type: Schedule
+          Name: AWSSyncSchedule
+          Properties:
+            Enabled: true
+            Schedule: !Ref ScheduleExpression
+
+  AWSGoogleCredentialsSecret:
+    Type: 'AWS::SecretsManager::Secret'
+    Properties:
+      Name: SSOSyncGoogleCredentials
+      SecretString: !Ref GoogleCredentials
+
+  AWSGoogleAdminEamil:
+    Type: 'AWS::SecretsManager::Secret'
+    Properties:
+      Name: SSOSyncGoogleAdminEmail
+      SecretString: !Ref GoogleAdminEmail
+
+  AWSSCIMEndpointSecret: # This can be moved to custom provider
+    Type: 'AWS::SecretsManager::Secret'
+    Properties:
+      Name: SSOSyncSCIMEndpointUrl
+      SecretString: !Ref SCIMEndpointUrl
+
+  AWSSCIMAccessTokenSecret: # This can be moved to custom provider
+    Type: 'AWS::SecretsManager::Secret'
+    Properties:
+      Name: SSOSyncSCIMAccessToken
+      SecretString: !Ref SCIMEndpointAccessToken
+

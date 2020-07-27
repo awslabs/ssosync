@@ -1,4 +1,5 @@
 # .github/workflows/release.yaml
+name: release
 
 on:
   push:
@@ -6,8 +7,24 @@ on:
       - '*'
 
 jobs:
-  goreleaser:
+  test:
     runs-on: ubuntu-latest
+    steps:
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v2
+
+      - name: Setup go
+        uses: actions/setup-go@v1
+        with:
+          go-version: '1.14.x'
+      - name: Run Static Checks
+        run: GOBIN=$PWD/bin go install honnef.co/go/tools/cmd/staticcheck && ./bin/staticcheck ./...
+      - name: Run Tests
+        run: go test -p 1 -cover -race -v ./...
+
+  release:
+    runs-on: ubuntu-latest
+    needs: [ test ]
     steps:
       -
         name: Checkout
@@ -19,7 +36,7 @@ jobs:
         name: Set up Go
         uses: actions/setup-go@v2
         with:
-          go-version: 1.14
+          go-version: '1.14.x'
       -
         name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v2

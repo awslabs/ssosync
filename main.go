@@ -15,18 +15,16 @@
 package main
 
 import (
-	"fmt"
+	"math/rand"
+	"time"
 
 	"github.com/awslabs/ssosync/cmd"
 )
 
-var (
-	version = "dev"
-	commit  = "none"
-	date    = "unknown"
-	builtBy = "unknown"
-)
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
 
 func main() {
-	cmd.Execute(fmt.Sprintf("%s, commit %s, built at %s by %s\n", version, commit, date, builtBy))
+	cmd.Execute()
 }

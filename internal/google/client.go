@@ -16,75 +16,90 @@ package google
 
 import (
 	"context"
-	"net/http"
 
-	"go.uber.org/zap"
+	"golang.org/x/oauth2/google"
 	admin "google.golang.org/api/admin/directory/v1"
 	"google.golang.org/api/option"
 )
 
-// IClient is the Interface for the Client
-type IClient interface {
+// Client is the Interface for the Client
+type Client interface {
 	GetUsers() ([]*admin.User, error)
+	GetDeletedUsers() ([]*admin.User, error)
 	GetGroups() ([]*admin.Group, error)
 	GetGroupMembers(*admin.Group) ([]*admin.Member, error)
 }
 
-// Client is the Google Apps for Domains Client
-type Client struct {
-	logger  *zap.Logger
-	client  *http.Client
+type client struct {
+	ctx     context.Context
 	service *admin.Service
 }
 
 // NewClient creates a new client for Google's Admin API
-func NewClient(logger *zap.Logger, client *AuthClient) (IClient, error) {
-	c, err := client.GetClient()
+func NewClient(ctx context.Context, adminEmail string, serviceAccountKey []byte) (Client, error) {
+	config, err := google.JWTConfigFromJSON(serviceAccountKey, admin.AdminDirectoryGroupReadonlyScope,
+		admin.AdminDirectoryGroupMemberReadonlyScope,
+		admin.AdminDirectoryUserReadonlyScope)
+
+	config.Subject = adminEmail
+
 	if err != nil {
 		return nil, err
 	}
 
-	srv, err := admin.NewService(context.TODO(), option.WithHTTPClient(c))
+	ts := config.TokenSource(ctx)
+
+	srv, err := admin.NewService(ctx, option.WithTokenSource(ts))
 	if err != nil {
 		return nil, err
 	}
 
-	return &Client{
-		logger:  logger,
-		client:  c,
+	return &client{
+		ctx:     ctx,
 		service: srv,
 	}, nil
 }
 
-// GetUsers will get the users from Google's Admin API
-func (c *Client) GetUsers() (u []*admin.User, err error) {
-	u = make([]*admin.User, 0)
-	err = c.service.Users.List().Customer("my_customer").Pages(context.TODO(), func(users *admin.Users) error {
+// GetDeletedUsers will get the deleted users from the Google's Admin API.
+func (c *client) GetDeletedUsers() ([]*admin.User, error) {
+	u := make([]*admin.User, 0)
+	err := c.service.Users.List().Customer("my_customer").ShowDeleted("true").Pages(c.ctx, func(users *admin.Users) error {
 		u = append(u, users.Users...)
 		return nil
 	})
 
-	return
+	return u, err
+}
+
+// GetUsers will get the users from Google's Admin API
+func (c *client) GetUsers() ([]*admin.User, error) {
+	u := make([]*admin.User, 0)
+	err := c.service.Users.List().Customer("my_customer").Pages(c.ctx, func(users *admin.Users) error {
+		u = append(u, users.Users...)
+		return nil
+	})
+
+	return u, err
 }
 
 // GetGroups will get the groups from Google's Admin API
-func (c *Client) GetGroups() (g []*admin.Group, err error) {
-	g = make([]*admin.Group, 0)
-	err = c.service.Groups.List().Customer("my_customer").Pages(context.TODO(), func(groups *admin.Groups) error {
+func (c *client) GetGroups() ([]*admin.Group, error) {
+	g := make([]*admin.Group, 0)
+	err := c.service.Groups.List().Customer("my_customer").Pages(context.TODO(), func(groups *admin.Groups) error {
 		g = append(g, groups.Groups...)
 		return nil
 	})
 
-	return
+	return g, err
 }
 
 // GetGroupMembers will get the members of the group specified
-func (c *Client) GetGroupMembers(g *admin.Group) (m []*admin.Member, err error) {
-	m = make([]*admin.Member, 0)
-	err = c.service.Members.List(g.Id).Pages(context.TODO(), func(members *admin.Members) error {
+func (c *client) GetGroupMembers(g *admin.Group) ([]*admin.Member, error) {
+	m := make([]*admin.Member, 0)
+	err := c.service.Members.List(g.Id).Pages(context.TODO(), func(members *admin.Members) error {
 		m = append(m, members.Members...)
 		return nil
 	})
 
-	return
+	return m, err
 }
