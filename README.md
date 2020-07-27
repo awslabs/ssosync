@@ -1,18 +1,19 @@
 # SSO Sync
 
-<a href='https://github.com/jpoles1/gopherbadger' target='_blank'>![gopherbadger-tag-do-not-edit](https://img.shields.io/badge/Go%20Coverage-42%25-brightgreen.svg?longCache=true&style=flat)</a>
 ![Github Action](https://github.com/awslabs/ssosync/workflows/main/badge.svg)
+<a href='https://github.com/jpoles1/gopherbadger' target='_blank'>![gopherbadger-tag-do-not-edit](https://img.shields.io/badge/Go%20Coverage-42%25-brightgreen.svg?longCache=true&style=flat)</a>
 [![Go Report Card](https://goreportcard.com/badge/github.com/awslabs/ssosync)](https://goreportcard.com/report/github.com/awslabs/ssosync)
 [![License Apache 2](https://img.shields.io/badge/License-Apache2-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 [![Taylor Swift](https://img.shields.io/badge/secured%20by-taylor%20swift-brightgreen.svg)](https://twitter.com/SwiftOnSecurity)
-[![Volkswagen](https://auchenberg.github.io/volkswagen/volkswargen_ci.svg?v=1)](https://github.com/auchenberg/volkswagen)
 
 > Helping you populate AWS SSO directly with your Google Apps users
 
 SSO Sync will run on any platform that Go can build for.
 
 > :warning: there are breaking changes for versions `>= 0.02`
+
 > :warning: `>= 1.0.0-rc.2` groups to do not get deleted in AWS SSO when deleted in the Google Directory
+
 > 🤔 we hope to support other providers in the future
 
 ## Why?
@@ -147,3 +148,7 @@ You can use the AWS Serverless Application Model (SAM) to deploy this to your ac
 Specify an Amazon S3 Bucket for the upload with `export S3_BUCKET=<YOUR_BUCKET>`.
 
 Execute `make package` in the console. Which will package and upload the function to the bucket. You can then use the `packaged.yaml` to configure and deploy the stack in [AWS CloudFormation Console](https://console.aws.amazon.com/cloudformation).
+
+## License
+
+[Apache-2.0](/LICENSE)
