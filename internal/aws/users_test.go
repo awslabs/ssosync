@@ -35,3 +35,19 @@ func TestNewUser(t *testing.T) {
 	assert.Len(t, u.Schemas, 1)
 	assert.Equal(t, u.Schemas[0], "urn:ietf:params:scim:schemas:core:2.0:User")
 }
+
+func TestUpdateUser(t *testing.T) {
+	u := UpdateUser("111", "Lee", "Packham", "test@email.com", false)
+	assert.Equal(t, u.Name.GivenName, "Lee")
+	assert.Equal(t, u.Name.FamilyName, "Packham")
+	assert.Equal(t, u.DisplayName, "Lee Packham")
+	assert.Len(t, u.Emails, 1)
+
+	assert.Equal(t, u.Emails[0].Value, "test@email.com")
+	assert.Equal(t, u.Emails[0].Primary, true)
+
+	assert.Equal(t, u.Active, false)
+
+	assert.Len(t, u.Schemas, 1)
+	assert.Equal(t, u.Schemas[0], "urn:ietf:params:scim:schemas:core:2.0:User")
+}

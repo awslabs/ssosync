@@ -565,6 +565,51 @@ func TestClient_CreateUser(t *testing.T) {
 	}
 }
 
+func TestClient_UpdateUser(t *testing.T) {
+	nu := UpdateUser("userId", "Lee", "Packham", "test@example.com", true)
+	nuResult := *nu
+	nuResult.ID = "userId"
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	x := mock.NewMockIHttpClient(ctrl)
+
+	c, err := NewClient(x, &Config{
+		Endpoint: "https://scim.example.com/",
+		Token:    "bearerToken",
+	})
+	assert.NoError(t, err)
+
+	calledURL, _ := url.Parse("https://scim.example.com/Users/userId")
+
+	requestJSON, _ := json.Marshal(nu)
+
+	req := httpReqMatcher{
+		httpReq: &http.Request{
+			URL:    calledURL,
+			Method: http.MethodPut,
+		},
+		body: string(requestJSON),
+	}
+
+	response, _ := json.Marshal(nuResult)
+
+	x.EXPECT().Do(&req).MaxTimes(1).Return(&http.Response{
+		Status:     "OK",
+		StatusCode: 200,
+		Body:       nopCloser{bytes.NewBuffer(response)},
+	}, nil)
+
+	r, err := c.UpdateUser(nu)
+	assert.NotNil(t, r)
+	assert.NoError(t, err)
+
+	if r != nil {
+		assert.Equal(t, *r, nuResult)
+	}
+}
+
 func TestClient_CreateGroup(t *testing.T) {
 	ng := NewGroup("TestGroup")
 	ngResult := *ng
