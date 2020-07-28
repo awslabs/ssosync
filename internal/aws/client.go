@@ -54,6 +54,7 @@ type Client interface {
 	FindGroupByDisplayName(string) (*Group, error)
 	FindUserByEmail(string) (*User, error)
 	IsUserInGroup(*User, *Group) (bool, error)
+	UpdateUser(*User) (*User, error)
 	RemoveUserFromGroup(*User, *Group) error
 }
 
@@ -314,6 +315,38 @@ func (c *client) CreateUser(u *User) (user *User, err error) {
 
 	startURL.Path = path.Join(startURL.Path, "/Users")
 	resp, err := c.sendRequestWithBody(http.MethodPost, startURL.String(), *u)
+	if err != nil {
+		return
+	}
+
+	var newUser User
+	err = json.Unmarshal(resp, &newUser)
+	if err != nil {
+		return
+	}
+	if newUser.ID == "" {
+		user, err = c.FindUserByEmail(u.Username)
+		return
+	}
+
+	user = &newUser
+	return
+}
+
+// UpdateUser will update/replace the user specified
+func (c *client) UpdateUser(u *User) (user *User, err error) {
+	startURL, err := url.Parse(c.endpointURL.String())
+	if err != nil {
+		return
+	}
+
+	if u == nil {
+		err = errors.New("no user defined")
+		return
+	}
+
+	startURL.Path = path.Join(startURL.Path, fmt.Sprintf("/Users/%s", u.ID))
+	resp, err := c.sendRequestWithBody(http.MethodPut, startURL.String(), *u)
 	if err != nil {
 		return
 	}
