@@ -521,7 +521,7 @@ func TestClient_DeleteUser(t *testing.T) {
 }
 
 func TestClient_CreateUser(t *testing.T) {
-	nu := NewUser("Lee", "Packham", "test@example.com")
+	nu := NewUser("Lee", "Packham", "test@example.com", true)
 	nuResult := *nu
 	nuResult.ID = "userId"
 
