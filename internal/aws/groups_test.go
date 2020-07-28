@@ -21,9 +21,9 @@ import (
 )
 
 func TestNewGroup(t *testing.T) {
-	g := NewGroup("Test Group")
+	g := NewGroup("test_group@example.com")
 
 	assert.Len(t, g.Schemas, 1)
 	assert.Equal(t, g.Schemas[0], "urn:ietf:params:scim:schemas:core:2.0:Group")
-	assert.Equal(t, g.DisplayName, "Test Group")
+	assert.Equal(t, g.DisplayName, "test_group@example.com")
 }

@@ -566,7 +566,7 @@ func TestClient_CreateUser(t *testing.T) {
 }
 
 func TestClient_CreateGroup(t *testing.T) {
-	ng := NewGroup("TestGroup")
+	ng := NewGroup("test_group@example.com")
 	ngResult := *ng
 	ngResult.ID = "groupId"
 

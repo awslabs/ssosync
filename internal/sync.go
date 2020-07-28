@@ -130,7 +130,7 @@ func (s *syncGSuite) SyncGroups() error {
 
 		var group *aws.Group
 
-		gg, err := s.aws.FindGroupByDisplayName(g.Name)
+		gg, err := s.aws.FindGroupByDisplayName(g.Email)
 		if err != nil && err != aws.ErrGroupNotFound {
 			return err
 		}
@@ -141,7 +141,7 @@ func (s *syncGSuite) SyncGroups() error {
 			group = gg
 		} else {
 			log.Info("Creating group in AWS")
-			newGroup, err := s.aws.CreateGroup(aws.NewGroup(g.Name))
+			newGroup, err := s.aws.CreateGroup(aws.NewGroup(g.Email))
 			if err != nil {
 				return err
 			}
