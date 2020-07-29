@@ -334,7 +334,7 @@ func (c *client) CreateUser(u *User) (user *User, err error) {
 }
 
 // UpdateUser will update/replace the user specified
-func (c *client) UpdateUser(u *User) (user *User, err error) {
+func (c *client) UpdateUser(u *User) (*User, error) {
 	startURL, err := url.Parse(c.endpointURL.String())
 	if err != nil {
 		return nil, err
@@ -357,8 +357,7 @@ func (c *client) UpdateUser(u *User) (user *User, err error) {
 		return nil, err
 	}
 	if newUser.ID == "" {
-		user, err = c.FindUserByEmail(u.Username)
-		return user, err
+		return c.FindUserByEmail(u.Username)
 	}
 
 	return &newUser, nil
