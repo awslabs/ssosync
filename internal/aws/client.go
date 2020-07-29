@@ -28,8 +28,10 @@ import (
 )
 
 var (
-	ErrUserNotFound  = errors.New("user no found")
-	ErrGroupNotFound = errors.New("group not found")
+	ErrUserNotFound      = errors.New("user not found")
+	ErrGroupNotFound     = errors.New("group not found")
+	ErrUserNotSpecified  = errors.New("user not specified")
+	ErrGroupNotSpecified = errors.New("group not specified")
 )
 
 // OperationType handle patch operations for add/remove
@@ -54,6 +56,7 @@ type Client interface {
 	FindGroupByDisplayName(string) (*Group, error)
 	FindUserByEmail(string) (*User, error)
 	IsUserInGroup(*User, *Group) (bool, error)
+	UpdateUser(*User) (*User, error)
 	RemoveUserFromGroup(*User, *Group) error
 }
 
@@ -149,18 +152,18 @@ func (c *client) sendRequest(method string, url string) (response []byte, err er
 }
 
 // IsUserInGroup will determine if user (u) is in group (g)
-func (c *client) IsUserInGroup(u *User, g *Group) (present bool, err error) {
+func (c *client) IsUserInGroup(u *User, g *Group) (bool, error) {
 	if g == nil {
-		return false, errors.New("no group specified")
+		return false, ErrGroupNotSpecified
 	}
 
 	if u == nil {
-		return false, errors.New("no user specified")
+		return false, ErrUserNotSpecified
 	}
 
 	startURL, err := url.Parse(c.endpointURL.String())
 	if err != nil {
-		return
+		return false, err
 	}
 
 	filter := fmt.Sprintf("id eq \"%s\" and members eq \"%s\"", g.ID, u.ID)
@@ -172,27 +175,25 @@ func (c *client) IsUserInGroup(u *User, g *Group) (present bool, err error) {
 	startURL.RawQuery = q.Encode()
 	resp, err := c.sendRequest(http.MethodGet, startURL.String())
 	if err != nil {
-		return
+		return false, err
 	}
 
 	var r GroupFilterResults
 	err = json.Unmarshal(resp, &r)
 	if err != nil {
-		return
+		return false, err
 	}
 
-	present = r.TotalResults > 0
-
-	return
+	return r.TotalResults > 0, nil
 }
 
 func (c *client) groupChangeOperation(op OperationType, u *User, g *Group) error {
 	if g == nil {
-		return errors.New("no group specified")
+		return ErrGroupNotSpecified
 	}
 
 	if u == nil {
-		return errors.New("no user specified")
+		return ErrUserNotSpecified
 	}
 
 	log.WithFields(log.Fields{"operations": op, "user": u.Username, "group": g.DisplayName}).Debug("Group Change")
@@ -301,35 +302,63 @@ func (c *client) FindGroupByDisplayName(name string) (*Group, error) {
 }
 
 // CreateUser will create the user specified
-func (c *client) CreateUser(u *User) (user *User, err error) {
+func (c *client) CreateUser(u *User) (*User, error) {
 	startURL, err := url.Parse(c.endpointURL.String())
 	if err != nil {
-		return
+		return nil, err
 	}
 
 	if u == nil {
-		err = errors.New("no user defined")
-		return
+		err = ErrUserNotSpecified
+		return nil, err
 	}
 
 	startURL.Path = path.Join(startURL.Path, "/Users")
 	resp, err := c.sendRequestWithBody(http.MethodPost, startURL.String(), *u)
 	if err != nil {
-		return
+		return nil, err
 	}
 
 	var newUser User
 	err = json.Unmarshal(resp, &newUser)
 	if err != nil {
-		return
+		return nil, err
 	}
 	if newUser.ID == "" {
-		user, err = c.FindUserByEmail(u.Username)
-		return
+		return c.FindUserByEmail(u.Username)
 	}
 
-	user = &newUser
-	return
+	return &newUser, nil
+}
+
+// UpdateUser will update/replace the user specified
+func (c *client) UpdateUser(u *User) (*User, error) {
+	startURL, err := url.Parse(c.endpointURL.String())
+	if err != nil {
+		return nil, err
+	}
+
+	if u == nil {
+		err = ErrUserNotFound
+		return nil, err
+	}
+
+	startURL.Path = path.Join(startURL.Path, fmt.Sprintf("/Users/%s", u.ID))
+	resp, err := c.sendRequestWithBody(http.MethodPut, startURL.String(), *u)
+	if err != nil {
+		return nil, err
+	}
+
+	var newUser User
+	err = json.Unmarshal(resp, &newUser)
+	if err != nil {
+		return nil, err
+	}
+	if newUser.ID == "" {
+		return c.FindUserByEmail(u.Username)
+	}
+
+	return &newUser, nil
 }
 
 // DeleteUser will remove the current user from the directory
@@ -340,7 +369,7 @@ func (c *client) DeleteUser(u *User) error {
 	}
 
 	if u == nil {
-		return errors.New("no user specified")
+		return ErrUserNotSpecified
 	}
 
 	startURL.Path = path.Join(startURL.Path, fmt.Sprintf("/Users/%s", u.ID))
@@ -353,31 +382,30 @@ func (c *client) DeleteUser(u *User) error {
 }
 
 // CreateGroup will create a group given
-func (c *client) CreateGroup(g *Group) (group *Group, err error) {
+func (c *client) CreateGroup(g *Group) (*Group, error) {
 	startURL, err := url.Parse(c.endpointURL.String())
 	if err != nil {
-		return
+		return nil, err
 	}
 
 	if g == nil {
-		err = errors.New("no group defined")
-		return
+		err = ErrGroupNotSpecified
+		return nil, err
 	}
 
 	startURL.Path = path.Join(startURL.Path, "/Groups")
 	resp, err := c.sendRequestWithBody(http.MethodPost, startURL.String(), *g)
 	if err != nil {
-		return
+		return nil, err
 	}
 
 	var newGroup Group
 	err = json.Unmarshal(resp, &newGroup)
 	if err != nil {
-		return
+		return nil, err
 	}
 
-	group = &newGroup
-	return
+	return &newGroup, nil
 }
 
 // DeleteGroup will delete the group specified
@@ -388,7 +416,7 @@ func (c *client) DeleteGroup(g *Group) error {
 	}
 
 	if g == nil {
-		return errors.New("no group specified")
+		return ErrGroupNotSpecified
 	}
 
 	startURL.Path = path.Join(startURL.Path, fmt.Sprintf("/Groups/%s", g.ID))

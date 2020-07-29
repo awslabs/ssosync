@@ -92,15 +92,29 @@ func (s *syncGSuite) SyncUsers() error {
 		uu, _ := s.aws.FindUserByEmail(u.PrimaryEmail)
 		if uu != nil {
 			s.users[uu.Username] = uu
+			// Update the user when suspended state is changed
+			if uu.Active == u.Suspended {
+				log.Debug("Mismatch active/suspended, updating user")
+				// create new user object and update the user
+				_, err := s.aws.UpdateUser(aws.UpdateUser(
+					uu.ID,
+					u.Name.GivenName,
+					u.Name.FamilyName,
+					u.PrimaryEmail,
+					!u.Suspended))
+				if err != nil {
+					return err
+				}
+			}
 			continue
 		}
+		ll.Info("creating user ")
 
-		ll.Info("creating user")
 		uu, err := s.aws.CreateUser(aws.NewUser(
 			u.Name.GivenName,
 			u.Name.FamilyName,
 			u.PrimaryEmail,
-		))
+			!u.Suspended))
 		if err != nil {
 			return err
 		}
