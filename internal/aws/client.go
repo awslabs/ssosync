@@ -382,31 +382,30 @@ func (c *client) DeleteUser(u *User) error {
 }
 
 // CreateGroup will create a group given
-func (c *client) CreateGroup(g *Group) (group *Group, err error) {
+func (c *client) CreateGroup(g *Group) (*Group, error) {
 	startURL, err := url.Parse(c.endpointURL.String())
 	if err != nil {
-		return
+		return nil, err
 	}
 
 	if g == nil {
 		err = errors.New("no group defined")
-		return
+		return nil, err
 	}
 
 	startURL.Path = path.Join(startURL.Path, "/Groups")
 	resp, err := c.sendRequestWithBody(http.MethodPost, startURL.String(), *g)
 	if err != nil {
-		return
+		return nil, err
 	}
 
 	var newGroup Group
 	err = json.Unmarshal(resp, &newGroup)
 	if err != nil {
-		return
+		return nil, err
 	}
 
-	group = &newGroup
-	return
+	return &newGroup, nil
 }
 
 // DeleteGroup will delete the group specified
