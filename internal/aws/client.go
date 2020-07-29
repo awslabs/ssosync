@@ -28,8 +28,10 @@ import (
 )
 
 var (
-	ErrUserNotFound  = errors.New("user no found")
-	ErrGroupNotFound = errors.New("group not found")
+	ErrUserNotFound      = errors.New("user not found")
+	ErrGroupNotFound     = errors.New("group not found")
+	ErrUserNotSpecified  = errors.New("user not specified")
+	ErrGroupNotSpecified = errors.New("group not specified")
 )
 
 // OperationType handle patch operations for add/remove
@@ -150,18 +152,18 @@ func (c *client) sendRequest(method string, url string) (response []byte, err er
 }
 
 // IsUserInGroup will determine if user (u) is in group (g)
-func (c *client) IsUserInGroup(u *User, g *Group) (present bool, err error) {
+func (c *client) IsUserInGroup(u *User, g *Group) (bool, error) {
 	if g == nil {
-		return false, errors.New("no group specified")
+		return false, ErrGroupNotSpecified
 	}
 
 	if u == nil {
-		return false, errors.New("no user specified")
+		return false, ErrUserNotSpecified
 	}
 
 	startURL, err := url.Parse(c.endpointURL.String())
 	if err != nil {
-		return
+		return false, err
 	}
 
 	filter := fmt.Sprintf("id eq \"%s\" and members eq \"%s\"", g.ID, u.ID)
@@ -173,27 +175,25 @@ func (c *client) IsUserInGroup(u *User, g *Group) (present bool, err error) {
 	startURL.RawQuery = q.Encode()
 	resp, err := c.sendRequest(http.MethodGet, startURL.String())
 	if err != nil {
-		return
+		return false, err
 	}
 
 	var r GroupFilterResults
 	err = json.Unmarshal(resp, &r)
 	if err != nil {
-		return
+		return false, err
 	}
 
-	present = r.TotalResults > 0
-
-	return
+	return r.TotalResults > 0, nil
 }
 
 func (c *client) groupChangeOperation(op OperationType, u *User, g *Group) error {
 	if g == nil {
-		return errors.New("no group specified")
+		return ErrGroupNotSpecified
 	}
 
 	if u == nil {
-		return errors.New("no user specified")
+		return ErrUserNotSpecified
 	}
 
 	log.WithFields(log.Fields{"operations": op, "user": u.Username, "group": g.DisplayName}).Debug("Group Change")
@@ -309,7 +309,7 @@ func (c *client) CreateUser(u *User) (*User, error) {
 	}
 
 	if u == nil {
-		err = errors.New("no user defined")
+		err = ErrUserNotSpecified
 		return nil, err
 	}
 
@@ -369,7 +369,7 @@ func (c *client) DeleteUser(u *User) error {
 	}
 
 	if u == nil {
-		return errors.New("no user specified")
+		return ErrUserNotSpecified
 	}
 
 	startURL.Path = path.Join(startURL.Path, fmt.Sprintf("/Users/%s", u.ID))
@@ -389,7 +389,7 @@ func (c *client) CreateGroup(g *Group) (*Group, error) {
 	}
 
 	if g == nil {
-		err = errors.New("no group defined")
+		err = ErrGroupNotSpecified
 		return nil, err
 	}
 
@@ -416,7 +416,7 @@ func (c *client) DeleteGroup(g *Group) error {
 	}
 
 	if g == nil {
-		return errors.New("no group specified")
+		return ErrGroupNotSpecified
 	}
 
 	startURL.Path = path.Join(startURL.Path, fmt.Sprintf("/Groups/%s", g.ID))
