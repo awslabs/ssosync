@@ -341,7 +341,7 @@ func (c *client) UpdateUser(u *User) (user *User, err error) {
 	}
 
 	if u == nil {
-		err = errors.New("no user defined")
+		err = ErrUserNotFound
 		return
 	}
 
