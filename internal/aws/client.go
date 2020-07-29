@@ -302,35 +302,33 @@ func (c *client) FindGroupByDisplayName(name string) (*Group, error) {
 }
 
 // CreateUser will create the user specified
-func (c *client) CreateUser(u *User) (user *User, err error) {
+func (c *client) CreateUser(u *User) (*User, error) {
 	startURL, err := url.Parse(c.endpointURL.String())
 	if err != nil {
-		return
+		return nil, err
 	}
 
 	if u == nil {
 		err = errors.New("no user defined")
-		return
+		return nil, err
 	}
 
 	startURL.Path = path.Join(startURL.Path, "/Users")
 	resp, err := c.sendRequestWithBody(http.MethodPost, startURL.String(), *u)
 	if err != nil {
-		return
+		return nil, err
 	}
 
 	var newUser User
 	err = json.Unmarshal(resp, &newUser)
 	if err != nil {
-		return
+		return nil, err
 	}
 	if newUser.ID == "" {
-		user, err = c.FindUserByEmail(u.Username)
-		return
+		return c.FindUserByEmail(u.Username)
 	}
 
-	user = &newUser
-	return
+	return &newUser, nil
 }
 
 // UpdateUser will update/replace the user specified
