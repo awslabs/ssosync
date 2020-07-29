@@ -337,32 +337,31 @@ func (c *client) CreateUser(u *User) (user *User, err error) {
 func (c *client) UpdateUser(u *User) (user *User, err error) {
 	startURL, err := url.Parse(c.endpointURL.String())
 	if err != nil {
-		return
+		return nil, err
 	}
 
 	if u == nil {
 		err = ErrUserNotFound
-		return
+		return nil, err
 	}
 
 	startURL.Path = path.Join(startURL.Path, fmt.Sprintf("/Users/%s", u.ID))
 	resp, err := c.sendRequestWithBody(http.MethodPut, startURL.String(), *u)
 	if err != nil {
-		return
+		return nil, err
 	}
 
 	var newUser User
 	err = json.Unmarshal(resp, &newUser)
 	if err != nil {
-		return
+		return nil, err
 	}
 	if newUser.ID == "" {
 		user, err = c.FindUserByEmail(u.Username)
-		return
+		return user, err
 	}
 
-	user = &newUser
-	return
+	return &newUser, nil
 }
 
 // DeleteUser will remove the current user from the directory
