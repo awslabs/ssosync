@@ -112,6 +112,8 @@ Flags:
   -u, --google-admin string         Google Admin Email
   -c, --google-credentials string   set the path to find credentials for Google (default "credentials.json")
   -h, --help                        help for ssosync
+      --ignore-groups strings       ignores these groups
+      --ignore-users strings        ignores these users
       --log-format string           log format (default "text")
       --log-level string            log level (default "warn")
   -v, --version                     version for ssosync
@@ -128,6 +130,8 @@ The output of the command when run without 'debug' turned on looks like this:
 2020-05-26T12:08:15.703+0100	INFO	internal/sync.go:172	Clean up AWS groups
 2020-05-26T12:08:15.703+0100	INFO	internal/sync.go:183	Done sync groups
 ```
+
+You can ignore users to be synced by setting `--ignore-users user1@example.com,user2@example.com` or `SSOSYNC_IGNORE_USERS=user1@example.com,user2@example.com`. Groups are ignored by setting `--ignore-groups group1@example.com,group1@example.com` or `SSOSYNC_IGNORE_GROUPS=group1@example.com,group1@example.com`.
 
 ## AWS Lambda Usage
 

@@ -37,15 +37,17 @@ type SyncGSuite interface {
 type syncGSuite struct {
 	aws    aws.Client
 	google google.Client
+	cfg    *config.Config
 
 	users map[string]*aws.User
 }
 
 // New will create a new SyncGSuite object
-func New(a aws.Client, g google.Client) SyncGSuite {
+func New(cfg *config.Config, a aws.Client, g google.Client) SyncGSuite {
 	return &syncGSuite{
 		aws:    a,
 		google: g,
+		cfg:    cfg,
 		users:  make(map[string]*aws.User),
 	}
 }
@@ -84,6 +86,10 @@ func (s *syncGSuite) SyncUsers() error {
 	}
 
 	for _, u := range googleUsers {
+		if s.ignoreUser(u.PrimaryEmail) {
+			continue
+		}
+
 		ll := log.WithFields(log.Fields{
 			"email": u.PrimaryEmail,
 		})
@@ -136,8 +142,12 @@ func (s *syncGSuite) SyncGroups() error {
 	correlatedGroups := make(map[string]*aws.Group)
 
 	for _, g := range googleGroups {
+		if s.ignoreGroup(g.Email) {
+			continue
+		}
+
 		log := log.WithFields(log.Fields{
-			"group": g.Name,
+			"group": g.Email,
 		})
 
 		log.Debug("Check group")
@@ -205,17 +215,6 @@ func (s *syncGSuite) SyncGroups() error {
 		}
 	}
 
-	// log.Info("Clean up AWS groups")
-	// for _, g := range awsGroups {
-	// 	if _, ok := correlatedGroups[g.DisplayName]; !ok {
-	// 		log.Info("Delete Group in AWS", zap.String("group", g.DisplayName))
-	// 		err := s.aws.DeleteGroup(&g)
-	// 		if err != nil {
-	// 			return err
-	// 		}
-	// 	}
-	// }
-
 	return nil
 }
 
@@ -249,7 +248,7 @@ func DoSync(ctx context.Context, cfg *config.Config) error {
 		return err
 	}
 
-	c := New(awsClient, googleClient)
+	c := New(cfg, awsClient, googleClient)
 	err = c.SyncUsers()
 	if err != nil {
 		return err
@@ -261,4 +260,24 @@ func DoSync(ctx context.Context, cfg *config.Config) error {
 	}
 
 	return nil
+}
+
+func (s *syncGSuite) ignoreUser(name string) bool {
+	for _, u := range s.cfg.IgnoreUsers {
+		if u == name {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (s *syncGSuite) ignoreGroup(name string) bool {
+	for _, g := range s.cfg.IgnoreGroups {
+		if g == name {
+			return true
+		}
+	}
+
+	return false
 }

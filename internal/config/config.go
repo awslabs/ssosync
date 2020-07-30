@@ -18,6 +18,10 @@ type Config struct {
 	SCIMAccessToken string `mapstructure:"scim_access_token"`
 	// IsLambda ...
 	IsLambda bool
+	// Ignore users ...
+	IgnoreUsers []string `mapstructure:"ignore_users"`
+	// Ignore groups ...
+	IgnoreGroups []string `mapstructure:"ignore_groups"`
 }
 
 const (
