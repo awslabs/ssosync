@@ -1,3 +1,7 @@
+## 1.0.0-rc.7
+
+- #11 Fixing deleted users not synced
+
 ## 1.0.0-rc.5
 
 - #7 Groups are synced by their email address
