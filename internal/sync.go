@@ -57,24 +57,34 @@ func (s *syncGSuite) SyncUsers() error {
 	log.Debug("get deleted users")
 	deletedUsers, err := s.google.GetDeletedUsers()
 	if err != nil {
+		log.Warn("Error Getting Deleted Users")
 		return err
 	}
 
 	for _, u := range deletedUsers {
-		uu, err := s.aws.FindUserByEmail(u.PrimaryEmail)
-		if err != aws.ErrUserNotFound {
-			return err
-		}
-
-		if err == aws.ErrUserNotFound {
-			continue
-		}
-
 		log.WithFields(log.Fields{
 			"email": u.PrimaryEmail,
 		}).Info("deleting google user")
 
+		uu, err := s.aws.FindUserByEmail(u.PrimaryEmail)
+		if err != aws.ErrUserNotFound && err != nil {
+			log.WithFields(log.Fields{
+				"email": u.PrimaryEmail,
+			}).Warn("Error deleting google user")
+			return err
+		}
+
+		if err == aws.ErrUserNotFound {
+			log.WithFields(log.Fields{
+				"email": u.PrimaryEmail,
+			}).Debug("User already deleted")
+			continue
+		}
+
 		if err := s.aws.DeleteUser(uu); err != nil {
+			log.WithFields(log.Fields{
+				"email": u.PrimaryEmail,
+			}).Warn("Error deleting user")
 			return err
 		}
 	}
