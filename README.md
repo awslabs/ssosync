@@ -61,20 +61,20 @@ as locally running the ssosync tool.
 
 ### Google
 
-First, you have to setup your API. In the project you want to use go to the [Console](https://console.developers.google.com/apis) and select *API & Services* > *Enable APIs and Services*. Search for *Admin SDK* and *Enable* the API. 
+First, you have to setup your API. In the project you want to use go to the [Console](https://console.developers.google.com/apis) and select *API & Services* > *Enable APIs and Services*. Search for *Admin SDK* and *Enable* the API.
 
-You have to perform this [tutorial](https://developers.google.com/admin-sdk/directory/v1/guides/delegation) to create a service account that you use to sync your users. Save the JSON file you create during the process and rename it to `credentials.json`. 
+You have to perform this [tutorial](https://developers.google.com/admin-sdk/directory/v1/guides/delegation) to create a service account that you use to sync your users. Save the JSON file you create during the process and rename it to `credentials.json`.
 
 > you can also use the `--google-credentials` parameter to explicitly specify the file with the service credentials. Please, keep this file safe, or store it in the AWS Secrets Manager
 
-In the domain-wide delegation for the Admin API, you have to specificy the following scopes for the user.
+In the domain-wide delegation for the Admin API, you have to specify the following scopes for the user.
 
 `https://www.googleapis.com/auth/admin.directory.group.readonly,https://www.googleapis.com/auth/admin.directory.group.member.readonly,https://www.googleapis.com/auth/admin.directory.user.readonly`
 
 Back in the Console go to the Dashboard for the API & Services and select "Enable API and Services".
 In the Search box type `Admin` and select the `Admin SDK` option. Click the `Enable` button.
 
-You will have to specifiy the email address of an admin via `--google-admin` to assume this users role in the Directory.
+You will have to specify the email address of an admin via `--google-admin` to assume this users role in the Directory.
 
 ### AWS
 
@@ -84,7 +84,7 @@ Settings. Click `Enable automatic provisioning`.
 A pop up will appear with URL and the Access Token. The Access Token will only appear
 at this stage. You want to copy both of these as a parameter to the `ssosync` command.
 
-Or you specifc these as environment variables.
+Or you specific these as environment variables.
 
 ```
 SSOSYNC_SCIM_ACCESS_TOKEN=<YOUR_TOKEN>
@@ -139,7 +139,7 @@ NOTE: Using Lambda may incur costs in your AWS account. Please make sure you hav
 the pricing for AWS Lambda and CloudWatch before continuing.
 
 Running ssosync once means that any changes to your Google directory will not appear in
-AWS SSO. To sync. regularly, you can run ssosync via AWS Lambda. 
+AWS SSO. To sync. regularly, you can run ssosync via AWS Lambda.
 
 :warning: You find it in the [AWS Serverless Application Repository](https://console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:eu-west-1:084703771460:applications/ssosync).
 
