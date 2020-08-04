@@ -23,7 +23,6 @@ import (
 	"net/http"
 	"net/url"
 	"path"
-	"time"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -103,76 +102,53 @@ func (c *client) sendRequestWithBody(method string, url string, body interface{}
 	r.Header.Set("Content-Type", "application/scim+json")
 	r.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.bearerToken))
 
-	for retry := 1; retry < 5; retry++ {
-		// Call the URL
-		resp, err := c.httpClient.Do(r)
-		if err != nil {
-			return nil, err
-		}
-		defer resp.Body.Close()
+	// Call the URL
+	resp, err := c.httpClient.Do(r)
+	if err != nil {
+		return
+	}
+	defer resp.Body.Close()
 
-		// Read the body back from the response
-		response, err = ioutil.ReadAll(resp.Body)
-		if err != nil {
-			return nil, err
-		}
-
-		if resp.StatusCode == http.StatusTooManyRequests {
-			time.Sleep(500 * time.Millisecond)
-			continue
-		}
-
-		//	fmt.Printf("%+v\n", body)
-		//fmt.Printf("%+v\n", resp)
-		// If we get a non-2xx status code, raise that via an error
-		if resp.StatusCode < http.StatusOK || resp.StatusCode > http.StatusNoContent {
-
-			return nil, fmt.Errorf("status of http response was %d", resp.StatusCode)
-		}
-
-		break
+	// Read the body back from the response
+	response, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return
 	}
 
-	return response, nil
+	// If we get a non-2xx status code, raise that via an error
+	if resp.StatusCode < http.StatusOK || resp.StatusCode > http.StatusNoContent {
+		err = fmt.Errorf("status of http response was %d", resp.StatusCode)
+	}
+
+	return
 }
 
 func (c *client) sendRequest(method string, url string) (response []byte, err error) {
 	r, err := http.NewRequest(method, url, nil)
 	if err != nil {
-		return nil, err
+		return
 	}
 
 	log.WithFields(log.Fields{"url": url, "method": method})
 
 	r.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.bearerToken))
 
-	for retry := 1; retry < 5; retry++ {
-
-		resp, err := c.httpClient.Do(r)
-		if err != nil {
-			return nil, err
-
-		}
-
-		defer resp.Body.Close()
-		response, err = ioutil.ReadAll(resp.Body)
-		if err != nil {
-			return nil, err
-		}
-
-		if resp.StatusCode == http.StatusTooManyRequests {
-			time.Sleep(500 * time.Millisecond)
-			continue
-		}
-
-		//fmt.Printf("%+v\n", resp)
-		if resp.StatusCode < http.StatusOK || resp.StatusCode > http.StatusNoContent {
-			return nil, fmt.Errorf("status of http response was %d", resp.StatusCode)
-		}
-
-		break
+	resp, err := c.httpClient.Do(r)
+	if err != nil {
+		return
 	}
-	return response, nil
+
+	defer resp.Body.Close()
+	response, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return
+	}
+
+	if resp.StatusCode < http.StatusOK || resp.StatusCode > http.StatusNoContent {
+		err = fmt.Errorf("status of http response was %d", resp.StatusCode)
+	}
+
+	return
 }
 
 // IsUserInGroup will determine if user (u) is in group (g)
