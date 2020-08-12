@@ -18,16 +18,16 @@ RUN go mod download
 COPY . .
 
 # Build the application
-RUN go build -o main .
+RUN go build -o ssosync .
 
 # Move to /dist directory as the place for resulting binary folder
 WORKDIR /dist
 
 # Copy binary from build to main folder
-RUN cp /build/main .
+RUN cp /build/ssosync .
 
 # Export necessary port
 EXPOSE 3000
 
 # Command to run when starting the container
-CMD ["/dist/main"]
+ENTRYPOINT [ "/dist/ssosync" ]
