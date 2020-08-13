@@ -67,8 +67,8 @@ type client struct {
 }
 
 // NewClient creates a new client to talk with AWS SSO's SCIM endpoint. It
-// required a http.Client{} as well as the URL and bearer token from the
-/// console. If the URL is not parsable, an error will be thrown.
+// requires a http.Client{} as well as the URL and bearer token from the
+// console. If the URL is not parsable, an error will be thrown.
 func NewClient(c HttpClient, config *Config) (Client, error) {
 	u, err := url.Parse(config.Endpoint)
 	if err != nil {
