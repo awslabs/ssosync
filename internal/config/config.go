@@ -22,6 +22,8 @@ type Config struct {
 	IgnoreUsers []string `mapstructure:"ignore_users"`
 	// Ignore groups ...
 	IgnoreGroups []string `mapstructure:"ignore_groups"`
+	// Maximum Http retries ...
+	HttpRetries int
 }
 
 const (
@@ -33,6 +35,8 @@ const (
 	DefaultDebug = false
 	// DefaultGoogleCredentials is the default credentials path
 	DefaultGoogleCredentials = "credentials.json"
+	// DefaultHttpRetries is the default http retries
+	DefaultHttpRetries = 10
 )
 
 // New returns a new Config
@@ -42,5 +46,6 @@ func New() *Config {
 		LogLevel:          DefaultLogLevel,
 		LogFormat:         DefaultLogFormat,
 		GoogleCredentials: DefaultGoogleCredentials,
+		HttpRetries: 			 DefaultHttpRetries,
 	}
 }

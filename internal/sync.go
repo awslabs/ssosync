@@ -17,7 +17,6 @@ package internal
 import (
 	"context"
 	"io/ioutil"
-	"net/http"
 
 	"github.com/awslabs/ssosync/internal/aws"
 	"github.com/awslabs/ssosync/internal/config"
@@ -25,6 +24,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	admin "google.golang.org/api/admin/directory/v1"
+	retryablehttp "github.com/hashicorp/go-retryablehttp"
 )
 
 // SyncGSuite is the interface for synchronising users/groups
@@ -248,8 +248,15 @@ func DoSync(ctx context.Context, cfg *config.Config) error {
 		return err
 	}
 
+	// Define retryable HttpClient
+	retryClient := retryablehttp.NewClient()
+	retryClient.RetryMax = cfg.HttpRetries
+	// disable http request logger
+	retryClient.Logger = nil
+	standardClient := retryClient.StandardClient()
+
 	awsClient, err := aws.NewClient(
-		&http.Client{},
+		standardClient,
 		&aws.Config{
 			Endpoint: cfg.SCIMEndpoint,
 			Token:    cfg.SCIMAccessToken,

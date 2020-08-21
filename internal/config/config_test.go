@@ -19,4 +19,6 @@ func TestConfig(t *testing.T) {
 	assert.Equal(cfg.LogFormat, DefaultLogFormat)
 	assert.Equal(cfg.Debug, DefaultDebug)
 	assert.Equal(cfg.GoogleCredentials, DefaultGoogleCredentials)
+	assert.Equal(cfg.HttpRetries, DefaultHttpRetries)
+
 }
