@@ -17,11 +17,11 @@ package internal
 import (
 	"context"
 	"io/ioutil"
-	"net/http"
 
 	"github.com/awslabs/ssosync/internal/aws"
 	"github.com/awslabs/ssosync/internal/config"
 	"github.com/awslabs/ssosync/internal/google"
+	"github.com/hashicorp/go-retryablehttp"
 
 	log "github.com/sirupsen/logrus"
 	admin "google.golang.org/api/admin/directory/v1"
@@ -243,13 +243,18 @@ func DoSync(ctx context.Context, cfg *config.Config) error {
 		creds = b
 	}
 
+	// create a http client with retry and backoff capabilities
+	retryClient := retryablehttp.NewClient()
+	retryClient.Logger = log.StandardLogger()
+	httpClient := retryClient.StandardClient()
+
 	googleClient, err := google.NewClient(ctx, cfg.GoogleAdmin, creds)
 	if err != nil {
 		return err
 	}
 
 	awsClient, err := aws.NewClient(
-		&http.Client{},
+		httpClient,
 		&aws.Config{
 			Endpoint: cfg.SCIMEndpoint,
 			Token:    cfg.SCIMAccessToken,
