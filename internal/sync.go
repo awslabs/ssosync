@@ -152,7 +152,7 @@ func (s *syncGSuite) SyncGroups() error {
 	correlatedGroups := make(map[string]*aws.Group)
 
 	for _, g := range googleGroups {
-		if s.ignoreGroup(g.Email) {
+		if s.ignoreGroup(g.Email) || !s.includeGroup(g.Email) {
 			continue
 		}
 
@@ -289,6 +289,16 @@ func (s *syncGSuite) ignoreUser(name string) bool {
 
 func (s *syncGSuite) ignoreGroup(name string) bool {
 	for _, g := range s.cfg.IgnoreGroups {
+		if g == name {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (s *syncGSuite) includeGroup(name string) bool {
+	for _, g := range s.cfg.IncludeGroups {
 		if g == name {
 			return true
 		}
