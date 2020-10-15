@@ -51,15 +51,19 @@ Parameters:
   GoogleCredentials:
     Type: String
     Description: Credentials to log into Google (content of credentials.json)
+    NoEcho: true
   GoogleAdminEmail:
     Type: String
     Description: Google Admin email
+    NoEcho: true
   SCIMEndpointUrl:
     Type: String
     Description: AWS SSO SCIM Endpoint Url
+    NoEcho: true
   SCIMEndpointAccessToken:
     Type: String
     Description: AWS SSO SCIM AccessToken
+    NoEcho: true
 
 Resources:
   SSOSyncFunction:
