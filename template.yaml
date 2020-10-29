@@ -29,11 +29,11 @@ Metadata:
     LicenseUrl: LICENSE
     ReadmeUrl: SAR.md
     Labels: [serverless,sso,lambda]
-    HomePageUrl: https://github.com/awslabs/ssosync
+    HomePageUrl: https://github.com/m477r1x/ssosync
     # Update the semantic version and run sam publish to publish a new version of your app
     SemanticVersion: 1.0.0-rc.8
     # best practice is to use git tags for each release and link to the version tag as your source code URL
-    SourceCodeUrl: https://github.com/awslabs/ssosync/tree/1.0.0-rc.8
+    SourceCodeUrl: https://github.com/m477r1x/ssosync/archive/1.0.0-rc.9.zip
 
 Parameters:
   ScheduleExpression:
@@ -114,4 +114,3 @@ Resources:
     Properties:
       Name: SSOSyncSCIMAccessToken
       SecretString: !Ref SCIMEndpointAccessToken
-
