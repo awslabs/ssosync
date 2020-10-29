@@ -114,6 +114,7 @@ Flags:
   -h, --help                        help for ssosync
       --ignore-groups strings       ignores these groups
       --ignore-users strings        ignores these users
+      --include-groups strings      include only these groups
       --log-format string           log format (default "text")
       --log-level string            log level (default "warn")
   -v, --version                     version for ssosync
