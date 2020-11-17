@@ -125,3 +125,19 @@ module "parameter_store_ssosync_log_format" {
 
   ssm_parameter_value = "json"
 }
+
+module "parameter_store_cooldown_time" {
+  source = "git::ssh://git@github.com/creditas/terraform-modules.git//ssm/secure?ref=1.0.2"
+
+  name        = var.name
+  squad       = var.squad
+  owner       = var.owner
+  environment = var.environment
+  application = var.name
+
+  ssm_parameter_name        = "/${var.name}/${var.environment}/COOLDOWN_TIME"
+  ssm_parameter_description = "Amount of time that application will slep between executions"
+  ssm_parameter_type        = "SecureString"
+
+  ssm_parameter_value = "3600"
+}
