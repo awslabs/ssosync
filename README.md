@@ -133,6 +133,41 @@ The output of the command when run without 'debug' turned on looks like this:
 
 You can ignore users to be synced by setting `--ignore-users user1@example.com,user2@example.com` or `SSOSYNC_IGNORE_USERS=user1@example.com,user2@example.com`. Groups are ignored by setting `--ignore-groups group1@example.com,group1@example.com` or `SSOSYNC_IGNORE_GROUPS=group1@example.com,group1@example.com`.
 
+## AWS ECS Fargate
+
+NOTE: Using ECS may incur costs in your AWS account. Please make sure you have checked
+the pricing for AWS ECS before continuing.
+
+Running ssosync once means that any changes to your Google directory will not appear in
+AWS SSO. To sync. regularly, you can run `ssosync` via AWS ECS.
+
+The approach for running on ECS is to use it as a Fargate Task. With some modifications in the original code, the resulting binary is capable of reading environment variables and adding(or removing) necessary groups from the syncronization.
+
+The modifications in the code were necessary to overcome the 72 hours sync duration. By defining specific gruops to sync, we can reduce this time up to 7 minutes. To check those modifications, please see [this PR](https://github.com/Creditas/ssosync/pull/2/files).
+
+Defining a custom task and as well a custom Docker image was also necessary. Those files can also be found the PR above. There are also a few environment variables, which are set on Parameter Store, to check them, clich on [this PR](https://github.com/Creditas/ssosync/pull/1/files).
+
+All the infrastructure code can be found in the PR above, which defines:
+- ECS Cluster
+- Policies for grant access
+- ECS Task definition
+- ECS Container definitions
+- SSM Parameters
+
+#### Including more Groups to Sync
+
+If you want to incorporate more groups to sync, just add them in the `SSOSYNC_INCLUDE_GROUPS` environment variable. Beware this might take more time to complete the ECS Task.
+
+#### Pipeline for Deployment
+
+The pipeline for the CircleCi can be seen [here](https://github.com/Creditas/ssosync/pull/2/files) and it runs as follows:
+
+- Checkout the repository
+- Build and Push the image to ECR
+- Deploys it on ECS on the account *shared-services*
+
+The context for CircleCi in this account has been already created.
+
 ## AWS Lambda Usage
 
 NOTE: Using Lambda may incur costs in your AWS account. Please make sure you have checked
