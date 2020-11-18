@@ -1,0 +1,62 @@
+version: 2.1
+
+orbs:
+  docker: circleci/docker@0.5.13
+
+jobs:
+
+  build_push_deploy_shared_services:
+    docker:
+      - image: 801752185137.dkr.ecr.us-east-1.amazonaws.com/ecs-deploy:1.0.0
+        environment:
+          AWS_DEFAULT_REGION: 'us-east-1'
+          REPOSITORY: '801752185137.dkr.ecr.us-east-1.amazonaws.com/ssosync'
+          CLUSTER: ssosync
+          SERVICE: ssosync
+
+    steps:
+      - checkout
+      - setup_remote_docker
+
+      - run:
+          name: Build image
+          command: |
+            docker build \
+              -t $REPOSITORY:latest .
+
+      - run:
+          name: set TAG variable
+          command: |
+            echo "export TAG=\"$(git rev-parse --short $CIRCLE_SHA1)\"" | tee $BASH_ENV
+
+      - run:
+          name: Docker tag
+          command: docker tag $REPOSITORY $REPOSITORY:$TAG
+
+      - run:
+          name: Login to ECR
+          command: |
+            $(aws ecr get-login --no-include-email --region us-east-1)
+
+      - run:
+          name: Push image to ECR
+          command: |
+            docker push $REPOSITORY
+
+      - run:
+          name: deploy
+          command: |
+            ecs deploy --tag $TAG platform $SERVICE
+
+
+workflows:
+  version: 2.1
+  run_pipeline:
+    jobs:
+      - build_push_deploy_shared_services:
+          context: deploy-shared-services
+          filters:
+            branches:
+              only:
+                - master
+
