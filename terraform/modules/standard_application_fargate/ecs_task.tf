@@ -14,7 +14,7 @@ resource "aws_ecs_task_definition" "this" {
   family                = var.name
   container_definitions = data.template_file.container_definitions_file.rendered
 
-  execution_role_arn = aws_iam_role.task_execution_role.arn
+  execution_role_arn = aws_iam_role.task_execution.arn
   task_role_arn      = aws_iam_role.task_role.arn
 
   requires_compatibilities = ["FARGATE"]

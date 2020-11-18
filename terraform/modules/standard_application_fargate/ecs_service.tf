@@ -13,7 +13,7 @@ data "aws_iam_policy_document" "service_assume_role" {
   }
 }
 
-data "aws_iam_policy_document" "service_policy" {
+data "aws_iam_policy_document" "service" {
   statement {
     effect = "Allow"
 
@@ -48,7 +48,7 @@ data "aws_iam_policy_document" "service_policy" {
 }
 
 
-resource "aws_iam_role" "service_role" {
+resource "aws_iam_role" "service" {
   name               = "${var.name}-service"
   path               = "/"
   assume_role_policy = data.aws_iam_policy_document.service_assume_role.json
@@ -56,10 +56,10 @@ resource "aws_iam_role" "service_role" {
   tags = merge(local.tags)
 }
 
-resource "aws_iam_role_policy" "service_policy" {
+resource "aws_iam_role_policy" "service" {
   name   = "${var.name}-service"
-  policy = data.aws_iam_policy_document.service_policy.json
-  role   = aws_iam_role.service_role.name
+  policy = data.aws_iam_policy_document.service.json
+  role   = aws_iam_role.service.name
 }
 
 resource "aws_ecs_service" "this" {

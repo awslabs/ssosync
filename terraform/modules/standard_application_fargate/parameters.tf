@@ -62,7 +62,7 @@ module "parameter_store_ssosync_google_admin" {
   ssm_parameter_value = "change"
 }
 
-module "parameter_store_ssosync_SCIM_ENDPOINT" {
+module "parameter_store_ssosync_scim_endpoint" {
   source = "git::ssh://git@github.com/creditas/terraform-modules.git//ssm/secure?ref=1.0.2"
 
   name        = var.name
