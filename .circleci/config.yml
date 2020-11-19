@@ -46,7 +46,7 @@ jobs:
       - run:
           name: deploy
           command: |
-            ecs deploy --tag $TAG platform $SERVICE
+            ecs deploy --tag $TAG $CLUSTER $SERVICE
 
 
 workflows:
