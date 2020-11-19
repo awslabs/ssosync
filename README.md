@@ -135,17 +135,15 @@ You can ignore users to be synced by setting `--ignore-users user1@example.com,u
 
 ## AWS ECS Fargate
 
-NOTE: Using ECS may incur costs in your AWS account. Please make sure you have checked
-the pricing for AWS ECS before continuing.
+NOTE: Using ECS may incur costs in your AWS account. Please make sure you have checked the pricing for AWS ECS before continuing.
 
-Running ssosync once means that any changes to your Google directory will not appear in
-AWS SSO. To sync. regularly, you can run `ssosync` via AWS ECS.
+Running ssosync once means that any changes to your Google directory will not appear in AWS SSO. To sync. regularly, you can run `ssosync` via AWS ECS.
 
 The approach for running on ECS is to use it as a Fargate Task. With some modifications in the original code, the resulting binary is capable of reading environment variables and adding(or removing) necessary groups from the syncronization.
 
-The modifications in the code were necessary to overcome the 72 hours sync duration. By defining specific gruops to sync, we can reduce this time up to 7 minutes. To check those modifications, please see [this PR](https://github.com/Creditas/ssosync/pull/2/files).
+The modifications in the code were necessary to overcome the 72 hours sync duration. By defining specific groups to sync, we can reduce this time up to 7 minutes. To check those modifications, please see [this PR](https://github.com/Creditas/ssosync/pull/2/files).
 
-Defining a custom task and as well a custom Docker image was also necessary. Those files can also be found the PR above. There are also a few environment variables, which are set on Parameter Store, to check them, clich on [this PR](https://github.com/Creditas/ssosync/pull/1/files).
+Defining a custom task and as well as a custom Docker image was also necessary. Those files can also be found in the PR above. There are also a few environment variables, which are set on Parameter Store, to check them, click on [this PR](https://github.com/Creditas/ssosync/pull/1/files).
 
 All the infrastructure code can be found in the PR above, which defines:
 - ECS Cluster
