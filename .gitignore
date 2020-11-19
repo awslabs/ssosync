@@ -24,3 +24,8 @@ packaged.yaml
 # IDE
 .idea/
 .vscode/
+
+# Terraform
+.terraform
+*.tfplan
+*.tfstate*

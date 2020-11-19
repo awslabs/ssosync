@@ -1,0 +1,65 @@
+[
+  {
+    "name": "${name}",
+    "image": "${ecr_repository}:latest",
+    "cpu": 250,
+    "memoryReservation": 500,
+    "essential": true,
+    "logConfiguration": {
+      "logDriver": "awslogs",
+      "options": {
+        "awslogs-group": "/ecs/${name}",
+        "awslogs-region": "${region}",
+        "awslogs-stream-prefix": "ecs"
+      }
+    },
+    "environment": [
+      {
+        "name": "ENV",
+        "value": "${environment}"
+      }
+    ],
+    "command":[
+      "init"
+    ],
+    "secrets": [
+      {
+        "name": "SSOSYNC_GOOGLE_CREDENTIALS",
+        "valueFrom": "${application_ssm_arn}/SSOSYNC_GOOGLE_CREDENTIALS"
+      },
+      {
+        "name": "SSOSYNC_GOOGLE_CREDENTIALS_SECRET",
+        "valueFrom": "${application_ssm_arn}/SSOSYNC_GOOGLE_CREDENTIALS_SECRET"
+      },
+      {
+        "name": "SSOSYNC_LOG_LEVEL",
+        "valueFrom": "${application_ssm_arn}/SSOSYNC_LOG_LEVEL"
+      },
+      {
+        "name": "SSOSYNC_GOOGLE_ADMIN",
+        "valueFrom": "${application_ssm_arn}/SSOSYNC_GOOGLE_ADMIN"
+      },
+      {
+        "name": "SSOSYNC_SCIM_ENDPOINT",
+        "valueFrom": "${application_ssm_arn}/SSOSYNC_SCIM_ENDPOINT"
+      },
+      {
+        "name": "SSOSYNC_SCIM_ACCESS_TOKEN",
+        "valueFrom": "${application_ssm_arn}/SSOSYNC_SCIM_ACCESS_TOKEN"
+      },
+      {
+        "name": "SSOSYNC_INCLUDE_GROUPS",
+        "valueFrom": "${application_ssm_arn}/SSOSYNC_INCLUDE_GROUPS"
+      },
+      {
+        "name": "COOLDOWN_TIME",
+        "valueFrom": "${application_ssm_arn}/COOLDOWN_TIME"
+      },
+      {
+        "name": "SSOSYNC_LOG_FORMAT",
+        "valueFrom": "${application_ssm_arn}/SSOSYNC_LOG_FORMAT"
+      }
+    ]
+  }
+]
+
