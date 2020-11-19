@@ -14,7 +14,7 @@ case "$COMMAND" in
       ./ssosync
       echo "sync already finished"
 
-      echo "Waiting $(COOLDOWN_TIME) for next execution"
+      echo "Waiting $COOLDOWN_TIME for next execution"
       sleep $COOLDOWN_TIME
     done
     ;;
