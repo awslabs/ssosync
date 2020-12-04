@@ -25,7 +25,7 @@ type Config struct {
 	// Allow Groups
 	AllowGroups []string `mapstructure:"allow_groups"`
 	// Allow Pattern
-	AllowPattern string `mapstructure:"allow_patterm"`
+	AllowPattern []string `mapstructure:"allow_pattern"`
 }
 
 const (

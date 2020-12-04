@@ -323,14 +323,18 @@ func (s *syncGSuite) allowGroup(name string) bool {
 }
 
 func (s *syncGSuite) allowPattern(name string) bool {
-	if s.cfg.AllowPattern == "" {
+	if len(s.cfg.AllowGroups) == 0 {
 		return true
 	}
-	re := regexp.MustCompile(s.cfg.AllowPattern)
-		
-	if re.FindStringIndex(name) != nil {
-		return true
-	}
+	for _, p := range s.cfg.AllowPattern {
+		if p == "" {
+			return true
+		}
 
+		re := regexp.MustCompile(p)
+		if re.FindStringIndex(name) != nil {
+			return true
+		}
+	}
 	return false
 }
