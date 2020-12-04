@@ -16,7 +16,9 @@ package internal
 
 import (
 	"context"
+	"strings"
 	"io/ioutil"
+    "regexp"
 
 	"github.com/awslabs/ssosync/internal/aws"
 	"github.com/awslabs/ssosync/internal/config"
@@ -100,6 +102,11 @@ func (s *syncGSuite) SyncUsers() error {
 			continue
 		}
 
+		if !s.allowPattern(u.PrimaryEmail) {
+			log.Debug("Filtered out a user")
+			continue
+		}
+
 		ll := log.WithFields(log.Fields{
 			"email": u.PrimaryEmail,
 		})
@@ -153,6 +160,10 @@ func (s *syncGSuite) SyncGroups() error {
 
 	for _, g := range googleGroups {
 		if s.ignoreGroup(g.Email) {
+			continue
+		}
+
+		if ! s.allowGroup(g.Email) {
 			continue
 		}
 
@@ -292,6 +303,33 @@ func (s *syncGSuite) ignoreGroup(name string) bool {
 		if g == name {
 			return true
 		}
+	}
+
+	return false
+}
+
+func (s *syncGSuite) allowGroup(name string) bool {
+	if len(s.cfg.AllowGroups) == 0 {
+		return true
+	}
+
+	for _, g := range s.cfg.AllowGroups {
+		if strings.HasPrefix(name, g) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (s *syncGSuite) allowPattern(name string) bool {
+	if s.cfg.AllowPattern == "" {
+		return true
+	}
+	re := regexp.MustCompile(s.cfg.AllowPattern)
+		
+	if re.FindStringIndex(name) != nil {
+		return true
 	}
 
 	return false
