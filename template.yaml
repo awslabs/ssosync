@@ -82,7 +82,11 @@ Resources:
             Effect: Allow
             Action:
               - "secretsmanager:Get*"
-            Resource: '*'
+            Resource:
+              - !Ref AWSGoogleCredentialsSecret
+              - !Ref AWSGoogleAdminEamil
+              - !Ref AWSSCIMEndpointSecret
+              - !Ref AWSSCIMAccessTokenSecret
       Events:
         SyncScheduledEvent:
           Type: Schedule
