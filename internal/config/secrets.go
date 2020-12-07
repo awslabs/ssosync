@@ -2,7 +2,8 @@ package config
 
 import (
 	"encoding/base64"
-
+	"os"
+	log "github.com/sirupsen/logrus"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/secretsmanager"
 )
@@ -19,24 +20,33 @@ func NewSecrets(svc *secretsmanager.SecretsManager) *Secrets {
 	}
 }
 
+func (s *Secrets) getSecretByNameOrEnv(name string, envName string) (string, error) {
+	secretName := name
+	if len(os.Getenv(envName)) > 0 {
+		secretName = os.Getenv(envName)
+	}
+	log.Debug("Getting Secret Name: ", secretName)
+	return s.getSecret(secretName)
+}
+
 // GoogleAdminEmail ...
 func (s *Secrets) GoogleAdminEmail() (string, error) {
-	return s.getSecret("SSOSyncGoogleAdminEmail")
+	return s.getSecretByNameOrEnv("SSOSyncGoogleAdminEmail", "SSOSYNC_SECRETS_GOOGLE_EMAIL")
 }
 
 // SCIMAccessToken ...
 func (s *Secrets) SCIMAccessToken() (string, error) {
-	return s.getSecret("SSOSyncSCIMAccessToken")
+	return s.getSecretByNameOrEnv("SSOSyncSCIMAccessToken", "SSOSYNC_SECRETS_SCIM_TOKEN")
 }
 
 // SCIMEndpointUrl ...
 func (s *Secrets) SCIMEndpointUrl() (string, error) {
-	return s.getSecret("SSOSyncSCIMEndpointUrl")
+	return s.getSecretByNameOrEnv("SSOSyncSCIMEndpointUrl", "SSOSYNC_SECRETS_SCIM_URL")
 }
 
 // GoogleCredentials ...
 func (s *Secrets) GoogleCredentials() (string, error) {
-	return s.getSecret("SSOSyncGoogleCredentials")
+	return s.getSecretByNameOrEnv("SSOSyncGoogleCredentials", "SSOSYNC_SECRETS_GOOGLE_CREDENTIALS")
 }
 
 func (s *Secrets) getSecret(secretKey string) (string, error) {
