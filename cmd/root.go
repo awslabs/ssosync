@@ -95,7 +95,7 @@ func initConfig() {
 	viper.SetEnvPrefix("ssosync")
 	viper.AutomaticEnv()
 
-	for _, e := range []string{"google_admin", "google_credentials", "scim_access_token", "scim_endpoint", "log_level", "log_format", "ignore_users", "ignore_groups"} {
+	for _, e := range []string{"google_admin", "google_credentials", "scim_access_token", "scim_endpoint", "log_level", "log_format", "ignore_users", "ignore_groups", "allow_groups", "allow_pattern"} {
 		if err := viper.BindEnv(e); err != nil {
 			log.Fatalf(errors.Wrap(err, "cannot bind environment variable").Error())
 		}
@@ -154,6 +154,8 @@ func addFlags(cmd *cobra.Command, cfg *config.Config) {
 	rootCmd.Flags().StringVarP(&cfg.GoogleAdmin, "google-admin", "u", "", "Google Admin Email")
 	rootCmd.Flags().StringSliceVar(&cfg.IgnoreUsers, "ignore-users", []string{}, "ignores these users")
 	rootCmd.Flags().StringSliceVar(&cfg.IgnoreGroups, "ignore-groups", []string{}, "ignores these groups")
+	rootCmd.Flags().StringSliceVar(&cfg.AllowGroups, "allow-groups", []string{}, "allows only these groups (prefixed with this)")
+	rootCmd.Flags().StringSliceVar(&cfg.AllowPattern, "allow-pattern", []string{}, "pattern necessary for a user email to be allowed")
 }
 
 func logConfig(cfg *config.Config) {
