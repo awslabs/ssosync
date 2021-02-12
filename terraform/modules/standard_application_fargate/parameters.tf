@@ -31,7 +31,7 @@ module "parameter_store_ssosync_google_credentials_secret" {
 }
 
 module "parameter_store_ssosync_log_level" {
-  source = "git::ssh://git@github.com/creditas/terraform-modules.git//ssm/secure?ref=1.0.2"
+  source = "git::ssh://git@github.com/creditas/terraform-modules.git//ssm?ref=1.0.2"
 
   name        = var.name
   squad       = var.squad
@@ -95,7 +95,7 @@ module "parameter_store_ssosync_scim_access_token" {
 }
 
 module "parameter_store_ssosync_include_groups" {
-  source = "git::ssh://git@github.com/creditas/terraform-modules.git//ssm/secure?ref=1.0.2"
+  source = "git::ssh://git@github.com/creditas/terraform-modules.git//ssm?ref=1.0.2"
 
   name        = var.name
   squad       = var.squad
@@ -107,11 +107,11 @@ module "parameter_store_ssosync_include_groups" {
   ssm_parameter_description = "Groups from gsuite that will be sync to AWS SSO"
   ssm_parameter_type        = "SecureString"
 
-  ssm_parameter_value = "change"
+  ssm_parameter_value = var.include_groups
 }
 
 module "parameter_store_ssosync_log_format" {
-  source = "git::ssh://git@github.com/creditas/terraform-modules.git//ssm/secure?ref=1.0.2"
+  source = "git::ssh://git@github.com/creditas/terraform-modules.git//ssm?ref=1.0.2"
 
   name        = var.name
   squad       = var.squad

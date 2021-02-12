@@ -8,4 +8,5 @@ module "standard_application_fargate" {
   squad       = var.squad
 
   container_definitions = var.container_definitions
+  include_groups        = var.include_groups
 }
