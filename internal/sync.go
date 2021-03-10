@@ -31,6 +31,7 @@ import (
 type SyncGSuite interface {
 	SyncUsers() error
 	SyncGroups() error
+	DeleteUnmappedUsers() error
 }
 
 // SyncGSuite is an object type that will synchronise real users and groups
@@ -41,6 +42,8 @@ type syncGSuite struct {
 
 	users map[string]*aws.User
 }
+
+var usersMappedToGroups []*aws.User
 
 // New will create a new SyncGSuite object
 func New(cfg *config.Config, a aws.Client, g google.Client) SyncGSuite {
@@ -152,8 +155,17 @@ func (s *syncGSuite) SyncGroups() error {
 	correlatedGroups := make(map[string]*aws.Group)
 
 	for _, g := range googleGroups {
-		if s.ignoreGroup(g.Email) {
-			continue
+		if len(s.cfg.AddGroups) != 0 {
+			if !s.addGroup(g.Email) {
+				log.Error("Do not add group ", g.Email)
+				continue
+			}
+		} else {
+			log.Error("addgroup parameter is empty")
+			if s.ignoreGroup(g.Email) {
+				log.Error("Inside Ignore Group block check")
+				continue
+			}
 		}
 
 		log := log.WithFields(log.Fields{
@@ -208,6 +220,7 @@ func (s *syncGSuite) SyncGroups() error {
 			if _, ok := memberList[u.Username]; ok {
 				if !b {
 					log.WithField("user", u.Username).Info("Adding user to group")
+					usersMappedToGroups = append(usersMappedToGroups, u)
 					err := s.aws.AddUserToGroup(u, group)
 					if err != nil {
 						return err
@@ -274,6 +287,11 @@ func DoSync(ctx context.Context, cfg *config.Config) error {
 		return err
 	}
 
+	err = c.DeleteUnmappedUsers()
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -287,8 +305,38 @@ func (s *syncGSuite) ignoreUser(name string) bool {
 	return false
 }
 
+func (s *syncGSuite) DeleteUnmappedUsers() error {
+	for _, u := range s.users {
+		userIsMapped := false
+		for _, mu := range usersMappedToGroups {
+			if u.Username == mu.Username {
+				userIsMapped = true
+			}
+		}
+		if !userIsMapped {
+			if err := s.aws.DeleteUser(u); err != nil {
+				log.WithFields(log.Fields{
+					"email": u.Username,
+				}).Warn("Error deleting user")
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 func (s *syncGSuite) ignoreGroup(name string) bool {
 	for _, g := range s.cfg.IgnoreGroups {
+		if g == name {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (s *syncGSuite) addGroup(name string) bool {
+	for _, g := range s.cfg.AddGroups {
 		if g == name {
 			return true
 		}
