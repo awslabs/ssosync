@@ -30,6 +30,7 @@ import (
 var (
 	ErrUserNotFound      = errors.New("user not found")
 	ErrGroupNotFound     = errors.New("group not found")
+	ErrNoGroupsFound     = errors.New("no groups found")
 	ErrUserNotSpecified  = errors.New("user not specified")
 	ErrGroupNotSpecified = errors.New("group not specified")
 )
@@ -45,7 +46,7 @@ const (
 	OperationRemove = "remove"
 )
 
-// IClient represents an interface of methods used
+// Client represents an interface of methods used
 // to communicate with AWS SSO
 type Client interface {
 	AddUserToGroup(*User, *Group) error
@@ -55,7 +56,9 @@ type Client interface {
 	DeleteUser(*User) error
 	FindGroupByDisplayName(string) (*Group, error)
 	FindUserByEmail(string) (*User, error)
+	GetUsers() ([]*User, error)
 	IsUserInGroup(*User, *Group) (bool, error)
+	GetGroups() ([]*Group, error)
 	UpdateUser(*User) (*User, error)
 	RemoveUserFromGroup(*User, *Group) error
 }
@@ -426,4 +429,68 @@ func (c *client) DeleteGroup(g *Group) error {
 	}
 
 	return nil
+}
+
+// GetGroups will return existing groups
+func (c *client) GetGroups() ([]*Group, error) {
+	startURL, err := url.Parse(c.endpointURL.String())
+	if err != nil {
+		return nil, err
+	}
+
+	startURL.Path = path.Join(startURL.Path, "/Groups")
+
+	resp, err := c.sendRequest(http.MethodGet, startURL.String())
+	if err != nil {
+		return nil, err
+	}
+
+	var r GroupFilterResults
+	err = json.Unmarshal(resp, &r)
+	if err != nil {
+		return nil, err
+	}
+
+	if r.TotalResults != 1 {
+		return nil, ErrNoGroupsFound
+	}
+
+	gps := make([]*Group, len(r.Resources))
+	for i := range r.Resources {
+		gps[i] = &r.Resources[i]
+	}
+
+	return gps, nil
+}
+
+// GetUsers will return existing users
+func (c *client) GetUsers() ([]*User, error) {
+	startURL, err := url.Parse(c.endpointURL.String())
+	if err != nil {
+		return nil, err
+	}
+
+	startURL.Path = path.Join(startURL.Path, "/Users")
+
+	resp, err := c.sendRequest(http.MethodGet, startURL.String())
+	if err != nil {
+		return nil, err
+	}
+
+	var r UserFilterResults
+	err = json.Unmarshal(resp, &r)
+	if err != nil {
+		return nil, err
+	}
+
+	if r.TotalResults != 1 {
+		return nil, ErrUserNotFound
+	}
+
+	usrs := make([]*User, len(r.Resources))
+	for i := range r.Resources {
+		usrs[i] = &r.Resources[i]
+	}
+
+	return usrs, nil
 }

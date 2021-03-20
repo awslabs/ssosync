@@ -8,6 +8,7 @@ require (
 	github.com/aws/aws-sdk-go v1.33.7
 	github.com/golang/mock v1.5.0
 	github.com/hashicorp/go-retryablehttp v0.6.7
+	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/pkg/errors v0.9.1
 	github.com/sirupsen/logrus v1.2.0
 	github.com/spf13/cobra v1.0.0

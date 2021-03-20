@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package google ...
 package google
 
 import (
@@ -25,6 +26,7 @@ import (
 // Client is the Interface for the Client
 type Client interface {
 	GetUsers() ([]*admin.User, error)
+	GetUsersMatch(string) ([]*admin.User, error)
 	GetDeletedUsers() ([]*admin.User, error)
 	GetGroups() ([]*admin.Group, error)
 	GetGroupsMatch(string) ([]*admin.Group, error)
@@ -83,7 +85,29 @@ func (c *client) GetUsers() ([]*admin.User, error) {
 	return u, err
 }
 
-// GetUsers will get the users from Google's Admin API
+// GetGroups will get the groups from Google's Admin API
+func (c *client) GetGroups() ([]*admin.Group, error) {
+	g := make([]*admin.Group, 0)
+	err := c.service.Groups.List().Customer("my_customer").Pages(context.TODO(), func(groups *admin.Groups) error {
+		g = append(g, groups.Groups...)
+		return nil
+	})
+
+	return g, err
+}
+
+// GetGroupMembers will get the members of the group specified
+func (c *client) GetGroupMembers(g *admin.Group) ([]*admin.Member, error) {
+	m := make([]*admin.Member, 0)
+	err := c.service.Members.List(g.Id).Pages(context.TODO(), func(members *admin.Members) error {
+		m = append(m, members.Members...)
+		return nil
+	})
+
+	return m, err
+}
+
+// GetUsersMatch will get the users from Google's Admin API
 // using the Method: users.list with parameter "query"
 // References:
 // * https://developers.google.com/admin-sdk/directory/reference/rest/v1/users/list
@@ -103,17 +127,6 @@ func (c *client) GetUsersMatch(query string) ([]*admin.User, error) {
 	})
 
 	return u, err
-}
-
-// GetGroups will get the groups from Google's Admin API
-func (c *client) GetGroups() ([]*admin.Group, error) {
-	g := make([]*admin.Group, 0)
-	err := c.service.Groups.List().Customer("my_customer").Pages(context.TODO(), func(groups *admin.Groups) error {
-		g = append(g, groups.Groups...)
-		return nil
-	})
-
-	return g, err
 }
 
 // GetGroupsMatch will get the groups from Google's Admin API
@@ -136,15 +149,4 @@ func (c *client) GetGroupsMatch(query string) ([]*admin.Group, error) {
 	})
 
 	return g, err
-}
-
-// GetGroupMembers will get the members of the group specified
-func (c *client) GetGroupMembers(g *admin.Group) ([]*admin.Member, error) {
-	m := make([]*admin.Member, 0)
-	err := c.service.Members.List(g.Id).Pages(context.TODO(), func(members *admin.Members) error {
-		m = append(m, members.Members...)
-		return nil
-	})
-
-	return m, err
 }
