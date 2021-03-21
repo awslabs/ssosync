@@ -1,3 +1,4 @@
+// Package config ...
 package config
 
 // Config ...
@@ -12,7 +13,7 @@ type Config struct {
 	GoogleCredentials string `mapstructure:"google_credentials"`
 	// GoogleAdmin ...
 	GoogleAdmin string `mapstructure:"google_admin"`
-	// UserFilter ...
+	// UserMatch ...
 	UserMatch string `mapstructure:"user_match"`
 	// GroupFilter ...
 	GroupMatch string `mapstructure:"group_match"`
@@ -26,6 +27,8 @@ type Config struct {
 	IgnoreUsers []string `mapstructure:"ignore_users"`
 	// Ignore groups ...
 	IgnoreGroups []string `mapstructure:"ignore_groups"`
+	// SyncMethod
+	SyncMethod string `mapstructure:"sync_method"`
 }
 
 const (
@@ -37,6 +40,8 @@ const (
 	DefaultDebug = false
 	// DefaultGoogleCredentials is the default credentials path
 	DefaultGoogleCredentials = "credentials.json"
+	// DefaultSyncMethod is the default sync method to use.
+	DefaultSyncMethod = "users_groups"
 )
 
 // New returns a new Config

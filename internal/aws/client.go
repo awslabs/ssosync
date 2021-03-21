@@ -451,9 +451,9 @@ func (c *client) GetGroups() ([]*Group, error) {
 		return nil, err
 	}
 
-	if r.TotalResults != 1 {
-		return nil, ErrNoGroupsFound
-	}
+	// if r.TotalResults != 1 {
+	// 	return nil, ErrNoGroupsFound
+	// }
 
 	gps := make([]*Group, len(r.Resources))
 	for i := range r.Resources {
@@ -483,9 +483,9 @@ func (c *client) GetUsers() ([]*User, error) {
 		return nil, err
 	}
 
-	if r.TotalResults != 1 {
-		return nil, ErrUserNotFound
-	}
+	// if r.TotalResults != 1 {
+	// 	return nil, ErrUserNotFound
+	// }
 
 	usrs := make([]*User, len(r.Resources))
 	for i := range r.Resources {
