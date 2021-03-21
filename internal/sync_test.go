@@ -25,7 +25,7 @@ import (
 	admin "google.golang.org/api/admin/directory/v1"
 )
 
-// toJSON return a json prety of the stc
+// toJSON return a json pretty of the stc
 func toJSON(stc interface{}) []byte {
 	JSON, err := json.MarshalIndent(stc, "", "  ")
 	if err != nil {

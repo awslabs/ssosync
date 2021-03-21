@@ -17,6 +17,7 @@ package internal
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 
@@ -274,11 +275,6 @@ func (s *syncGSuite) SyncGroupsUsers(query string) error {
 		return err
 	}
 
-	// for _, val := range googleGroups {
-	// 	fmt.Println(val)
-	// }
-	//log.Fatal("stop here")
-
 	log.Debug("get google users and groups and its users")
 	googleUsers, googleGroupsUsers, err := s.getGoogleGroupsAndUsers(googleGroups)
 	if err != nil {
@@ -297,6 +293,12 @@ func (s *syncGSuite) SyncGroupsUsers(query string) error {
 	if err != nil {
 		return err
 	}
+
+	// log.Debug("get aws groups and its users")
+	// awsGroupsUsers, err := s.getAWSGroupsAndUsers(awsGroups, awsUsers)
+	// if err != nil {
+	// 	return err
+	// }
 
 	// list of changes
 	addAWSUsers, delAWSUsers, updateAWSUsers, _ := getUserOperations(awsUsers, googleUsers)
@@ -370,8 +372,8 @@ func (s *syncGSuite) SyncGroupsUsers(query string) error {
 		for _, googleUser := range googleGroupsUsers[awsGroup.DisplayName] {
 
 			// equivalent aws user of google user on the fly
+			awsUserFull, err := s.aws.FindUserByEmail(googleUser.PrimaryEmail) // NOTE: improve, use awsGroupsUsers[awsGroup.DisplayName] instead
 
-			awsUserFull, err := s.aws.FindUserByEmail(googleUser.PrimaryEmail)
 			if err != nil {
 				return err
 			}
@@ -473,6 +475,34 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(googleGroups []*admin.Group) ([]*ad
 		gGroupsUsers[g.Name] = gUsers
 	}
 	return gUsers, gGroupsUsers, nil
+}
+
+// getAWSGroupsAndUsers return a list of google users members of googleGroups
+// and a map of google groups and its users' list
+func (s *syncGSuite) getAWSGroupsAndUsers(awsGroups []*aws.Group, awsUsers []*aws.User) (map[string][]*aws.User, error) {
+	awsGroupsUsers := make(map[string][]*aws.User, len(awsGroups))
+	users := make([]*aws.User, 0)
+
+	for _, group := range awsGroups {
+
+		log := log.WithFields(log.Fields{"group": group.DisplayName})
+
+		log.Debug("get group members")
+
+		for _, user := range awsUsers {
+
+			found, err := s.aws.IsUserInGroup(user, group)
+			if err != nil {
+				return nil, err
+			}
+			if found {
+				users = append(users, user)
+			}
+		}
+
+		awsGroupsUsers[group.DisplayName] = users
+	}
+	return awsGroupsUsers, nil
 }
 
 // getGroupOperations returns the groups of AWS that must be added, deleted and are equals
@@ -624,4 +654,13 @@ func (s *syncGSuite) ignoreGroup(name string) bool {
 	}
 
 	return false
+}
+
+// toJSON return a json pretty of the stc
+func toJSON(stc interface{}) []byte {
+	JSON, err := json.MarshalIndent(stc, "", "  ")
+	if err != nil {
+		log.Fatalf(err.Error())
+	}
+	return JSON
 }
