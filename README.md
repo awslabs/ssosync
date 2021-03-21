@@ -106,16 +106,18 @@ Usage:
   ssosync [flags]
 
 Flags:
-  -t, --access-token string         SCIM Access Token
-  -d, --debug                       Enable verbose / debug logging
-  -e, --endpoint string             SCIM Endpoint
-  -u, --google-admin string         Google Admin Email
-  -c, --google-credentials string   set the path to find credentials for Google (default "credentials.json")
+  -t, --access-token string         AWS SCIM Access Token
+  -d, --debug                       enable verbose / debug logging
+  -e, --endpoint string             AWS SCIM Endpoint
+  -u, --google-admin string         Google admin user email
+  -c, --google-credentials string   path to find credentials file for Google (default "credentials.json")
+  -g, --group-match string          Google groups query parameter, example: 'name:Admin* email:aws-*', see: https://developers.google.com/admin-sdk/directory/v1/guides/search-groups
   -h, --help                        help for ssosync
-      --ignore-groups strings       ignores these groups
-      --ignore-users strings        ignores these users
+      --ignore-groups strings       ignores these Google groups
+      --ignore-users strings        ignores these Google users
       --log-format string           log format (default "text")
       --log-level string            log level (default "warn")
+  -m, --user-match string           Google users query parameter, example: 'name:John* email:admin*', see: https://developers.google.com/admin-sdk/directory/v1/guides/search-users
   -v, --version                     version for ssosync
 ```
 

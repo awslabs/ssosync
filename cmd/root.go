@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package cmd ...
 package cmd
 
 import (
@@ -95,7 +96,7 @@ func initConfig() {
 	viper.SetEnvPrefix("ssosync")
 	viper.AutomaticEnv()
 
-	for _, e := range []string{"google_admin", "google_credentials", "scim_access_token", "scim_endpoint", "log_level", "log_format", "ignore_users", "ignore_groups"} {
+	for _, e := range []string{"google_admin", "google_credentials", "scim_access_token", "scim_endpoint", "log_level", "log_format", "ignore_users", "ignore_groups", "user_match", "group_match"} {
 		if err := viper.BindEnv(e); err != nil {
 			log.Fatalf(errors.Wrap(err, "cannot bind environment variable").Error())
 		}
@@ -144,18 +145,20 @@ func configLambda() {
 }
 
 func addFlags(cmd *cobra.Command, cfg *config.Config) {
-	rootCmd.PersistentFlags().StringVarP(&cfg.GoogleCredentials, "google-admin", "a", config.DefaultGoogleCredentials, "set the path to find credentials for Google")
-	rootCmd.PersistentFlags().BoolVarP(&cfg.Debug, "debug", "d", config.DefaultDebug, "Enable verbose / debug logging")
+	rootCmd.PersistentFlags().StringVarP(&cfg.GoogleCredentials, "google-admin", "a", config.DefaultGoogleCredentials, "path to find credentials file for Google")
+	rootCmd.PersistentFlags().BoolVarP(&cfg.Debug, "debug", "d", config.DefaultDebug, "enable verbose / debug logging")
 	rootCmd.PersistentFlags().StringVarP(&cfg.LogFormat, "log-format", "", config.DefaultLogFormat, "log format")
 	rootCmd.PersistentFlags().StringVarP(&cfg.LogLevel, "log-level", "", config.DefaultLogLevel, "log level")
-	rootCmd.Flags().StringVarP(&cfg.SCIMAccessToken, "access-token", "t", "", "SCIM Access Token")
-	rootCmd.Flags().StringVarP(&cfg.SCIMEndpoint, "endpoint", "e", "", "SCIM Endpoint")
-	rootCmd.Flags().StringVarP(&cfg.GoogleCredentials, "google-credentials", "c", config.DefaultGoogleCredentials, "set the path to find credentials for Google")
-	rootCmd.Flags().StringVarP(&cfg.GoogleAdmin, "google-admin", "u", "", "Google Admin Email")
-	rootCmd.Flags().StringSliceVar(&cfg.IgnoreUsers, "ignore-users", []string{}, "ignores these users")
-	rootCmd.Flags().StringSliceVar(&cfg.IgnoreGroups, "ignore-groups", []string{}, "ignores these groups")
-	rootCmd.Flags().StringVarP(&cfg.UserMatch, "user-match", "m", "", "user query parameter, example: 'name:John* email:admin*', see: https://developers.google.com/admin-sdk/directory/v1/guides/search-users")
-	rootCmd.Flags().StringVarP(&cfg.GroupMatch, "group-match", "g", "", "group query parameter, example: 'name:Admin* email:aws-*', see: https://developers.google.com/admin-sdk/directory/v1/guides/search-groups")
+
+	rootCmd.Flags().StringVarP(&cfg.SCIMAccessToken, "access-token", "t", "", "AWS SCIM Access Token")
+	rootCmd.Flags().StringVarP(&cfg.SCIMEndpoint, "endpoint", "e", "", "AWS SCIM Endpoint")
+	rootCmd.Flags().StringVarP(&cfg.GoogleCredentials, "google-credentials", "c", config.DefaultGoogleCredentials, "path to find credentials file for Google")
+	rootCmd.Flags().StringVarP(&cfg.GoogleAdmin, "google-admin", "u", "", "Google admin user email")
+	rootCmd.Flags().StringSliceVar(&cfg.IgnoreUsers, "ignore-users", []string{}, "ignores these Google users")
+	rootCmd.Flags().StringSliceVar(&cfg.IgnoreGroups, "ignore-groups", []string{}, "ignores these Google groups")
+
+	rootCmd.Flags().StringVarP(&cfg.UserMatch, "user-match", "m", "", "Google users query parameter, example: 'name:John* email:admin*', see: https://developers.google.com/admin-sdk/directory/v1/guides/search-users")
+	rootCmd.Flags().StringVarP(&cfg.GroupMatch, "group-match", "g", "", "Google groups query parameter, example: 'name:Admin* email:aws-*', see: https://developers.google.com/admin-sdk/directory/v1/guides/search-groups")
 }
 
 func logConfig(cfg *config.Config) {

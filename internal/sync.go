@@ -29,14 +29,14 @@ import (
 	admin "google.golang.org/api/admin/directory/v1"
 )
 
-// SyncGSuite is the interface for synchronising users/groups
+// SyncGSuite is the interface for synchronizing users/groups
 type SyncGSuite interface {
 	SyncUsers(string) error
 	SyncGroups(string) error
 	SyncGroupsUsers(string) error
 }
 
-// SyncGSuite is an object type that will synchronise real users and groups
+// SyncGSuite is an object type that will synchronize real users and groups
 type syncGSuite struct {
 	aws    aws.Client
 	google google.Client
@@ -259,7 +259,7 @@ func (s *syncGSuite) SyncGroups(query string) error {
 //  name:contact* email:contact*
 //  name:Admin* email:aws-*
 //  email:aws-*
-// process worflow:
+// process workflow:
 //  1) delete users in aws, these were deleted in google
 //  2) update users in aws, these were updated in google
 //  3) add users in aws, these were added in google
@@ -416,12 +416,16 @@ func (s *syncGSuite) SyncGroupsUsers(query string) error {
 	return nil
 }
 
-// getGoogleGroupsAndUsers ...
+// getGoogleGroupsAndUsers return a list of google users members of googleGroups
+// and a map of google groups and its users' list
 func (s *syncGSuite) getGoogleGroupsAndUsers(googleGroups []*admin.Group) ([]*admin.User, map[string][]*admin.User, error) {
 	gUsers := make([]*admin.User, 0)
 	gGroupsUsers := make(map[string][]*admin.User, len(googleGroups))
 	for _, g := range googleGroups {
 
+		if s.ignoreGroup(g.Name) {
+			continue
+		}
 		log := log.WithFields(log.Fields{
 			"group": g.Name,
 		})
@@ -435,11 +439,17 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(googleGroups []*admin.Group) ([]*ad
 
 		log.Info("get user")
 		for _, m := range groupMembers {
+
+			if s.ignoreUser(m.Email) {
+				continue
+			}
+
 			q := fmt.Sprintf("email:%s", m.Email)
-			u, err := s.google.GetUsers(q) // TODO: implemnet GetUser(q)
+			u, err := s.google.GetUsers(q) // TODO: implement GetUser(q)
 			if err != nil {
 				return nil, nil, err
 			}
+
 			gUsers = append(gUsers, u[0])
 		}
 		gGroupsUsers[g.Name] = gUsers
