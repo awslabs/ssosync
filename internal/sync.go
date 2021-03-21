@@ -588,27 +588,27 @@ func getGroupOperations(awsGroups []*aws.Group, googleGroups []*admin.Group) (ad
 	awsMap := make(map[string]*aws.Group, len(awsGroups))
 	googleMap := make(map[string]struct{}, len(googleGroups))
 
-	for _, e := range awsGroups {
-		awsMap[e.DisplayName] = e
+	for _, awsGroup := range awsGroups {
+		awsMap[awsGroup.DisplayName] = awsGroup
 	}
 
-	for _, e := range googleGroups {
-		googleMap[e.Name] = struct{}{}
+	for _, gGroup := range googleGroups {
+		googleMap[gGroup.Name] = struct{}{}
 	}
 
 	// AWS Groups found and not found in google
-	for _, e := range googleGroups {
-		if _, found := awsMap[e.Name]; found {
-			equals = append(equals, awsMap[e.Name])
+	for _, gGroup := range googleGroups {
+		if _, found := awsMap[gGroup.Name]; found {
+			equals = append(equals, awsMap[gGroup.Name])
 		} else {
-			add = append(add, aws.NewGroup(e.Name))
+			add = append(add, aws.NewGroup(gGroup.Name))
 		}
 	}
 
 	// Google Groups founds and not in aws
-	for _, e := range awsGroups {
-		if _, found := googleMap[e.DisplayName]; !found {
-			delete = append(delete, aws.NewGroup(e.DisplayName))
+	for _, awsGroup := range awsGroups {
+		if _, found := googleMap[awsGroup.DisplayName]; !found {
+			delete = append(delete, aws.NewGroup(awsGroup.DisplayName))
 		}
 	}
 
@@ -621,30 +621,33 @@ func getUserOperations(awsUsers []*aws.User, googleUsers []*admin.User) (add []*
 	awsMap := make(map[string]*aws.User, len(awsUsers))
 	googleMap := make(map[string]struct{}, len(googleUsers))
 
-	for _, e := range awsUsers {
-		awsMap[e.DisplayName] = e
+	for _, awsUser := range awsUsers {
+		awsMap[awsUser.Username] = awsUser
 	}
 
-	for _, e := range googleUsers {
-		googleMap[e.PrimaryEmail] = struct{}{}
+	for _, gUser := range googleUsers {
+		googleMap[gUser.PrimaryEmail] = struct{}{}
 	}
 
 	// AWS Users found and not found in google
-	for _, e := range googleUsers {
-		if _, found := awsMap[e.PrimaryEmail]; found {
-			equals = append(equals, awsMap[e.PrimaryEmail])
-			if awsMap[e.PrimaryEmail].Active == e.Suspended {
-				update = append(update, aws.NewUser(e.Name.GivenName, e.Name.FamilyName, e.PrimaryEmail, !e.Suspended))
+	for _, gUser := range googleUsers {
+		if awsUser, found := awsMap[gUser.PrimaryEmail]; found {
+			if awsUser.Active == gUser.Suspended ||
+				awsUser.Name.GivenName != gUser.Name.GivenName ||
+				awsUser.Name.FamilyName != gUser.Name.FamilyName {
+				update = append(update, aws.NewUser(gUser.Name.GivenName, gUser.Name.FamilyName, gUser.PrimaryEmail, !gUser.Suspended))
+			} else {
+				equals = append(equals, awsUser)
 			}
 		} else {
-			add = append(add, aws.NewUser(e.Name.GivenName, e.Name.FamilyName, e.PrimaryEmail, !e.Suspended))
+			add = append(add, aws.NewUser(gUser.Name.GivenName, gUser.Name.FamilyName, gUser.PrimaryEmail, !gUser.Suspended))
 		}
 	}
 
 	// Google Users founds and not in aws
-	for _, e := range awsUsers {
-		if _, found := googleMap[e.DisplayName]; !found {
-			delete = append(delete, aws.NewUser(e.Name.GivenName, e.Name.FamilyName, e.DisplayName, false))
+	for _, awsUser := range awsUsers {
+		if _, found := googleMap[awsUser.Username]; !found {
+			delete = append(delete, aws.NewUser(awsUser.Name.GivenName, awsUser.Name.FamilyName, awsUser.Username, awsUser.Active))
 		}
 	}
 
