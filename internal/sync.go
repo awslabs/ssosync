@@ -17,7 +17,6 @@ package internal
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 
@@ -577,6 +576,36 @@ func getUserOperations(awsUsers []*aws.User, googleUsers []*admin.User) (add []*
 	return add, delete, update, equals
 }
 
+// groupUsersOperations ...
+func getGroupUsersOperations(gGroupsUsers map[string][]*admin.User, awsGroupsUsers map[string][]*aws.User) (add map[string][]*aws.User, delete map[string][]*aws.User, equals map[string][]*aws.User) {
+
+	mbG := make(map[string]map[string]struct{}, len(gGroupsUsers))
+
+	// get user in google groups that are in aws groups and
+	// users in aws groups that aren't in google groups
+	for gGroupName, gGroupUsers := range gGroupsUsers {
+		mbG[gGroupName] = make(map[string]struct{}, len(gGroupUsers))
+		for _, gUser := range gGroupUsers {
+			mbG[gGroupName][gUser.PrimaryEmail] = struct{}{}
+		}
+	}
+
+	delete = make(map[string][]*aws.User)
+	equals = make(map[string][]*aws.User)
+	for awsGroupName, awsGroupUsers := range awsGroupsUsers {
+		for _, awsUser := range awsGroupUsers {
+			// users that exist in aws groups but doesn't in google groups
+			if _, found := mbG[awsGroupName][awsUser.Username]; found {
+				equals[awsGroupName] = append(equals[awsGroupName], awsUser)
+			} else {
+				delete[awsGroupName] = append(delete[awsGroupName], awsUser)
+			}
+		}
+	}
+
+	return
+}
+
 // DoSync will create a logger and run the sync with the paths
 // given to do the sync.
 func DoSync(ctx context.Context, cfg *config.Config) error {
@@ -654,13 +683,4 @@ func (s *syncGSuite) ignoreGroup(name string) bool {
 	}
 
 	return false
-}
-
-// toJSON return a json pretty of the stc
-func toJSON(stc interface{}) []byte {
-	JSON, err := json.MarshalIndent(stc, "", "  ")
-	if err != nil {
-		log.Fatalf(err.Error())
-	}
-	return JSON
 }

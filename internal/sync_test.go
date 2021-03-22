@@ -235,24 +235,27 @@ func Test_getUserOperations(t *testing.T) {
 					aws.NewUser("name-4", "lastname-4", "user-4@email.com", true),
 				},
 				googleUsers: []*admin.User{
-					{Name: &admin.UserName{
-						GivenName:  "name-1",
-						FamilyName: "lastname-1",
-					},
+					{
+						Name: &admin.UserName{
+							GivenName:  "name-1",
+							FamilyName: "lastname-1",
+						},
 						Suspended:    false,
 						PrimaryEmail: "user-1@email.com",
 					},
-					{Name: &admin.UserName{
-						GivenName:  "name-2",
-						FamilyName: "lastname-2",
-					},
+					{
+						Name: &admin.UserName{
+							GivenName:  "name-2",
+							FamilyName: "lastname-2",
+						},
 						Suspended:    false,
 						PrimaryEmail: "user-2@email.com",
 					},
-					{Name: &admin.UserName{
-						GivenName:  "name-4",
-						FamilyName: "lastname-4",
-					},
+					{
+						Name: &admin.UserName{
+							GivenName:  "name-4",
+							FamilyName: "lastname-4",
+						},
 						Suspended:    true,
 						PrimaryEmail: "user-4@email.com",
 					},
@@ -286,6 +289,69 @@ func Test_getUserOperations(t *testing.T) {
 			}
 			if !reflect.DeepEqual(gotEquals, tt.wantEquals) {
 				t.Errorf("getUserOperations() gotEquals = %s, want %s", toJSON(gotEquals), toJSON(tt.wantEquals))
+			}
+		})
+	}
+}
+
+func Test_getGroupUsersOperations(t *testing.T) {
+	type args struct {
+		gGroupsUsers   map[string][]*admin.User
+		awsGroupsUsers map[string][]*aws.User
+	}
+	tests := []struct {
+		name       string
+		args       args
+		wantAdd    map[string][]*aws.User
+		wantDelete map[string][]*aws.User
+		wantEquals map[string][]*aws.User
+	}{
+		{
+			name: "one add, one delete, one equal",
+			args: args{
+				gGroupsUsers: map[string][]*admin.User{
+					"group-1": {
+						{
+							Name: &admin.UserName{
+								GivenName:  "name-1",
+								FamilyName: "lastname-1",
+							},
+							Suspended:    false,
+							PrimaryEmail: "user-1@email.com",
+						},
+					},
+				},
+				awsGroupsUsers: map[string][]*aws.User{
+					"group-1": {
+						aws.NewUser("name-1", "lastname-1", "user-1@email.com", true),
+						aws.NewUser("name-2", "lastname-2", "user-2@email.com", true),
+					},
+				},
+			},
+			wantAdd: nil,
+			wantDelete: map[string][]*aws.User{
+				"group-1": {
+					aws.NewUser("name-2", "lastname-2", "user-2@email.com", true),
+				},
+			},
+			wantEquals: map[string][]*aws.User{
+				"group-1": {
+					aws.NewUser("name-1", "lastname-1", "user-1@email.com", true),
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotAdd, gotDelete, gotEquals := getGroupUsersOperations(tt.args.gGroupsUsers, tt.args.awsGroupsUsers)
+			if !reflect.DeepEqual(gotAdd, tt.wantAdd) {
+				t.Errorf("getGroupUsersOperations() gotAdd = %s, want %s", toJSON(gotAdd), toJSON(tt.wantAdd))
+			}
+			if !reflect.DeepEqual(gotDelete, tt.wantDelete) {
+				t.Errorf("getGroupUsersOperations() gotDelete = %s, want %s", toJSON(gotDelete), toJSON(tt.wantDelete))
+			}
+			if !reflect.DeepEqual(gotEquals, tt.wantEquals) {
+				t.Errorf("getGroupUsersOperations() gotEquals = %s, want %s", toJSON(gotEquals), toJSON(tt.wantEquals))
 			}
 		})
 	}
