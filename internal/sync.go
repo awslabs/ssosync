@@ -442,6 +442,8 @@ func (s *syncGSuite) SyncGroupsUsers(query string) error {
 		}
 	}
 
+	log.Info("sync complete")
+
 	return nil
 }
 
@@ -467,7 +469,7 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(googleGroups []*admin.Group) ([]*ad
 			return nil, nil, err
 		}
 
-		log.Info("get users")
+		log.Debug("get users")
 		membersUsers := make([]*admin.User, 0)
 
 		for _, m := range groupMembers {
@@ -477,7 +479,7 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(googleGroups []*admin.Group) ([]*ad
 				continue
 			}
 
-			log.WithField("id", m.Email).Info("get user")
+			log.WithField("id", m.Email).Debug("get user")
 			q := fmt.Sprintf("email:%s", m.Email)
 			u, err := s.google.GetUsers(q) // TODO: implement GetUser(q)
 			if err != nil {
