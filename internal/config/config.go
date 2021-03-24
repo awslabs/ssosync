@@ -33,7 +33,7 @@ type Config struct {
 
 const (
 	// DefaultLogLevel is the default logging level.
-	DefaultLogLevel = "warn"
+	DefaultLogLevel = "info"
 	// DefaultLogFormat is the default format of the logger
 	DefaultLogFormat = "text"
 	// DefaultDebug is the default debug status.

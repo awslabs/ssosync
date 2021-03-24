@@ -302,7 +302,6 @@ func Test_getGroupUsersOperations(t *testing.T) {
 	tests := []struct {
 		name       string
 		args       args
-		wantAdd    map[string][]*aws.User
 		wantDelete map[string][]*aws.User
 		wantEquals map[string][]*aws.User
 	}{
@@ -328,7 +327,6 @@ func Test_getGroupUsersOperations(t *testing.T) {
 					},
 				},
 			},
-			wantAdd: nil,
 			wantDelete: map[string][]*aws.User{
 				"group-1": {
 					aws.NewUser("name-2", "lastname-2", "user-2@email.com", true),
@@ -343,10 +341,7 @@ func Test_getGroupUsersOperations(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotAdd, gotDelete, gotEquals := getGroupUsersOperations(tt.args.gGroupsUsers, tt.args.awsGroupsUsers)
-			if !reflect.DeepEqual(gotAdd, tt.wantAdd) {
-				t.Errorf("getGroupUsersOperations() gotAdd = %s, want %s", toJSON(gotAdd), toJSON(tt.wantAdd))
-			}
+			gotDelete, gotEquals := getGroupUsersOperations(tt.args.gGroupsUsers, tt.args.awsGroupsUsers)
 			if !reflect.DeepEqual(gotDelete, tt.wantDelete) {
 				t.Errorf("getGroupUsersOperations() gotDelete = %s, want %s", toJSON(gotDelete), toJSON(tt.wantDelete))
 			}
