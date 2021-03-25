@@ -98,9 +98,7 @@ Usage:
 The default for ssosync is to run through the sync.
 
 ```text
-A command line tool to enable you to synchronise your Google
-Apps (G-Suite) users to AWS Single Sign-on (AWS SSO)
-Complete documentation is available at https://github.com/awslabs/ssosync
+A command line tool to enable you to synchronise your GoogleApps (G-Suite) users to AWS Single Sign-on (AWS SSO)Complete documentation is available at https://github.com/awslabs/ssosync
 
 Usage:
   ssosync [flags]
@@ -116,7 +114,8 @@ Flags:
       --ignore-groups strings       ignores these Google groups
       --ignore-users strings        ignores these Google users
       --log-format string           log format (default "text")
-      --log-level string            log level (default "warn")
+      --log-level string            log level (default "info")
+  -s, --sync-method string          Select the sync method to use (users_groups|groups) (default "groups")
   -m, --user-match string           Google users query parameter, example: 'name:John* email:admin*', see: https://developers.google.com/admin-sdk/directory/v1/guides/search-users
   -v, --version                     version for ssosync
 ```
@@ -154,6 +153,22 @@ You can use the AWS Serverless Application Model (SAM) to deploy this to your ac
 Specify an Amazon S3 Bucket for the upload with `export S3_BUCKET=<YOUR_BUCKET>`.
 
 Execute `make package` in the console. Which will package and upload the function to the bucket. You can then use the `packaged.yaml` to configure and deploy the stack in [AWS CloudFormation Console](https://console.aws.amazon.com/cloudformation).
+
+### Example
+
+Build
+
+```bash
+aws cloudformation validate-template --template-body  file://template.yaml 1>/dev/null &&
+sam validate &&
+sam build
+```
+
+Deploy
+
+```bash
+sam deploy --guided
+```
 
 ## License
 

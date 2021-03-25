@@ -14,10 +14,11 @@ Metadata:
       - Label:
           default: "Advanced Configuration"
         Parameters:
-          - LogLevel
-          - LogFormat
+          - SyncMethod
           - GoogleUserMatch
           - GoogleGroupMatch
+          - LogLevel
+          - LogFormat
           - ScheduleExpression
 
   AWS::ServerlessRepo::Application:
@@ -28,7 +29,7 @@ Metadata:
     # paths are relative to .aws-sam/build directory
     LicenseUrl: LICENSE
     ReadmeUrl: SAR.md
-    Labels: [serverless, sso, lambda]
+    Labels: [serverless, sso, lambda, scim]
     HomePageUrl: https://github.com/awslabs/ssosync
     # Update the semantic version and run sam publish to publish a new version of your app
     SemanticVersion: 1.0.0-rc.8
@@ -42,12 +43,23 @@ Parameters:
     Default: rate(15 minutes)
   LogLevel:
     Type: String
-    Description: Log level for Lambda function logging, e.g., error, info, debug, etc
+    Description: Log level for Lambda function logging
     Default: warn
+    AllowedValues:
+      - panic
+      - fatal
+      - error
+      - warn
+      - info
+      - debug
+      - trace
   LogFormat:
     Type: String
-    Description: Log format for Lambda function logging, e.g., text, json
+    Description: Log format for Lambda function logging
     Default: json
+    AllowedValues:
+      - json
+      - text
   GoogleCredentials:
     Type: String
     Description: Credentials to log into Google (content of credentials.json)
@@ -68,6 +80,13 @@ Parameters:
     Type: String
     Description: |
       Google group query parameter, example: 'name:Admin* email:aws-*', see: https://developers.google.com/admin-sdk/directory/v1/guides/search-groups
+  SyncMethod:
+    Type: String
+    Description: Sync method to use
+    Default: groups
+    AllowedValues:
+      - groups
+      - users_groups
 
 Resources:
   SSOSyncFunction:
@@ -86,6 +105,7 @@ Resources:
           SSOSYNC_SCIM_ACCESS_TOKEN: !Ref AWSSCIMAccessTokenSecret
           SSOSYNC_USER_MATCH: !Ref GoogleUserMatch
           SSOSYNC_GROUP_MATCH: !Ref GoogleGroupMatch
+          SSOSYNC_SYNC_METHOD: !Ref SyncMethod
       Policies:
         - Statement:
             - Sid: SSMGetParameterPolicy

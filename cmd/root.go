@@ -96,7 +96,21 @@ func initConfig() {
 	viper.SetEnvPrefix("ssosync")
 	viper.AutomaticEnv()
 
-	for _, e := range []string{"google_admin", "google_credentials", "scim_access_token", "scim_endpoint", "log_level", "log_format", "ignore_users", "ignore_groups", "user_match", "group_match"} {
+	appEnvVars := []string{
+		"google_admin",
+		"google_credentials",
+		"scim_access_token",
+		"scim_endpoint",
+		"log_level",
+		"log_format",
+		"ignore_users",
+		"ignore_groups",
+		"user_match",
+		"group_match",
+		"sync_method",
+	}
+
+	for _, e := range appEnvVars {
 		if err := viper.BindEnv(e); err != nil {
 			log.Fatalf(errors.Wrap(err, "cannot bind environment variable").Error())
 		}

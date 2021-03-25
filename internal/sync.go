@@ -249,7 +249,8 @@ func (s *syncGSuite) SyncGroups(query string) error {
 	return nil
 }
 
-// SyncGroupsUsers will sync groups and its users from Google -> AWS SSO
+// SyncGroupsUsers will sync groups and its members from Google -> AWS SSO SCIM
+// allowing filter groups base on google api filter query parameter
 // References:
 // * https://developers.google.com/admin-sdk/directory/v1/guides/search-groups
 // query possible values:
@@ -671,18 +672,17 @@ func DoSync(ctx context.Context, cfg *config.Config) error {
 
 	log.WithField("sync_method", cfg.SyncMethod).Info("syncing")
 	if cfg.SyncMethod == config.DefaultSyncMethod {
+		err = c.SyncGroupsUsers(cfg.GroupMatch)
+		if err != nil {
+			return err
+		}
+	} else {
 		err = c.SyncUsers(cfg.UserMatch)
 		if err != nil {
 			return err
 		}
 
 		err = c.SyncGroups(cfg.GroupMatch)
-		if err != nil {
-			return err
-		}
-
-	} else {
-		err = c.SyncGroupsUsers(cfg.GroupMatch)
 		if err != nil {
 			return err
 		}
