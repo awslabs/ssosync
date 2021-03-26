@@ -653,7 +653,14 @@ func DoSync(ctx context.Context, cfg *config.Config) error {
 
 	// create a http client with retry and backoff capabilities
 	retryClient := retryablehttp.NewClient()
-	retryClient.Logger = log.StandardLogger()
+
+	// https://github.com/hashicorp/go-retryablehttp/issues/6
+	if cfg.Debug {
+		retryClient.Logger = log.StandardLogger()
+	} else {
+		retryClient.Logger = nil
+	}
+
 	httpClient := retryClient.StandardClient()
 
 	googleClient, err := google.NewClient(ctx, cfg.GoogleAdmin, creds)
