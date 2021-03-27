@@ -98,7 +98,7 @@ Usage:
 The default for ssosync is to run through the sync.
 
 ```text
-A command line tool to enable you to synchronise your GoogleApps (G-Suite) users to AWS Single Sign-on (AWS SSO)Complete documentation is available at https://github.com/awslabs/ssosync
+A command line tool to enable you to synchronise your GoogleApps (G-Suite) users to AWS Single Sign-on (AWS SSO). Complete documentation is available at https://github.com/awslabs/ssosync
 
 Usage:
   ssosync [flags]
@@ -113,6 +113,7 @@ Flags:
   -h, --help                        help for ssosync
       --ignore-groups strings       ignores these Google groups
       --ignore-users strings        ignores these Google users
+      --include-groups strings      include only these Google groups
       --log-format string           log format (default "text")
       --log-level string            log level (default "info")
   -s, --sync-method string          Select the sync method to use (users_groups|groups) (default "groups")

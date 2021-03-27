@@ -27,7 +27,9 @@ type Config struct {
 	IgnoreUsers []string `mapstructure:"ignore_users"`
 	// Ignore groups ...
 	IgnoreGroups []string `mapstructure:"ignore_groups"`
-	// SyncMethod
+	// Include groups ...
+	IncludeGroups []string `mapstructure:"include_groups"`
+	// SyncMethod ...
 	SyncMethod string `mapstructure:"sync_method"`
 }
 
