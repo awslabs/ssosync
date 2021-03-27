@@ -19,6 +19,7 @@ type Group struct {
 	ID          string   `json:"id,omitempty"`
 	Schemas     []string `json:"schemas"`
 	DisplayName string   `json:"displayName"`
+	Members     []string `json:"members"`
 }
 
 // GroupFilterResults represents filtered results when we search for
