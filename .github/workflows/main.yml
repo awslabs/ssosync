@@ -24,7 +24,7 @@ jobs:
           go-version: '1.16.x'
 
       - name: Run Static Checks
-        run: go mod download honnef.co/go/tools && go install honnef.co/go/tools/cmd/staticcheck && staticcheck ./...
+        run: go get honnef.co/go/tools/cmd/staticcheck && go install honnef.co/go/tools/cmd/staticcheck && staticcheck ./...
 
       - name: Run Linting
         uses: golangci/golangci-lint-action@v2
