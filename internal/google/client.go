@@ -119,10 +119,19 @@ func (c *client) GetUsers(query string) ([]*admin.User, error) {
 //  email:aws-*
 func (c *client) GetGroups(query string) ([]*admin.Group, error) {
 	g := make([]*admin.Group, 0)
-	err := c.service.Groups.List().Customer("my_customer").Query(query).Pages(context.TODO(), func(groups *admin.Groups) error {
-		g = append(g, groups.Groups...)
-		return nil
-	})
+	var err error
+
+	if query == "" {
+		err = c.service.Groups.List().Customer("my_customer").Pages(context.TODO(), func(groups *admin.Groups) error {
+			g = append(g, groups.Groups...)
+			return nil
+		})
+	} else {
+		err = c.service.Groups.List().Customer("my_customer").Query(query).Pages(context.TODO(), func(groups *admin.Groups) error {
+			g = append(g, groups.Groups...)
+			return nil
+		})
+	}
 
 	return g, err
 }

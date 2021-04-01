@@ -9,6 +9,8 @@ type Config struct {
 	LogLevel string `mapstructure:"log_level"`
 	// LogFormat is the format that is used for logging
 	LogFormat string `mapstructure:"log_format"`
+	// Enable a dry run
+	DryRun bool
 	// GoogleCredentials ...
 	GoogleCredentials string `mapstructure:"google_credentials"`
 	// GoogleAdmin ...
@@ -40,6 +42,8 @@ const (
 	DefaultLogFormat = "text"
 	// DefaultDebug is the default debug status.
 	DefaultDebug = false
+	// DefaultDryRun is the default dry-run status.
+	DefaultDryRun = false
 	// DefaultGoogleCredentials is the default credentials path
 	DefaultGoogleCredentials = "credentials.json"
 	// DefaultSyncMethod is the default sync method to use.
@@ -52,6 +56,7 @@ func New() *Config {
 		Debug:             DefaultDebug,
 		LogLevel:          DefaultLogLevel,
 		LogFormat:         DefaultLogFormat,
+		DryRun:            DefaultDryRun,
 		SyncMethod:        DefaultSyncMethod,
 		GoogleCredentials: DefaultGoogleCredentials,
 	}
