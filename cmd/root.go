@@ -108,6 +108,7 @@ func initConfig() {
 		"user_match",
 		"group_match",
 		"sync_method",
+		"dry_run",
 	}
 
 	for _, e := range appEnvVars {
