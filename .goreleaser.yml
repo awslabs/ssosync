@@ -60,4 +60,5 @@ archives:
      - lambda
     format: zip
     name_template: '{{ .ProjectName }}_lambda'
+    wrap_in_directory: false
 

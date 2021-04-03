@@ -123,6 +123,7 @@ func initConfig() {
 
 	// config logger
 	logConfig(cfg)
+	log.Debug(cfg)
 
 	if cfg.IsLambda {
 		configLambda()
