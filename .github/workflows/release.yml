@@ -52,8 +52,8 @@ jobs:
 
       - name: zip lambda file
         uses: montudor/action-zip@v0.1.1
-          with: 
-            args: zip -qq -r ssosync-lambda.zip main
+        with: 
+           args: zip -qq -r ssosync-lambda.zip main
 
       - name: upload lambda artifact to release
         uses: fnkr/github-action-ghr@v1
