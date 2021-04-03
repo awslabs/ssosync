@@ -124,7 +124,7 @@ func initConfig() {
 
 	// config logger
 	logConfig(cfg)
-	log.Debug(cfg)
+	log.Debugf("%+v\n", cfg)
 
 	if cfg.IsLambda {
 		configLambda()
