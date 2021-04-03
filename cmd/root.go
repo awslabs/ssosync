@@ -135,25 +135,39 @@ func configLambda() {
 	svc := secretsmanager.New(s)
 	secrets := config.NewSecrets(svc)
 
-	unwrap, err := secrets.GoogleAdminEmail()
+	var skey string
+
+	if skey = cfg.GoogleAdmin; skey == "" {
+		skey = "SSOSyncGoogleAdminEmail"
+	}
+	unwrap, err := secrets.GetSecret(skey)
 	if err != nil {
 		log.Fatalf(errors.Wrap(err, "cannot read config").Error())
 	}
 	cfg.GoogleAdmin = unwrap
 
-	unwrap, err = secrets.GoogleCredentials()
+	if skey = cfg.GoogleCredentials; skey == "" {
+		skey = "SSOSyncGoogleCrednetials"
+	}
+	unwrap, err = secrets.GetSecret(skey)
 	if err != nil {
 		log.Fatalf(errors.Wrap(err, "cannot read config").Error())
 	}
 	cfg.GoogleCredentials = unwrap
 
-	unwrap, err = secrets.SCIMAccessToken()
+	if skey = cfg.SCIMAccessToken; skey == "" {
+		skey = "SSOSyncAccessToken"
+	}
+	unwrap, err = secrets.GetSecret(skey)
 	if err != nil {
 		log.Fatalf(errors.Wrap(err, "cannot read config").Error())
 	}
 	cfg.SCIMAccessToken = unwrap
 
-	unwrap, err = secrets.SCIMEndpointUrl()
+	if skey = cfg.SCIMEndpoint; skey == "" {
+		skey = "SSOSyncSCMEndPoint"
+	}
+	unwrap, err = secrets.GetSecret(skey)
 	if err != nil {
 		log.Fatalf(errors.Wrap(err, "cannot read config").Error())
 	}
