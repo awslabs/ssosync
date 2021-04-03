@@ -47,27 +47,17 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  build-lambda:
-      runs-on: ubuntu-latest
-      steps:
-        - uses: actions/checkout@v2
-          with:
-            # repository: awslabs/ssosync
-            # ref: ${{ github.event.release.tag_name }}
-            # temporarily using my fork until group handling is fix in upstream
-            repository: brokenbot/ssosync
-            path: src/ssosync
-        - uses: actions/setup-go@v2
-          with:
-            stable: 'true'
-            go-version: '1.16'
-        - run: cd src/ssosync && go build -o ../../main main.go
-        - uses: montudor/action-zip@v0.1.1
+      - name: Build Lambda
+        run: go build -o main main.go
+
+      - name: zip lambda file
+        uses: montudor/action-zip@v0.1.1
           with: 
             args: zip -qq -r ssosync-lambda.zip main
-        - name: release
-          uses: fnkr/github-action-ghr@v1
-          if: startsWith(github.ref, 'refs/tags/')
-          env:
-            GHR_PATH: ssosync-lambda.zip
-            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: upload lambda artifact to release
+        uses: fnkr/github-action-ghr@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GHR_PATH: ssosync-lambda.zip
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
