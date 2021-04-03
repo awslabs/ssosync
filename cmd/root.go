@@ -152,7 +152,7 @@ func configLambda() {
 	}
 	unwrap, err = secrets.GetSecret(skey)
 	if err != nil {
-		log.WithField("secret_name", skey)Fatalf(errors.Wrap(err, "cannot read config").Error())
+		log.WithField("secret_name", skey).Fatalf(errors.Wrap(err, "cannot read config").Error())
 	}
 	cfg.GoogleCredentials = unwrap
 
@@ -161,7 +161,7 @@ func configLambda() {
 	}
 	unwrap, err = secrets.GetSecret(skey)
 	if err != nil {
-		log.WithField("secret_name", skey)Fatalf(errors.Wrap(err, "cannot read config").Error())
+		log.WithField("secret_name", skey).Fatalf(errors.Wrap(err, "cannot read config").Error())
 	}
 	cfg.SCIMAccessToken = unwrap
 
@@ -170,7 +170,7 @@ func configLambda() {
 	}
 	unwrap, err = secrets.GetSecret(skey)
 	if err != nil {
-		log.WithField("secret_name", skey)Fatalf(errors.Wrap(err, "cannot read config").Error())
+		log.WithField("secret_name", skey).Fatalf(errors.Wrap(err, "cannot read config").Error())
 	}
 	cfg.SCIMEndpoint = unwrap
 }
