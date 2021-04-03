@@ -2,24 +2,35 @@ before:
   hooks:
     - go mod download
 builds:
-- env:
-    - CGO_ENABLED=0
-  goos:
-    - linux
-    - darwin
-    - windows
-  goarch:
-    - 386
-    - amd64
-    - arm
-    - arm64
-  ignore:
-    - goos: darwin
-      goarch: 386
-    - goos: windows
-      goarch: 386
-  ldflags:
-     - -s -w -X github.com/awslabs/ssosync/cmd.version={{.Version}} -X github.com/awslabs/ssosync/cmd.commit={{.Commit}} -X github.com/awslabs/ssosync/cmd.date={{.Date}} -X github.com/awslabs/ssosync/cmd.builtBy=goreleaser
+  - id: cli
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - 386
+      - amd64
+      - arm
+      - arm64
+    ignore:
+      - goos: darwin
+        goarch: 386
+      - goos: windows
+        goarch: 386
+    ldflags:
+      - -s -w -X github.com/awslabs/ssosync/cmd.version={{.Version}} -X github.com/awslabs/ssosync/cmd.commit={{.Commit}} -X github.com/awslabs/ssosync/cmd.date={{.Date}} -X github.com/awslabs/ssosync/cmd.builtBy=goreleaser
+  - id: lambda
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+    goarch:
+      - amd64
+    main: ./main.go
+    binary: main
+
 checksum:
   name_template: '{{ .ProjectName }}_checksums.txt'
 changelog:
@@ -31,7 +42,10 @@ changelog:
     - Merge pull request
     - Merge branch
 archives:
-  - name_template: '{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}'
+  - id: cli
+    builds: 
+     - cli
+    name_template: '{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}'
     replacements:
       darwin: Darwin
       linux: Linux
@@ -41,4 +55,9 @@ archives:
     format_overrides:
     - goos: windows
       format: zip
+  - id: lambda
+    builds: 
+     - lambda
+    format: zip
+    name_template: '{{ .ProjectName }}_lambda'
 

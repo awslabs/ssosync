@@ -46,18 +46,3 @@ jobs:
           args: release --rm-dist
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build Lambda
-        run: go build -o main main.go
-
-      - name: zip lambda file
-        uses: montudor/action-zip@v0.1.1
-        with: 
-           args: zip -qq -r ssosync-lambda.zip main
-
-      - name: upload lambda artifact to release
-        uses: fnkr/github-action-ghr@v1
-        if: startsWith(github.ref, 'refs/tags/')
-        env:
-          GHR_PATH: ssosync-lambda.zip
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
