@@ -10,7 +10,7 @@ type Config struct {
 	// LogFormat is the format that is used for logging
 	LogFormat string `mapstructure:"log_format"`
 	// Enable a dry run
-	DryRun bool
+	DryRun bool `mapstructure:"dry_run"`
 	// GoogleCredentials ...
 	GoogleCredentials string `mapstructure:"google_credentials"`
 	// GoogleAdmin ...
