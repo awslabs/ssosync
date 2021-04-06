@@ -31,9 +31,7 @@ import (
 
 // SyncGSuite is the interface for synchronizing users/groups
 type SyncGSuite interface {
-	SyncUsers(string) error
-	SyncGroups(string) error
-	SyncGroupsUsers(string) error
+	Sync() error
 }
 
 // SyncGSuite is an object type that will synchronize real users and groups
@@ -41,8 +39,6 @@ type syncGSuite struct {
 	aws    aws.Client
 	google google.Client
 	cfg    *config.Config
-
-	users map[string]*aws.User
 }
 
 // New will create a new SyncGSuite object
@@ -51,651 +47,377 @@ func New(cfg *config.Config, a aws.Client, g google.Client) SyncGSuite {
 		aws:    a,
 		google: g,
 		cfg:    cfg,
-		users:  make(map[string]*aws.User),
 	}
 }
 
-// SyncUsers will Sync Google Users to AWS SSO SCIM
-// References:
-// * https://developers.google.com/admin-sdk/directory/v1/guides/search-users
-// query possible values:
-//  name:'Jane'
-//  email:admin*
-//  isAdmin=true
-//  manager='janesmith@example.com'
-//  orgName=Engineering orgTitle:Manager
-//  EmploymentData.projects:'GeneGnomes'
-func (s *syncGSuite) SyncUsers(query string) error {
-	log.Debug("get deleted users")
-	deletedUsers, err := s.google.GetDeletedUsers()
+// pull a list of users and groups from AWS,
+
+func (s *syncGSuite) planSync(awsUsers map[string]*aws.User, awsGroups map[string]*aws.Group, googleUsers map[string]*admin.User, googleGroups map[string][]string) (syncPlan map[string][][]string, err error) {
+
+	log.Info("creating user and group sync plans")
+	syncPlan = make(map[string][][]string)
+	syncPlan["users"], err = s.getUserChanges(awsUsers, googleUsers)
 	if err != nil {
-		log.Warn("Error Getting Deleted Users")
-		return err
+		return nil, err
 	}
-
-	for _, u := range deletedUsers {
-		log.WithFields(log.Fields{
-			"email": u.PrimaryEmail,
-		}).Info("deleting google user")
-
-		uu, err := s.aws.FindUserByEmail(u.PrimaryEmail)
-		if err != aws.ErrUserNotFound && err != nil {
-			log.WithFields(log.Fields{
-				"email": u.PrimaryEmail,
-			}).Warn("Error deleting google user")
-			return err
-		}
-
-		if err == aws.ErrUserNotFound {
-			log.WithFields(log.Fields{
-				"email": u.PrimaryEmail,
-			}).Debug("User already deleted")
-			continue
-		}
-
-		if s.cfg.DryRun {
-			continue
-		}
-
-		if err := s.aws.DeleteUser(uu); err != nil {
-			log.WithFields(log.Fields{
-				"email": u.PrimaryEmail,
-			}).Warn("Error deleting user")
-			return err
-		}
-	}
-
-	log.Debug("get active google users")
-	googleUsers, err := s.google.GetUsers(query)
+	syncPlan["groups"], err = s.getGroupChanges(awsGroups, googleGroups)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	for _, u := range googleUsers {
-		if s.ignoreUser(u.PrimaryEmail) {
-			continue
-		}
-
-		ll := log.WithFields(log.Fields{
-			"email": u.PrimaryEmail,
-		})
-
-		ll.Debug("finding user")
-		uu, _ := s.aws.FindUserByEmail(u.PrimaryEmail)
-		if uu != nil {
-			s.users[uu.Username] = uu
-			// Update the user when suspended state is changed
-			if uu.Active == u.Suspended {
-				log.Debug("Mismatch active/suspended, updating user")
-				// create new user object and update the user
-				if s.cfg.DryRun {
-					continue
-				}
-				_, err := s.aws.UpdateUser(aws.UpdateUser(
-					uu.ID,
-					u.Name.GivenName,
-					u.Name.FamilyName,
-					u.PrimaryEmail,
-					!u.Suspended))
-				if err != nil {
-					return err
-				}
-			}
-			continue
-		}
-
-		ll.Info("creating user ")
-		if s.cfg.DryRun {
-			continue
-		}
-		uu, err := s.aws.CreateUser(aws.NewUser(
-			u.Name.GivenName,
-			u.Name.FamilyName,
-			u.PrimaryEmail,
-			!u.Suspended))
-		if err != nil {
-			return err
-		}
-
-		s.users[uu.Username] = uu
-	}
-
-	return nil
+	return syncPlan, err
 }
 
-// SyncGroups will sync groups from Google -> AWS SSO
-// References:
-// * https://developers.google.com/admin-sdk/directory/v1/guides/search-groups
-// query possible values:
-//  name='contact'
-//  email:admin*
-//  memberKey=user@company.com
-//  name:contact* email:contact*
-//  name:Admin* email:aws-*
-//  email:aws-*
-func (s *syncGSuite) SyncGroups(query string) error {
+func (s *syncGSuite) Sync() (err error) {
 
-	log.WithField("query", query).Debug("get google groups")
-	googleGroups, err := s.google.GetGroups(query)
+	log.Info("starting sync process")
+
+	awsUsers, err := s.getAwsUsers()
+	if err != nil {
+		return err
+	}
+	awsGroups, err := s.getAwsGroups(awsUsers)
+	if err != nil {
+		return err
+	}
+	googleGroups, err := s.getFilteredGoogleGroups()
+	if err != nil {
+		return err
+	}
+	googleUsers, err := s.getFilteredGoogleUsers(googleGroups)
+	if err != nil {
+		return err
+	}
+	//googleDeleteUsers, err := s.google.GetDeletedUsers()
+
+	syncPlan, err := s.planSync(awsUsers, awsGroups, googleUsers, googleGroups)
 	if err != nil {
 		return err
 	}
 
-	correlatedGroups := make(map[string]*aws.Group)
-
-	for _, g := range googleGroups {
-		if s.ignoreGroup(g.Email) || s.ignoreGroup(g.Name) {
-			continue
+	if log.GetLevel() >= log.InfoLevel {
+		log.WithField("plan", "users").Info("user plan:")
+		for _, cmd := range syncPlan["users"] {
+			log.WithField("plan", "user").Info("\t", cmd[0], "->", cmd[1])
 		}
-
-		if !(s.includeGroup(g.Email) || s.includeGroup(g.Name)) {
-			continue
-		}
-
-		log := log.WithFields(log.Fields{
-			"group": g.Email,
-		})
-
-		log.Debug("Check group")
-		var group *aws.Group
-
-		gg, err := s.aws.FindGroupByDisplayName(g.Email)
-		if err != nil && err != aws.ErrGroupNotFound {
-			return err
-		}
-
-		if gg != nil {
-			log.Debug("Found group")
-			correlatedGroups[gg.DisplayName] = gg
-			group = gg
-		} else {
-			log.Info("Creating group in AWS")
-			if !s.cfg.DryRun {
-				newGroup, err := s.aws.CreateGroup(aws.NewGroup(g.Email))
-				if err != nil {
-					return err
-				}
-				correlatedGroups[newGroup.DisplayName] = newGroup
-				group = newGroup
+		log.WithField("plan", "groups").Info("group plan:")
+		for _, cmd := range syncPlan["groups"] {
+			if len(cmd) == 2 {
+				log.WithField("plan", "groups").Info("\t", cmd[0], "->", cmd[1])
 			} else {
-				group = aws.NewGroup(g.Email)
+				log.WithField("plan", "groups").Info("\t", cmd[1], ":", cmd[0], "->", cmd[2])
 			}
 		}
+	}
 
-		groupMembers, err := s.google.GetGroupMembers(g)
-		if err != nil {
-			return err
-		}
+	if s.cfg.DryRun {
+		log.Info("running in dry run mode, no changes will be committed")
+		return nil
+	}
 
-		memberList := make(map[string]*admin.Member)
-
-		log.Info("Start group user sync")
-
-		for _, m := range groupMembers {
-			if _, ok := s.users[m.Email]; ok {
-				memberList[m.Email] = m
-			}
-		}
-
-		for _, u := range s.users {
-			log.WithField("user", u.Username).Debug("Checking user is in group already")
-			b, err := s.aws.IsUserInGroup(u, group)
-			if err != nil && !s.cfg.DryRun {
-				return err
-			}
-
-			if _, ok := memberList[u.Username]; ok {
-				if !b {
-					log.WithField("user", u.Username).Info("Adding user to group")
-					if s.cfg.DryRun {
-						continue
-					}
-					err := s.aws.AddUserToGroup(u, group)
-					if err != nil {
-						return err
-					}
-				}
-			} else {
-				if b {
-					log.WithField("user", u.Username).Info("Removing user from group")
-					if s.cfg.DryRun {
-						continue
-					}
-					err := s.aws.RemoveUserFromGroup(u, group)
-					if err != nil {
-						return err
-					}
-				}
-			}
-		}
+	newUsers, err := s.syncUsers(syncPlan["users"], awsUsers, googleUsers)
+	if err != nil {
+		return err
+	}
+	for user, awsUser := range newUsers {
+		awsUsers[user] = awsUser
+	}
+	err = s.syncGroups(syncPlan["groups"], awsUsers, awsGroups, googleGroups)
+	if err != nil {
+		return err
 	}
 
 	return nil
 }
 
-// SyncGroupsUsers will sync groups and its members from Google -> AWS SSO SCIM
-// allowing filter groups base on google api filter query parameter
-// References:
-// * https://developers.google.com/admin-sdk/directory/v1/guides/search-groups
-// query possible values:
-//  name='contact'
-//  email:admin*
-//  memberKey=user@company.com
-//  name:contact* email:contact*
-//  name:Admin* email:aws-*
-//  email:aws-*
-// process workflow:
-//  1) delete users in aws, these were deleted in google
-//  2) update users in aws, these were updated in google
-//  3) add users in aws, these were added in google
-//  4) add groups in aws and add its members, these were added in google
-//  5) validate equals aws an google groups members
-//  6) delete groups in aws, these were deleted in google
-func (s *syncGSuite) SyncGroupsUsers(query string) error {
+func (s *syncGSuite) syncUsers(userPlan [][]string, awsUsers map[string]*aws.User, googleUsers map[string]*admin.User) (newUsers map[string]*aws.User, err error) {
 
-	log.WithField("query", query).Debug("get google groups")
-	googleGroups, err := s.google.GetGroups(query)
-	if err != nil {
-		return err
-	}
+	log.Info("executing user plan")
 
-	log.Debug("get google users and groups and its users")
-	googleGroups, googleUsers, googleGroupsUsers, err := s.getGoogleGroupsAndUsers(googleGroups)
-	if err != nil {
-		return err
-	}
+	newUsers = make(map[string]*aws.User)
 
-	log.Debug("get aws groups")
-	awsGroups, err := s.aws.GetGroups()
-	if err != nil {
-		log.Error("error getting aws groups")
-		return err
-	}
-
-	log.Debug("get aws users")
-	awsUsers, err := s.aws.GetUsers()
-	if err != nil {
-		return err
-	}
-
-	awsGroupsUsers, err := s.getAWSGroupsAndUsers(awsGroups, awsUsers)
-	log.Debug("get aws groups and its users")
-	if err != nil {
-		return err
-	}
-
-	// list of changes
-	addAWSUsers, delAWSUsers, updateAWSUsers, _ := getUserOperations(awsUsers, googleUsers)
-	addAWSGroups, delAWSGroups, equalAWSGroups := getGroupOperations(awsGroups, googleGroups)
-
-	// delete aws users (deleted in google)
-	for _, awsUser := range delAWSUsers {
-
-		log := log.WithFields(log.Fields{"user": awsUser.Username})
-
-		log.Debug("finding user")
-		awsUserFull, err := s.aws.FindUserByEmail(awsUser.Username)
-		if err != nil {
-			return err
-		}
-
-		log.Warn("deleting user")
-		if s.cfg.DryRun {
-			continue
-		}
-		if err := s.aws.DeleteUser(awsUserFull); err != nil {
-			log.Error("error deleting user")
-			return err
-		}
-	}
-
-	// update aws users (updated in google)
-	for _, awsUser := range updateAWSUsers {
-
-		log := log.WithFields(log.Fields{"user": awsUser.Username})
-
-		awsUserFull, err := s.aws.FindUserByEmail(awsUser.Username)
-		if err != nil {
-			return err
-		}
-
-		log.Warn("updating user")
-		if s.cfg.DryRun {
-			continue
-		}
-		_, err = s.aws.UpdateUser(awsUserFull)
-		if err != nil {
-			log.Error("error updating user")
-			return err
-		}
-	}
-
-	// add aws users (new in google)
-	for _, awsUser := range addAWSUsers {
-
-		log := log.WithFields(log.Fields{"user": awsUser.Username})
-
-		log.Info("creating user")
-		if s.cfg.DryRun {
-			continue
-		}
-		_, err := s.aws.CreateUser(awsUser)
-		if err != nil {
-			log.Error("error creating user")
-			return err
-		}
-	}
-
-	// add aws groups (new in google)
-	for _, awsGroup := range addAWSGroups {
-
-		log := log.WithFields(log.Fields{"group": awsGroup.DisplayName})
-
-		log.Info("creating group")
-		if s.cfg.DryRun {
-			continue
-		}
-		_, err := s.aws.CreateGroup(awsGroup)
-		if err != nil {
-			log.Error("creating group")
-			return err
-		}
-
-		// fix 404 errors when adding members too group
-		awsGroup, err := s.aws.FindGroupByDisplayName(awsGroup.DisplayName)
-		if err != nil {
-			log.Error("creating group")
-			return err
-		}
-
-		// add members of the new group
-		for _, googleUser := range googleGroupsUsers[awsGroup.DisplayName] {
-
-			// equivalent aws user of google user on the fly
-			log.Debug("finding user in aws")
-			awsUserFull, err := s.aws.FindUserByEmail(googleUser.PrimaryEmail)
-			if err != nil {
-				return err
-			}
-
-			log.WithField("user", awsUserFull.Username).Info("adding user to group")
-			if s.cfg.DryRun {
-				continue
-			}
-			err = s.aws.AddUserToGroup(awsUserFull, awsGroup)
-			if err != nil {
-				return err
-			}
-		}
-	}
-
-	// remove users from groups in aws
-	deleteUsersFromGroup, _ := getGroupUsersOperations(googleGroupsUsers, awsGroupsUsers)
-
-	// validate equals aws and google groups members
-	for _, awsGroup := range equalAWSGroups {
-
-		// add members of the new group
-		log := log.WithFields(log.Fields{"group": awsGroup.DisplayName})
-
-		for _, googleUser := range googleGroupsUsers[awsGroup.DisplayName] {
-
-			log.WithField("user", googleUser.PrimaryEmail).Debug("finding user")
-			awsUserFull, err := s.aws.FindUserByEmail(googleUser.PrimaryEmail)
-			if err != nil && !s.cfg.DryRun {
-				return err
-			}
-
-			log.WithField("user", awsUserFull.Username).Debug("checking user is in group already")
-			b, err := s.aws.IsUserInGroup(awsUserFull, awsGroup)
-			if err != nil {
-				return err
-			}
-
-			if !b {
-				log.WithField("user", awsUserFull.Username).Info("adding user to group")
-				if s.cfg.DryRun {
-					continue
-				}
-				err := s.aws.AddUserToGroup(awsUserFull, awsGroup)
-				if err != nil {
-					return err
-				}
-			}
-		}
-
-		for _, awsUser := range deleteUsersFromGroup[awsGroup.DisplayName] {
-			log.WithField("user", awsUser.Username).Warn("removing user from group")
-			if s.cfg.DryRun {
-				continue
-			}
-			err := s.aws.RemoveUserFromGroup(awsUser, awsGroup)
-			if err != nil {
-				return err
-			}
-		}
-	}
-
-	// delete aws groups (deleted in google)
-	for _, awsGroup := range delAWSGroups {
-
-		log := log.WithFields(log.Fields{"group": awsGroup.DisplayName})
-
-		log.Debug("finding group")
-		awsGroupFull, err := s.aws.FindGroupByDisplayName(awsGroup.DisplayName)
-		if err != nil {
-			return err
-		}
-
-		log.Warn("deleting group")
-		if s.cfg.DryRun {
-			continue
-		}
-		err = s.aws.DeleteGroup(awsGroupFull)
-		if err != nil {
-			log.Error("deleting group")
-			return err
-		}
-	}
-
-	log.Info("sync complete")
-
-	return nil
-}
-
-// getGoogleGroupsAndUsers return a list of google users members of googleGroups
-// and a map of google groups and its users' list
-func (s *syncGSuite) getGoogleGroupsAndUsers(googleGroups []*admin.Group) ([]*admin.Group, []*admin.User, map[string][]*admin.User, error) {
-	gUsers := make([]*admin.User, 0)
-	gGroupsUsers := make(map[string][]*admin.User)
-	gGroups := make([]*admin.Group, 0)
-	gUniqUsers := make(map[string]*admin.User)
-
-	for _, g := range googleGroups {
-
-		if s.ignoreGroup(g.Email) || s.ignoreGroup(g.Name) {
-			continue
-		}
-
-		if !(s.includeGroup(g.Email) || s.includeGroup(g.Name)) {
-			continue
-		}
-
-		gGroups = append(gGroups, g)
-
-		log := log.WithFields(log.Fields{"group": g.Name})
-
-		log.Debug("get group members from google")
-		groupMembers, err := s.google.GetGroupMembers(g)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-
-		log.Debug("get users")
-		membersUsers := make([]*admin.User, 0)
-
-		for _, m := range groupMembers {
-
-			if s.ignoreUser(m.Email) {
-				log.WithField("id", m.Email).Debug("ignoring user")
-				continue
-			}
-
-			log.WithField("id", m.Email).Debug("get user")
-			q := fmt.Sprintf("email:%s", m.Email)
-			u, err := s.google.GetUsers(q) // TODO: implement GetUser(q)
-			if err != nil {
-				return nil, nil, nil, err
-			}
-
-			membersUsers = append(membersUsers, u[0])
-
-			_, ok := gUniqUsers[m.Email]
-			if !ok {
-				gUniqUsers[m.Email] = u[0]
-			}
-		}
-		gGroupsUsers[g.Name] = membersUsers
-	}
-
-	for _, user := range gUniqUsers {
-		gUsers = append(gUsers, user)
-	}
-
-	return gGroups, gUsers, gGroupsUsers, nil
-}
-
-// getAWSGroupsAndUsers return a list of google users members of googleGroups
-// and a map of google groups and its users' list
-func (s *syncGSuite) getAWSGroupsAndUsers(awsGroups []*aws.Group, awsUsers []*aws.User) (map[string][]*aws.User, error) {
-	awsGroupsUsers := make(map[string][]*aws.User)
-
-	for _, awsGroup := range awsGroups {
-
-		users := make([]*aws.User, 0)
-		log := log.WithFields(log.Fields{"group": awsGroup.DisplayName})
-
-		log.Debug("get group members from aws")
-		// NOTE: AWS has not implemented yet some method to get the groups members https://docs.aws.amazon.com/singlesignon/latest/developerguide/listgroups.html
-		// so, we need to check each user in each group which are too many unnecessary API calls
-		for _, user := range awsUsers {
-
-			log.Debug("checking if user is member of")
-			found, err := s.aws.IsUserInGroup(user, awsGroup)
+	for _, cmd := range userPlan {
+		if cmd[0] == "create" {
+			log.WithField("user", cmd[1]).Info("adding user")
+			gUser := googleUsers[cmd[1]]
+			awsUser := aws.NewUser(gUser.Name.GivenName, gUser.Name.FamilyName, cmd[1], !gUser.Suspended)
+			_, err := s.aws.CreateUser(awsUser)
 			if err != nil {
 				return nil, err
 			}
-			if found {
-				users = append(users, user)
+			newUsers[cmd[1]] = awsUser
+			continue
+		}
+		if cmd[0] == "delete" {
+			log.WithField("user", cmd[1]).Warn("deleting user")
+			awsUser := awsUsers[cmd[1]]
+			err := s.aws.DeleteUser(awsUser)
+			if err != nil {
+				return nil, err
 			}
+			continue
 		}
 
-		awsGroupsUsers[awsGroup.DisplayName] = users
 	}
-	return awsGroupsUsers, nil
+
+	return newUsers, nil
 }
 
-// getGroupOperations returns the groups of AWS that must be added, deleted and are equals
-func getGroupOperations(awsGroups []*aws.Group, googleGroups []*admin.Group) (add []*aws.Group, delete []*aws.Group, equals []*aws.Group) {
+func (s *syncGSuite) syncGroups(groupPlan [][]string, awsUsers map[string]*aws.User, awsGroups map[string]*aws.Group, googleGroups map[string][]string) (err error) {
 
-	awsMap := make(map[string]*aws.Group)
-	googleMap := make(map[string]*admin.Group)
+	log.Info("executing group plan")
+
+	for _, stmt := range groupPlan {
+		cmd := stmt[0]
+		group := stmt[1]
+		if cmd == "create" {
+			log.WithField("group", group).Info("creating group")
+			newGroup := aws.NewGroup(group)
+			awsGroup, err := s.aws.CreateGroup(newGroup)
+			if err != nil {
+				return err
+			}
+			awsGroups[group] = awsGroup
+		}
+		if cmd == "delete" {
+			log.WithField("group", group).Warn("deleting group")
+			err = s.aws.DeleteGroup(awsGroups[group])
+			if err != nil && err != aws.ErrGroupNotFound {
+				return err
+			}
+		}
+		if cmd == "remove" {
+			user := stmt[2]
+			log.WithField("group", group).Warn("removing user from group: ", user)
+			err := s.aws.RemoveUserFromGroup(awsUsers[user], awsGroups[group])
+			if err != nil {
+				return err
+			}
+		}
+		if cmd == "add" {
+			user := stmt[2]
+			log.WithField("group", group).Info("adding user to group: ", user)
+			err := s.aws.AddUserToGroup(awsUsers[user], awsGroups[group])
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func (s *syncGSuite) getAwsUsers() (awsUsers map[string]*aws.User, err error) {
+
+	log.Info("Retreiving list of AWS Users")
+
+	awsUsers = make(map[string]*aws.User)
+
+	users, err := s.aws.GetUsers()
+	if err != nil {
+		return nil, err
+	}
+
+	for _, u := range users {
+		awsUsers[u.Username] = u
+	}
+
+	log.Debugf("AWS Users: %+v\n", awsUsers)
+
+	return awsUsers, nil
+
+}
+
+func (s *syncGSuite) getAwsGroups(awsUsers map[string]*aws.User) (awsGroups map[string]*aws.Group, err error) {
+
+	log.Info("Retreiving list of AWS Groups")
+
+	awsGroups = make(map[string]*aws.Group)
+
+	groups, err := s.aws.GetGroups()
+	if err != nil {
+		return nil, err
+	}
+
+	for _, g := range groups {
+		log.WithField("group", g.DisplayName).Debug("finding users for group")
+		for _, u := range awsUsers {
+			//log.WithField("user", u.Username).Debug("checking is user is in group.")
+			in, err := s.aws.IsUserInGroup(u, g)
+			if err != nil {
+				return nil, err
+			}
+			if in {
+				log.WithField("user", u.Username).Debug("adding user to group members")
+				g.Members = append(g.Members, u.Username)
+			}
+		}
+		awsGroups[g.DisplayName] = g
+	}
+
+	log.Debugf("AWS Groups: %+v\n", awsGroups)
+
+	return awsGroups, nil
+
+}
+
+func (s *syncGSuite) getGroupChanges(awsGroups map[string]*aws.Group, googleGroups map[string][]string) (groupPlan [][]string, err error) {
+
+	deleteGroups := make(map[string]string)
+	compareGroups := make(map[string]string)
 
 	for _, awsGroup := range awsGroups {
-		awsMap[awsGroup.DisplayName] = awsGroup
-	}
-
-	for _, gGroup := range googleGroups {
-		googleMap[gGroup.Name] = gGroup
-	}
-
-	// AWS Groups found and not found in google
-	for _, gGroup := range googleGroups {
-		if _, found := awsMap[gGroup.Name]; found {
-			equals = append(equals, awsMap[gGroup.Name])
+		if _, in := googleGroups[awsGroup.DisplayName]; in {
+			compareGroups[awsGroup.DisplayName] = awsGroup.ID
 		} else {
-			add = append(add, aws.NewGroup(gGroup.Name))
+			deleteGroups[awsGroup.DisplayName] = awsGroup.ID
+			groupPlan = append(groupPlan, []string{"delete", awsGroup.DisplayName})
 		}
 	}
 
-	// Google Groups founds and not in aws
-	for _, awsGroup := range awsGroups {
-		if _, found := googleMap[awsGroup.DisplayName]; !found {
-			log.WithField("group", awsGroup.DisplayName).Debug("aws group not found in google groups")
-			delete = append(delete, aws.NewGroup(awsGroup.DisplayName))
+	for googleGroup, members := range googleGroups {
+		if _, in := deleteGroups[googleGroup]; in {
+			continue
 		}
+
+		if _, in := compareGroups[googleGroup]; in {
+			delMembers, addMembers := s.diffLists(awsGroups[googleGroup].Members, members)
+
+			for _, d := range delMembers {
+				groupPlan = append(groupPlan, []string{"remove", googleGroup, d})
+			}
+
+			for _, a := range addMembers {
+				groupPlan = append(groupPlan, []string{"add", googleGroup, a})
+			}
+
+			continue
+		}
+
+		groupPlan = append(groupPlan, []string{"create", googleGroup})
+		for _, m := range members {
+			groupPlan = append(groupPlan, []string{"add", googleGroup, m})
+		}
+
 	}
 
-	return add, delete, equals
+	log.Debugf("Group Changes: %+v\n", groupPlan)
+
+	return groupPlan, nil
+
 }
 
-// getUserOperations returns the users of AWS that must be added, deleted, updated and are equals
-func getUserOperations(awsUsers []*aws.User, googleUsers []*admin.User) (add []*aws.User, delete []*aws.User, update []*aws.User, equals []*aws.User) {
+func (s *syncGSuite) getUserChanges(awsUsers map[string]*aws.User, googleUsers map[string]*admin.User) (userPlan [][]string, err error) {
 
-	awsMap := make(map[string]*aws.User)
-	googleMap := make(map[string]struct{})
+	userPlan = make([][]string, 0)
 
-	for _, awsUser := range awsUsers {
-		awsMap[awsUser.Username] = awsUser
-	}
-
-	for _, gUser := range googleUsers {
-		googleMap[gUser.PrimaryEmail] = struct{}{}
-	}
-
-	// AWS Users found and not found in google
-	for _, gUser := range googleUsers {
-		if awsUser, found := awsMap[gUser.PrimaryEmail]; found {
-			if awsUser.Active == gUser.Suspended ||
-				awsUser.Name.GivenName != gUser.Name.GivenName ||
-				awsUser.Name.FamilyName != gUser.Name.FamilyName {
-				update = append(update, aws.NewUser(gUser.Name.GivenName, gUser.Name.FamilyName, gUser.PrimaryEmail, !gUser.Suspended))
-			} else {
-				equals = append(equals, awsUser)
-			}
-		} else {
-			add = append(add, aws.NewUser(gUser.Name.GivenName, gUser.Name.FamilyName, gUser.PrimaryEmail, !gUser.Suspended))
+	for u := range awsUsers {
+		if _, in := googleUsers[u]; !in {
+			userPlan = append(userPlan, []string{"delete", u})
 		}
 	}
 
-	// Google Users founds and not in aws
-	for _, awsUser := range awsUsers {
-		if _, found := googleMap[awsUser.Username]; !found {
-			delete = append(delete, aws.NewUser(awsUser.Name.GivenName, awsUser.Name.FamilyName, awsUser.Username, awsUser.Active))
+	for u := range googleUsers {
+		if _, in := awsUsers[u]; !in {
+			userPlan = append(userPlan, []string{"create", u})
 		}
 	}
 
-	return add, delete, update, equals
+	log.Debugf("User Changes: %+v\n", userPlan)
+
+	return userPlan, err
 }
 
-// groupUsersOperations returns the groups and its users of AWS that must be delete from these groups and what are equals
-func getGroupUsersOperations(gGroupsUsers map[string][]*admin.User, awsGroupsUsers map[string][]*aws.User) (delete map[string][]*aws.User, equals map[string][]*aws.User) {
+func (s *syncGSuite) getFilteredGoogleGroups() (map[string][]string, error) {
 
-	mbG := make(map[string]map[string]struct{})
+	log.Info("Retreiving list of Google Groups")
 
-	// get user in google groups that are in aws groups and
-	// users in aws groups that aren't in google groups
-	for gGroupName, gGroupUsers := range gGroupsUsers {
-		mbG[gGroupName] = make(map[string]struct{})
-		for _, gUser := range gGroupUsers {
-			mbG[gGroupName][gUser.PrimaryEmail] = struct{}{}
-		}
+	groupsMembers := make(map[string][]string)
+
+	groups, err := s.google.GetGroups(s.cfg.GroupMatch)
+	if err != nil {
+		return nil, err
 	}
 
-	delete = make(map[string][]*aws.User)
-	equals = make(map[string][]*aws.User)
-	for awsGroupName, awsGroupUsers := range awsGroupsUsers {
-		for _, awsUser := range awsGroupUsers {
-			// users that exist in aws groups but doesn't in google groups
-			if _, found := mbG[awsGroupName][awsUser.Username]; found {
-				equals[awsGroupName] = append(equals[awsGroupName], awsUser)
-			} else {
-				delete[awsGroupName] = append(delete[awsGroupName], awsUser)
+	for _, g := range groups {
+		if s.ignoreGroup(g.Email) || s.ignoreGroup(g.Name) {
+			continue
+		}
+
+		if !(s.includeGroup(g.Email) || s.includeGroup(g.Name)) {
+			continue
+		}
+
+		members, err := s.google.GetGroupMembers(g)
+		if err != nil {
+			return nil, err
+		}
+
+		memberEmails := make([]string, 0)
+		for _, m := range members {
+			if m.Type == "Group" {
+				log.WithField("id", m.Email).Warn("skipping, nested groups are not supported")
+				continue
+			}
+			memberEmails = append(memberEmails, m.Email)
+		}
+
+		groupsMembers[g.Name] = memberEmails
+	}
+
+	log.Debugf("Google Groups: %+v\n", groupsMembers)
+
+	return groupsMembers, nil
+
+}
+
+func (s *syncGSuite) getFilteredGoogleUsers(groupsMembers map[string][]string) (map[string]*admin.User, error) {
+
+	log.Info("Retrieving list of Google Users")
+
+	filteredUsers := make(map[string]*admin.User)
+
+	if s.cfg.SyncMethod == config.DefaultSyncMethod {
+		log.Info("Using default sync method to get users: ", s.cfg.SyncMethod)
+		for g, members := range groupsMembers {
+			log.Info("Retreiving users for group:", g)
+			for _, m := range members {
+				if _, in := filteredUsers[m]; in {
+					log.WithField("id", m).Debug("skipping, user already in retreived")
+					continue
+				}
+				if s.ignoreUser(m) {
+					log.WithField("id", m).Debug("ignoring user")
+					continue
+				}
+
+				q := fmt.Sprintf("email:%s", m)
+
+				user, err := s.google.GetUsers(q)
+				if err != nil {
+					return nil, err
+				}
+
+				filteredUsers[m] = user[0]
 			}
 		}
+	} else {
+		users, err := s.google.GetUsers(s.cfg.UserMatch)
+		if err != nil {
+			return nil, err
+		}
+		for _, u := range users {
+			if s.ignoreUser(u.PrimaryEmail) {
+				log.WithField("id", u.PrimaryEmail).Debug("ignoring user")
+			}
+			filteredUsers[u.PrimaryEmail] = u
+		}
 	}
 
-	return
+	log.Debugf("%+v\n", filteredUsers)
+
+	return filteredUsers, nil
+
 }
 
 // DoSync will create a logger and run the sync with the paths
@@ -742,23 +464,7 @@ func DoSync(ctx context.Context, cfg *config.Config) error {
 
 	c := New(cfg, awsClient, googleClient)
 
-	log.WithField("sync_method", cfg.SyncMethod).Info("syncing")
-	if cfg.SyncMethod == config.DefaultSyncMethod {
-		err = c.SyncGroupsUsers(cfg.GroupMatch)
-		if err != nil {
-			return err
-		}
-	} else {
-		err = c.SyncUsers(cfg.UserMatch)
-		if err != nil {
-			return err
-		}
-
-		err = c.SyncGroups(cfg.GroupMatch)
-		if err != nil {
-			return err
-		}
-	}
+	c.Sync()
 
 	return nil
 }
@@ -766,6 +472,7 @@ func DoSync(ctx context.Context, cfg *config.Config) error {
 func (s *syncGSuite) ignoreUser(name string) bool {
 	for _, u := range s.cfg.IgnoreUsers {
 		if u == name {
+			log.WithField("user", name).Info("in ignore user list")
 			return true
 		}
 	}
@@ -773,10 +480,35 @@ func (s *syncGSuite) ignoreUser(name string) bool {
 	return false
 }
 
+func (s *syncGSuite) diffLists(listA []string, listB []string) (onlyA []string, onlyB []string) {
+	onlyA = make([]string, 0)
+	onlyB = make([]string, 0)
+	union := make(map[string]string)
+
+OUTER:
+	for _, a := range listA {
+		for _, b := range listB {
+			if a == b {
+				union[a] = a
+				continue OUTER
+			}
+		}
+		onlyA = append(onlyA, a)
+	}
+
+	for _, b := range listB {
+		if _, in := union[b]; !in {
+			onlyB = append(onlyB, b)
+		}
+	}
+
+	return onlyA, onlyB
+}
+
 func (s *syncGSuite) ignoreGroup(name string) bool {
 	for _, g := range s.cfg.IgnoreGroups {
 		if g == name {
-			log.WithField("group", name).Debug("in ignore groups list")
+			log.WithField("group", name).Info("in ignore groups list")
 			return true
 		}
 	}
@@ -791,10 +523,9 @@ func (s *syncGSuite) includeGroup(name string) bool {
 
 	for _, g := range s.cfg.IncludeGroups {
 		if g == name {
+			log.WithField("group", name).Info("in included groups list")
 			return true
 		}
 	}
-
-	log.WithField("group", name).Debug("not in included groups list")
 	return false
 }
