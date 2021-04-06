@@ -18,11 +18,6 @@ package internal
 import (
 	"encoding/json"
 	"log"
-	"reflect"
-	"testing"
-
-	"github.com/awslabs/ssosync/internal/aws"
-	admin "google.golang.org/api/admin/directory/v1"
 )
 
 // toJSON return a json pretty of the stc
@@ -34,6 +29,7 @@ func toJSON(stc interface{}) []byte {
 	return JSON
 }
 
+/*
 func Test_getGroupOperations(t *testing.T) {
 	type args struct {
 		awsGroups    []*aws.Group
@@ -351,3 +347,4 @@ func Test_getGroupUsersOperations(t *testing.T) {
 		})
 	}
 }
+*/
