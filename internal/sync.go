@@ -274,6 +274,15 @@ func (s *syncGSuite) SyncGroupsUsers(query string) error {
 	if err != nil {
 		return err
 	}
+	filteredGoogleGroups := []*admin.Group{}
+	for _, g := range googleGroups {
+		if s.ignoreGroup(g.Email) {
+			log.WithField("group", g.Email).Debug("ignoring group")
+			continue
+		}
+		filteredGoogleGroups = append(filteredGoogleGroups, g)
+	}
+	googleGroups = filteredGoogleGroups
 
 	log.Debug("get google users and groups and its users")
 	googleUsers, googleGroupsUsers, err := s.getGoogleGroupsAndUsers(googleGroups)
