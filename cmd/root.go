@@ -105,6 +105,7 @@ func initConfig() {
 		"log_format",
 		"ignore_users",
 		"ignore_groups",
+		"include_groups",
 		"user_match",
 		"group_match",
 		"sync_method",
