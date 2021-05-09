@@ -27,3 +27,6 @@ packaged.yaml
 
 # SAM
 .aws-sam/
+
+# Local binary
+ssosync
