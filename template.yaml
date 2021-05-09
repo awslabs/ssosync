@@ -20,6 +20,9 @@ Metadata:
           - LogLevel
           - LogFormat
           - ScheduleExpression
+          - IgnoreUsers
+          - IgnoreGroups
+          - IncludeGroups
 
   AWS::ServerlessRepo::Application:
     Name: ssosync
@@ -32,9 +35,9 @@ Metadata:
     Labels: [serverless, sso, lambda, scim]
     HomePageUrl: https://github.com/awslabs/ssosync
     # Update the semantic version and run sam publish to publish a new version of your app
-    SemanticVersion: 1.0.0-rc.8
+    SemanticVersion: 1.0.0-rc.10
     # best practice is to use git tags for each release and link to the version tag as your source code URL
-    SourceCodeUrl: https://github.com/awslabs/ssosync/tree/1.0.0-rc.8
+    SourceCodeUrl: https://github.com/awslabs/ssosync/tree/1.0.0-rc.10
 
 Parameters:
   ScheduleExpression:
@@ -79,11 +82,23 @@ Parameters:
   GoogleUserMatch:
     Type: String
     Description: |
-      Google user query parameter, example: 'name:John* email:admin*', see: https://developers.google.com/admin-sdk/directory/v1/guides/search-users
+      Google Workspace user filter query parameter, example: 'name:John* email:admin*', see: https://developers.google.com/admin-sdk/directory/v1/guides/search-users
   GoogleGroupMatch:
     Type: String
     Description: |
-      Google group query parameter, example: 'name:Admin* email:aws-*', see: https://developers.google.com/admin-sdk/directory/v1/guides/search-groups
+      Google Workspace group filter query parameter, example: 'name:Admin* email:aws-*', see: https://developers.google.com/admin-sdk/directory/v1/guides/search-groups
+  IgnoreGroups:
+    Type: String
+    Description: |
+      Ignore these Google Workspace groups
+  IgnoreUsers:
+    Type: String
+    Description: |
+      Ignore these Google Workspace users
+  IncludeGroups:
+    Type: String
+    Description: | 
+      Include only these Google Workspace groups. (Only applicable for SyncMethod user_groups)
   SyncMethod:
     Type: String
     Description: Sync method to use
@@ -91,6 +106,9 @@ Parameters:
     AllowedValues:
       - groups
       - users_groups
+      
+      
+      
 
 Resources:
   SSOSyncFunction:
@@ -110,6 +128,9 @@ Resources:
           SSOSYNC_USER_MATCH: !Ref GoogleUserMatch
           SSOSYNC_GROUP_MATCH: !Ref GoogleGroupMatch
           SSOSYNC_SYNC_METHOD: !Ref SyncMethod
+          SSOSYNC_IGNORE_GROUPS: !Ref IgnoreGroups
+          SSOSYNC_IGNORE_USERS: !Ref IgnoreUsers
+          SSOSYNC_INCLUDE_GROUPS: !Ref IncludeGroups
       Policies:
         - Statement:
             - Sid: SSMGetParameterPolicy
