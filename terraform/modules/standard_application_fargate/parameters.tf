@@ -107,7 +107,7 @@ module "parameter_store_ssosync_include_groups" {
   ssm_parameter_description = "Groups from gsuite that will be sync to AWS SSO"
   ssm_parameter_type        = "SecureString"
 
-  ssm_parameter_value = var.include_groups
+  ssm_parameter_value = join(",", var.include_groups)
 }
 
 module "parameter_store_ssosync_log_format" {
