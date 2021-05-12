@@ -359,14 +359,18 @@ func (s *syncGSuite) SyncGroupsUsers(query string) error {
 	// add aws users (added in google)
 	log.Debug("creating aws users added in google")
 	for _, awsUser := range addAWSUsers {
+		// Due to limits in users listing, the user may already exists
+		// see https://docs.aws.amazon.com/singlesignon/latest/developerguide/listusers.html
+		user, _ := s.aws.FindUserByEmail(awsUser.Username)
+		if user == nil {
+			log := log.WithFields(log.Fields{"user": awsUser.Username})
 
-		log := log.WithFields(log.Fields{"user": awsUser.Username})
-
-		log.Info("creating user")
-		_, err := s.aws.CreateUser(awsUser)
-		if err != nil {
-			log.Error("error creating user")
-			return err
+			log.Info("creating user")
+			_, err := s.aws.CreateUser(awsUser)
+			if err != nil {
+				log.Error("error creating user")
+				return err
+			}
 		}
 	}
 
