@@ -277,12 +277,17 @@ func (s *syncGSuite) SyncGroupsUsers(query string) error {
 	if err != nil {
 		return err
 	}
+
+	// Filter groups
 	filteredGoogleGroups := []*admin.Group{}
 	for _, g := range googleGroups {
+
+		// bacaudse is in flag --ignore-groups
 		if s.ignoreGroup(g.Email) {
-			log.WithField("group", g.Email).Debug("ignoring group")
+			log.WithField("group", g.Email).Warn("ignoring group, using --ignore-groups")
 			continue
 		}
+
 		filteredGoogleGroups = append(filteredGoogleGroups, g)
 	}
 	googleGroups = filteredGoogleGroups
@@ -377,7 +382,7 @@ func (s *syncGSuite) SyncGroupsUsers(query string) error {
 		log := log.WithFields(log.Fields{"group": awsGroup.DisplayName})
 
 		log.Info("creating group")
-		_, err := s.aws.CreateGroup(awsGroup)
+		awsGroupFull, err := s.aws.CreateGroup(awsGroup)
 		if err != nil {
 			log.Error("creating group")
 			return err
@@ -394,7 +399,7 @@ func (s *syncGSuite) SyncGroupsUsers(query string) error {
 			}
 
 			log.WithField("user", awsUserFull.Username).Info("adding user to group")
-			err = s.aws.AddUserToGroup(awsUserFull, awsGroup)
+			err = s.aws.AddUserToGroup(awsUserFull, awsGroupFull)
 			if err != nil {
 				return err
 			}
