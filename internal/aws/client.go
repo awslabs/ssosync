@@ -584,11 +584,3 @@ func (c *client) GetUsers() ([]*User, error) {
 
 	return usrs, nil
 }
-
-func toJSON(stc interface{}) []byte {
-	JSON, err := json.MarshalIndent(stc, "", "  ")
-	if err != nil {
-		log.Fatalf(err.Error())
-	}
-	return JSON
-}
