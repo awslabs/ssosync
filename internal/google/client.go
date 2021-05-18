@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package google ...
 package google
 
 import (
@@ -25,9 +24,9 @@ import (
 
 // Client is the Interface for the Client
 type Client interface {
-	GetUsers(string) ([]*admin.User, error)
+	GetUsers() ([]*admin.User, error)
 	GetDeletedUsers() ([]*admin.User, error)
-	GetGroups(string) ([]*admin.Group, error)
+	GetGroups() ([]*admin.Group, error)
 	GetGroupMembers(*admin.Group) ([]*admin.Member, error)
 }
 
@@ -72,6 +71,28 @@ func (c *client) GetDeletedUsers() ([]*admin.User, error) {
 	return u, err
 }
 
+// GetUsers will get the users from Google's Admin API
+func (c *client) GetUsers() ([]*admin.User, error) {
+	u := make([]*admin.User, 0)
+	err := c.service.Users.List().Customer("my_customer").Pages(c.ctx, func(users *admin.Users) error {
+		u = append(u, users.Users...)
+		return nil
+	})
+
+	return u, err
+}
+
+// GetGroups will get the groups from Google's Admin API
+func (c *client) GetGroups() ([]*admin.Group, error) {
+	g := make([]*admin.Group, 0)
+	err := c.service.Groups.List().Customer("my_customer").Pages(context.TODO(), func(groups *admin.Groups) error {
+		g = append(g, groups.Groups...)
+		return nil
+	})
+
+	return g, err
+}
+
 // GetGroupMembers will get the members of the group specified
 func (c *client) GetGroupMembers(g *admin.Group) ([]*admin.Member, error) {
 	m := make([]*admin.Member, 0)
@@ -81,69 +102,4 @@ func (c *client) GetGroupMembers(g *admin.Group) ([]*admin.Member, error) {
 	})
 
 	return m, err
-}
-
-// GetUsers will get the users from Google's Admin API
-// using the Method: users.list with parameter "query"
-// References:
-// * https://developers.google.com/admin-sdk/directory/reference/rest/v1/users/list
-// * https://developers.google.com/admin-sdk/directory/v1/guides/search-users
-// query possible values:
-// '' --> empty or not defined
-//  name:'Jane'
-//  email:admin*
-//  isAdmin=true
-//  manager='janesmith@example.com'
-//  orgName=Engineering orgTitle:Manager
-//  EmploymentData.projects:'GeneGnomes'
-func (c *client) GetUsers(query string) ([]*admin.User, error) {
-	u := make([]*admin.User, 0)
-	var err error
-
-	if query != "" {
-		err = c.service.Users.List().Query(query).Customer("my_customer").Pages(c.ctx, func(users *admin.Users) error {
-			u = append(u, users.Users...)
-			return nil
-		})
-
-	} else {
-		err = c.service.Users.List().Customer("my_customer").Pages(c.ctx, func(users *admin.Users) error {
-			u = append(u, users.Users...)
-			return nil
-		})
-	}
-
-	return u, err
-}
-
-// GetGroups will get the groups from Google's Admin API
-// using the Method: groups.list with parameter "query"
-// References:
-// * https://developers.google.com/admin-sdk/directory/reference/rest/v1/groups/list
-// * https://developers.google.com/admin-sdk/directory/v1/guides/search-groups
-// query possible values:
-// '' --> empty or not defined
-//  name='contact'
-//  email:admin*
-//  memberKey=user@company.com
-//  name:contact* email:contact*
-//  name:Admin* email:aws-*
-//  email:aws-*
-func (c *client) GetGroups(query string) ([]*admin.Group, error) {
-	g := make([]*admin.Group, 0)
-	var err error
-
-	if query != "" {
-		err = c.service.Groups.List().Customer("my_customer").Query(query).Pages(context.TODO(), func(groups *admin.Groups) error {
-			g = append(g, groups.Groups...)
-			return nil
-		})
-	} else {
-		err = c.service.Groups.List().Customer("my_customer").Pages(context.TODO(), func(groups *admin.Groups) error {
-			g = append(g, groups.Groups...)
-			return nil
-		})
-
-	}
-	return g, err
 }

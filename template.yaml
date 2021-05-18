@@ -1,28 +1,24 @@
-AWSTemplateFormatVersion: "2010-09-09"
+AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
-      - Label:
+      -
+        Label:
           default: "General"
         Parameters:
           - GoogleCredentials
           - GoogleAdminEmail
           - SCIMEndpointUrl
           - SCIMEndpointAccessToken
-      - Label:
+      -
+        Label:
           default: "Advanced Configuration"
         Parameters:
-          - SyncMethod
-          - GoogleUserMatch
-          - GoogleGroupMatch
           - LogLevel
           - LogFormat
           - ScheduleExpression
-          - IgnoreUsers
-          - IgnoreGroups
-          - IncludeGroups
 
   AWS::ServerlessRepo::Application:
     Name: ssosync
@@ -32,12 +28,12 @@ Metadata:
     # paths are relative to .aws-sam/build directory
     LicenseUrl: LICENSE
     ReadmeUrl: SAR.md
-    Labels: [serverless, sso, lambda, scim]
+    Labels: [serverless,sso,lambda]
     HomePageUrl: https://github.com/awslabs/ssosync
     # Update the semantic version and run sam publish to publish a new version of your app
-    SemanticVersion: 1.0.0-rc.10
+    SemanticVersion: 1.0.0-rc.8
     # best practice is to use git tags for each release and link to the version tag as your source code URL
-    SourceCodeUrl: https://github.com/awslabs/ssosync/tree/1.0.0-rc.10
+    SourceCodeUrl: https://github.com/awslabs/ssosync/tree/1.0.0-rc.8
 
 Parameters:
   ScheduleExpression:
@@ -46,69 +42,24 @@ Parameters:
     Default: rate(15 minutes)
   LogLevel:
     Type: String
-    Description: Log level for Lambda function logging
+    Description: Log level for Lambda function logging, e.g., error, info, debug, etc
     Default: warn
-    AllowedValues:
-      - panic
-      - fatal
-      - error
-      - warn
-      - info
-      - debug
-      - trace
   LogFormat:
     Type: String
-    Description: Log format for Lambda function logging
+    Description: Log format for Lambda function logging, e.g., text, json
     Default: json
-    AllowedValues:
-      - json
-      - text
   GoogleCredentials:
     Type: String
     Description: Credentials to log into Google (content of credentials.json)
-    NoEcho: true
   GoogleAdminEmail:
     Type: String
     Description: Google Admin email
-    NoEcho: true
   SCIMEndpointUrl:
     Type: String
     Description: AWS SSO SCIM Endpoint Url
-    NoEcho: true
   SCIMEndpointAccessToken:
     Type: String
     Description: AWS SSO SCIM AccessToken
-    NoEcho: true
-  GoogleUserMatch:
-    Type: String
-    Description: |
-      Google Workspace user filter query parameter, example: 'name:John* email:admin*', see: https://developers.google.com/admin-sdk/directory/v1/guides/search-users
-  GoogleGroupMatch:
-    Type: String
-    Description: |
-      Google Workspace group filter query parameter, example: 'name:Admin* email:aws-*', see: https://developers.google.com/admin-sdk/directory/v1/guides/search-groups
-  IgnoreGroups:
-    Type: String
-    Description: |
-      Ignore these Google Workspace groups
-  IgnoreUsers:
-    Type: String
-    Description: |
-      Ignore these Google Workspace users
-  IncludeGroups:
-    Type: String
-    Description: | 
-      Include only these Google Workspace groups. (Only applicable for SyncMethod user_groups)
-  SyncMethod:
-    Type: String
-    Description: Sync method to use
-    Default: groups
-    AllowedValues:
-      - groups
-      - users_groups
-      
-      
-      
 
 Resources:
   SSOSyncFunction:
@@ -125,23 +76,13 @@ Resources:
           SSOSYNC_GOOGLE_ADMIN: !Ref AWSGoogleAdminEamil
           SSOSYNC_SCIM_ENDPOINT: !Ref AWSSCIMEndpointSecret
           SSOSYNC_SCIM_ACCESS_TOKEN: !Ref AWSSCIMAccessTokenSecret
-          SSOSYNC_USER_MATCH: !Ref GoogleUserMatch
-          SSOSYNC_GROUP_MATCH: !Ref GoogleGroupMatch
-          SSOSYNC_SYNC_METHOD: !Ref SyncMethod
-          SSOSYNC_IGNORE_GROUPS: !Ref IgnoreGroups
-          SSOSYNC_IGNORE_USERS: !Ref IgnoreUsers
-          SSOSYNC_INCLUDE_GROUPS: !Ref IncludeGroups
       Policies:
         - Statement:
-            - Sid: SSMGetParameterPolicy
-              Effect: Allow
-              Action:
-                - "secretsmanager:Get*"
-              Resource:
-                - !Ref AWSGoogleCredentialsSecret
-                - !Ref AWSGoogleAdminEamil
-                - !Ref AWSSCIMEndpointSecret
-                - !Ref AWSSCIMAccessTokenSecret
+          - Sid: SSMGetParameterPolicy
+            Effect: Allow
+            Action:
+              - "secretsmanager:Get*"
+            Resource: '*'
       Events:
         SyncScheduledEvent:
           Type: Schedule
@@ -151,25 +92,26 @@ Resources:
             Schedule: !Ref ScheduleExpression
 
   AWSGoogleCredentialsSecret:
-    Type: "AWS::SecretsManager::Secret"
+    Type: 'AWS::SecretsManager::Secret'
     Properties:
       Name: SSOSyncGoogleCredentials
       SecretString: !Ref GoogleCredentials
 
   AWSGoogleAdminEamil:
-    Type: "AWS::SecretsManager::Secret"
+    Type: 'AWS::SecretsManager::Secret'
     Properties:
       Name: SSOSyncGoogleAdminEmail
       SecretString: !Ref GoogleAdminEmail
 
   AWSSCIMEndpointSecret: # This can be moved to custom provider
-    Type: "AWS::SecretsManager::Secret"
+    Type: 'AWS::SecretsManager::Secret'
     Properties:
       Name: SSOSyncSCIMEndpointUrl
       SecretString: !Ref SCIMEndpointUrl
 
   AWSSCIMAccessTokenSecret: # This can be moved to custom provider
-    Type: "AWS::SecretsManager::Secret"
+    Type: 'AWS::SecretsManager::Secret'
     Properties:
       Name: SSOSyncSCIMAccessToken
       SecretString: !Ref SCIMEndpointAccessToken
+

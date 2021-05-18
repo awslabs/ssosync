@@ -4,16 +4,10 @@ PACKAGED_TEMPLATE = packaged.yaml
 STACK_NAME := $(STACK_NAME)
 S3_BUCKET := $(S3_BUCKET)
 TEMPLATE = template.yaml
-APP_NAME 	 ?= ssosync
-
 
 .PHONY: test
 test:
 	go test ./...
-
-.PHONY: go-build
-go-build:
-	go build -o $(APP_NAME) main.go
 
 .PHONY: clean
 clean:

@@ -16,20 +16,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out code into the Go module directory
-        uses: actions/checkout@v2
+        uses: actions/checkout@v1
 
       - name: Setup go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v1
         with:
-          go-version: '1.16.x'
+          go-version: '1.14.x'
 
       - name: Run Static Checks
-        run: go get honnef.co/go/tools/cmd/staticcheck && go install honnef.co/go/tools/cmd/staticcheck && staticcheck ./...
+        run: GOBIN=$PWD/bin go install honnef.co/go/tools/cmd/staticcheck && ./bin/staticcheck ./...
 
       - name: Run Linting
-        uses: golangci/golangci-lint-action@v2
+        uses: golangci/golangci-lint-action@v1
         with:
-          version: v1.33.0
+          version: v1.27
 
       - name: Run Tests
         run: go test -cover -p 1 -race -v ./...

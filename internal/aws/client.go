@@ -30,7 +30,6 @@ import (
 var (
 	ErrUserNotFound      = errors.New("user not found")
 	ErrGroupNotFound     = errors.New("group not found")
-	ErrNoGroupsFound     = errors.New("no groups found")
 	ErrUserNotSpecified  = errors.New("user not specified")
 	ErrGroupNotSpecified = errors.New("group not specified")
 )
@@ -46,7 +45,7 @@ const (
 	OperationRemove = "remove"
 )
 
-// Client represents an interface of methods used
+// IClient represents an interface of methods used
 // to communicate with AWS SSO
 type Client interface {
 	AddUserToGroup(*User, *Group) error
@@ -56,11 +55,7 @@ type Client interface {
 	DeleteUser(*User) error
 	FindGroupByDisplayName(string) (*Group, error)
 	FindUserByEmail(string) (*User, error)
-	FindUserByID(string) (*User, error)
-	GetUsers() ([]*User, error)
-	GetGroupMembers(*Group) ([]*User, error)
 	IsUserInGroup(*User, *Group) (bool, error)
-	GetGroups() ([]*Group, error)
 	UpdateUser(*User) (*User, error)
 	RemoveUserFromGroup(*User, *Group) error
 }
@@ -273,33 +268,6 @@ func (c *client) FindUserByEmail(email string) (*User, error) {
 	return &r.Resources[0], nil
 }
 
-// FindUserByID will find the user by the email address specified
-func (c *client) FindUserByID(id string) (*User, error) {
-	startURL, err := url.Parse(c.endpointURL.String())
-	if err != nil {
-		return nil, err
-	}
-
-	startURL.Path = path.Join(startURL.Path, fmt.Sprintf("/Users/%s", id))
-
-	resp, err := c.sendRequest(http.MethodGet, startURL.String())
-	if err != nil {
-		return nil, err
-	}
-
-	var r UserFilterResults
-	err = json.Unmarshal(resp, &r)
-	if err != nil {
-		return nil, err
-	}
-
-	if r.TotalResults != 1 {
-		return nil, ErrUserNotFound
-	}
-
-	return &r.Resources[0], nil
-}
-
 // FindGroupByDisplayName will find the group by its displayname.
 func (c *client) FindGroupByDisplayName(name string) (*Group, error) {
 	startURL, err := url.Parse(c.endpointURL.String())
@@ -458,113 +426,4 @@ func (c *client) DeleteGroup(g *Group) error {
 	}
 
 	return nil
-}
-
-// GetGroups will return existing groups
-func (c *client) GetGroups() ([]*Group, error) {
-	startURL, err := url.Parse(c.endpointURL.String())
-	if err != nil {
-		return nil, err
-	}
-
-	startURL.Path = path.Join(startURL.Path, "/Groups")
-
-	resp, err := c.sendRequest(http.MethodGet, startURL.String())
-	if err != nil {
-		return nil, err
-	}
-
-	var r GroupFilterResults
-	err = json.Unmarshal(resp, &r)
-	if err != nil {
-		return nil, err
-	}
-
-	// if r.TotalResults != 1 {
-	// 	return nil, ErrNoGroupsFound
-	// }
-
-	gps := make([]*Group, len(r.Resources))
-	for i := range r.Resources {
-		gps[i] = &r.Resources[i]
-	}
-
-	return gps, nil
-}
-
-// GetGroupMembers will return existing groups
-func (c *client) GetGroupMembers(g *Group) ([]*User, error) {
-	startURL, err := url.Parse(c.endpointURL.String())
-	if err != nil {
-		return nil, err
-	}
-
-	if g == nil {
-		return nil, ErrGroupNotSpecified
-	}
-
-	filter := fmt.Sprintf("displayName eq \"%s\"", g.DisplayName)
-
-	startURL.Path = path.Join(startURL.Path, "/Groups")
-	q := startURL.Query()
-	q.Add("filter", filter)
-
-	startURL.RawQuery = q.Encode()
-
-	resp, err := c.sendRequest(http.MethodGet, startURL.String())
-	if err != nil {
-		return nil, err
-	}
-
-	var r GroupFilterResults
-	err = json.Unmarshal(resp, &r)
-	if err != nil {
-		return nil, err
-	}
-
-	var users = make([]*User, 0)
-	for _, res := range r.Resources {
-		for _, uID := range res.Members { // NOTE: Not Implemented Yet https://docs.aws.amazon.com/singlesignon/latest/developerguide/listgroups.html
-
-			user, err := c.FindUserByID(uID)
-			if err != nil {
-				return nil, err
-			}
-			users = append(users, user)
-		}
-	}
-
-	return users, nil
-}
-
-// GetUsers will return existing users
-func (c *client) GetUsers() ([]*User, error) {
-	startURL, err := url.Parse(c.endpointURL.String())
-	if err != nil {
-		return nil, err
-	}
-
-	startURL.Path = path.Join(startURL.Path, "/Users")
-
-	resp, err := c.sendRequest(http.MethodGet, startURL.String())
-	if err != nil {
-		return nil, err
-	}
-
-	var r UserFilterResults
-	err = json.Unmarshal(resp, &r)
-	if err != nil {
-		return nil, err
-	}
-
-	// if r.TotalResults != 1 {
-	// 	return nil, ErrUserNotFound
-	// }
-
-	usrs := make([]*User, len(r.Resources))
-	for i := range r.Resources {
-		usrs[i] = &r.Resources[i]
-	}
-
-	return usrs, nil
 }
