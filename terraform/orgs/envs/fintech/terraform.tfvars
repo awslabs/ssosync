@@ -18,7 +18,6 @@ include_groups = [
     "aws-creditas-ds@creditas.com",
     "aws-creditas-mle@creditas.com",
     "aws-creditas-terceiro-bitone@creditas.com",
-    "aws-creditas-terceiro-cesar-til@creditas.com",
     "aws-creditas-terceiro-chp@creditas.com",
     "aws-creditas-terceiro-cobmais@creditas.com",
     "aws-creditas-terceiro-empirica@creditas.com",
