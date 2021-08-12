@@ -32,8 +32,8 @@ import (
 // SyncGSuite is the interface for synchronizing users/groups
 type SyncGSuite interface {
 	SyncUsers(string) error
-	SyncGroups(string) error
-	SyncGroupsUsers(string) error
+	SyncGroups([]string) error
+	SyncGroupsUsers([]string) error
 }
 
 // SyncGSuite is an object type that will synchronize real users and groups
@@ -165,10 +165,8 @@ func (s *syncGSuite) SyncUsers(query string) error {
 //  name:contact* email:contact*
 //  name:Admin* email:aws-*
 //  email:aws-*
-func (s *syncGSuite) SyncGroups(query string) error {
-
-	log.WithField("query", query).Debug("get google groups")
-	googleGroups, err := s.google.GetGroups(query)
+func (s *syncGSuite) SyncGroups(queries []string) error {
+	googleGroups, err := s.getGroups(queries)
 	if err != nil {
 		return err
 	}
@@ -270,10 +268,8 @@ func (s *syncGSuite) SyncGroups(query string) error {
 //  4) add groups in aws and add its members, these were added in google
 //  5) validate equals aws an google groups members
 //  6) delete groups in aws, these were deleted in google
-func (s *syncGSuite) SyncGroupsUsers(query string) error {
-
-	log.WithField("query", query).Info("get google groups")
-	googleGroups, err := s.google.GetGroups(query)
+func (s *syncGSuite) SyncGroupsUsers(queries []string) error {
+	googleGroups, err := s.getGroups(queries)
 	if err != nil {
 		return err
 	}
@@ -553,6 +549,32 @@ func (s *syncGSuite) getAWSGroupsAndUsers(awsGroups []*aws.Group, awsUsers []*aw
 		awsGroupsUsers[awsGroup.DisplayName] = users
 	}
 	return awsGroupsUsers, nil
+}
+
+// getGroups returns Google Groups from multiple queries.
+func (s *syncGSuite) getGroups(queries []string) ([]*admin.Group, error) {
+	uniqueGroups := map[string]*admin.Group{}
+
+	for _, query := range queries {
+		log.WithField("query", query).Debug("get google groups")
+		googleGroups, err := s.google.GetGroups(query)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, group := range googleGroups {
+			uniqueGroups[group.Id] = group
+		}
+	}
+
+	groups := make([]*admin.Group, len(uniqueGroups))
+	var i int
+	for _, group := range uniqueGroups {
+		groups[i] = group
+		i++
+	}
+
+	return groups, nil
 }
 
 // getGroupOperations returns the groups of AWS that must be added, deleted and are equals
