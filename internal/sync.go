@@ -486,7 +486,7 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(googleGroups []*admin.Group) ([]*ad
 		}
 
 		log.Debug("get group members from google")
-		groupMembers, err := s.google.GetGroupMembers(g)
+		groupMembers, err := s.google.GetGroupMemberUsers(g)
 		if err != nil {
 			return nil, nil, err
 		}
