@@ -30,7 +30,7 @@ type Client interface {
 	GetDeletedUsers() ([]*admin.User, error)
 	GetGroups(string) ([]*admin.Group, error)
 	GetGroupMembers(*admin.Group) ([]*admin.Member, error)
-	GetDirectAndIndirectMemberUsers(*admin.Group) ([]*admin.Member, error)
+	GetDirectAndIndirectGroupMemberUsers(*admin.Group) ([]*admin.Member, error)
 }
 
 type client struct {
@@ -85,8 +85,8 @@ func (c *client) GetGroupMembers(g *admin.Group) ([]*admin.Member, error) {
 	return m, err
 }
 
-// GetDirectAndIndirectMemberUsers will recursively get the users of the group specified
-func (c *client) GetDirectAndIndirectMemberUsers(g *admin.Group) ([]*admin.Member, error) {
+// GetDirectAndIndirectGroupMemberUsers will recursively get the users of the group specified
+func (c *client) GetDirectAndIndirectGroupMemberUsers(g *admin.Group) ([]*admin.Member, error) {
 	u := make([]*admin.Member, 0)
 	err := c.service.Members.List(g.Id).Pages(context.TODO(), func(members *admin.Members) error {
 		for _, m := range members.Members {
