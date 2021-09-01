@@ -17,6 +17,7 @@ package google
 
 import (
 	"context"
+	"fmt"
 
 	"golang.org/x/oauth2/google"
 	admin "google.golang.org/api/admin/directory/v1"
@@ -29,6 +30,7 @@ type Client interface {
 	GetDeletedUsers() ([]*admin.User, error)
 	GetGroups(string) ([]*admin.Group, error)
 	GetGroupMembers(*admin.Group) ([]*admin.Member, error)
+	GetDirectAndIndirectGroupMemberUsers(*admin.Group) ([]*admin.Member, error)
 }
 
 type client struct {
@@ -81,6 +83,34 @@ func (c *client) GetGroupMembers(g *admin.Group) ([]*admin.Member, error) {
 	})
 
 	return m, err
+}
+
+// GetDirectAndIndirectGroupMemberUsers will recursively get the users of the group specified
+func (c *client) GetDirectAndIndirectGroupMemberUsers(g *admin.Group) ([]*admin.Member, error) {
+	u := make([]*admin.Member, 0)
+	err := c.service.Members.List(g.Id).Pages(context.TODO(), func(members *admin.Members) error {
+		for _, m := range members.Members {
+			if m.Type == "GROUP" {
+				q := fmt.Sprintf("email=%s", m.Email)
+				g, err := c.GetGroups(q)
+				if err != nil {
+					return err
+				}
+
+				c, err := c.GetDirectAndIndirectGroupMemberUsers(g[0])
+				if err != nil {
+					return err
+				}
+
+				u = append(u, c...)
+			} else {
+				u = append(u, m)
+			}
+		}
+		return nil
+	})
+
+	return u, err
 }
 
 // GetUsers will get the users from Google's Admin API
