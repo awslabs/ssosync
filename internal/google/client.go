@@ -97,7 +97,7 @@ func (c *client) GetDirectAndIndirectGroupMemberUsers(g *admin.Group) ([]*admin.
 					return err
 				}
 
-				c, err := c.GetGroupMembers(g[0])
+				c, err := c.GetDirectAndIndirectGroupMemberUsers(g[0])
 				if err != nil {
 					return err
 				}
