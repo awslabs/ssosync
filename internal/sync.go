@@ -206,7 +206,7 @@ func (s *syncGSuite) SyncGroups(query string) error {
 			group = newGroup
 		}
 
-		groupMembers, err := s.google.GetGroupMembers(g)
+		groupMembers, err := s.google.GetDirectAndIndirectMemberUsers(g)
 		if err != nil {
 			return err
 		}
@@ -486,7 +486,7 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(googleGroups []*admin.Group) ([]*ad
 		}
 
 		log.Debug("get group members from google")
-		groupMembers, err := s.google.GetGroupMemberUsers(g)
+		groupMembers, err := s.google.GetDirectAndIndirectMemberUsers(g)
 		if err != nil {
 			return nil, nil, err
 		}
