@@ -23,6 +23,9 @@ import (
 	"github.com/awslabs/ssosync/internal"
 	"github.com/awslabs/ssosync/internal/config"
 
+    "github.com/aws/aws-sdk-go/aws"
+    "github.com/aws/aws-lambda-go/events"
+    "github.com/aws/aws-sdk-go/service/codepipeline"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/secretsmanager"
@@ -56,7 +59,6 @@ Complete documentation is available at https://github.com/awslabs/ssosync`,
 		if err != nil {
 			return err
 		}
-
 		return nil
 	},
 }
@@ -66,7 +68,10 @@ Complete documentation is available at https://github.com/awslabs/ssosync`,
 // execution path.
 func Execute() {
 	if cfg.IsLambda {
-		lambda.Start(rootCmd.Execute)
+		if cfg.IsLambdaRunningInCodePipeline {
+			lambda.Start(Handler)
+		}
+        lambda.Start(rootCmd.Execute)
 	}
 
 	if err := rootCmd.Execute(); err != nil {
@@ -74,11 +79,55 @@ func Execute() {
 	}
 }
 
+func Handler(ctx context.Context, event events.CodePipelineEvent) (string, error) {
+    log.Debug(event)
+    err := rootCmd.Execute()
+    if err != nil {
+    	// notify codepipeline and mark its job execution as Failure
+    	s := session.Must(session.NewSession())
+    	cpl := codepipeline.New(s)
+    	log.Fatal("Notifying CodePipeline and mark its job execution as Failure")
+    	jobID := event.CodePipelineJob.ID
+    	if len(jobID) == 0 {
+    		panic("CodePipeline Job ID is not set")
+    	}
+    	// mark the job as Failure.
+    	cplFailure := &codepipeline.PutJobFailureResultInput{
+    		JobId: aws.String(jobID),
+    		FailureDetails: &codepipeline.FailureDetails{
+    			Message: aws.String(err.Error()),
+    			Type: aws.String("JobFailed"),
+    		},
+    	}
+    	_, cplErr := cpl.PutJobFailureResult(cplFailure)
+    	if cplErr != nil {
+    		log.Fatal("Failed to update CodePipeline jobID %s status with: %s", jobID, cplErr.Error())
+    	}
+    	return "Failure", err
+    }
+    s := session.Must(session.NewSession())
+    cpl := codepipeline.New(s)
+    log.Info("Notifying CodePipeline and mark its job execution as Success")
+    jobID := event.CodePipelineJob.ID
+    if len(jobID) == 0 {
+    	panic("CodePipeline Job ID is not set")
+    }
+    // mark the job as Success.
+    cplSuccess := &codepipeline.PutJobSuccessResultInput{
+    	JobId: aws.String(jobID),
+    }
+    _, cplErr := cpl.PutJobSuccessResult(cplSuccess)
+    if cplErr != nil {
+    	log.Fatal("Failed to update CodePipeline jobID %s status with: %s", jobID, cplErr.Error())
+    }
+    return "Success", nil
+}
+
 func init() {
 	// init config
 	cfg = config.New()
 	cfg.IsLambda = len(os.Getenv("_LAMBDA_SERVER_PORT")) > 0
-
+    cfg.IsLambdaRunningInCodePipeline = os.Getenv("RUNNING_IN_CODEPIPELINE") == "True"
 	// initialize cobra
 	cobra.OnInitialize(initConfig)
 	addFlags(rootCmd, cfg)
