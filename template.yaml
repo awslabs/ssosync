@@ -139,7 +139,7 @@ Resources:
                 - "secretsmanager:Get*"
               Resource:
                 - !Ref AWSGoogleCredentialsSecret
-                - !Ref AWSGoogleAdminEamil
+                - !Ref AWSGoogleAdminEmail
                 - !Ref AWSSCIMEndpointSecret
                 - !Ref AWSSCIMAccessTokenSecret
       Events:
@@ -156,7 +156,7 @@ Resources:
       Name: SSOSyncGoogleCredentials
       SecretString: !Ref GoogleCredentials
 
-  AWSGoogleAdminEamil:
+  AWSGoogleAdminEmail:
     Type: "AWS::SecretsManager::Secret"
     Properties:
       Name: SSOSyncGoogleAdminEmail
