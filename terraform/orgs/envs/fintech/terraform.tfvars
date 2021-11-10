@@ -38,5 +38,6 @@ include_groups = [
   "aws-creditas-core-admin@creditas.com",
   "aws-creditas-principals@creditas.com",
   "aws-creditas-topup@creditas.com",
-  "aws-creditas-specs@creditas.com"
+  "aws-creditas-specs@creditas.com",
+  "aws-creditas-wr-nubank@creditas",
 ]
