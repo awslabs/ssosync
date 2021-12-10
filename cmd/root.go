@@ -98,6 +98,7 @@ func initConfig() {
 
 	appEnvVars := []string{
 		"google_admin",
+		"google_customer_id",
 		"google_credentials",
 		"scim_access_token",
 		"scim_endpoint",
@@ -168,6 +169,7 @@ func addFlags(cmd *cobra.Command, cfg *config.Config) {
 	rootCmd.Flags().StringVarP(&cfg.SCIMEndpoint, "endpoint", "e", "", "AWS SSO SCIM API Endpoint")
 	rootCmd.Flags().StringVarP(&cfg.GoogleCredentials, "google-credentials", "c", config.DefaultGoogleCredentials, "path to Google Workspace credentials file")
 	rootCmd.Flags().StringVarP(&cfg.GoogleAdmin, "google-admin", "u", "", "Google Workspace admin user email")
+	rootCmd.Flags().StringVarP(&cfg.GoogleCustomerId, "google-customer-id", "", config.DefaultGoogleCustomerId, "Google Workspace customer id")
 	rootCmd.Flags().StringSliceVar(&cfg.IgnoreUsers, "ignore-users", []string{}, "ignores these Google Workspace users")
 	rootCmd.Flags().StringSliceVar(&cfg.IgnoreGroups, "ignore-groups", []string{}, "ignores these Google Workspace groups")
 	rootCmd.Flags().StringSliceVar(&cfg.IncludeGroups, "include-groups", []string{}, "include only these Google Workspace groups, NOTE: only works when --sync-method 'users_groups'")

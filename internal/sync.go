@@ -694,7 +694,7 @@ func DoSync(ctx context.Context, cfg *config.Config) error {
 
 	httpClient := retryClient.StandardClient()
 
-	googleClient, err := google.NewClient(ctx, cfg.GoogleAdmin, creds)
+	googleClient, err := google.NewClient(ctx, cfg.GoogleAdmin, creds, cfg.GoogleCustomerId)
 	if err != nil {
 		return err
 	}

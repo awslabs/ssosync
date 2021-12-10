@@ -25,6 +25,9 @@ packaged.yaml
 .idea/
 .vscode/
 
+# MacOS
+.DS_Store
+
 # SAM
 .aws-sam/
 

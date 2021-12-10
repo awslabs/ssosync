@@ -118,6 +118,7 @@ Flags:
   -d, --debug                       enable verbose / debug logging
   -e, --endpoint string             AWS SSO SCIM API Endpoint
   -u, --google-admin string         Google Workspace admin user email
+      --google-customer-id string   Google Workspace customer id
   -c, --google-credentials string   path to Google Workspace credentials file (default "credentials.json")
   -g, --group-match string          Google Workspace Groups filter query parameter, example: 'name:Admin* email:aws-*', see: https://developers.google.com/admin-sdk/directory/v1/guides/search-groups
   -h, --help                        help for ssosync
@@ -143,6 +144,7 @@ Flags Notes:
 * `--ignore-groups` works for both `--sync-method` values. Example: --ignore-groups group1@example.com,group1@example.com` or `SSOSYNC_IGNORE_GROUPS=group1@example.com,group1@example.com`
 * `--group-match` works for both `--sync-method` values and also in combination with `--ignore-groups` and `--ignore-users`.  This is the filter query passed to the [Google Workspace Directory API when search Groups](https://developers.google.com/admin-sdk/directory/v1/guides/search-groups), if the flag is not used, groups are not filtered.
 * `--user-match` works for both `--sync-method` values and also in combination with `--ignore-groups` and `--ignore-users`.  This is the filter query passed to the [Google Workspace Directory API when search Users](https://developers.google.com/admin-sdk/directory/v1/guides/search-users), if the flag is not used, users are not filtered.
+* `--google-customer-id` should be used when assigning admin roles to a GCP service-account.
 
 NOTES:
 
