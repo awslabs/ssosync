@@ -501,11 +501,21 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(googleGroups []*admin.Group) ([]*ad
 				continue
 			}
 
+			if m.Type == "GROUP" {
+				log.WithField("id", m.Email).Debug("ignoring group address")
+				continue
+			}
+
 			log.WithField("id", m.Email).Debug("get user")
 			q := fmt.Sprintf("email:%s", m.Email)
 			u, err := s.google.GetUsers(q) // TODO: implement GetUser(m.Email)
 			if err != nil {
 				return nil, nil, err
+			}
+
+			if len(u) == 0 {
+				log.WithField("email", m.Email).Debug("Ignoring Unknown User")
+				continue
 			}
 
 			membersUsers = append(membersUsers, u[0])

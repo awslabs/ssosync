@@ -75,7 +75,7 @@ func (c *client) GetDeletedUsers() ([]*admin.User, error) {
 // GetGroupMembers will get the members of the group specified
 func (c *client) GetGroupMembers(g *admin.Group) ([]*admin.Member, error) {
 	m := make([]*admin.Member, 0)
-	err := c.service.Members.List(g.Id).Pages(context.TODO(), func(members *admin.Members) error {
+	err := c.service.Members.List(g.Id).IncludeDerivedMembership(true).Pages(context.TODO(), func(members *admin.Members) error {
 		m = append(m, members.Members...)
 		return nil
 	})
