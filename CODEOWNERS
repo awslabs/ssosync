@@ -1,0 +1,5 @@
+# Teams listed below will be the default owners for
+# everything in this repo. Unless a later match takes
+# precedence, @healx/platform-enablement is required
+# to review each pull-request opened.
+* @healx/platform-enablement
