@@ -502,6 +502,10 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(googleGroups []*admin.Group) ([]*ad
 				continue
 			}
 
+			if m.Type != "USER" {
+				continue
+			}
+
 			log.WithField("id", m.Email).Debug("get user")
 			q := fmt.Sprintf("email:%s", m.Email)
 			u, err := s.google.GetUsers(q) // TODO: implement GetUser(m.Email)
