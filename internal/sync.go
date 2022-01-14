@@ -377,11 +377,12 @@ func (s *syncGSuite) SyncGroupsUsers(query string) error {
 		log := log.WithFields(log.Fields{"group": awsGroup.DisplayName})
 
 		log.Info("creating group")
-		_, err := s.aws.CreateGroup(awsGroup)
+		newGroup, err := s.aws.CreateGroup(awsGroup)
 		if err != nil {
 			log.Error("creating group")
 			return err
 		}
+		awsGroup.ID = newGroup.ID
 
 		// add members of the new group
 		for _, googleUser := range googleGroupsUsers[awsGroup.DisplayName] {
