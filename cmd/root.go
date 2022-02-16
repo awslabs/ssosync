@@ -77,7 +77,7 @@ func Execute() {
 func init() {
 	// init config
 	cfg = config.New()
-	cfg.IsLambda = len(os.Getenv("_LAMBDA_SERVER_PORT")) > 0
+	cfg.IsLambda = len(os.Getenv("AWS_EXECUTION_ENV")) > 0
 
 	// initialize cobra
 	cobra.OnInitialize(initConfig)
