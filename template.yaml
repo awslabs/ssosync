@@ -97,7 +97,7 @@ Parameters:
       Ignore these Google Workspace users
   IncludeGroups:
     Type: String
-    Description: | 
+    Description: |
       Include only these Google Workspace groups. (Only applicable for SyncMethod user_groups)
   SyncMethod:
     Type: String
@@ -106,9 +106,9 @@ Parameters:
     AllowedValues:
       - groups
       - users_groups
-      
-      
-      
+
+
+
 
 Resources:
   SSOSyncFunction:
@@ -139,7 +139,7 @@ Resources:
                 - "secretsmanager:Get*"
               Resource:
                 - !Ref AWSGoogleCredentialsSecret
-                - !Ref AWSGoogleAdminEamil
+                - !Ref AWSGoogleAdminEmail
                 - !Ref AWSSCIMEndpointSecret
                 - !Ref AWSSCIMAccessTokenSecret
       Events:
@@ -156,7 +156,7 @@ Resources:
       Name: SSOSyncGoogleCredentials
       SecretString: !Ref GoogleCredentials
 
-  AWSGoogleAdminEamil:
+  AWSGoogleAdminEmail:
     Type: "AWS::SecretsManager::Secret"
     Properties:
       Name: SSOSyncGoogleAdminEmail
