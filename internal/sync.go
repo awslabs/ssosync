@@ -523,7 +523,7 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(googleGroups []*admin.Group) ([]*ad
 			}
 
 			if len(u) == 0 {
-				log.WithField("email", m.Email).Warn("ignoring group member because it is not a user, looks like a group inside the group")
+				log.WithField("email", m.Email).Warn("ignoring unknown user")
 				continue
 			}
 
