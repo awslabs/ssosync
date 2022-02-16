@@ -31,9 +31,9 @@ import (
 
 // SyncGSuite is the interface for synchronizing users/groups
 type SyncGSuite interface {
-	SyncUsers(string) error
-	SyncGroups(string) error
-	SyncGroupsUsers(string) error
+	SyncUsers([]string) error
+	SyncGroups([]string) error
+	SyncGroupsUsers([]string) error
 }
 
 // SyncGSuite is an object type that will synchronize real users and groups
@@ -66,7 +66,7 @@ func New(cfg *config.Config, a aws.Client, g google.Client) SyncGSuite {
 //  manager='janesmith@example.com'
 //  orgName=Engineering orgTitle:Manager
 //  EmploymentData.projects:'GeneGnomes'
-func (s *syncGSuite) SyncUsers(query string) error {
+func (s *syncGSuite) SyncUsers(queries []string) error {
 	log.Debug("get deleted users")
 	deletedUsers, err := s.google.GetDeletedUsers()
 	if err != nil {
@@ -102,8 +102,7 @@ func (s *syncGSuite) SyncUsers(query string) error {
 		}
 	}
 
-	log.Debug("get active google users")
-	googleUsers, err := s.google.GetUsers(query)
+	googleUsers, err := s.getUsers(queries)
 	if err != nil {
 		return err
 	}
@@ -165,10 +164,9 @@ func (s *syncGSuite) SyncUsers(query string) error {
 //  name:contact* email:contact*
 //  name:Admin* email:aws-*
 //  email:aws-*
-func (s *syncGSuite) SyncGroups(query string) error {
+func (s *syncGSuite) SyncGroups(queries []string) error {
 
-	log.WithField("query", query).Debug("get google groups")
-	googleGroups, err := s.google.GetGroups(query)
+	googleGroups, err := s.getGroups(queries)
 	if err != nil {
 		return err
 	}
@@ -270,10 +268,9 @@ func (s *syncGSuite) SyncGroups(query string) error {
 //  4) add groups in aws and add its members, these were added in google
 //  5) validate equals aws an google groups members
 //  6) delete groups in aws, these were deleted in google
-func (s *syncGSuite) SyncGroupsUsers(query string) error {
+func (s *syncGSuite) SyncGroupsUsers(queries []string) error {
 
-	log.WithField("query", query).Info("get google groups")
-	googleGroups, err := s.google.GetGroups(query)
+	googleGroups, err := s.getGroups(queries)
 	if err != nil {
 		return err
 	}
@@ -475,6 +472,58 @@ func (s *syncGSuite) SyncGroupsUsers(query string) error {
 	log.Info("sync completed")
 
 	return nil
+}
+
+// getGroups returns Google Groups from multiple queries.
+func (s *syncGSuite) getGroups(queries []string) ([]*admin.Group, error) {
+	uniqueGroups := map[string]*admin.Group{}
+
+	for _, query := range queries {
+		log.WithField("query", query).Debug("get google groups")
+		googleGroups, err := s.google.GetGroups(query)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, group := range googleGroups {
+			uniqueGroups[group.Id] = group
+		}
+	}
+
+	groups := make([]*admin.Group, len(uniqueGroups))
+	var i int
+	for _, group := range uniqueGroups {
+		groups[i] = group
+		i++
+	}
+
+	return groups, nil
+}
+
+// getUsers returns Google Users from multiple queries.
+func (s *syncGSuite) getUsers(queries []string) ([]*admin.User, error) {
+	uniqueUsers := map[string]*admin.User{}
+
+	for _, query := range queries {
+		log.WithField("query", query).Debug("get google users")
+		googleUsers, err := s.google.GetUsers(query)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, user := range googleUsers {
+			uniqueUsers[user.Id] = user
+		}
+	}
+
+	users := make([]*admin.User, len(uniqueUsers))
+	var i int
+	for _, user := range uniqueUsers {
+		users[i] = user
+		i++
+	}
+
+	return users, nil
 }
 
 // getGoogleGroupsAndUsers return a list of google users members of googleGroups
