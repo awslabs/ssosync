@@ -103,13 +103,13 @@ func (c *client) GetUsers(query string) ([]*admin.User, error) {
 	var err error
 
 	if query != "" {
-		err = c.service.Users.List().Query(query).Customer(c.customerId).Pages(c.ctx, func(users *admin.Users) error {
+		err = c.service.Users.List().Query(query).Customer(c.customerId).ShowDeleted("false").Pages(c.ctx, func(users *admin.Users) error {
 			u = append(u, users.Users...)
 			return nil
 		})
 
 	} else {
-		err = c.service.Users.List().Customer(c.customerId).Pages(c.ctx, func(users *admin.Users) error {
+		err = c.service.Users.List().Customer(c.customerId).ShowDeleted("false").Pages(c.ctx, func(users *admin.Users) error {
 			u = append(u, users.Users...)
 			return nil
 		})

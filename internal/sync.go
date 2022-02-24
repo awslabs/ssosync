@@ -67,6 +67,22 @@ func New(cfg *config.Config, a aws.Client, g google.Client) SyncGSuite {
 //  orgName=Engineering orgTitle:Manager
 //  EmploymentData.projects:'GeneGnomes'
 func (s *syncGSuite) SyncUsers(queries []string) error {
+	activeUsers := make(map[string]*admin.User)
+
+	googleUsers, err := s.getUsers(queries)
+	if err != nil {
+		return err
+	}
+
+	// Required to ensure potential re-add of recently deleted users
+	for _, u := range googleUsers {
+		log.WithFields(log.Fields{
+			"email": u.PrimaryEmail,
+		}).Info("adding user to cache")
+
+		activeUsers[u.PrimaryEmail] = u
+	}
+
 	log.Debug("get deleted users")
 	deletedUsers, err := s.google.GetDeletedUsers()
 	if err != nil {
@@ -75,6 +91,19 @@ func (s *syncGSuite) SyncUsers(queries []string) error {
 	}
 
 	for _, u := range deletedUsers {
+		log.WithFields(log.Fields{
+			"email": u.PrimaryEmail,
+		}).Info("looking up google user")
+
+		// If user is still active, it was re-added (instead of recovered)
+		if _, found := activeUsers[u.PrimaryEmail]; found {
+			log.WithFields(log.Fields{
+				"email": u.PrimaryEmail,
+			}).Info("found deleted google user that was re-added")
+
+			continue
+		}
+
 		log.WithFields(log.Fields{
 			"email": u.PrimaryEmail,
 		}).Info("deleting google user")
@@ -100,11 +129,6 @@ func (s *syncGSuite) SyncUsers(queries []string) error {
 			}).Warn("Error deleting user")
 			return err
 		}
-	}
-
-	googleUsers, err := s.getUsers(queries)
-	if err != nil {
-		return err
 	}
 
 	for _, u := range googleUsers {
@@ -279,7 +303,7 @@ func (s *syncGSuite) SyncGroupsUsers(queries []string) error {
 	filteredGoogleGroups := []*admin.Group{}
 	for _, g := range googleGroups {
 
-		// bacaudse is in flag --ignore-groups
+		// because is in flag --ignore-groups
 		if s.ignoreGroup(g.Email) {
 			log.WithField("group", g.Email).Warn("ignoring group, using --ignore-groups")
 			continue
@@ -676,6 +700,17 @@ func getUserOperations(awsUsers []*aws.User, googleUsers []*admin.User) (add []*
 			if awsUser.Active == gUser.Suspended ||
 				awsUser.Name.GivenName != gUser.Name.GivenName ||
 				awsUser.Name.FamilyName != gUser.Name.FamilyName {
+				log.WithFields(log.Fields{
+					"aws.username":        awsUser.Username,
+					"aws.active":          awsUser.Active,
+					"aws.givenName":       awsUser.Name.GivenName,
+					"aws.familyName":      awsUser.Name.FamilyName,
+					"google.primaryEmail": gUser.PrimaryEmail,
+					"google.suspended":    gUser.Suspended,
+					"google.givenName":    gUser.Name.GivenName,
+					"google.familyName":   gUser.Name.FamilyName,
+				}).Warn("updated user values")
+
 				update = append(update, aws.NewUser(gUser.Name.GivenName, gUser.Name.FamilyName, gUser.PrimaryEmail, !gUser.Suspended))
 			} else {
 				equals = append(equals, awsUser)
