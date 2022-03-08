@@ -35,6 +35,14 @@ var (
 	ErrGroupNotSpecified = errors.New("group not specified")
 )
 
+type ErrHttpNotOK struct {
+	StatusCode int
+}
+
+func (e *ErrHttpNotOK) Error() string {
+	return fmt.Sprintf("status of http response was %d", e.StatusCode)
+}
+
 // OperationType handle patch operations for add/remove
 type OperationType string
 
@@ -122,7 +130,7 @@ func (c *client) sendRequestWithBody(method string, url string, body interface{}
 
 	// If we get a non-2xx status code, raise that via an error
 	if resp.StatusCode < http.StatusOK || resp.StatusCode > http.StatusNoContent {
-		err = fmt.Errorf("status of http response was %d", resp.StatusCode)
+		err = &ErrHttpNotOK{resp.StatusCode}
 	}
 
 	return
