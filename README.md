@@ -1,5 +1,21 @@
 # SSO Sync
 
+
+## FlipX Guideance
+
+To build the binnary for AWS Lambda use the following command:
+
+```
+GOOS=linux GOARCH=amd64 go build -o ssosync main.go
+```
+
+Move the binary to the [platform-infra](https://github.com/flipx-io/platform-infra) repository.
+```
+mv ssosync ../platform-infra/terraform/core/test
+```
+
+Re-deploy the ssosync solution with the new binary through Terraform or use the CI/CD pipeline.
+
 ![Github Action](https://github.com/awslabs/ssosync/workflows/main/badge.svg)
 <a href='https://github.com/jpoles1/gopherbadger' target='_blank'>![gopherbadger-tag-do-not-edit](https://img.shields.io/badge/Go%20Coverage-42%25-brightgreen.svg?longCache=true&style=flat)</a>
 [![Go Report Card](https://goreportcard.com/badge/github.com/awslabs/ssosync)](https://goreportcard.com/report/github.com/awslabs/ssosync)
