@@ -25,7 +25,7 @@ import (
 
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/secretsmanager"
+	"github.com/aws/aws-sdk-go/service/ssm"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -131,28 +131,27 @@ func initConfig() {
 
 func configLambda() {
 	s := session.Must(session.NewSession())
-	svc := secretsmanager.New(s)
-	secrets := config.NewSecrets(svc)
+	svc := ssm.New(s)
 
-	unwrap, err := secrets.GoogleAdminEmail()
+	unwrap, err := config.GoogleAdminEmail(svc)
 	if err != nil {
 		log.Fatalf(errors.Wrap(err, "cannot read config").Error())
 	}
 	cfg.GoogleAdmin = unwrap
 
-	unwrap, err = secrets.GoogleCredentials()
+	unwrap, err = config.GoogleCredentials(svc)
 	if err != nil {
 		log.Fatalf(errors.Wrap(err, "cannot read config").Error())
 	}
 	cfg.GoogleCredentials = unwrap
 
-	unwrap, err = secrets.SCIMAccessToken()
+	unwrap, err = config.SCIMAccessToken(svc)
 	if err != nil {
 		log.Fatalf(errors.Wrap(err, "cannot read config").Error())
 	}
 	cfg.SCIMAccessToken = unwrap
 
-	unwrap, err = secrets.SCIMEndpointUrl()
+	unwrap, err = config.SCIMEndpointUrl(svc)
 	if err != nil {
 		log.Fatalf(errors.Wrap(err, "cannot read config").Error())
 	}

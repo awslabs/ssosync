@@ -44,6 +44,14 @@ const (
 	DefaultGoogleCredentials = "credentials.json"
 	// DefaultSyncMethod is the default sync method to use.
 	DefaultSyncMethod = "groups"
+	// The SSM Parameter name of the Google Admin
+	SSMParameterNameGoogleAdmin = "googleAdminEmail"
+	// The SSM Parameter name of the Google Admin
+	SSMParameterNameGoogleCredentials = "googleCredentials"
+	// The SSM Parameter name of the Google Admin
+	SSMParameterNameScimAccessToken = "scimAccessToken"
+	// The SSM Parameter name of the Google Admin
+	SSMParameterNameScimEndpointUrl = "scimEndpointUrl"
 )
 
 // New returns a new Config
