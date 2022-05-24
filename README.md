@@ -8,7 +8,7 @@
 
 > Helping you populate AWS SSO directly with your Google Apps users
 
-SSO Sync will run on any platform that Go can build for. It is available in the [AWS Serverless Application Repository](https://console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:eu-west-1:084703771460:applications/ssosync).
+SSO Sync will run on any platform that Go can build for. It is available in the [AWS Serverless Application Repository](https://us-east-2.console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync)
 
 > :warning: there are breaking changes for versions `>= 0.02`
 

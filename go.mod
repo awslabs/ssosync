@@ -3,7 +3,7 @@ module github.com/awslabs/ssosync
 go 1.16
 
 require (
-	github.com/BurntSushi/toml v0.3.1
+	github.com/BurntSushi/toml v1.0.0
 	github.com/aws/aws-lambda-go v1.23.0
 	github.com/aws/aws-sdk-go v1.38.36
 	github.com/fsnotify/fsnotify v1.4.9 // indirect
