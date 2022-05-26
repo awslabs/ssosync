@@ -8,7 +8,7 @@
 
 > Helping you populate AWS SSO directly with your Google Apps users
 
-SSO Sync will run on any platform that Go can build for. It is available in the [AWS Serverless Application Repository](https://us-east-2.console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync)
+SSO Sync will run on any platform that Go can build for. It is available in the [AWS Serverless Application Repository](https://eu-west-1.console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync)
 
 > :warning: there are breaking changes for versions `>= 0.02`
 
@@ -157,7 +157,7 @@ the pricing for AWS Lambda and CloudWatch before continuing.
 Running ssosync once means that any changes to your Google directory will not appear in
 AWS SSO. To sync. regularly, you can run ssosync via AWS Lambda.
 
-:warning: You find it in the [AWS Serverless Application Repository](https://console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:eu-west-1:084703771460:applications/ssosync).
+:warning: You find it in the [AWS Serverless Application Repository](https://eu-west-1.console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync).
 
 ## SAM
 
