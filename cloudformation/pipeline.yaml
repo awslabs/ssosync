@@ -116,7 +116,7 @@ Resources:
         Type: CODEPIPELINE
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
-        Image: aws/codebuild/golang:1.16
+        Image: aws/codebuild/standard:5.0
         Type: LINUX_CONTAINER
         EnvironmentVariables:
           - Name: ARTIFACT_S3_BUCKET

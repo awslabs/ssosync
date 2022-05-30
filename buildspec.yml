@@ -4,7 +4,7 @@ phases:
 
   install: 
     runtime-versions:
-      go: 1.17
+      go: 1.17.5
     commands:
       - go get -u github.com/golang/lint/golint
       - go env -w GOPROXY=direct
