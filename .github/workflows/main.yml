@@ -29,10 +29,11 @@ jobs:
       - name: Run staticcheck
         run: staticcheck ./...
 
-      - name: Run Linting
-        uses: golangci/golangci-lint-action@v2
-        with:
-          version: v1.33.0
+      - name: Install golint
+        run: go install golang.org/x/lint/golint@latest
 
+      - name: Run golint
+        run: golint ./...
+      
       - name: Run Tests
         run: go test -cover -p 1 -race -v ./...
