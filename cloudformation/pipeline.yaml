@@ -1,0 +1,337 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: 'AWS::Serverless-2016-10-31'
+
+Description: 
+  This CloudFormation template will deploy a full CI/CD pipeline for SSO
+  Sync. It includes building with AWS CodeBuild, publishing to a
+  staging (private) AWS Serverless Application Repository (SAR), deployment
+  of the beta into a staging environment via AWS CloudFormation. If the commit
+  is also a release, then the app will also be published to the public SAR entry.
+
+Parameters:
+   
+  ApplicationName: 
+    Description: This will be used to name the pipeline and build resources
+    Default: SSOSync-BETA
+    Type: String
+    AllowedPattern: '[A-Za-z0-9-]+'
+    
+  ArtifactS3Bucket:
+    Description: An existing S3 bucket within this AWS account
+    Type: String
+
+  GitHubOAuthToken: 
+    Description: Create a token with 'repo' and 'admin:repo_hook' permissions here https://github.com/settings/tokens
+    Type: String
+    NoEcho: True
+
+Metadata:
+
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label: 
+          default: Application Configuration
+        Parameters:
+          - ApplicationName
+          - ArtifactS3Bucket
+      - Label:
+          default: GitHub Configuration
+        Parameters:
+          - GitHubOAuthToken
+            
+    ParameterLabels:
+      ApplicationName: 
+        default: Application Name
+      ArtifactS3Bucket: 
+        default: CodePipeline S3 Bucket
+      GitHubOAuthToken: 
+        default: OAuth2 Token
+
+Resources:
+  CodePipelineServerlessRepoPublishApp:
+    Type: AWS::Serverless::Application
+    Properties:
+      Location:
+        ApplicationId: 'arn:aws:serverlessrepo:us-east-1:077246666028:applications/aws-serverless-codepipeline-serverlessrepo-publish'
+        SemanticVersion: 1.0.0
+
+  CodePipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      Name: !Ref ApplicationName
+      RoleArn: !Sub ${CodePipelineRole.Arn}
+      ArtifactStore: 
+        Type: S3
+        Location: !Ref ArtifactS3Bucket
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: GitHub
+              ActionTypeId:
+                Category: Source
+                Owner: ThirdParty
+                Version: 1
+                Provider: GitHub
+              OutputArtifacts:
+                - Name: SourceArtifact
+              Configuration:
+                Owner: awslabs
+                Repo: ssosync
+                Branch: CodePipeline
+                OAuthToken: !Ref GitHubOAuthToken
+        - Name: Build
+          Actions:
+            - Name: CodeBuild
+              InputArtifacts:
+                - Name: SourceArtifact
+              ActionTypeId: 
+                Category: Build
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              OutputArtifacts:
+                - Name: BuildArtifact
+              Configuration: 
+                ProjectName: !Ref CodeBuild
+        - Name: Beta
+          Actions:
+            - Name: PublishBetaToSAR
+              InputArtifacts:
+                - Name: BuildArtifact
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Version: '1'
+                Provider: Lambda
+              Configuration:
+                FunctionName: !GetAtt CodePipelineServerlessRepoPublishApp.Outputs.ServerlessRepoPublishFunctionName # Here we use the app output ServerlessRepoPublishFunctionName
+
+  CodeBuild:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Ref ApplicationName
+      Description: !Sub Build project for ${ApplicationName}
+      ServiceRole: !Ref CodeBuildRole
+      Source:
+        Type: CODEPIPELINE
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/golang:latest
+        Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: ARTIFACT_S3_BUCKET
+            Value: !Sub ${ArtifactS3Bucket}
+      Artifacts:
+        Name: !Ref ApplicationName
+        Type: CODEPIPELINE
+
+  CodePipelineRole:
+    Type: AWS::IAM::Role
+    Properties: 
+      Path: /
+      RoleName: !Sub ${ApplicationName}-CodePipeline-${AWS::Region}
+      AssumeRolePolicyDocument: |
+        {
+          "Statement": [{
+            "Action": "sts:AssumeRole",
+            "Effect": "Allow",
+            "Principal": { 
+              "Service": "codepipeline.amazonaws.com" 
+            }
+          }]
+        }
+      Policies: 
+        - PolicyName: !Sub ${ApplicationName}-CodePipeline-${AWS::Region}
+          PolicyDocument: !Sub |                    
+            {
+              "Statement": [
+                {
+                  "Action": [ "s3:GetBucketVersioning" ],
+                  "Resource": [ "arn:aws:s3:::${ArtifactS3Bucket}" ],
+                  "Effect": "Allow"
+                },
+                {
+                  "Action": [
+                    "s3:PutObject",
+                    "s3:GetObject",
+                    "S3:GetObjectVersion"
+                  ],
+                  "Resource": [
+                    "arn:aws:s3:::${ArtifactS3Bucket}/${ApplicationName}/*"
+                  ],
+                  "Effect": "Allow"
+                },
+                {
+                  "Action": [
+                    "codedeploy:CreateDeployment",
+                    "codedeploy:GetApplicationRevision",
+                    "codedeploy:GetDeployment",
+                    "codedeploy:GetDeploymentConfig",
+                    "codedeploy:RegisterApplicationRevision"
+                  ],
+                  "Resource": "*",
+                  "Effect": "Allow"
+                },
+                {
+                  "Action": [
+                    "cloudformation:CreateStack",
+                    "cloudformation:DeleteStack",
+                    "cloudformation:DescribeStacks",
+                    "cloudformation:UpdateStack",
+                    "cloudformation:CreateChangeSet",
+                    "cloudformation:DeleteChangeSet",
+                    "cloudformation:DescribeChangeSet",
+                    "cloudformation:ExecuteChangeSet",
+                    "cloudformation:SetStackPolicy",
+                    "cloudformation:ValidateTemplate",
+                    "iam:PassRole"
+                  ],
+                  "Resource": "*",
+                  "Effect": "Allow"
+                },
+                {
+                  "Action": [
+                    "codebuild:BatchGetBuilds",
+                    "codebuild:StartBuild"
+                  ],
+                  "Resource": "*",
+                  "Effect": "Allow"
+                }
+              ]
+            }
+
+  CodePipelineCloudFormationRole:
+    Type: AWS::IAM::Role
+    Properties: 
+      Path: /
+      RoleName: !Sub ${ApplicationName}-CloudFormation-${AWS::Region}
+      AssumeRolePolicyDocument: |
+        {
+          "Statement": [{
+            "Action": "sts:AssumeRole",
+            "Effect": "Allow",
+            "Principal": { 
+              "Service": "cloudformation.amazonaws.com" 
+            }
+          }]
+        }
+      Policies: 
+        - PolicyName: !Sub ${ApplicationName}-CloudFormation-${AWS::Region}
+          PolicyDocument: !Sub |                    
+            {
+              "Statement": [{
+                "Effect": "Allow",
+                "Action": [ "*" ],
+                "Resource": "*"
+              }]
+            }
+
+  CodeDeployApplication:
+    Type: AWS::CodeDeploy::Application
+    Properties:
+      ApplicationName: !Sub ${ApplicationName}
+
+  CodeDeployServiceRole:
+    Type: AWS::IAM::Role
+    Properties: 
+      Path: /
+      RoleName: !Sub ${ApplicationName}-CodeDeploy-${AWS::Region}
+      AssumeRolePolicyDocument: |
+        {
+          "Statement": [{
+            "Action": "sts:AssumeRole",
+            "Effect": "Allow",
+            "Principal": { 
+              "Service": "codedeploy.amazonaws.com" 
+            }
+          }]
+        }
+      Policies: 
+        - PolicyName: !Sub ${AWS::StackName}-${AWS::Region}
+          PolicyDocument: !Sub |
+            {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "autoscaling:CompleteLifecycleAction",
+                    "autoscaling:DeleteLifecycleHook",
+                    "autoscaling:DescribeAutoScalingGroups",
+                    "autoscaling:DescribeLifecycleHooks",
+                    "autoscaling:PutLifecycleHook",
+                    "autoscaling:RecordLifecycleActionHeartbeat",
+                    "ec2:DescribeInstances",
+                    "ec2:DescribeInstanceStatus",
+                    "tag:GetTags",
+                    "tag:GetResources",
+                    "sns:Publish",
+                    "cloudwatch:DescribeAlarms"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+
+  CodeBuildRole:
+    Type: AWS::IAM::Role
+    Properties: 
+      Path: /
+      RoleName: !Sub ${ApplicationName}-CodeBuild-${AWS::Region}
+      AssumeRolePolicyDocument: |
+        {
+          "Statement": [{
+            "Action": "sts:AssumeRole",
+            "Effect": "Allow",
+            "Principal": { 
+              "Service": "codebuild.amazonaws.com" 
+            }
+          }]
+        }
+      Policies: 
+        - PolicyName: !Sub ${ApplicationName}-CodeBuild-${AWS::Region}
+          PolicyDocument: !Sub |      
+            {
+              "Statement": [              
+                {
+                  "Effect": "Allow",
+                  "Resource": [ "*" ],
+                  "Action": [
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Resource": [
+                    "arn:aws:s3:::${ArtifactS3Bucket}/${ApplicationName}/*"
+                  ],
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:GetObjectVersion",
+                    "s3:PutObject"
+                  ]
+                }
+              ]
+            }
+
+Outputs:
+
+  CodePipelineURL:
+    Description: The URL for the created pipeline
+    Value: !Sub https://${AWS::Region}.console.aws.amazon.com/codepipeline/home?region=${AWS::Region}#/view/${ApplicationName}      
+
+  CodeDeployApplication:
+    Description: The CodeDeploy application used across all environments
+    Value: !Ref CodeDeployApplication
+    Export:
+      Name: !Sub CodeDeployApplication-${ApplicationName}
+
+  CodeDeployServiceRoleArn:
+    Description: The CodeDeploy service role used across all environments
+    Value: !GetAtt CodeDeployServiceRole.Arn
+    Export:
+      Name: !Sub CodeDeployServiceRoleArn-${ApplicationName}
+
+
