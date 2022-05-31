@@ -1,17 +1,20 @@
 version: 0.1
             
+env:
+  variables:
+    GO_VERSION: 1.17.5
 phases:
-
   install: 
-    runtime-versions:
-      go: 1.17.5
     commands:
+      - wget https://storage.googleapis.com/golang/go${GO_VERSION}.linux-amd64.tar.gz
+      - tar -C /usr/local -xzf go${GO_VERSION}.linux-amd64.tar.gz
+      - export PATH="/usr/local/go/bin:$PATH" && export GOPATH="$HOME/go" && export PATH="$GOPATH/bin:$PATH"
       - go get -u github.com/golang/lint/golint
       - go env -w GOPROXY=direct
 
   pre_build: 
     commands:
-
+      - echo "Start pre_build..."
       # Ensure code passes all lint tests
       - golint -set_exit_status
 
@@ -20,8 +23,7 @@ phases:
 
   build:
     commands:
-
-      # Build our application
+      - echo "Start build..."
       - go build -o ssosync main.go
 
 artifacts:
