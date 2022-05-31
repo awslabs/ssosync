@@ -2,7 +2,7 @@ version: 0.2
             
 env:
   variables:
-    GO_VERSION: "1.17.5"
+    GO_VERSION: "1.18.1"
 phases:
   install: 
     commands:
@@ -27,7 +27,7 @@ phases:
       - go get -u github.com/stretchr/testify
 
       # Install goreleaser
-      - go install github.com/goreleaser/goreleaser@1.2.5
+      - go install github.com/goreleaser/goreleaser@latest
 
   pre_build: 
     commands:
