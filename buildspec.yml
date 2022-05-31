@@ -3,6 +3,7 @@ version: 0.2
 env:
   variables:
     GO_VERSION: "1.18.1"
+    APP_NAME: ssosync
 phases:
   install: 
     commands:
