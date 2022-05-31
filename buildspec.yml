@@ -16,11 +16,8 @@ phases:
     commands:
       - echo "Start pre_build..."
 
-      # Make sure we're in the project directory within our GOPATH
-      - cd "/go/src/${PACKAGE}"
-
       # Fetch all dependencies
-      - go get -t ./...
+      - go get ./...
 
       # Ensure code passes all lint tests
       - golint -set_exit_status
