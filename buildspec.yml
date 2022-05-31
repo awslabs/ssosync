@@ -19,10 +19,13 @@ phases:
       # Fetch all dependencies
       - go get ./...
 
-      -ls 
+      - ls 
+      - pwd
+      - ls golint
+      - echo ${PATH}
 
       # Ensure code passes all lint tests
-      - golint -set_exit_status $(go list ./... | grep -v /vendor/) 
+      - golint -set_exit_status 
 
       # Check the Go code for common problems with 'go vet'
       - go vet .
@@ -41,4 +44,6 @@ phases:
 
 artifacts:
   files:
+    - ssosync
+    - buildspec.yml
     - packaged.yml
