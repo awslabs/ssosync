@@ -50,12 +50,15 @@ phases:
   build:
     commands:
       - echo "Start build..."
+
       # Build our go application
       - go build -o ssosync main.go
 
+      # Build lambda
+      - goreleaser build --snapshot --rm-dist
+
       # Package our application with AWS SAM
-      - pwd
-      - ls
+      - sam publish -t packaged.yaml
       - sam package --output-template-file packaged.yaml --s3-bucket ${ARTIFACT_S3_BUCKET}
 
 artifacts:
@@ -63,6 +66,3 @@ artifacts:
     - ssosync
     - buildspec.yml
     - packaged.yaml
-    - SAR.md
-    - README.md
-    - LICENSE
