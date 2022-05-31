@@ -64,3 +64,4 @@ artifacts:
     - ssosync
     - buildspec.yml
     - packaged.yaml
+    - .goreleaser.yml
