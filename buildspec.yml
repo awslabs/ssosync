@@ -54,7 +54,7 @@ phases:
       - go build -o ssosync main.go
 
       # Package our application with AWS SAM
-      - sam package  --s3-bucket $(S3_BUCKET) --output-template-file packaged.yml --s3-bucket $(S3_BUCKET)
+      - aws cloudformation package --template template.yml --s3-bucket $S3_BUCKET --output-template packaged.yml
 
 artifacts:
   files:
