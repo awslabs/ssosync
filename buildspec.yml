@@ -63,3 +63,6 @@ artifacts:
     - ssosync
     - buildspec.yml
     - packaged.yaml
+    - SAR.md
+    - README.md
+    - LICENSE
