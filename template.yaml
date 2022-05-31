@@ -30,8 +30,8 @@ Metadata:
     Author: Sebastian Doell
     SpdxLicenseId: Apache-2.0
     # paths are relative to .aws-sam/build directory
-    LicenseUrl: LICENSE
-    ReadmeUrl: SAR.md
+    LicenseUrl: https://github.com/awslabs/ssosync/blob/master/LICENSE
+    ReadmeUrl: https://github.com/awslabs/ssosync/blob/master/SAR.md
     Labels: [serverless, sso, lambda, scim]
     HomePageUrl: https://github.com/awslabs/ssosync
     # Update the semantic version and run sam publish to publish a new version of your app
