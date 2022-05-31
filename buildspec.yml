@@ -3,6 +3,10 @@ version: 0.2
 env:
   variables:
     GO_VERSION: "1.18.1"
+    OUTPUT: main
+    TEMPLATE: template.yaml
+    PACKAGED_TEMPLATE: packaged.yaml
+    APP_NAME: ssosync
 phases:
   install: 
     commands:
@@ -39,26 +43,26 @@ phases:
       #- golint -set_exit_status ./...
 
       # Check the Go code for common problems with 'go vet'
-      - go vet .
+      - go vet ./...
 
       # Run all tests included with our application
-      - go test .
+      - go test ./...
 
   build:
     commands:
       - echo "Start build..."
-      - pwd
-      - ls -la
 
-      # Build our go application
-      - go build -o ssosync main.go
+      # Make clean
+      - rm -f ${OUTPUT} ${PACKAGED_TEMPLATE}
 
-      # Build lambda
+      # Make go-build
+      - go build -o $(APP_NAME) main.go
+ 
+      # Make main 
       - goreleaser build --snapshot --rm-dist
 
       # Package our application with AWS SAM
-      - sam publish -t packaged.yaml
-      - sam package --output-template-file packaged.yaml --s3-bucket ${ARTIFACT_S3_BUCKET}
+      - sam package --output-template-file ${PACKAGED_TEMPLATE} --s3-bucket ${ARTIFACT_S3_BUCKET}
 
 artifacts:
   files:
