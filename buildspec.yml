@@ -14,7 +14,6 @@ phases:
 
       # Install golint
       - go install golang.org/x/lint/golint@latest
-      #- go get -u github.com/golang/lint/golint
 
       # Install staticcheck
       - go install honnef.co/go/tools/cmd/staticcheck@latest
@@ -48,6 +47,8 @@ phases:
   build:
     commands:
       - echo "Start build..."
+      - pwd
+      - ls -la
 
       # Build our go application
       - go build -o ssosync main.go
