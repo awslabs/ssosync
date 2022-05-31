@@ -56,13 +56,14 @@ phases:
       - rm -f ${OUTPUT} ${PACKAGED_TEMPLATE}
 
       # Make go-build
-      - go build -o $(APP_NAME) main.go
+      - go build -o ${APP_NAME} main.go
  
       # Make main 
       - goreleaser build --snapshot --rm-dist
 
       # Package our application with AWS SAM
-      - sam package --output-template-file ${PACKAGED_TEMPLATE} --s3-bucket ${ARTIFACT_S3_BUCKET}
+      - aws cloudformation package --template-file ${TEMPLATE} --s3-bucket ${ARTIFACT_S3_BUCKET} --output-template-file ${PACKAGED_TEMPLATE}
+
 
 artifacts:
   files:
