@@ -27,7 +27,7 @@ phases:
       - go get -u github.com/stretchr/testify
 
       # Install goreleaser
-      - go install github.com/goreleaser/goreleaser@latest
+      - go install github.com/goreleaser/goreleaser@1.2.5
 
   pre_build: 
     commands:
