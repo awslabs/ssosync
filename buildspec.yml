@@ -62,7 +62,7 @@ phases:
       - goreleaser build --snapshot --rm-dist
 
       # Package our application with AWS SAM
-      - aws cloudformation package --template-file ${TEMPLATE} --s3-bucket ${ARTIFACT_S3_BUCKET} --output-template-file ${PACKAGED_TEMPLATE}
+      - sam package --template-file ${TEMPLATE} --s3-bucket ${ARTIFACT_S3_BUCKET} --output-template-file ${PACKAGED_TEMPLATE}
 
 
 artifacts:
