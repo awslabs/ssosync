@@ -54,6 +54,8 @@ phases:
       - go build -o ssosync main.go
 
       # Package our application with AWS SAM
+      - pwd
+      - ls
       - sam package --output-template-file packaged.yaml --s3-bucket ${ARTIFACT_S3_BUCKET}
 
 artifacts:
