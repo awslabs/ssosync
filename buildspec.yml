@@ -9,28 +9,37 @@ phases:
       - wget https://storage.googleapis.com/golang/go${GO_VERSION}.linux-amd64.tar.gz
       - tar -C /usr/local -xzf go${GO_VERSION}.linux-amd64.tar.gz
       - export PATH="/usr/local/go/bin:$PATH" && export GOPATH="$HOME/go" && export PATH="$GOPATH/bin:$PATH"
-      - go get -u golang.org/x/lint
       - go env -w GOPROXY=direct
+      - go get -u golang.org/x/lint
 
   pre_build: 
     commands:
       - echo "Start pre_build..."
+
+      # Make sure we're in the project directory within our GOPATH
+      - cd "/go/src/${PACKAGE}"
+
+      # Fetch all dependencies
+      - go get -t ./...
+
       # Ensure code passes all lint tests
       - golint -set_exit_status
 
+      # Check the Go code for common problems with 'go vet'
+      - go vet .
+
       # Run all tests included with our application
-      - go test
+      - go test .
 
   build:
     commands:
       - echo "Start build..."
+      # Build our go application
       - go build -o ssosync main.go
+
+      # Package our application with AWS SAM
+      - sam package  --s3-bucket $(S3_BUCKET) --output-template-file packaged.yml --s3-bucket $(S3_BUCKET)
 
 artifacts:
   files:
-    - app
-    - appspec.yml
-    - buildspec.yml
-    - config/*
-    - codedeploy/*
-    - cloudformation/*
+    - packaged.yml
