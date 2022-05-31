@@ -12,10 +12,6 @@ phases:
       - export PATH="/go/bin:$PATH" && export GOPATH="/go" && export PATH="$GOPATH/bin:$PATH"
       - rm go${GO_VERSION}.linux-amd64.tar.gz
 
-      # AWS Codebuild Go images use /go for the $GOPATH so let's symlink our
-      # application source code into that directory structure.
-      - ln -s "${CODEBUILD_SRC_DIR}" "/go/src/ssosync"
-
       # Install golint
       - go install golang.org/x/lint/golint@latest
       #- go get -u github.com/golang/lint/golint
@@ -32,9 +28,6 @@ phases:
   pre_build: 
     commands:
       - echo "Start pre_build..."
-
-      # Make sure we're in the project directory within our GOPATH
-      - cd "/go/src/ssosync"
 
       # Fetch all dependencies
       - go env -w GOPROXY=direct
