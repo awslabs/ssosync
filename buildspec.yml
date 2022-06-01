@@ -35,12 +35,10 @@ phases:
       - wget https://github.com/aws/aws-sam-cli/releases/latest/download/aws-sam-cli-linux-x86_64.zip
       - unzip aws-sam-cli-linux-x86_64.zip -d sam-installation
       - sudo ./sam-installation/install --update
-      - rm -rvf ./sam-installation  
+      - rm -rf ./sam-installation  aws-sam-cli-linux-x86_64.zip
 
   pre_build: 
     commands:
-      - echo "Start pre_build..."
-
       # Fetch all dependencies
       - go env -w GOPROXY=direct
       - go get ./...
@@ -59,8 +57,6 @@ phases:
 
   build:
     commands:
-      - echo "Start build..."
-
       # Make clean
       - rm -f ${OUTPUT} ${PACKAGED_TEMPLATE}
 
@@ -70,17 +66,13 @@ phases:
       # Make main 
       - goreleaser build --snapshot --rm-dist
 
-      - pwd
-      - ls -la 
-      - echo ${ARTIFACT_S3_BUCKET}
-      - ls ${TEMPLATE}
+      - aws s3 ls
  
       # Package our application with AWS SAM
       - sam package --s3-bucket ${ARTIFACT_S3_BUCKET}
 
   post_build:
     commands:
-      - echo "Start post_build..."
       - ls -la 
 
 artifacts:
