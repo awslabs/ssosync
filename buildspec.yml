@@ -61,8 +61,14 @@ phases:
       # Make main 
       - goreleaser build --snapshot --rm-dist
 
+      - pwd
+      - ls -la 
+      - echo ${ARTIFACT_S3_BUCKET}
+      - ls ${TEMPLATE}
+      - ls ${PACKAGED_TEMPLATE}
+ 
       # Package our application with AWS SAM
-      - sam package --template-file ${TEMPLATE} --s3-bucket ${ARTIFACT_S3_BUCKET} --output-template-file ${PACKAGED_TEMPLATE}
+      - sam package --template-file ${TEMPLATE} --s3-bucket ${ARTIFACT_S3_BUCKET} --output-template-file ${PACKAGED_TEMPLATE} --debug
 
 
 artifacts:
