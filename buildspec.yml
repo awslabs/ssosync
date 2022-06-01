@@ -39,6 +39,13 @@ phases:
 
   pre_build: 
     commands:
+      - aws sts get-caller-identity
+      - mkdir ~/.aws/ && touch ~/.aws/config
+      - echo "[profile buildprofile]" > ~/.aws/config
+      - echo "role_arn = arn:aws:iam::004480582608:role/SSOSync-BETA-CodeBuild-us-east-2" >> ~/.aws/config
+      - echo "credential_source = EcsContainer" >> ~/.aws/config
+      - aws sts get-caller-identity --profile buildprofile
+
       # Fetch all dependencies
       - go env -w GOPROXY=direct
       - go get ./...
@@ -69,7 +76,7 @@ phases:
       - aws s3 ls
  
       # Package our application with AWS SAM
-      - sam package --s3-bucket ${ARTIFACT_S3_BUCKET}
+      - sam package --s3-bucket ${ARTIFACT_S3_BUCKET} --profile buildprofile
 
   post_build:
     commands:
