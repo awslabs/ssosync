@@ -28,6 +28,9 @@ phases:
       # Install goreleaser
       - go install github.com/goreleaser/goreleaser@latest
 
+      # Print all environment variables (handy for AWS CodeBuild logs)
+      - env
+
   pre_build: 
     commands:
       - echo "Start pre_build..."
@@ -65,15 +68,16 @@ phases:
       - ls -la 
       - echo ${ARTIFACT_S3_BUCKET}
       - ls ${TEMPLATE}
-      - echo ${PACKAGED_TEMPLATE}
  
       # Package our application with AWS SAM
-      - sam package --template-file ${TEMPLATE} --s3-bucket ${ARTIFACT_S3_BUCKET} --output-template-file ${PACKAGED_TEMPLATE} --debug
+      - sam package --ouput-template-file ${PACKAGED_TEMPLATE} --s3-bucket ${ARTIFACT_S3_BUCKET} --debug
 
+
+  post_build:
+    commands:
+      - echo "Start post_build..."
+      - ls ${PACKAGED_TEMPLATE}
 
 artifacts:
   files:
-    - ssosync
-    - buildspec.yml
     - packaged.yaml
-    - .goreleaser.yml
