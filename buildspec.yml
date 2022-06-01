@@ -31,6 +31,12 @@ phases:
       # Print all environment variables (handy for AWS CodeBuild logs)
       - env
 
+      # Update sam to latest version
+      - wget https://github.com/aws/aws-sam-cli/releases/latest/download/aws-sam-cli-linux-x86_64.zip
+      - unzip aws-sam-cli-linux-x86_64.zip -d sam-installation
+      - sudo ./sam-installation/install --update
+      - rm -rvf ./sam-installation  
+
   pre_build: 
     commands:
       - echo "Start pre_build..."
@@ -70,13 +76,12 @@ phases:
       - ls ${TEMPLATE}
  
       # Package our application with AWS SAM
-      - sam build
       - sam package --s3-bucket ${ARTIFACT_S3_BUCKET}
 
   post_build:
     commands:
       - echo "Start post_build..."
-      - ls ${PACKAGED_TEMPLATE}
+      - ls -la 
 
 artifacts:
   files:
