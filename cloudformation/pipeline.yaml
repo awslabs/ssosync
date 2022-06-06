@@ -9,31 +9,19 @@ Description:
   is also a release, then the app will also be published to the public SAR entry.
 
 Parameters:
-   
   ApplicationName: 
     Description: This will be used to name the pipeline and build resources
-    Default: SSOSync-BETA
+    Default: SSOSync
     Type: String
     AllowedPattern: '[A-Za-z0-9-]+'
-    
-  ArtifactS3Bucket:
-    Description: An existing S3 bucket within this AWS account
-    Type: String
-
-  GitHubOAuthToken: 
-    Description: Create a token with 'repo' and 'admin:repo_hook' permissions here https://github.com/settings/tokens
-    Type: String
-    NoEcho: True
 
 Metadata:
-
   AWS::CloudFormation::Interface:
     ParameterGroups:
       - Label: 
           default: Application Configuration
         Parameters:
           - ApplicationName
-          - ArtifactS3Bucket
       - Label:
           default: GitHub Configuration
         Parameters:
@@ -42,18 +30,58 @@ Metadata:
     ParameterLabels:
       ApplicationName: 
         default: Application Name
-      ArtifactS3Bucket: 
-        default: CodePipeline S3 Bucket
       GitHubOAuthToken: 
         default: OAuth2 Token
 
 Resources:
   CodePipelineServerlessRepoPublishApp:
     Type: AWS::Serverless::Application
+    UpdateReplacePolicy: Delete
     Properties:
       Location:
         ApplicationId: 'arn:aws:serverlessrepo:us-east-1:077246666028:applications/aws-serverless-codepipeline-serverlessrepo-publish'
         SemanticVersion: 1.0.0
+
+  CodePipelineArtifactS3Bucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Delete
+
+  StagingS3Bucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Delete
+
+  ReleaseS3Bucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Delete
+
+  CodePipelineArtifactS3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref CodePipelineArtifactS3Bucket
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          -
+            Sid: DenyUnEncryptedObjectUploads
+            Effect: Deny
+            Principal: '*'
+            Action: s3:PutObject
+            Resource: !Join [ '', [ !GetAtt CodePipelineArtifactS3Bucket.Arn, '/*' ] ]
+            Condition:
+              StringNotEquals: 
+                s3:x-amz-server-side-encryption: aws:kms
+          -
+            Sid: DenyInsecureConnections
+            Effect: Deny
+            Principal: '*'
+            Action: s3:*
+            Resource: !Join [ '', [ !GetAtt CodePipelineArtifactS3Bucket.Arn, '/*' ] ]
+            Condition:
+              Bool:
+                aws:SecureTransport: false
 
   CodePipeline:
     Type: AWS::CodePipeline::Pipeline
@@ -62,42 +90,42 @@ Resources:
       RoleArn: !Sub ${CodePipelineRole.Arn}
       ArtifactStore: 
         Type: S3
-        Location: !Ref ArtifactS3Bucket
+        Location: !Ref CodePipelineArtifactS3Bucket
       Stages:
         - Name: Source
           Actions:
             - Name: GitHub
               ActionTypeId:
                 Category: Source
-                Owner: ThirdParty
+                Owner: AWS
                 Version: 1
-                Provider: GitHub
+                Provider: CodeStarSourceConnection
               OutputArtifacts:
-                - Name: SourceArtifact
+                - Name: 1-Source
               Configuration:
-                Owner: awslabs
-                Repo: ssosync
-                Branch: CodePipeline
-                OAuthToken: !Ref GitHubOAuthToken
-        - Name: Build
+                ConnectionArn: arn:aws:codestar-connections:us-east-2:004480582608:connection/0a1c90d5-1395-4a3b-8734-2b53cda9fad2
+                FullRepositoryId: awslabs/ssosync
+                BranchName: CodePipeline
+                DetectChanges: true
+        - Name: BuildStaging
           Actions:
             - Name: CodeBuild
               InputArtifacts:
-                - Name: SourceArtifact
+                - Name: 1-Source
               ActionTypeId: 
                 Category: Build
                 Owner: AWS
                 Version: 1
                 Provider: CodeBuild
               OutputArtifacts:
-                - Name: BuildArtifact
+                - Name: 2-BuildStaging
               Configuration: 
-                ProjectName: !Ref CodeBuild
-        - Name: Beta
+                ProjectName: !Ref CodeBuildStaging
+        - Name: PublishBeta
           Actions:
             - Name: PublishBetaToSAR
               InputArtifacts:
-                - Name: BuildArtifact
+                - Name: 2-BuildStaging
               ActionTypeId:
                 Category: Invoke
                 Owner: AWS
@@ -106,11 +134,11 @@ Resources:
               Configuration:
                 FunctionName: !GetAtt CodePipelineServerlessRepoPublishApp.Outputs.ServerlessRepoPublishFunctionName # Here we use the app output ServerlessRepoPublishFunctionName
 
-  CodeBuild:
+  CodeBuildStaging:
     Type: AWS::CodeBuild::Project
     Properties:
-      Name: !Ref ApplicationName
-      Description: !Sub Build project for ${ApplicationName}
+      Name: !Sub ${ApplicationName}-Beta
+      Description: !Sub Build project for ${ApplicationName}-Beta
       ServiceRole: !Ref CodeBuildRole
       Source:
         Type: CODEPIPELINE
@@ -120,7 +148,9 @@ Resources:
         Type: LINUX_CONTAINER
         EnvironmentVariables:
           - Name: ARTIFACT_S3_BUCKET
-            Value: !Sub ${ArtifactS3Bucket}
+            Value: !Sub ${CodePipelineArtifactS3Bucket}
+          - Name: S3Bucket
+            Value: !Ref StagingS3Bucket
       Artifacts:
         Name: !Ref ApplicationName
         Type: CODEPIPELINE
@@ -147,7 +177,7 @@ Resources:
               "Statement": [
                 {
                   "Action": [ "s3:GetBucketVersioning" ],
-                  "Resource": [ "arn:aws:s3:::${ArtifactS3Bucket}" ],
+                  "Resource": [ "arn:aws:s3:::${CodePipelineArtifactS3Bucket}" ],
                   "Effect": "Allow"
                 },
                 {
@@ -157,7 +187,7 @@ Resources:
                     "S3:GetObjectVersion"
                   ],
                   "Resource": [
-                    "arn:aws:s3:::${ArtifactS3Bucket}/${ApplicationName}/*"
+                    "arn:aws:s3:::${CodePipelineArtifactS3Bucket}/${ApplicationName}/*"
                   ],
                   "Effect": "Allow"
                 },
@@ -305,7 +335,7 @@ Resources:
                 {
                   "Effect": "Allow",
                   "Resource": [
-                    "arn:aws:s3:::${ArtifactS3Bucket}/${ApplicationName}/*"
+                    "arn:aws:s3:::${CodePipelineArtifactS3Bucket}/${ApplicationName}/*"
                   ],
                   "Action": [
                     "s3:GetObject",
@@ -334,4 +364,8 @@ Outputs:
     Export:
       Name: !Sub CodeDeployServiceRoleArn-${ApplicationName}
 
-
+  CodePipelineArtifactS3BucketARN:
+    Description: "S3 bucket ARN Codepipeline is using"
+    Value: !GetAtt CodePipelineArtifactS3Bucket.Arn
+    Export:
+      Name: CodePipelineArtifactS3BucketARN

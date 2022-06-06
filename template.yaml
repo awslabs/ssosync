@@ -152,24 +152,32 @@ Resources:
 
   AWSGoogleCredentialsSecret:
     Type: "AWS::SecretsManager::Secret"
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Delete
     Properties:
       Name: SSOSyncGoogleCredentials
       SecretString: !Ref GoogleCredentials
 
   AWSGoogleAdminEmail:
     Type: "AWS::SecretsManager::Secret"
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Delete
     Properties:
       Name: SSOSyncGoogleAdminEmail
       SecretString: !Ref GoogleAdminEmail
 
   AWSSCIMEndpointSecret: # This can be moved to custom provider
     Type: "AWS::SecretsManager::Secret"
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Delete
     Properties:
       Name: SSOSyncSCIMEndpointUrl
       SecretString: !Ref SCIMEndpointUrl
 
   AWSSCIMAccessTokenSecret: # This can be moved to custom provider
     Type: "AWS::SecretsManager::Secret"
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Delete
     Properties:
       Name: SSOSyncSCIMAccessToken
       SecretString: !Ref SCIMEndpointAccessToken

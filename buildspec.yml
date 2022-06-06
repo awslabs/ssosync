@@ -67,7 +67,7 @@ phases:
       - goreleaser build --snapshot --rm-dist
 
       # Package our application with AWS SAM
-      - sam package --s3-bucket ${ARTIFACT_S3_BUCKET} 
+      - sam package --s3-bucket ${S3BUCKET} 
 
   post_build:
     commands:
