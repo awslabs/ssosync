@@ -52,36 +52,44 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Delete
 
+  StagingS3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref StagingS3Bucket
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Sid: AllowSARObjectDownloads            
+            Effect: Allow,
+            Principal:
+              Service: serverlessrepo.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Join [ '', [ !GetAtt StagingS3Bucket.Arn, '/*' ] ]
+            Condition: 
+              StringEquals: 
+                aws:SourceAccount": !Ref AWS::AccountId
+
   ReleaseS3Bucket:
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
     UpdateReplacePolicy: Delete
 
-  CodePipelineArtifactS3BucketPolicy:
+  ReleaseS3BucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
-      Bucket: !Ref CodePipelineArtifactS3Bucket
+      Bucket: !Ref ReleaseS3Bucket
       PolicyDocument:
         Version: 2012-10-17
         Statement:
-          -
-            Sid: DenyUnEncryptedObjectUploads
-            Effect: Deny
-            Principal: '*'
-            Action: s3:PutObject
-            Resource: !Join [ '', [ !GetAtt CodePipelineArtifactS3Bucket.Arn, '/*' ] ]
-            Condition:
-              StringNotEquals: 
-                s3:x-amz-server-side-encryption: aws:kms
-          -
-            Sid: DenyInsecureConnections
-            Effect: Deny
-            Principal: '*'
-            Action: s3:*
-            Resource: !Join [ '', [ !GetAtt CodePipelineArtifactS3Bucket.Arn, '/*' ] ]
-            Condition:
-              Bool:
-                aws:SecureTransport: false
+          - Sid: AllowSARObjectDownloads            
+            Effect: Allow,
+            Principal:
+              Service: serverlessrepo.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Join [ '', [ !GetAtt ReleaseS3Bucket.Arn, '/*' ] ]
+            Condition: 
+              StringEquals: 
+                aws:SourceAccount": !Ref AWS::AccountId
 
   CodePipeline:
     Type: AWS::CodePipeline::Pipeline
@@ -109,7 +117,7 @@ Resources:
                 DetectChanges: true
         - Name: BuildStaging
           Actions:
-            - Name: CodeBuild
+            - Name: BuildGo
               InputArtifacts:
                 - Name: 1-Source
               ActionTypeId: 
@@ -118,8 +126,22 @@ Resources:
                 Version: 1
                 Provider: CodeBuild
               OutputArtifacts:
-                - Name: 2-BuildStaging
+                - Name: 2-Build
               Configuration: 
+                ProjectName: !Ref CodeBuildGo
+        - Name: BuildStaging
+          Actions:
+            - Name: BuildGo
+              InputArtifacts:
+                - Name: 2-Build
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              OutputArtifacts:
+                - Name: 3-BuildStaging
+              Configuration:
                 ProjectName: !Ref CodeBuildStaging
         - Name: PublishBeta
           Actions:
@@ -133,15 +155,44 @@ Resources:
                 Provider: Lambda
               Configuration:
                 FunctionName: !GetAtt CodePipelineServerlessRepoPublishApp.Outputs.ServerlessRepoPublishFunctionName # Here we use the app output ServerlessRepoPublishFunctionName
+        - Name: Approvals
+          Actions:
+            - Name: ProductionGate
+              ActionTypeId: 
+                Category: Approval
+                Owner: AWS
+                Version: 1
+                Provider: Manual  
+
+  CodeBuildGo:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: ${ApplicationName}
+      Description: !Sub Build project for ${ApplicationName}
+      ServiceRole: !Ref CodeBuildRole
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: cicd/buildgo.yml
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:5.0
+        Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: ARTIFACT_S3_BUCKET
+            Value: !Sub ${CodePipelineArtifactS3Bucket}
+      Artifacts:
+        Name: !Ref ApplicationName
+        Type: CODEPIPELINE
 
   CodeBuildStaging:
     Type: AWS::CodeBuild::Project
     Properties:
       Name: !Sub ${ApplicationName}-Beta
-      Description: !Sub Build project for ${ApplicationName}-Beta
+      Description: !Sub SAM package for ${ApplicationName}-Beta
       ServiceRole: !Ref CodeBuildRole
       Source:
         Type: CODEPIPELINE
+        BuildSpec: cicd/buildstaging.yml
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
         Image: aws/codebuild/standard:5.0
@@ -187,7 +238,7 @@ Resources:
                     "S3:GetObjectVersion"
                   ],
                   "Resource": [
-                    "arn:aws:s3:::${CodePipelineArtifactS3Bucket}/${ApplicationName}/*"
+                    "arn:aws:s3:::${CodePipelineArtifactS3Bucket}/*"
                   ],
                   "Effect": "Allow"
                 },
@@ -217,6 +268,16 @@ Resources:
                     "iam:PassRole"
                   ],
                   "Resource": "*",
+                  "Effect": "Allow"
+                },
+                {
+                  "Action": [
+                    "codestar-connections:UseConnection",
+                    "codestar-connections:GetConnection",
+                    "codestar-connections:ListConnections",
+                    "codestar-connections:ListTagsForResource"
+                  ],
+                  "Resource": "arn:aws:codestar-connections:${AWS::Region}:${AWS::AccountId}:connection/*",
                   "Effect": "Allow"
                 },
                 {
@@ -335,7 +396,9 @@ Resources:
                 {
                   "Effect": "Allow",
                   "Resource": [
-                    "arn:aws:s3:::${CodePipelineArtifactS3Bucket}/${ApplicationName}/*"
+                    "arn:aws:s3:::${CodePipelineArtifactS3Bucket}/*",
+                    "arn:aws:s3:::${StagingS3Bucket}/*",
+                    "arn:aws:s3:::${ReleaseS3Bucket}/*"
                   ],
                   "Action": [
                     "s3:GetObject",

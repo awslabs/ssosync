@@ -4,8 +4,6 @@ env:
   variables:
     GO_VERSION: "1.18.1"
     OUTPUT: main
-    TEMPLATE: template.yaml
-    PACKAGED_TEMPLATE: packaged.yaml
     APP_NAME: ssosync
 phases:
   install: 
@@ -31,14 +29,9 @@ phases:
       # Print all environment variables (handy for AWS CodeBuild logs)
       - env
 
-      # Update sam to latest version
-      - wget https://github.com/aws/aws-sam-cli/releases/latest/download/aws-sam-cli-linux-x86_64.zip
-      - unzip aws-sam-cli-linux-x86_64.zip -d sam-installation
-      - sudo ./sam-installation/install --update
-      - rm -rf ./sam-installation  aws-sam-cli-linux-x86_64.zip
-
   pre_build: 
     commands:
+      on-failure: CONTINUE
       # Fetch all dependencies
       - go env -w GOPROXY=direct
       - go get ./...
@@ -47,7 +40,7 @@ phases:
       - staticcheck ./...
 
       # Ensure code passes all lint tests
-      #- golint -set_exit_status ./...
+      - golint -set_exit_status ./...
 
       # Check the Go code for common problems with 'go vet'
       - go vet ./...
@@ -65,9 +58,6 @@ phases:
  
       # Make main 
       - goreleaser build --snapshot --rm-dist
-
-      # Package our application with AWS SAM
-      - sam package --s3-bucket ${S3BUCKET} 
 
   post_build:
     commands:
