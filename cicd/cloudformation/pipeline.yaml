@@ -115,7 +115,7 @@ Resources:
                 FullRepositoryId: awslabs/ssosync
                 BranchName: CodePipeline
                 DetectChanges: true
-        - Name: BuildStaging
+        - Name: BuildGo
           Actions:
             - Name: BuildGo
               InputArtifacts:
@@ -129,9 +129,9 @@ Resources:
                 - Name: 2-Build
               Configuration: 
                 ProjectName: !Ref CodeBuildGo
-        - Name: BuildStaging
+        - Name: PackageStaging
           Actions:
-            - Name: BuildGo
+            - Name: PackageStaging
               InputArtifacts:
                 - Name: 2-Build
               ActionTypeId:
@@ -147,7 +147,7 @@ Resources:
           Actions:
             - Name: PublishBetaToSAR
               InputArtifacts:
-                - Name: 2-BuildStaging
+                - Name: 3-BuildStaging
               ActionTypeId:
                 Category: Invoke
                 Owner: AWS
@@ -167,12 +167,12 @@ Resources:
   CodeBuildGo:
     Type: AWS::CodeBuild::Project
     Properties:
-      Name: ${ApplicationName}
+      Name: !Sub ${ApplicationName}
       Description: !Sub Build project for ${ApplicationName}
       ServiceRole: !Ref CodeBuildRole
       Source:
         Type: CODEPIPELINE
-        BuildSpec: cicd/buildgo.yml
+        BuildSpec: cicd/codebuild/buildgo.yml
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
         Image: aws/codebuild/standard:5.0
@@ -192,7 +192,7 @@ Resources:
       ServiceRole: !Ref CodeBuildRole
       Source:
         Type: CODEPIPELINE
-        BuildSpec: cicd/buildstaging.yml
+        BuildSpec: cicd/codebuild/package.yml
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
         Image: aws/codebuild/standard:5.0
