@@ -22,16 +22,10 @@ Metadata:
           default: Application Configuration
         Parameters:
           - ApplicationName
-      - Label:
-          default: GitHub Configuration
-        Parameters:
-          - GitHubOAuthToken
             
     ParameterLabels:
       ApplicationName: 
         default: Application Name
-      GitHubOAuthToken: 
-        default: OAuth2 Token
 
 Resources:
   CodePipelineServerlessRepoPublishApp:
@@ -47,6 +41,30 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Delete
 
+  CodePipelineArtifactS3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref CodePipelineArtifactS3Bucket
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Sid: DenyUnEncryptedObjectUploads
+            Effect: Deny
+            Principal: "*"
+            Action: s3:PutObject
+            Resource: !Join [ '', [ !GetAtt CodePipelineArtifactS3Bucket.Arn, '*' ] ]
+            Condition: 
+              StringNotEquals: 
+                s3:x-amz-server-side-encryption: aws:kms
+          - Sid: DenyInsecureConnections
+            Effect: Deny
+            Principal: "*"
+            Action: "s3:*"
+            Resource: !Join [ '', [ !GetAtt CodePipelineArtifactS3Bucket.Arn, '*' ] ]
+            Condition: 
+              Bool: 
+                aws:SecureTransport: false
+
   StagingS3Bucket:
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
@@ -60,7 +78,7 @@ Resources:
         Version: 2012-10-17
         Statement:
           - Sid: AllowSARObjectDownloads            
-            Effect: Allow,
+            Effect: Allow
             Principal:
               Service: serverlessrepo.amazonaws.com
             Action: s3:GetObject
@@ -82,7 +100,7 @@ Resources:
         Version: 2012-10-17
         Statement:
           - Sid: AllowSARObjectDownloads            
-            Effect: Allow,
+            Effect: Allow
             Principal:
               Service: serverlessrepo.amazonaws.com
             Action: s3:GetObject
@@ -115,7 +133,7 @@ Resources:
                 FullRepositoryId: awslabs/ssosync
                 BranchName: CodePipeline
                 DetectChanges: true
-        - Name: BuildGo
+        - Name: Build
           Actions:
             - Name: BuildGo
               InputArtifacts:
@@ -129,7 +147,7 @@ Resources:
                 - Name: 2-Build
               Configuration: 
                 ProjectName: !Ref CodeBuildGo
-        - Name: PackageStaging
+        - Name: Staging
           Actions:
             - Name: PackageStaging
               InputArtifacts:
@@ -143,8 +161,6 @@ Resources:
                 - Name: 3-BuildStaging
               Configuration:
                 ProjectName: !Ref CodeBuildStaging
-        - Name: PublishBeta
-          Actions:
             - Name: PublishBetaToSAR
               InputArtifacts:
                 - Name: 3-BuildStaging
@@ -233,9 +249,7 @@ Resources:
                 },
                 {
                   "Action": [
-                    "s3:PutObject",
-                    "s3:GetObject",
-                    "S3:GetObjectVersion"
+                    "s3:*"
                   ],
                   "Resource": [
                     "arn:aws:s3:::${CodePipelineArtifactS3Bucket}/*"
