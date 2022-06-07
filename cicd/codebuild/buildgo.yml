@@ -65,4 +65,6 @@ phases:
 
 artifacts:
   files:
-    - packaged.yaml
+    - ${APP_NAME}
+    - dist/*
+    - cicd/*
