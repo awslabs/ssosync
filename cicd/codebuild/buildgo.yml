@@ -30,8 +30,8 @@ phases:
       - env
 
   pre_build: 
+    on-failure: CONTINUE
     commands:
-      on-failure: CONTINUE
       # Fetch all dependencies
       - go env -w GOPROXY=direct
       - go get ./...

@@ -28,7 +28,7 @@ Metadata:
         default: Application Name
 
 Resources:
-  CodePipelineServerlessRepoPublishApp:
+  SARPublishApp:
     Type: AWS::Serverless::Application
     UpdateReplacePolicy: Delete
     Properties:
@@ -52,7 +52,7 @@ Resources:
             Effect: Deny
             Principal: "*"
             Action: s3:PutObject
-            Resource: !Join [ '', [ !GetAtt CodePipelineArtifactS3Bucket.Arn, '*' ] ]
+            Resource: !Join [ '', [ !GetAtt CodePipelineArtifactS3Bucket.Arn, '/*' ] ]
             Condition: 
               StringNotEquals: 
                 s3:x-amz-server-side-encryption: aws:kms
@@ -60,7 +60,7 @@ Resources:
             Effect: Deny
             Principal: "*"
             Action: "s3:*"
-            Resource: !Join [ '', [ !GetAtt CodePipelineArtifactS3Bucket.Arn, '*' ] ]
+            Resource: !Join [ '', [ !GetAtt CodePipelineArtifactS3Bucket.Arn, '/*' ] ]
             Condition: 
               Bool: 
                 aws:SecureTransport: false
@@ -147,7 +147,7 @@ Resources:
                 - Name: 2-Build
               Configuration: 
                 ProjectName: !Ref CodeBuildGo
-        - Name: Staging
+        - Name: PackageStaging
           Actions:
             - Name: PackageStaging
               InputArtifacts:
@@ -158,19 +158,21 @@ Resources:
                 Version: 1
                 Provider: CodeBuild
               OutputArtifacts:
-                - Name: 3-BuildStaging
+                - Name: 3-Staging
               Configuration:
                 ProjectName: !Ref CodeBuildStaging
+        - Name: PublishStaging
+          Actions:
             - Name: PublishBetaToSAR
               InputArtifacts:
-                - Name: 3-BuildStaging
+                - Name: 3-Staging
               ActionTypeId:
                 Category: Invoke
                 Owner: AWS
-                Version: '1'
+                Version: 1
                 Provider: Lambda
               Configuration:
-                FunctionName: !GetAtt CodePipelineServerlessRepoPublishApp.Outputs.ServerlessRepoPublishFunctionName # Here we use the app output ServerlessRepoPublishFunctionName
+                FunctionName: !GetAtt SARPublishApp.Outputs.ServerlessRepoPublishFunctionName
         - Name: Approvals
           Actions:
             - Name: ProductionGate
@@ -265,6 +267,13 @@ Resources:
                     "codedeploy:RegisterApplicationRevision"
                   ],
                   "Resource": "*",
+                  "Effect": "Allow"
+                },
+                {
+                  "Action": [
+                    "lambda:InvokeFunction"
+                  ],
+                  "Resource": "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${SARPublishApp}",
                   "Effect": "Allow"
                 },
                 {
@@ -415,9 +424,7 @@ Resources:
                     "arn:aws:s3:::${ReleaseS3Bucket}/*"
                   ],
                   "Action": [
-                    "s3:GetObject",
-                    "s3:GetObjectVersion",
-                    "s3:PutObject"
+                    "s3:*"
                   ]
                 }
               ]
