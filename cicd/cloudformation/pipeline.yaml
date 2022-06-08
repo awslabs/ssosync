@@ -185,12 +185,12 @@ Resources:
   CodeBuildGo:
     Type: AWS::CodeBuild::Project
     Properties:
-      Name: !Sub "Build-${ApplicationName}-go"
+      Name: !Sub "${ApplicationName}-Build-go"
       Description: !Sub Build project for ${ApplicationName}
       ServiceRole: !Ref CodeBuildRole
       Source:
         Type: CODEPIPELINE
-        BuildSpec: "cicd/codebuild/buildgo.yml"
+        BuildSpec: "cicd/build/buildspec.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
         Image: aws/codebuild/standard:5.0
@@ -211,12 +211,12 @@ Resources:
   CodeBuildStaging:
     Type: AWS::CodeBuild::Project
     Properties:
-      Name: !Sub "Package-${ApplicationName}-Staging"
+      Name: !Sub "${ApplicationName}-Package-Staging"
       Description: !Sub SAM package for ${ApplicationName}
       ServiceRole: !Ref CodeBuildRole
       Source:
         Type: CODEPIPELINE
-        BuildSpec: "cicd/codebuild/buildsam.yml"
+        BuildSpec: "cicd/staging/buildspec.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
         Image: aws/codebuild/standard:5.0
@@ -227,7 +227,7 @@ Resources:
           - Name: S3Bucket
             Value: !Ref StagingS3Bucket
           - Name: Template
-            Value: template.yaml
+            Value: cicd/staging/template.yaml 
           - Name: Packaged
             Value: packaged-staging.yaml
           - Name: APP_NAME

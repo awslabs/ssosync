@@ -15,7 +15,7 @@ phases:
   build:
     commands:
       # Package our application with AWS SAM
-      - sam package --s3-bucket ${S3Bucket} --output-template-file ${Packaged}
+      - sam package --template-file ${Template} --s3-bucket ${S3Bucket} --output-template-file ${Packaged}
 
   post_build:
     commands:
