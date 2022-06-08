@@ -198,6 +198,12 @@ Resources:
         EnvironmentVariables:
           - Name: ARTIFACT_S3_BUCKET
             Value: !Sub ${CodePipelineArtifactS3Bucket}
+          - Name: GO_VERSION
+            Value: "1.18.1"
+          - Name: OUTPUT
+            Value: main
+          - Name: APP_NAME
+            Value: ssosync
       Artifacts:
         Name: !Ref ApplicationName
         Type: CODEPIPELINE
@@ -220,6 +226,12 @@ Resources:
             Value: !Sub ${CodePipelineArtifactS3Bucket}
           - Name: S3Bucket
             Value: !Ref StagingS3Bucket
+          - Name: Template
+            Value: template.yaml
+          - Name: Packaged
+            Value: packaged-staging.yaml
+          - Name: APP_NAME
+            Value: ssosync
       Artifacts:
         Name: !Ref ApplicationName
         Type: CODEPIPELINE
@@ -273,7 +285,7 @@ Resources:
                   "Action": [
                     "lambda:InvokeFunction"
                   ],
-                  "Resource": "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${SARPublishApp}",
+                  "Resource": "${SARPublishApp.Outputs.ServerlessRepoPublishFunctionArn}",
                   "Effect": "Allow"
                 },
                 {

@@ -1,15 +1,10 @@
 version: 0.2
             
-env:
-  variables:
-    GO_VERSION: "1.18.1"
-    OUTPUT: main
-    APP_NAME: ssosync
 phases:
   install: 
     commands:
       # Install go.lang
-      - wget https://storage.googleapis.com/golang/go${GO_VERSION}.linux-amd64.tar.gz
+      - wget -q https://storage.googleapis.com/golang/go${GO_VERSION}.linux-amd64.tar.gz
       - tar -C / -xzf go${GO_VERSION}.linux-amd64.tar.gz
       - export PATH="/go/bin:$PATH" && export GOPATH="/go" && export PATH="$GOPATH/bin:$PATH"
       - rm go${GO_VERSION}.linux-amd64.tar.gz

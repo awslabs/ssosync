@@ -1,10 +1,5 @@
 version: 0.2
             
-env:
-  variables:
-    TEMPLATE: template.yaml
-    PACKAGED_TEMPLATE: packaged.yaml
-    APP_NAME: ssosync
 phases:
   install: 
     commands:
@@ -12,15 +7,15 @@ phases:
       - env
 
       # Update sam to latest version
-      - wget https://github.com/aws/aws-sam-cli/releases/latest/download/aws-sam-cli-linux-x86_64.zip
-      - unzip aws-sam-cli-linux-x86_64.zip -d sam-installation
+      - wget -q https://github.com/aws/aws-sam-cli/releases/latest/download/aws-sam-cli-linux-x86_64.zip
+      - unzip -q aws-sam-cli-linux-x86_64.zip -d sam-installation
       - sudo ./sam-installation/install --update
       - rm -rf ./sam-installation  aws-sam-cli-linux-x86_64.zip
 
   build:
     commands:
       # Package our application with AWS SAM
-      - sam package --s3-bucket ${S3BUCKET} 
+      - sam package --s3-bucket ${S3Bucket} --output-template-file ${Packaged}
 
   post_build:
     commands:
@@ -28,4 +23,4 @@ phases:
 
 artifacts:
   files:
-    - packaged.yaml
+    - ${Packaged}
