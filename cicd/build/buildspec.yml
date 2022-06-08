@@ -64,7 +64,6 @@ artifacts:
     - NOTICE
     - README.md
     - SAR.md
-    - cicd/staging/*
-    - cicd/release/*
-    - dist/*
-    - cmd/*
+    - cicd/**/*
+    - dist/**/*
+    - cmd/**/*
