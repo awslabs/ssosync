@@ -14,6 +14,22 @@ Parameters:
     Default: SSOSync
     Type: String
     AllowedPattern: '[A-Za-z0-9-]+'
+  GoogleCredentials:
+    Description: Credentials to log into Google (content of credentials.json)
+    Type: String
+    NoEcho: true
+  GoogleAdminEmail:
+    Description: Google Admin email
+    Type: String
+    NoEcho: true
+  SCIMEndpointUrl:
+    Description: AWS SSO SCIM Endpoint Url
+    Type: String
+    NoEcho: true
+  SCIMEndpointAccessToken:
+    Description: AWS SSO SCIM AccessToken
+    Type: String
+    NoEcho: true  
 
 Metadata:
   AWS::CloudFormation::Interface:
@@ -22,12 +38,79 @@ Metadata:
           default: Application Configuration
         Parameters:
           - ApplicationName
+      - Label:
+          default: End 2 End Test Configuration
+        Parameters:
+          - GoogleCredentials
+          - GoogleAdminEmail
+          - SCIMEndpointUrl
+          - SCIMEndpointAccessToken
             
     ParameterLabels:
       ApplicationName: 
         default: Application Name
+      GoogleCredentials:
+        default: Content of the credentials.json
+      GoogleAdminEmail:
+        default: email address of an admin admin@WorkspaceDomain
+      SCIMEndpointUrl:
+        default: AWS SSO SCIM Endpoint Url
+      SCIMEndpointAccessToken:
+        default: AWS SSO SCIM Access Token
 
 Resources:
+  GoogleCredentialSecret:
+    Type: "AWS::SecretsManager::Secret"
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Delete
+    Properties:
+      Name: E2ETestGoogleCredentials
+      SecretString: !Ref GoogleCredentials
+      Tags:
+        - Key: Pipeline
+          Value: !Ref CodePipeline
+        - Key: Application
+          Value: !Ref ApplicationName
+
+  GoogleAdminEmailSecret:
+    Type: "AWS::SecretsManager::Secret"
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Delete
+    Properties:
+      Name: E2ETestGoogleAdminEmail
+      SecretString: !Ref GoogleAdminEmail
+      Tags:
+        - Key: Pipeline
+          Value: !Ref CodePipeline
+        - Key: Application
+          Value: !Ref ApplicationName
+
+  SSoSCIMUrlSecret: # This can be moved to custom provider
+    Type: "AWS::SecretsManager::Secret"
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Delete
+    Properties:
+      Name: E2ETestSCIMEndpointUrl
+      SecretString: !Ref SCIMEndpointUrl
+      Tags:
+        - Key: Pipeline
+          Value: !Ref CodePipeline
+        - Key: Application
+          Value: !Ref ApplicationName
+
+  SSoSSCIMAccessTokenSecret: # This can be moved to custom provider
+    Type: "AWS::SecretsManager::Secret"
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Delete
+    Properties:
+      Name: E2ETestSCIMAccessToken
+      SecretString: !Ref SCIMEndpointAccessToken
+      Tags:
+        - Key: Pipeline
+          Value: !Ref CodePipeline
+        - Key: Application
+          Value: !Ref ApplicationName
+
   SARPublishApp:
     Type: AWS::Serverless::Application
     UpdateReplacePolicy: Delete
@@ -253,9 +336,11 @@ Resources:
           - Name: S3Bucket
             Value: !Ref StagingS3Bucket
           - Name: Template
-            Value: cicd/staging/template.yaml 
+            Value: template.yaml 
+          - Name: Packaged
+            Value: packaged.yaml 
           - Name: APP_NAME
-            Value: ssosync
+            Value: SSOSync-Staging
       Artifacts:
         Name: !Ref ApplicationName
         Type: CODEPIPELINE
@@ -279,9 +364,11 @@ Resources:
           - Name: S3Bucket
             Value: !Ref ReleaseS3Bucket
           - Name: Template
-            Value: cicd/release/template.yaml
+            Value: template.yaml             
+          - Name: Packaged
+            Value: packaged.yaml        
           - Name: APP_NAME
-            Value: ssosync
+            Value: SSOSync
       Artifacts:
         Name: !Ref ApplicationName
         Type: CODEPIPELINE

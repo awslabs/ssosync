@@ -67,3 +67,4 @@ artifacts:
     - cicd/**/*
     - dist/**/*
     - cmd/**/*
+    - template.yaml

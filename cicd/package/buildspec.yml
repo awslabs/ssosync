@@ -12,12 +12,15 @@ phases:
       - sudo ./sam-installation/install --update
       - rm -rf ./sam-installation  aws-sam-cli-linux-x86_64.zip
 
-      # Copy the Staging to this folder
-      - cp ${Template} template.yaml
+  pre_build:
+    commands:
+      # Replace App Name in template, to be correct for the stage
+      - sed -e '/Name\: ssosync/Name\: ${APP_NAME}/g' ${Template}
+
   build:
     commands:
       # Package our application with AWS SAM
-      - sam package --template-file template.yaml --s3-bucket ${S3Bucket} --output-template-file packaged.yaml
+      - sam package  --no-progressbar --template-file ${Template} --s3-bucket ${S3Bucket} --output-template-file ${Packaged}
 
   post_build:
     commands:
@@ -25,4 +28,5 @@ phases:
 
 artifacts:
   files:
-    - packaged.yaml
+    - ${Template}
+    - ${Packaged}
