@@ -14,7 +14,7 @@ phases:
 
   pre_build:
     commands:
-      # Replace App Name in template, to be correct for the stage
+      # Replace App Name in template
       - sed -e '/Name\: ssosync/Name\: ${APP_NAME}/g' ${Template}
 
   build:
