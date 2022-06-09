@@ -81,11 +81,12 @@ Resources:
             Effect: Allow
             Principal:
               Service: serverlessrepo.amazonaws.com
-            Action: s3:GetObject
+            Action:  
+              s3:GetObject
             Resource: !Join [ '', [ !GetAtt StagingS3Bucket.Arn, '/*' ] ]
             Condition: 
               StringEquals: 
-                aws:SourceAccount": !Ref AWS::AccountId
+                aws:SourceAccount: !Ref AWS::AccountId
 
   ReleaseS3Bucket:
     Type: AWS::S3::Bucket
@@ -107,7 +108,7 @@ Resources:
             Resource: !Join [ '', [ !GetAtt ReleaseS3Bucket.Arn, '/*' ] ]
             Condition: 
               StringEquals: 
-                aws:SourceAccount": !Ref AWS::AccountId
+                aws:SourceAccount: !Ref AWS::AccountId
 
   CodePipeline:
     Type: AWS::CodePipeline::Pipeline
@@ -181,7 +182,32 @@ Resources:
                 Owner: AWS
                 Version: 1
                 Provider: Manual  
-
+        - Name: PackageRelease
+          Actions:
+            - Name: PackageRelease
+              InputArtifacts:
+                - Name: 2-Build
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              OutputArtifacts:
+                - Name: 4-Release
+              Configuration:
+                ProjectName: !Ref CodeBuildRelease
+        - Name: PublishRelease
+          Actions:
+            - Name: PublishReleaseToSAR
+              InputArtifacts:
+                - Name: 4-Release
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Version: 1
+                Provider: Lambda
+              Configuration:
+                FunctionName: !GetAtt SARPublishApp.Outputs.ServerlessRepoPublishFunctionName
   CodeBuildGo:
     Type: AWS::CodeBuild::Project
     Properties:
@@ -216,7 +242,7 @@ Resources:
       ServiceRole: !Ref CodeBuildRole
       Source:
         Type: CODEPIPELINE
-        BuildSpec: "cicd/staging/buildspec.yml"
+        BuildSpec: "cicd/package/buildspec.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
         Image: aws/codebuild/standard:5.0
@@ -228,8 +254,32 @@ Resources:
             Value: !Ref StagingS3Bucket
           - Name: Template
             Value: cicd/staging/template.yaml 
-          - Name: Packaged
-            Value: packaged-staging.yaml
+          - Name: APP_NAME
+            Value: ssosync
+      Artifacts:
+        Name: !Ref ApplicationName
+        Type: CODEPIPELINE
+
+  CodeBuildRelease:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub "${ApplicationName}-Package-Release"
+      Description: !Sub SAM package for ${ApplicationName}
+      ServiceRole: !Ref CodeBuildRole
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: "cicd/package/buildspec.yml"
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:5.0
+        Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: ARTIFACT_S3_BUCKET
+            Value: !Sub ${CodePipelineArtifactS3Bucket}
+          - Name: S3Bucket
+            Value: !Ref ReleaseS3Bucket
+          - Name: Template
+            Value: cicd/release/template.yaml
           - Name: APP_NAME
             Value: ssosync
       Artifacts:

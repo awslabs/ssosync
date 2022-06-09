@@ -12,10 +12,12 @@ phases:
       - sudo ./sam-installation/install --update
       - rm -rf ./sam-installation  aws-sam-cli-linux-x86_64.zip
 
+      # Copy the Staging to this folder
+      - cp ${Template} template.yaml
   build:
     commands:
       # Package our application with AWS SAM
-      - sam package --template-file ${Template} --s3-bucket ${S3Bucket} --output-template-file ${Packaged}
+      - sam package --template-file template.yaml --s3-bucket ${S3Bucket} --output-template-file packaged.yaml
 
   post_build:
     commands:
@@ -23,4 +25,4 @@ phases:
 
 artifacts:
   files:
-    - ${Packaged}
+    - packaged.yaml
