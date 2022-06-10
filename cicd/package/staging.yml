@@ -1,7 +1,7 @@
 version: 0.2
-            
+
 phases:
-  install: 
+  install:
     commands:
       # Print all environment variables (handy for AWS CodeBuild logs)
       - env
@@ -15,7 +15,7 @@ phases:
   pre_build:
     commands:
       # Replace App Name in template
-      - sed -e '/Name\: ssosync/Name\: ${APP_NAME}/g' ${Template}
+      - sed -i 's/"ssosync"/SSOSync-Staging/g' ${Template}
 
   build:
     commands:
@@ -24,7 +24,8 @@ phases:
 
   post_build:
     commands:
-      - ls -la 
+      - ls -la
+      - cat ${Packaged}
 
 artifacts:
   files:

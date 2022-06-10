@@ -1,0 +1,33 @@
+version: 0.2
+
+phases:
+  install:
+    commands:
+      # Print all environment variables (handy for AWS CodeBuild logs)
+      - env
+
+      # Update sam to latest version
+      - wget -q https://github.com/aws/aws-sam-cli/releases/latest/download/aws-sam-cli-linux-x86_64.zip
+      - unzip -q aws-sam-cli-linux-x86_64.zip -d sam-installation
+      - sudo ./sam-installation/install --update
+      - rm -rf ./sam-installation  aws-sam-cli-linux-x86_64.zip
+
+  pre_build:
+    commands:
+      # Replace App Name in template
+      - sed -i 's/"ssosync"/SSOSync/g' ${Template}
+
+  build:
+    commands:
+      # Package our application with AWS SAM
+      - sam package  --no-progressbar --template-file ${Template} --s3-bucket ${S3Bucket} --output-template-file ${Packaged}
+
+  post_build:
+    commands:
+      - ls -la
+      - cat ${Packaged}
+
+artifacts:
+  files:
+    - ${Template}
+    - ${Packaged}

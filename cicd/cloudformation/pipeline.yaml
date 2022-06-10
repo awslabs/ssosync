@@ -301,6 +301,7 @@ Resources:
                 Provider: Lambda
               Configuration:
                 FunctionName: !GetAtt SARPublishApp.Outputs.ServerlessRepoPublishFunctionName
+
   CodeBuildGo:
     Type: AWS::CodeBuild::Project
     Properties:
@@ -309,7 +310,7 @@ Resources:
       ServiceRole: !Ref CodeBuildGoRole
       Source:
         Type: CODEPIPELINE
-        BuildSpec: "cicd/build/buildspec.yml"
+        BuildSpec: "cicd/build/buildgo.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
         Image: aws/codebuild/standard:5.0
@@ -335,7 +336,7 @@ Resources:
       ServiceRole: !Ref CodeBuildStagingRole
       Source:
         Type: CODEPIPELINE
-        BuildSpec: "cicd/package/buildspec.yml"
+        BuildSpec: "cicd/package/staging.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
         Image: aws/codebuild/standard:5.0
@@ -349,8 +350,6 @@ Resources:
             Value: template.yaml 
           - Name: Packaged
             Value: packaged.yaml 
-          - Name: APP_NAME
-            Value: !Sub "${ApplicationName}-Staging"
       Artifacts:
         Name: !Ref ApplicationName
         Type: CODEPIPELINE
@@ -363,7 +362,7 @@ Resources:
       ServiceRole: !Ref CodeBuildReleaseRole
       Source:
         Type: CODEPIPELINE
-        BuildSpec: "cicd/package/buildspec.yml"
+        BuildSpec: "cicd/package/release.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
         Image: aws/codebuild/standard:5.0
@@ -571,7 +570,7 @@ Resources:
               "Statement": [      
                 {
                   "Effect": "Allow",
-                  "Resource": [ "*" ],
+                  "Resource": "*",
                   "Action": [
                     "logs:CreateLogGroup",
                     "logs:CreateLogStream",
@@ -580,12 +579,8 @@ Resources:
                 },
                 {
                   "Effect": "Allow",
-                  "Resource": [
-                    "${CodePipelineArtifactS3Bucket.Arn}/*"
-                  ],
-                  "Action": [
-                    "s3:*"
-                  ]
+                  "Resource": "${CodePipelineArtifactS3Bucket.Arn}/*",
+                  "Action": "s3:*"
                 }
               ]
             }
@@ -627,9 +622,7 @@ Resources:
                     "${CodePipelineArtifactS3Bucket.Arn}/*",
                     "${StagingS3Bucket.Arn}/*"
                   ],
-                  "Action": [
-                    "s3:*"
-                  ]
+                  "Action": "s3:*"
                 }
               ]
             }
@@ -669,9 +662,7 @@ Resources:
                     "arn:aws:s3:::${CodePipelineArtifactS3Bucket}/*",
                     "arn:aws:s3:::${ReleaseS3Bucket}/*"
                   ],
-                  "Action": [
-                    "s3:*"
-                  ]
+                  "Action": "s3:*"
                 }
               ]
             }
