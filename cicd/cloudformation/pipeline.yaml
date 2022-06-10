@@ -413,6 +413,14 @@ Resources:
                   "Effect": "Allow"
                 },
                 {
+                  "Action": "s3:GetObject",
+                  "Resource": [
+                    "${StagingS3Bucket.Arn}/*",
+                    "${ReleaseS3Bucket.Arn}/*"
+                  ],
+                  "Effect": "Allow"
+                },
+                {
                   "Action": [
                     "codedeploy:CreateDeployment",
                     "codedeploy:GetApplicationRevision",
