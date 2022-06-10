@@ -20,7 +20,8 @@ phases:
   build:
     commands:
       # Package our application with AWS SAM
-      - sam package  --no-progressbar --template-file ${Template} --s3-bucket ${S3Bucket} --output-template-file ${Packaged}
+      - sam package --no-progressbar --template-file ${Template} --s3-bucket ${S3Bucket} --output-template-file ${Packaged}
+      - sam publish --template ${Packaged}
 
   post_build:
     commands:

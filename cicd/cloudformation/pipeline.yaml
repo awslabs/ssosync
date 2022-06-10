@@ -139,24 +139,33 @@ Resources:
     Properties:
       Bucket: !Ref CodePipelineArtifactS3Bucket
       PolicyDocument:
-        Version: 2012-10-17
+        Version: '2012-10-17'
         Statement:
-          - Sid: DenyUnEncryptedObjectUploads
-            Effect: Deny
-            Principal: "*"
-            Action: s3:PutObject
-            Resource: !Join [ '', [ !GetAtt CodePipelineArtifactS3Bucket.Arn, '/*' ] ]
-            Condition: 
-              StringNotEquals: 
-                s3:x-amz-server-side-encryption: aws:kms
-          - Sid: DenyInsecureConnections
-            Effect: Deny
-            Principal: "*"
-            Action: "s3:*"
-            Resource: !Join [ '', [ !GetAtt CodePipelineArtifactS3Bucket.Arn, '/*' ] ]
-            Condition: 
-              Bool: 
-                aws:SecureTransport: false
+        - Action: ['s3:GetObject']
+          Effect: Allow
+          Principal:
+            Service: 'serverlessrepo.amazonaws.com'
+          Resource:
+          - !Sub ${StagingS3Bucket.Arn}/*
+          Condition: 
+            StringEquals: 
+              aws:SourceAccount: !Ref AWS::AccountId
+        - Sid: DenyUnEncryptedObjectUploads
+          Effect: Deny
+          Principal: "*"
+          Action: s3:PutObject
+          Resource: !Sub ${CodePipelineArtifactS3Bucket.Arn}/*
+          Condition: 
+            StringNotEquals: 
+              s3:x-amz-server-side-encryption: aws:kms
+        - Sid: DenyInsecureConnections
+          Effect: Deny
+          Principal: "*"
+          Action: "s3:*"
+          Resource: !Sub ${CodePipelineArtifactS3Bucket.Arn}/*
+          Condition: 
+            Bool: 
+              aws:SecureTransport: false
 
   StagingS3Bucket:
     Type: AWS::S3::Bucket
@@ -168,18 +177,16 @@ Resources:
     Properties:
       Bucket: !Ref StagingS3Bucket
       PolicyDocument:
-        Version: 2012-10-17
+        Version: '2012-10-17'
         Statement:
-          - Sid: AllowSARObjectDownloads            
-            Effect: Allow
-            Principal:
-              Service: serverlessrepo.amazonaws.com
-            Action:  
-              s3:GetObject
-            Resource: !Join [ '', [ !GetAtt StagingS3Bucket.Arn, '/*' ] ]
-            Condition: 
-              StringEquals: 
-                aws:SourceAccount: !Ref AWS::AccountId
+        - Action: ['s3:GetObject']
+          Effect: Allow
+          Principal:
+            Service: 'serverlessrepo.amazonaws.com'
+          Resource: !Sub ${StagingS3Bucket.Arn}/*
+          Condition:  
+            StringEquals:  
+              aws:SourceAccount: !Ref AWS::AccountId
 
   ReleaseS3Bucket:
     Type: AWS::S3::Bucket
@@ -191,17 +198,17 @@ Resources:
     Properties:
       Bucket: !Ref ReleaseS3Bucket
       PolicyDocument:
-        Version: 2012-10-17
+        Version: '2012-10-17'
         Statement:
-          - Sid: AllowSARObjectDownloads            
-            Effect: Allow
-            Principal:
-              Service: serverlessrepo.amazonaws.com
-            Action: s3:GetObject
-            Resource: !Join [ '', [ !GetAtt ReleaseS3Bucket.Arn, '/*' ] ]
-            Condition: 
-              StringEquals: 
-                aws:SourceAccount: !Ref AWS::AccountId
+        - Action: ['s3:GetObject']
+          Effect: Allow
+          Principal:
+            Service: 'serverlessrepo.amazonaws.com'
+          Resource: 
+          - !Sub ${ReleaseS3Bucket.Arn}/*
+          Condition:  
+            StringEquals:  
+              aws:SourceAccount: !Ref AWS::AccountId
 
   CodePipeline:
     Type: AWS::CodePipeline::Pipeline
@@ -385,94 +392,80 @@ Resources:
   CodePipelineRole:
     Type: AWS::IAM::Role
     Properties: 
-      Path: /
       RoleName: !Sub ${ApplicationName}-CodePipeline-${AWS::Region}
-      AssumeRolePolicyDocument: |
-        {
-          "Statement": [{
-            "Action": "sts:AssumeRole",
-            "Effect": "Allow",
-            "Principal": { 
-              "Service": "codepipeline.amazonaws.com" 
-            }
-          }]
-        }
+      AssumeRolePolicyDocument:
+        Statement:
+        - Action: ['sts:AssumeRole']
+          Effect: Allow
+          Principal: 
+            Service: [codepipeline.amazonaws.com] 
+        Version: '2012-10-17'
+      Path: /
       Policies: 
         - PolicyName: !Sub ${ApplicationName}-CodePipeline-${AWS::Region}
-          PolicyDocument: !Sub |                    
-            {
-              "Statement": [
-               {
-                  "Action": "s3:GetBucketVersioning",
-                  "Resource": "${CodePipelineArtifactS3Bucket.Arn}",
-                  "Effect": "Allow"
-                },
-                {
-                  "Action": "s3:*",
-                  "Resource": "${CodePipelineArtifactS3Bucket.Arn}/*",
-                  "Effect": "Allow"
-                },
-                {
-                  "Action": "s3:GetObject",
-                  "Resource": [
-                    "${StagingS3Bucket.Arn}/*",
-                    "${ReleaseS3Bucket.Arn}/*"
-                  ],
-                  "Effect": "Allow"
-                },
-                {
-                  "Action": [
-                    "codedeploy:CreateDeployment",
-                    "codedeploy:GetApplicationRevision",
-                    "codedeploy:GetDeployment",
-                    "codedeploy:GetDeploymentConfig",
-                    "codedeploy:RegisterApplicationRevision"
-                  ],
-                  "Resource": "*",
-                  "Effect": "Allow"
-                },
-                {
-                  "Action": "lambda:InvokeFunction",
-                  "Resource": "${SARPublishApp.Outputs.ServerlessRepoPublishFunctionArn}",
-                  "Effect": "Allow"
-                },
-                {
-                  "Action": [
-                    "cloudformation:CreateStack",
-                    "cloudformation:DeleteStack",
-                    "cloudformation:DescribeStacks",
-                    "cloudformation:UpdateStack",
-                    "cloudformation:CreateChangeSet",
-                    "cloudformation:DeleteChangeSet",
-                    "cloudformation:DescribeChangeSet",
-                    "cloudformation:ExecuteChangeSet",
-                    "cloudformation:SetStackPolicy",
-                    "cloudformation:ValidateTemplate",
-                    "iam:PassRole"
-                  ],
-                  "Resource": "*",
-                  "Effect": "Allow"
-                },
-                {
-                  "Action": [
-                    "codestar-connections:UseConnection",
-                    "codestar-connections:GetConnection",
-                    "codestar-connections:ListConnections",
-                    "codestar-connections:ListTagsForResource"
-                  ],
-                  "Resource": "arn:aws:codestar-connections:${AWS::Region}:${AWS::AccountId}:connection/*",
-                  "Effect": "Allow"
-                },
-                {
-                  "Action": [
-                    "codebuild:BatchGetBuilds",
-                    "codebuild:StartBuild"
-                  ],
-                  "Resource": "*",
-                  "Effect": "Allow"
-                }
-              ]
-            }
+          PolicyDocument:                     
+            Version: '2012-10-17'
+            Statement: 
+            - Action:
+              - 'iam:PassRole'
+              Effect: Allow
+              Resource: '*'
+            - Action:
+              - 'codestar-connections:UseConnection'
+              - 'codestar-connections:GetConnection'
+              - 'codestar-connections:ListConnections'
+              - 'codestar-connections:ListTagsForResource'
+              Resource: !Sub arn:aws:codestar-connections:${AWS::Region}:${AWS::AccountId}:connection/*
+              Effect: Allow
+            - Action:
+              - 'codebuild:BatchGetBuilds'
+              - 'codebuild:StartBuild'
+              Resource:
+              - !Sub ${CodeBuildGo.Arn}
+              - !Sub ${CodeBuildStaging.Arn}
+              - !Sub ${CodeBuildRelease.Arn}
+              Effect: Allow
+            - Action:
+              - 's3:GetBucketVersioning'
+              - 's3:ListBucket'
+              Resource:
+              - !Sub ${CodePipelineArtifactS3Bucket.Arn}
+              - !Sub ${StagingS3Bucket.Arn}
+              - !Sub ${ReleaseS3Bucket.Arn}
+              Effect: Allow
+            - Action:
+              -  's3:PutObject'
+              -  's3:GetObject'
+              -  's3:GetObjectVersion'
+              Resource:
+              - !Sub ${CodePipelineArtifactS3Bucket.Arn}/*
+              - !Sub ${StagingS3Bucket.Arn}/*
+              - !Sub ${ReleaseS3Bucket.Arn}/*
+              Effect: Allow
+            - Action:
+              - 'codedeploy:CreateDeployment'
+              - 'codedeploy:GetApplicationRevision'
+              - 'codedeploy:GetDeployment'
+              - 'codedeploy:GetDeploymentConfig'
+              - 'codedeploy:RegisterApplicationRevision'
+              Resource: '*'
+              Effect: Allow
+            - Action: 'lambda:InvokeFunction'
+              Resource: !GetAtt SARPublishApp.Outputs.ServerlessRepoPublishFunctionArn
+              Effect: Allow
+            - Action:
+              - 'cloudformation:CreateStack'
+              - 'cloudformation:DeleteStack'
+              - 'cloudformation:DescribeStacks'
+              - 'cloudformation:UpdateStack'
+              - 'cloudformation:CreateChangeSet'
+              - 'cloudformation:DeleteChangeSet'
+              - 'cloudformation:DescribeChangeSet'
+              - 'cloudformation:ExecuteChangeSet'
+              - 'cloudformation:SetStackPolicy'
+              - 'cloudformation:ValidateTemplate'
+              Resource: '*'
+              Effect: Allow
 
   CodePipelineCloudFormationRole:
     Type: AWS::IAM::Role
