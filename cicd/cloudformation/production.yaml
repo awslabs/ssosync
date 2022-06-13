@@ -49,7 +49,7 @@ Metadata:
 
 Resources:
 
-  LogGroup:
+  CodePipelineLogGroup:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Retain
     UpdateReplacePolicy: Delete
@@ -57,15 +57,15 @@ Resources:
       LogGroupName: !Ref ApplicationName
       RetentionInDays: 120
 
-  ArtifactS3Bucket:
+  ArtifactBucket:
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
     UpdateReplacePolicy: Delete
 
-  ArtifactS3BucketPolicy:
+  ArtifactBucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
-      Bucket: !Ref ArtifactS3Bucket
+      Bucket: !Ref ArtifactBucket
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -74,7 +74,7 @@ Resources:
           Principal:
             Service: 'serverlessrepo.amazonaws.com'
           Resource:
-          - !Sub ${ArtifactS3Bucket.Arn}/*
+          - !Sub ${ArtifactBucket.Arn}/*
           Condition: 
             StringEquals: 
               aws:SourceAccount: !Ref AWS::AccountId
@@ -82,7 +82,7 @@ Resources:
           Effect: Deny
           Principal: "*"
           Action: s3:PutObject
-          Resource: !Sub ${ArtifactS3Bucket.Arn}/*
+          Resource: !Sub ${ArtifactBucket.Arn}/*
           Condition: 
             StringNotEquals: 
               s3:x-amz-server-side-encryption: aws:kms
@@ -90,20 +90,20 @@ Resources:
           Effect: Deny
           Principal: "*"
           Action: "s3:*"
-          Resource: !Sub ${ArtifactS3Bucket.Arn}/*
+          Resource: !Sub ${ArtifactBucket.Arn}/*
           Condition: 
             Bool: 
               aws:SecureTransport: false
 
-  AppS3Bucket:
+  AppBucket:
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
     UpdateReplacePolicy: Delete
 
-  AppS3BucketPolicy:
+  AppBucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
-      Bucket: !Ref AppS3Bucket
+      Bucket: !Ref AppBucket
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -112,7 +112,7 @@ Resources:
           Principal:
             Service: 'serverlessrepo.amazonaws.com'
           Resource: 
-          - !Sub ${AppS3Bucket.Arn}/*
+          - !Sub ${AppBucket.Arn}/*
           Condition:
             StringEquals:  
               aws:SourceAccount: !Ref AWS::AccountId
@@ -124,7 +124,7 @@ Resources:
       RoleArn: !Sub ${CodePipelineRole.Arn}
       ArtifactStore: 
         Type: S3
-        Location: !Ref ArtifactS3Bucket
+        Location: !Ref ArtifactBucket
       Stages:
         - Name: Source
           Actions:
@@ -210,14 +210,14 @@ Resources:
       ServiceRole: !Ref CodeBuildGoRole
       Source:
         Type: CODEPIPELINE
-        BuildSpec: "cicd/build/buildgo.yml"
+        BuildSpec: "cicd/buildgo.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
         Image: aws/codebuild/standard:5.0
         Type: LINUX_CONTAINER
         EnvironmentVariables:
           - Name: ARTIFACT_S3_BUCKET
-            Value: !Sub ${ArtifactS3Bucket}
+            Value: !Sub ${ArtifactBucket}
           - Name: GO_VERSION
             Value: "1.18.1"
           - Name: OUTPUT
@@ -229,14 +229,14 @@ Resources:
         Type: CODEPIPELINE
       LogsConfig:
         CloudWatchLogs:
-          GroupName: !Ref LogGroup
+          GroupName: !Ref CodePipelineLogGroup
           StreamName: !Ref CodeBuildGoLogs
           Status: ENABLED
 
   CodeBuildGoLogs:
     Type: AWS::Logs::LogStream
     Properties: 
-      LogGroupName: !Ref LogGroup
+      LogGroupName: !Ref CodePipelineLogGroup
       LogStreamName: !Sub "${ApplicationName}-Build-go"
 
   CodeBuildPackage:
@@ -254,9 +254,9 @@ Resources:
         Type: LINUX_CONTAINER
         EnvironmentVariables:
           - Name: ARTIFACT_S3_BUCKET
-            Value: !Sub ${ArtifactS3Bucket}
+            Value: !Sub ${ArtifactBucket}
           - Name: S3Bucket
-            Value: !Ref AppS3Bucket
+            Value: !Ref AppBucket
           - Name: Template
             Value: template.yaml
       Artifacts:
@@ -264,14 +264,14 @@ Resources:
         Type: CODEPIPELINE
       LogsConfig:
         CloudWatchLogs:
-          GroupName: !Ref LogGroup
+          GroupName: !Ref CodePipelineLogGroup
           StreamName: !Ref CodeBuildPackageLogs
           Status: ENABLED
 
   CodeBuildPackageLogs:
     Type: AWS::Logs::LogStream
     Properties:
-      LogGroupName: !Ref LogGroup
+      LogGroupName: !Ref CodePipelineLogGroup
       LogStreamName: !Sub "${ApplicationName}-Package"
 
   CodeBuildStaging:
@@ -289,7 +289,7 @@ Resources:
         Type: LINUX_CONTAINER
         EnvironmentVariables:
           - Name: ARTIFACT_S3_BUCKET
-            Value: !Sub ${ArtifactS3Bucket}
+            Value: !Sub ${ArtifactBucket}
           - Name: SDLC
             Value: 'staging'
       Artifacts:
@@ -297,14 +297,14 @@ Resources:
         Type: CODEPIPELINE
       LogsConfig:
         CloudWatchLogs:
-          GroupName: !Ref LogGroup
+          GroupName: !Ref CodePipelineLogGroup
           StreamName: !Ref CodeBuildStagingLogs
           Status: ENABLED
 
   CodeBuildStagingLogs:
     Type: AWS::Logs::LogStream
     Properties:
-      LogGroupName: !Ref LogGroup
+      LogGroupName: !Ref CodePipelineLogGroup
       LogStreamName: !Sub "${ApplicationName}-Staging"
 
 
@@ -323,7 +323,7 @@ Resources:
         Type: LINUX_CONTAINER
         EnvironmentVariables:
           - Name: ARTIFACT_S3_BUCKET
-            Value: !Sub ${ArtifactS3Bucket}
+            Value: !Sub ${ArtifactBucket}
           - Name: SDLC
             Value: release
       Artifacts:
@@ -331,14 +331,14 @@ Resources:
         Type: CODEPIPELINE
       LogsConfig:
         CloudWatchLogs:
-          GroupName: !Ref LogGroup
+          GroupName: !Ref CodePipelineLogGroup
           StreamName: !Ref CodeBuildReleaseLogs
           Status: ENABLED
 
   CodeBuildReleaseLogs:
     Type: AWS::Logs::LogStream
     Properties:
-      LogGroupName: !Ref LogGroup
+      LogGroupName: !Ref CodePipelineLogGroup
       LogStreamName: !Sub "${ApplicationName}-Release"
 
 
@@ -380,19 +380,15 @@ Resources:
               - !Sub ${CodeBuildRelease.Arn}
               Effect: Allow
             - Action:
+              - 's3:GetBucketPolicy'
               - 's3:GetBucketVersioning'
-              - 's3:ListBucket'
               Resource:
-              - !Sub ${ArtifactS3Bucket.Arn}
-              - !Sub ${AppS3Bucket.Arn}
+              - !Sub ${ArtifactBucket.Arn}
               Effect: Allow
             - Action:
-              -  's3:PutObject'
-              -  's3:GetObject'
-              -  's3:GetObjectVersion'
+              - 's3:*'
               Resource:
-              - !Sub ${ArtifactS3Bucket.Arn}/*
-              - !Sub ${AppS3Bucket.Arn}/*
+              - !Sub ${ArtifactBucket.Arn}/*
               Effect: Allow
 
   CodeBuildGoRole:
@@ -421,7 +417,7 @@ Resources:
             - Action: 's3:*'
               Effect: Allow
               Resource:
-              - !Sub ${ArtifactS3Bucket.Arn}/*
+              - !Sub ${ArtifactBucket.Arn}/*
 
   CodeBuildPackageRole:
     Type: AWS::IAM::Role
@@ -449,8 +445,8 @@ Resources:
             - Action: 's3:*'
               Effect: Allow
               Resource:
-              - !Sub ${ArtifactS3Bucket.Arn}/*
-              - !Sub ${AppS3Bucket.Arn}/*
+              - !Sub ${ArtifactBucket.Arn}/*
+              - !Sub ${AppBucket.Arn}/*
 
   CodeBuildPublishRole:
     Type: AWS::IAM::Role
@@ -478,8 +474,8 @@ Resources:
             - Action: 's3:*'
               Effect: Allow
               Resource:
-              - !Sub ${ArtifactS3Bucket.Arn}/*
-              - !Sub ${AppS3Bucket.Arn}/*
+              - !Sub ${ArtifactBucket.Arn}/*
+              - !Sub ${AppBucket.Arn}/*
             - Action: 'serverlessrepo:*'
               Effect: Allow
               Resource: 
@@ -492,15 +488,15 @@ Outputs:
     Description: The URL for the created pipeline
     Value: !Sub https://${AWS::Region}.console.aws.amazon.com/codepipeline/home?region=${AWS::Region}#/view/${ApplicationName}      
 
-  ArtifactS3BucketARN:
+  ArtifactBucketARN:
     Description: "S3 bucket ARN Codepipeline is using"
-    Value: !GetAtt ArtifactS3Bucket.Arn
+    Value: !GetAtt ArtifactBucket.Arn
     Export:
-      Name: ArtifactS3BucketARN
+      Name: ArtifactBucketARN
 
-  AppS3BucketARN:
+  AppBucketARN:
     Description: "S3 bucket ARN where Codepipeline publishs the app"
-    Value: !GetAtt AppS3Bucket.Arn
+    Value: !GetAtt AppBucket.Arn
     Export:
-      Name: AppS3BucketARN
+      Name: AppBucketARN
 
