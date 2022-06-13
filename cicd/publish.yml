@@ -15,19 +15,17 @@ phases:
   pre_build:
     commands:
       # Replace App Name in template
-      - sed -i 's/"ssosync"/SSOSync/g' ${Template}
+      - echo ${SDLC}
+      - | 
+        if [ ${SDLC} == "staging" ] ; then
+          sed -i 's/"ssosync"/SSOSync-Staging/g' packaged.yaml
+        elif [ ${SDLC} == "release" ] ; then
+          sed -i 's/"ssosync"/SSOSync/g' packaged.yaml
+        fi
+      
 
   build:
     commands:
       # Package our application with AWS SAM
-      - sam package  --no-progressbar --template-file ${Template} --s3-bucket ${S3Bucket} --output-template-file ${Packaged}
+      - sam publish --template packaged.yaml
 
-  post_build:
-    commands:
-      - ls -la
-      - cat ${Packaged}
-
-artifacts:
-  files:
-    - ${Template}
-    - ${Packaged}

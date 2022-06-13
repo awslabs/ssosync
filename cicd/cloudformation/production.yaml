@@ -1,0 +1,506 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: 'AWS::Serverless-2016-10-31'
+
+Description: 
+  This CloudFormation template will deploy a full CI/CD pipeline for SSO
+  Sync. It includes building with AWS CodeBuild, publishing to a
+  staging (private) AWS Serverless Application Repository (SAR), deployment
+  of the beta into a staging environment via AWS CloudFormation. If the commit
+  is also a release, then the app will also be published to the public SAR entry.
+
+Parameters:
+  ApplicationName: 
+    Description: This will be used to name the pipeline and build resources
+    Default: SSOSync
+    Type: String
+    AllowedPattern: '[A-Za-z0-9-]+'
+  StagingAccount:
+    Description: AWS Account where staging build is automatically deployed and tested
+    Type: String
+    AllowedPattern: '[0-9]+'
+  CodeStarConnection:
+    Description:  Resource ARN for the CodeStar Connection to use
+    Type: String
+    AllowedPattern: '[A-Za-z0-9:/-]+'
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label: 
+          default: Application Configuration
+        Parameters:
+          - ApplicationName
+      - Label:
+          default: End 2 End Test environment
+        Parameters:
+          - StagingAccount
+      - Label:
+          default: Connection id for the CodeStar Connection to use
+        Parameters:
+          - CodeStarConnection
+            
+    ParameterLabels:
+      ApplicationName: 
+        default: "SSOSync"
+      StagingAccount:
+        default: "123456789012"
+      CodeStarConnection:
+        default: "arn:aws:codestar-connections:<AWS::Region>:<AWS::AccountId>:connection/abcd1234-ab12-ab12--ab12-abcdef123456"
+
+Resources:
+
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Delete
+    Properties: 
+      LogGroupName: !Ref ApplicationName
+      RetentionInDays: 120
+
+  ArtifactS3Bucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Delete
+
+  ArtifactS3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ArtifactS3Bucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Action: ['s3:GetObject']
+          Effect: Allow
+          Principal:
+            Service: 'serverlessrepo.amazonaws.com'
+          Resource:
+          - !Sub ${ArtifactS3Bucket.Arn}/*
+          Condition: 
+            StringEquals: 
+              aws:SourceAccount: !Ref AWS::AccountId
+        - Sid: DenyUnEncryptedObjectUploads
+          Effect: Deny
+          Principal: "*"
+          Action: s3:PutObject
+          Resource: !Sub ${ArtifactS3Bucket.Arn}/*
+          Condition: 
+            StringNotEquals: 
+              s3:x-amz-server-side-encryption: aws:kms
+        - Sid: DenyInsecureConnections
+          Effect: Deny
+          Principal: "*"
+          Action: "s3:*"
+          Resource: !Sub ${ArtifactS3Bucket.Arn}/*
+          Condition: 
+            Bool: 
+              aws:SecureTransport: false
+
+  AppS3Bucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Delete
+
+  AppS3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref AppS3Bucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Action: ['s3:GetObject']
+          Effect: Allow
+          Principal:
+            Service: 'serverlessrepo.amazonaws.com'
+          Resource: 
+          - !Sub ${AppS3Bucket.Arn}/*
+          Condition:
+            StringEquals:  
+              aws:SourceAccount: !Ref AWS::AccountId
+
+  CodePipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      Name: !Ref ApplicationName
+      RoleArn: !Sub ${CodePipelineRole.Arn}
+      ArtifactStore: 
+        Type: S3
+        Location: !Ref ArtifactS3Bucket
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: GitHub
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Version: 1
+                Provider: CodeStarSourceConnection
+              OutputArtifacts:
+                - Name: 1-Source
+              Configuration:
+                ConnectionArn: !Ref CodeStarConnection
+                FullRepositoryId: awslabs/ssosync
+                BranchName: CodePipeline
+                DetectChanges: true
+        - Name: Build
+          Actions:
+            - Name: BuildGo
+              InputArtifacts:
+                - Name: 1-Source
+              ActionTypeId: 
+                Category: Build
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              OutputArtifacts:
+                - Name: 2-Build
+              Configuration: 
+                ProjectName: !Ref CodeBuildGo
+        - Name: Package
+          Actions:
+            - Name: Package
+              InputArtifacts:
+                - Name: 2-Build
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              OutputArtifacts:
+                - Name: 3-Package
+              Configuration:
+                ProjectName: !Ref CodeBuildPackage
+        - Name: Staging
+          Actions:
+            - Name: Staging
+              InputArtifacts:
+                - Name: 3-Package
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              Configuration:
+                ProjectName: !Ref CodeBuildStaging
+        - Name: Approvals
+          Actions:
+            - Name: PassedStaging
+              ActionTypeId: 
+                Category: Approval
+                Owner: AWS
+                Version: 1
+                Provider: Manual  
+        - Name: Release
+          Actions:
+            - Name: Release
+              InputArtifacts:
+                - Name: 3-Package
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              Configuration:
+                ProjectName: !Ref CodeBuildRelease
+
+  CodeBuildGo:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub "${ApplicationName}-Build-go"
+      Description: !Sub Build project for ${ApplicationName}
+      ServiceRole: !Ref CodeBuildGoRole
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: "cicd/build/buildgo.yml"
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:5.0
+        Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: ARTIFACT_S3_BUCKET
+            Value: !Sub ${ArtifactS3Bucket}
+          - Name: GO_VERSION
+            Value: "1.18.1"
+          - Name: OUTPUT
+            Value: main
+          - Name: APP_NAME
+            Value: ssosync
+      Artifacts:
+        Name: !Ref ApplicationName
+        Type: CODEPIPELINE
+      LogsConfig:
+        CloudWatchLogs:
+          GroupName: !Ref LogGroup
+          StreamName: !Ref CodeBuildGoLogs
+          Status: ENABLED
+
+  CodeBuildGoLogs:
+    Type: AWS::Logs::LogStream
+    Properties: 
+      LogGroupName: !Ref LogGroup
+      LogStreamName: !Sub "${ApplicationName}-Build-go"
+
+  CodeBuildPackage:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub "${ApplicationName}-Package"
+      Description: !Sub SAM package for ${ApplicationName}
+      ServiceRole: !Ref CodeBuildPackageRole
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: "cicd/package.yml"
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:5.0
+        Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: ARTIFACT_S3_BUCKET
+            Value: !Sub ${ArtifactS3Bucket}
+          - Name: S3Bucket
+            Value: !Ref AppS3Bucket
+          - Name: Template
+            Value: template.yaml
+      Artifacts:
+        Name: !Ref ApplicationName
+        Type: CODEPIPELINE
+      LogsConfig:
+        CloudWatchLogs:
+          GroupName: !Ref LogGroup
+          StreamName: !Ref CodeBuildPackageLogs
+          Status: ENABLED
+
+  CodeBuildPackageLogs:
+    Type: AWS::Logs::LogStream
+    Properties:
+      LogGroupName: !Ref LogGroup
+      LogStreamName: !Sub "${ApplicationName}-Package"
+
+  CodeBuildStaging:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub "${ApplicationName}-Staging"
+      Description: !Sub Publish ${ApplicationName} to Serverless Application Repository in Staging
+      ServiceRole: !Ref CodeBuildPublishRole
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: "cicd/publish.yml"
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:5.0
+        Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: ARTIFACT_S3_BUCKET
+            Value: !Sub ${ArtifactS3Bucket}
+          - Name: SDLC
+            Value: 'staging'
+      Artifacts:
+        Name: !Ref ApplicationName
+        Type: CODEPIPELINE
+      LogsConfig:
+        CloudWatchLogs:
+          GroupName: !Ref LogGroup
+          StreamName: !Ref CodeBuildStagingLogs
+          Status: ENABLED
+
+  CodeBuildStagingLogs:
+    Type: AWS::Logs::LogStream
+    Properties:
+      LogGroupName: !Ref LogGroup
+      LogStreamName: !Sub "${ApplicationName}-Staging"
+
+
+  CodeBuildRelease:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub "${ApplicationName}-Release"
+      Description: !Sub Publish ${ApplicationName} to Serverless Application Repository in Production
+      ServiceRole: !Ref CodeBuildPublishRole
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: "cicd/publish.yml"
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:5.0
+        Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: ARTIFACT_S3_BUCKET
+            Value: !Sub ${ArtifactS3Bucket}
+          - Name: SDLC
+            Value: release
+      Artifacts:
+        Name: !Ref ApplicationName
+        Type: CODEPIPELINE
+      LogsConfig:
+        CloudWatchLogs:
+          GroupName: !Ref LogGroup
+          StreamName: !Ref CodeBuildReleaseLogs
+          Status: ENABLED
+
+  CodeBuildReleaseLogs:
+    Type: AWS::Logs::LogStream
+    Properties:
+      LogGroupName: !Ref LogGroup
+      LogStreamName: !Sub "${ApplicationName}-Release"
+
+
+  CodePipelineRole:
+    Type: AWS::IAM::Role
+    Properties: 
+      RoleName: !Sub ${ApplicationName}-CodePipeline-${AWS::Region}
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Action: ['sts:AssumeRole']
+          Effect: Allow
+          Principal: 
+            Service: [codepipeline.amazonaws.com] 
+      Path: /
+      Policies: 
+        - PolicyName: !Sub ${ApplicationName}-CodePipeline-${AWS::Region}
+          PolicyDocument:                     
+            Version: '2012-10-17'
+            Statement: 
+            - Action:
+              - 'iam:PassRole'
+              Effect: Allow
+              Resource: '*'
+            - Action:
+              - 'codestar-connections:UseConnection'
+              - 'codestar-connections:GetConnection'
+              - 'codestar-connections:ListConnections'
+              - 'codestar-connections:ListTagsForResource'
+              Resource: !Ref CodeStarConnection
+              Effect: Allow
+            - Action:
+              - 'codebuild:BatchGetBuilds'
+              - 'codebuild:StartBuild'
+              Resource:
+              - !Sub ${CodeBuildGo.Arn}
+              - !Sub ${CodeBuildPackage.Arn}
+              - !Sub ${CodeBuildStaging.Arn}
+              - !Sub ${CodeBuildRelease.Arn}
+              Effect: Allow
+            - Action:
+              - 's3:GetBucketVersioning'
+              - 's3:ListBucket'
+              Resource:
+              - !Sub ${ArtifactS3Bucket.Arn}
+              - !Sub ${AppS3Bucket.Arn}
+              Effect: Allow
+            - Action:
+              -  's3:PutObject'
+              -  's3:GetObject'
+              -  's3:GetObjectVersion'
+              Resource:
+              - !Sub ${ArtifactS3Bucket.Arn}/*
+              - !Sub ${AppS3Bucket.Arn}/*
+              Effect: Allow
+
+  CodeBuildGoRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${ApplicationName}-CodeBuild-Go-${AWS::Region}
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Action: ['sts:AssumeRole']
+          Effect: Allow
+          Principal:
+            Service: [codebuild.amazonaws.com]
+      Path: /
+      Policies:
+        - PolicyName: !Sub ${ApplicationName}-CodeBuild-Go-${AWS::Region}
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+            - Action:
+              - 'logs:CreateLogGroup'
+              - 'logs:CreateLogStream'
+              - 'logs:PutLogEvents'
+              Effect: Allow
+              Resource: '*'
+            - Action: 's3:*'
+              Effect: Allow
+              Resource:
+              - !Sub ${ArtifactS3Bucket.Arn}/*
+
+  CodeBuildPackageRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${ApplicationName}-CodeBuild-Package-${AWS::Region}
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Action: ['sts:AssumeRole']
+          Effect: Allow
+          Principal:
+            Service: [codebuild.amazonaws.com]
+      Path: /
+      Policies:
+        - PolicyName: !Sub ${ApplicationName}-CodeBuild-Package-${AWS::Region}
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+            - Action:
+              - 'logs:CreateLogGroup'
+              - 'logs:CreateLogStream'
+              - 'logs:PutLogEvents'
+              Effect: Allow
+              Resource: '*'
+            - Action: 's3:*'
+              Effect: Allow
+              Resource:
+              - !Sub ${ArtifactS3Bucket.Arn}/*
+              - !Sub ${AppS3Bucket.Arn}/*
+
+  CodeBuildPublishRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${ApplicationName}-CodeBuild-Publish-${AWS::Region}
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Action: ['sts:AssumeRole']
+          Effect: Allow
+          Principal:
+            Service: [codebuild.amazonaws.com]
+      Path: /
+      Policies:
+        - PolicyName: !Sub ${ApplicationName}-CodeBuild-Publish-${AWS::Region}
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+            - Action:
+              - 'logs:CreateLogGroup'
+              - 'logs:CreateLogStream'
+              - 'logs:PutLogEvents'
+              Effect: Allow
+              Resource: '*'  
+            - Action: 's3:*'
+              Effect: Allow
+              Resource:
+              - !Sub ${ArtifactS3Bucket.Arn}/*
+              - !Sub ${AppS3Bucket.Arn}/*
+            - Action: 'serverlessrepo:*'
+              Effect: Allow
+              Resource: 
+              - !Sub arn:aws:serverlessrepo:${AWS::Region}:${AWS::AccountId}:applications/*
+
+
+Outputs:
+
+  PipelineURL:
+    Description: The URL for the created pipeline
+    Value: !Sub https://${AWS::Region}.console.aws.amazon.com/codepipeline/home?region=${AWS::Region}#/view/${ApplicationName}      
+
+  ArtifactS3BucketARN:
+    Description: "S3 bucket ARN Codepipeline is using"
+    Value: !GetAtt ArtifactS3Bucket.Arn
+    Export:
+      Name: ArtifactS3BucketARN
+
+  AppS3BucketARN:
+    Description: "S3 bucket ARN where Codepipeline publishs the app"
+    Value: !GetAtt AppS3Bucket.Arn
+    Export:
+      Name: AppS3BucketARN
+
