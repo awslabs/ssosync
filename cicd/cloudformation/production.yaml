@@ -135,7 +135,7 @@ Resources:
                 Version: 1
                 Provider: CodeStarSourceConnection
               OutputArtifacts:
-                - Name: 1-Source
+                - Name: Source
               Configuration:
                 ConnectionArn: !Ref CodeStarConnection
                 FullRepositoryId: awslabs/ssosync
@@ -145,35 +145,36 @@ Resources:
           Actions:
             - Name: BuildGo
               InputArtifacts:
-                - Name: 1-Source
+                - Name: Source
               ActionTypeId: 
                 Category: Build
                 Owner: AWS
                 Version: 1
                 Provider: CodeBuild
               OutputArtifacts:
-                - Name: 2-Build
+                - Name: Built
               Configuration: 
                 ProjectName: !Ref CodeBuildGo
         - Name: Package
           Actions:
             - Name: Package
-              InputArtifacts:
-                - Name: 2-Build
               ActionTypeId:
                 Category: Build
                 Owner: AWS
                 Version: 1
                 Provider: CodeBuild
-              OutputArtifacts:
-                - Name: 3-Package
+              RunOrder: 1
               Configuration:
                 ProjectName: !Ref CodeBuildPackage
+                PrimarySource: Source
+              OutputArtifacts:
+                - Name: Packaged
+              InputArtifacts:
+                - Name: Source
+                - Name: Built
         - Name: Staging
           Actions:
             - Name: Staging
-              InputArtifacts:
-                - Name: 3-Package
               ActionTypeId:
                 Category: Build
                 Owner: AWS
@@ -181,6 +182,9 @@ Resources:
                 Provider: CodeBuild
               Configuration:
                 ProjectName: !Ref CodeBuildStaging
+                PrimarySource: Source
+              InputArtifacts:
+                - Name: Packaged
         - Name: Approvals
           Actions:
             - Name: PassedStaging
@@ -192,8 +196,6 @@ Resources:
         - Name: Release
           Actions:
             - Name: Release
-              InputArtifacts:
-                - Name: 3-Package
               ActionTypeId:
                 Category: Build
                 Owner: AWS
@@ -201,6 +203,9 @@ Resources:
                 Provider: CodeBuild
               Configuration:
                 ProjectName: !Ref CodeBuildRelease
+                PrimarySource: Source
+              InputArtifacts:
+                - Name: Packaged
 
   CodeBuildGo:
     Type: AWS::CodeBuild::Project

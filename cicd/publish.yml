@@ -4,7 +4,8 @@ phases:
   install:
     commands:
       # Print all environment variables (handy for AWS CodeBuild logs)
-      - env
+      #- env
+      - ls -la
 
       # Update sam to latest version
       - wget -q https://github.com/aws/aws-sam-cli/releases/latest/download/aws-sam-cli-linux-x86_64.zip
@@ -16,13 +17,14 @@ phases:
     commands:
       # Replace App Name in template
       - echo ${SDLC}
-      - | 
-        if [ ${SDLC} == "staging" ] ; then
-          sed -i 's/"ssosync"/SSOSync-Staging/g' packaged.yaml
-        elif [ ${SDLC} == "release" ] ; then
-          sed -i 's/"ssosync"/SSOSync/g' packaged.yaml
+      - |
+        if expr "${SDLC}" : "staging" >/dev/null; then
+          echo "SSOSync-Staging"
+          sed -i 's/ ssosync/ SSOSync-Staging/g' packaged.yaml
+        elif expr "${SDLC}" : "release" >/dev/null; then
+          echo "SSOSync"
+          sed -i 's/ ssosync/ SSOSync/g' packaged.yaml
         fi
-      
 
   build:
     commands:

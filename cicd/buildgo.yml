@@ -60,11 +60,5 @@ phases:
 artifacts:
   files:
     - ${APP_NAME}
-    - LICENSE
-    - NOTICE
-    - README.md
-    - SAR.md
-    - cicd/**/*
     - dist/**/*
     - cmd/**/*
-    - template.yaml
