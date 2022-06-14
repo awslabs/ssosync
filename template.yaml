@@ -115,7 +115,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       Runtime: go1.x
-      Handler: dist/ssosync_linux_amd64_v1/ssosync
+      Handler: dist/ssosync_linux_amd64/ssosync
       Timeout: 300
       Environment:
         Variables:
