@@ -1,64 +1,27 @@
 version: 0.2
-            
+
 phases:
-  install: 
+  pre_build:
     commands:
-      # Install go.lang
-      - wget -q https://storage.googleapis.com/golang/go${GO_VERSION}.linux-amd64.tar.gz
-      - tar -C / -xzf go${GO_VERSION}.linux-amd64.tar.gz
-      - export PATH="/go/bin:$PATH" && export GOPATH="/go" && export PATH="$GOPATH/bin:$PATH"
-      - rm go${GO_VERSION}.linux-amd64.tar.gz
+      - echo Logging in to Amazon ECR...
+      - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
 
-      # Install golint
-      - go install golang.org/x/lint/golint@latest
-
-      # Install staticcheck
-      - go install honnef.co/go/tools/cmd/staticcheck@latest
-
-      # Install Testify to use common assertions and mocks in tests
-      - go get -u github.com/stretchr/testify
-
-      # Install goreleaser
-      - go install github.com/goreleaser/goreleaser@latest
-
-      # Print all environment variables (handy for AWS CodeBuild logs)
-      - env
-
-  pre_build: 
-    commands:
-      # Fetch all dependencies
-      - go env -w GOPROXY=direct
-      - go get ./...
-
-      # Run staticcheck
-      - staticcheck ./...
-
-      # Ensure code passes all lint tests
-      #- golint -set_exit_status ./...
-
-      # Check the Go code for common problems with 'go vet'
-      - go vet ./...
-
-      # Run all tests included with our application
-      - go test ./...
-
+      # Check to see whether the image already exists      
+      - IMAGE_META="$( aws ecr describe-images --repository-name=${IMAGE_REPO_NAME} --image-ids=imageTag=${GO_VERSION} ||: )"
+      - |
+        if expr ! ${#myvar} : 0; then
+        echo "Docker Image already exists. Skipping Docker build..."
+        exit 0
+        fi
   build:
     commands:
-      # Make clean
-      - rm -f ${OUTPUT} ${PACKAGED_TEMPLATE}
-
-      # Make go-build
-      - go build -o ${APP_NAME} main.go
- 
-      # Make main 
-      - goreleaser build --snapshot --rm-dist
-
+      - echo Build started on `date`
+      - echo Building the Docker image...          
+      - docker build --build-arg GO_VERSION=${GO_VERSION} -t ${IMAGE_REPO_NAME}:${GO_VERSION} ./cicd/
+      - docker tag ${IMAGE_REPO_NAME}:${GO_VERSION} ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${IMAGE_REPO_NAME}:${GO_VERSION}      
   post_build:
     commands:
-      - ls -la 
+      - echo Build completed on `date`
+      - echo Pushing the Docker image...
+      - docker push ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${IMAGE_REPO_NAME}:${IMAGE_TAG}
 
-artifacts:
-  files:
-    - ${APP_NAME}
-    - dist/**/*
-    - cmd/**/*

@@ -141,9 +141,21 @@ Resources:
                 FullRepositoryId: awslabs/ssosync
                 BranchName: CodePipeline
                 DetectChanges: true
-        - Name: Build
+        - Name: BuildGo
           Actions:
             - Name: BuildGo
+              InputArtifacts:
+                - Name: Source
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              Configuration:
+                ProjectName: !Ref CodeBuildGo
+        - Name: BuildApp
+          Actions:
+            - Name: BuildApp
               InputArtifacts:
                 - Name: Source
               ActionTypeId: 
@@ -154,7 +166,7 @@ Resources:
               OutputArtifacts:
                 - Name: Built
               Configuration: 
-                ProjectName: !Ref CodeBuildGo
+                ProjectName: !Ref CodeBuildApp
         - Name: Package
           Actions:
             - Name: Package
@@ -210,12 +222,47 @@ Resources:
   CodeBuildGo:
     Type: AWS::CodeBuild::Project
     Properties:
-      Name: !Sub "${ApplicationName}-Build-go"
-      Description: !Sub Build project for ${ApplicationName}
+      Name: !Sub "${ApplicationName}-Build-container"
+      Description: !Sub Build project for a go.lang container
       ServiceRole: !Ref CodeBuildGoRole
       Source:
         Type: CODEPIPELINE
         BuildSpec: "cicd/buildgo.yml"
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:5.0
+        Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: ARTIFACT_S3_BUCKET
+            Value: !Sub ${ArtifactBucket}
+          - Name: IMAGE_REPO_NAME
+            Value: golang
+          - Name: GO_VERSION
+            Value: "1.18.1"
+      Artifacts:
+        Name: !Ref ApplicationName
+        Type: CODEPIPELINE
+      LogsConfig:
+        CloudWatchLogs:
+          GroupName: !Ref CodePipelineLogGroup
+          StreamName: !Ref CodeBuildGoLogs
+          Status: ENABLED
+
+  CodeBuildGoLogs:
+    Type: AWS::Logs::LogStream
+    Properties:
+      LogGroupName: !Ref CodePipelineLogGroup
+      LogStreamName: !Sub "${ApplicationName}-Build-go"
+
+  CodeBuildApp:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub "${ApplicationName}-Build-App"
+      Description: !Sub Build project for ${ApplicationName}
+      ServiceRole: !Ref CodeBuildAppRole
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: "cicd/buildapp.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
         Image: aws/codebuild/standard:5.0
@@ -235,14 +282,14 @@ Resources:
       LogsConfig:
         CloudWatchLogs:
           GroupName: !Ref CodePipelineLogGroup
-          StreamName: !Ref CodeBuildGoLogs
+          StreamName: !Ref CodeBuildAppLogs
           Status: ENABLED
 
-  CodeBuildGoLogs:
+  CodeBuildAppLogs:
     Type: AWS::Logs::LogStream
     Properties: 
       LogGroupName: !Ref CodePipelineLogGroup
-      LogStreamName: !Sub "${ApplicationName}-Build-go"
+      LogStreamName: !Sub "${ApplicationName}-Build-App"
 
   CodeBuildPackage:
     Type: AWS::CodeBuild::Project
@@ -410,6 +457,44 @@ Resources:
       Path: /
       Policies:
         - PolicyName: !Sub ${ApplicationName}-CodeBuild-Go-${AWS::Region}
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+            - Action:
+              - 'logs:CreateLogGroup'
+              - 'logs:CreateLogStream'
+              - 'logs:PutLogEvents'
+              Effect: Allow
+              Resource: '*'
+            - Action: 's3:*'
+              Effect: Allow
+              Resource:
+              - !Sub ${ArtifactBucket.Arn}/*
+            - Action: 
+              - 'ecr:BatchCheckLayerAvailability'
+              - 'ecr:CompleteLayerUpload'
+              - 'ecr:GetAuthorizationToken'
+              - 'ecr:InitiateLayerUpload'
+              - 'ecr:PutImage'
+              - 'ecr:UploadLayerPart'
+              Effect: Allow
+              Resource:
+              - '*'
+
+  CodeBuildAppRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${ApplicationName}-CodeBuild-App-${AWS::Region}
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Action: ['sts:AssumeRole']
+          Effect: Allow
+          Principal:
+            Service: [codebuild.amazonaws.com]
+      Path: /
+      Policies:
+        - PolicyName: !Sub ${ApplicationName}-CodeBuild-App-${AWS::Region}
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
