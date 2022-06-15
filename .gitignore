@@ -30,3 +30,5 @@ packaged.yaml
 
 # Local binary
 ssosync
+.DS_Store
+*.swp
