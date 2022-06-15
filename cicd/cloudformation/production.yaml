@@ -151,12 +151,12 @@ Resources:
             Principal:
               AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
 
-  CodePipeline:
+  CodePipelineBuildImages:
     Type: AWS::CodePipeline::Pipeline
     Properties:
-      Name: !Ref ApplicationName
+      Name: BuildImages
       RoleArn: !Sub ${CodePipelineRole.Arn}
-      ArtifactStore: 
+      ArtifactStore:
         Type: S3
         Location: !Ref ArtifactBucket
       Stages:
@@ -200,6 +200,32 @@ Resources:
               RunOrder: '1'
               Configuration:
                 ProjectName: !Ref CodeBuildSAM
+
+  CodePipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      Name: !Ref ApplicationName
+      RoleArn: !Sub ${CodePipelineRole.Arn}
+      ArtifactStore: 
+        Type: S3
+        Location: !Ref ArtifactBucket
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: GitHub
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Version: 1
+                Provider: CodeStarSourceConnection
+              OutputArtifacts:
+                - Name: Source
+              RunOrder: '1'
+              Configuration:
+                ConnectionArn: !Ref CodeStarConnection
+                FullRepositoryId: awslabs/ssosync
+                BranchName: CodePipeline
+                DetectChanges: true
         - Name: Build
           Actions:
             - Name: BuildApp
@@ -231,6 +257,7 @@ Resources:
                 - Name: Packaged
               InputArtifacts:
                 - Name: Built
+                - Name: Source
             - Name: PublishStaging
               ActionTypeId:
                 Category: Build
@@ -241,7 +268,10 @@ Resources:
               Configuration:
                 ProjectName: !Ref CodeBuildStaging
                 PrimarySource: Source
+              OutputArtifacts:
+                - Name: Staging
               InputArtifacts:
+                - Name: Source
                 - Name: Packaged
         - Name: Approvals
           Actions:
@@ -262,13 +292,15 @@ Resources:
               Configuration:
                 ProjectName: !Ref CodeBuildRelease
                 PrimarySource: Source
+              OutputArtifacts:
+                - Name: Release
               InputArtifacts:
                 - Name: Packaged
 
   CodeBuildGo:
     Type: AWS::CodeBuild::Project
     Properties:
-      Name: !Sub "${ApplicationName}-Build-Go"
+      Name: !Sub "BuildImages-Build-Go"
       Description: !Sub Build project for a go.lang container
       ServiceRole: !Ref CodeBuildImagesRole
       Source:
@@ -303,12 +335,12 @@ Resources:
     Type: AWS::Logs::LogStream
     Properties:
       LogGroupName: !Ref CodePipelineLogGroup
-      LogStreamName: !Sub "${ApplicationName}-Build-go"
+      LogStreamName: !Sub "BuildImages-Build-go"
 
   CodeBuildSAM:
     Type: AWS::CodeBuild::Project
     Properties:
-      Name: !Sub "${ApplicationName}-Build-SAM"
+      Name: !Sub "BuildImages-Build-SAM"
       Description: !Sub Build project for a SAM container
       ServiceRole: !Ref CodeBuildImagesRole
       Source:
@@ -342,7 +374,7 @@ Resources:
     Type: AWS::Logs::LogStream
     Properties:
       LogGroupName: !Ref CodePipelineLogGroup
-      LogStreamName: !Sub "${ApplicationName}-Build-SAM"
+      LogStreamName: !Sub "BuildImages-Build-SAM"
 
   CodeBuildApp:
     Type: AWS::CodeBuild::Project

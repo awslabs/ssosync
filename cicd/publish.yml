@@ -4,7 +4,7 @@ phases:
   install:
     commands:
       # Print all environment variables (handy for AWS CodeBuild logs)
-      #- env
+      - env
       - ls -la
 
       # Update sam to latest version
@@ -15,6 +15,12 @@ phases:
 
   pre_build:
     commands:
+      # Copy in the package file
+      - cp ${CODEBUILD_SRC_DIR_Packaged}/packaged.yaml ./
+
+      # Check we have the required file
+      - ls packaged.yaml
+
       # Replace App Name in template
       - echo ${SDLC}
       - |
