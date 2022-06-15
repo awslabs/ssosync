@@ -117,6 +117,40 @@ Resources:
             StringEquals:  
               aws:SourceAccount: !Ref AWS::AccountId
 
+  BuildImageGoRepo:
+    Type: AWS::ECR::Repository
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Delete
+    Properties:
+      RepositoryName: 'codebuild/golang'
+      RepositoryPolicyText:
+        Version: '2012-10-17'
+        Statement:
+          - Action:
+              - 'ecr:BatchCheckLayerAvailability'
+              - 'ecr:BatchGetImage'
+              - 'ecr:GetDownloadUrlForLayer'
+            Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+
+  BuildImageSAMRepo:
+    Type: AWS::ECR::Repository
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Delete
+    Properties:
+      RepositoryName: 'codebuild/sam'
+      RepositoryPolicyText:
+        Version: '2012-10-17'
+        Statement:
+          - Action:
+              - ecr:BatchCheckLayerAvailability
+              - ecr:BatchGetImage
+              - ecr:GetDownloadUrlForLayer
+            Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+
   CodePipeline:
     Type: AWS::CodePipeline::Pipeline
     Properties:
@@ -136,14 +170,15 @@ Resources:
                 Provider: CodeStarSourceConnection
               OutputArtifacts:
                 - Name: Source
+              RunOrder: '1'
               Configuration:
                 ConnectionArn: !Ref CodeStarConnection
                 FullRepositoryId: awslabs/ssosync
                 BranchName: CodePipeline
                 DetectChanges: true
-        - Name: BuildGo
+        - Name: BuildImages
           Actions:
-            - Name: BuildGo
+            - Name: golang
               InputArtifacts:
                 - Name: Source
               ActionTypeId:
@@ -151,9 +186,21 @@ Resources:
                 Owner: AWS
                 Version: 1
                 Provider: CodeBuild
+              RunOrder: '1'
               Configuration:
                 ProjectName: !Ref CodeBuildGo
-        - Name: BuildApp
+            - Name: sam
+              InputArtifacts:
+                - Name: Source
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              RunOrder: '1'
+              Configuration:
+                ProjectName: !Ref CodeBuildSAM
+        - Name: Build
           Actions:
             - Name: BuildApp
               InputArtifacts:
@@ -165,11 +212,12 @@ Resources:
                 Provider: CodeBuild
               OutputArtifacts:
                 - Name: Built
+              RunOrder: '2'
               Configuration: 
                 ProjectName: !Ref CodeBuildApp
-        - Name: Package
+        - Name: Staging
           Actions:
-            - Name: Package
+            - Name: PackageApp
               ActionTypeId:
                 Category: Build
                 Owner: AWS
@@ -182,16 +230,14 @@ Resources:
               OutputArtifacts:
                 - Name: Packaged
               InputArtifacts:
-                - Name: Source
                 - Name: Built
-        - Name: Staging
-          Actions:
-            - Name: Staging
+            - Name: PublishStaging
               ActionTypeId:
                 Category: Build
                 Owner: AWS
                 Version: 1
                 Provider: CodeBuild
+              RunOrder: '2'
               Configuration:
                 ProjectName: !Ref CodeBuildStaging
                 PrimarySource: Source
@@ -205,7 +251,7 @@ Resources:
                 Owner: AWS
                 Version: 1
                 Provider: Manual  
-        - Name: Release
+        - Name: Production
           Actions:
             - Name: Release
               ActionTypeId:
@@ -222,23 +268,27 @@ Resources:
   CodeBuildGo:
     Type: AWS::CodeBuild::Project
     Properties:
-      Name: !Sub "${ApplicationName}-Build-container"
+      Name: !Sub "${ApplicationName}-Build-Go"
       Description: !Sub Build project for a go.lang container
-      ServiceRole: !Ref CodeBuildGoRole
+      ServiceRole: !Ref CodeBuildImagesRole
       Source:
         Type: CODEPIPELINE
-        BuildSpec: "cicd/buildgo.yml"
+        BuildSpec: "cicd/buildimage.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
-        Image: aws/codebuild/standard:5.0
+        Image: docker:dind
         Type: LINUX_CONTAINER
         EnvironmentVariables:
-          - Name: ARTIFACT_S3_BUCKET
-            Value: !Sub ${ArtifactBucket}
-          - Name: IMAGE_REPO_NAME
+          - Name: ImageRepo
             Value: golang
-          - Name: GO_VERSION
+          - Name: ImageVersion
             Value: "1.18.1"
+          - Name: AccountId
+            Value: !Ref AWS::AccountId
+          - Name: Region
+            Value: !Ref AWS::Region
+          - Name: DockerPath
+            Value: 'cicd/golang/'
       Artifacts:
         Name: !Ref ApplicationName
         Type: CODEPIPELINE
@@ -253,6 +303,45 @@ Resources:
     Properties:
       LogGroupName: !Ref CodePipelineLogGroup
       LogStreamName: !Sub "${ApplicationName}-Build-go"
+
+  CodeBuildSAM:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub "${ApplicationName}-Build-SAM"
+      Description: !Sub Build project for a SAM container
+      ServiceRole: !Ref CodeBuildImagesRole
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: "cicd/buildimage.yml"
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: docker:dind
+        Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: ImageRepo
+            Value: sam
+          - Name: ImageVersion
+            Value: "1.18.1"
+          - Name: AccountId
+            Value: !Ref AWS::AccountId
+          - Name: Region
+            Value: !Ref AWS::Region
+          - Name: DockerPath
+            Value: 'cicd/sam/'
+      Artifacts:
+        Name: !Ref ApplicationName
+        Type: CODEPIPELINE
+      LogsConfig:
+        CloudWatchLogs:
+          GroupName: !Ref CodePipelineLogGroup
+          StreamName: !Ref CodeBuildSAMLogs
+          Status: ENABLED
+
+  CodeBuildSAMLogs:
+    Type: AWS::Logs::LogStream
+    Properties:
+      LogGroupName: !Ref CodePipelineLogGroup
+      LogStreamName: !Sub "${ApplicationName}-Build-SAM"
 
   CodeBuildApp:
     Type: AWS::CodeBuild::Project
@@ -344,6 +433,8 @@ Resources:
             Value: !Sub ${ArtifactBucket}
           - Name: SDLC
             Value: 'staging'
+          - Name: ShareWith
+            Value: !Ref StagingAccount
       Artifacts:
         Name: !Ref ApplicationName
         Type: CODEPIPELINE
@@ -427,6 +518,8 @@ Resources:
               - 'codebuild:StartBuild'
               Resource:
               - !Sub ${CodeBuildGo.Arn}
+              - !Sub ${CodeBuildSAM.Arn}
+              - !Sub ${CodeBuildApp.Arn}
               - !Sub ${CodeBuildPackage.Arn}
               - !Sub ${CodeBuildStaging.Arn}
               - !Sub ${CodeBuildRelease.Arn}
@@ -443,10 +536,10 @@ Resources:
               - !Sub ${ArtifactBucket.Arn}/*
               Effect: Allow
 
-  CodeBuildGoRole:
+  CodeBuildImagesRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub ${ApplicationName}-CodeBuild-Go-${AWS::Region}
+      RoleName: !Sub ${ApplicationName}-CodeBuild-Images-${AWS::Region}
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -456,7 +549,7 @@ Resources:
             Service: [codebuild.amazonaws.com]
       Path: /
       Policies:
-        - PolicyName: !Sub ${ApplicationName}-CodeBuild-Go-${AWS::Region}
+        - PolicyName: !Sub ${ApplicationName}-CodeBuild-Images-${AWS::Region}
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
@@ -479,7 +572,8 @@ Resources:
               - 'ecr:UploadLayerPart'
               Effect: Allow
               Resource:
-              - '*'
+              - !Sub ${BuildImageGoRepo.Arn}
+              - !Sub ${BuildImageSAMRepo.Arn}
 
   CodeBuildAppRole:
     Type: AWS::IAM::Role

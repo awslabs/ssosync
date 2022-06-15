@@ -1,0 +1,31 @@
+version: 0.2
+
+phases:
+  pre_build:
+    commands:
+      - echo Logging in to Amazon ECR...
+      - aws ecr get-login-password --region ${Region} | docker login --username AWS --password-stdin ${AccountId}.dkr.ecr.${Region}.amazonaws.com
+      # Switch to the folder containing the Dockerfile
+      - cd ${DockerPath}
+
+      # Check to see whether the image already exists      
+      - IMAGE_META="$( aws ecr describe-images --repository-name=${ImageRepo} --image-ids=imageTag=${ImageVersion} ||: )"
+      - |
+        if expr ! ${#myvar} : 0; then
+        echo "Docker Image already exists. Skipping Docker build..."
+        exit 0
+        fi
+  build:
+    commands:
+      - cd ${DockerPath}
+      - echo Build started on `date`
+      - echo Building the Docker image...          
+      - docker build --build-arg ImageVersion=${ImageVersion} -t ${ImageRepo}:${ImageVersion} 
+      - docker tag ${ImageRepo}:${ImageVersion} ${AccountId}.dkr.ecr.${Region}.amazonaws.com/${ImageRepo}:${ImageVersion}      
+
+  post_build:
+    commands:
+      - echo Build completed on `date`
+      - echo Pushing the Docker image...
+      - docker push ${AccountId}.dkr.ecr.${Region}.amazonaws.com/${ImageRepo}:${ImageVersion}
+
