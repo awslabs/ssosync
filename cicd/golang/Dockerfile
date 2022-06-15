@@ -1,4 +1,4 @@
-FROM aws/codebuild/standard:5.0 AS build
+FROM standard:5.0 AS build
 #Install go.lang
 RUN wget -q https://storage.googleapis.com/golang/go${ImageVersion}.linux-amd64.tar.gz \
  && tar -C / -xzf go${ImageVersion}.linux-amd64.tar.gz \

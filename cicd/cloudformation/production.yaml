@@ -276,8 +276,9 @@ Resources:
         BuildSpec: "cicd/buildimage.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
-        Image: docker:dind
+        Image: aws/codebuild/standard:5.0
         Type: LINUX_CONTAINER
+        PrivilegedMode: true
         EnvironmentVariables:
           - Name: ImageRepo
             Value: golang
@@ -312,11 +313,11 @@ Resources:
       ServiceRole: !Ref CodeBuildImagesRole
       Source:
         Type: CODEPIPELINE
-        BuildSpec: "cicd/buildimage.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
-        Image: docker:dind
+        Image: aws/codebuild/standard:5.0
         Type: LINUX_CONTAINER
+        PrivilegedMode: true
         EnvironmentVariables:
           - Name: ImageRepo
             Value: sam
@@ -564,12 +565,25 @@ Resources:
               Resource:
               - !Sub ${ArtifactBucket.Arn}/*
             - Action: 
-              - 'ecr:BatchCheckLayerAvailability'
-              - 'ecr:CompleteLayerUpload'
               - 'ecr:GetAuthorizationToken'
+              - 'ecr:DescribeRepositories'
+              - 'ecr:DescribeImages'
+              Effect: Allow
+              Resource: '*'
+            - Action:
+              - 'ecr:BatchCheckLayerAvailability'
+              - 'ecr:GetDownloadUrlForLayer'
+              - 'ecr:GetRepositoryPolicy'
+              - 'ecr:ListImages'
+              - 'ecr:BatchGetImage'
+              - 'ecr:GetLifecyclePolicy'
+              - 'ecr:GetLifecyclePolicyPreview'
+              - 'ecr:ListTagsForResource'
+              - 'ecr:DescribeImageScanFindings'
               - 'ecr:InitiateLayerUpload'
-              - 'ecr:PutImage'
               - 'ecr:UploadLayerPart'
+              - 'ecr:CompleteLayerUploadr'
+              - 'ecr:PutImage'
               Effect: Allow
               Resource:
               - !Sub ${BuildImageGoRepo.Arn}
