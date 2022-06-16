@@ -24,13 +24,13 @@ phases:
   build:
     commands:
       # Replace App Name in template
-      - sed -i 's/ ssosync/ SSOSync-Staging/g' packaged.yaml --semantic-version "1.0.0-staging"
+      - sed -i 's/ ssosync/ SSOSync-Staging/g' packaged.yaml 
 
       # Remove the previous build
       - aws serverlessrepo delete-application --application-id ${AppARN}
         
       # Package our application with AWS SAM
-      - sam publish --template packaged.yaml
+      - sam publish --template packaged.yaml --semantic-version "1.0.0-staging"
 
       # Share with the StagingAccount
       - aws serverlessrepo put-application-policy --application-id ${AppARN} --statements Principals=${ShareWith},Actions=Deploy
