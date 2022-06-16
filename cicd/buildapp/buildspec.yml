@@ -5,9 +5,11 @@ phases:
     commands:
       # Install go.lang
       - wget -q https://storage.googleapis.com/golang/go${GO_VERSION}.linux-amd64.tar.gz
+      - rm -rf /go
       - tar -C / -xzf go${GO_VERSION}.linux-amd64.tar.gz
       - export PATH="/go/bin:$PATH" && export GOPATH="/go" && export PATH="$GOPATH/bin:$PATH"
       - rm go${GO_VERSION}.linux-amd64.tar.gz
+      - go version
 
       # Install golint
       - go install golang.org/x/lint/golint@latest
@@ -45,20 +47,25 @@ phases:
   build:
     commands:
       # Make clean
-      - rm -f ${OUTPUT} ${PACKAGED_TEMPLATE}
+      - rm -f main packaged.yaml
 
       # Make go-build
       - go build -o ${APP_NAME} main.go
- 
-      # Make main 
-      - goreleaser build --snapshot --rm-dist
+
+      # Does it exist?
+      - ls ${APP_NAME}
+
+      # Does it run? 
+      - ./${APP_NAME} --version
 
   post_build:
     commands:
+      # Make main 
+      - goreleaser build --snapshot --rm-dist
+
       - ls -la 
 
 artifacts:
   files:
     - ${APP_NAME}
     - dist/**/*
-    - cmd/**/*

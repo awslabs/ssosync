@@ -13,16 +13,22 @@ phases:
       - rm -rf ./sam-installation  aws-sam-cli-linux-x86_64.zip
   
   pre_build:
+    commands:
+      - cp -r ${CODEBUILD_SRC_DIR_Built}/* ./
+      - ls -la
+
       # Check that the files need to package exist
       - ls README.md
       - ls SAR.md
-      - cp -r ${CODEBUILD_SRC_DIR_Built}/dist ./
       - ls dist/ssosync_linux_amd64_v1/ssosync
  
+      # Check that the executable works
+      - ./dist/ssosync_linux_amd64_v1/ssosync --version 
+
   build:
     commands:
       # Package our application with AWS SAM
-      - sam package --no-progressbar --template-file ${Template} --s3-bucket ${S3Bucket} --output-template-file packaged.yaml
+      - sam package --no-progressbar --template-file template.yaml --s3-bucket ${S3Bucket} --output-template-file packaged.yaml
 
   post_build:
     commands:

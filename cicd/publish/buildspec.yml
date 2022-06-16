@@ -21,19 +21,16 @@ phases:
       # Check we have the required file
       - ls packaged.yaml
 
-      # Replace App Name in template
-      - echo ${SDLC}
-      - |
-        if expr "${SDLC}" : "staging" >/dev/null; then
-          echo "SSOSync-Staging"
-          sed -i 's/ ssosync/ SSOSync-Staging/g' packaged.yaml
-        elif expr "${SDLC}" : "release" >/dev/null; then
-          echo "SSOSync"
-          sed -i 's/ ssosync/ SSOSync/g' packaged.yaml
-        fi
-
   build:
     commands:
+      # Replace App Name in template
+      - sed -i 's/ ssosync/ SSOSync-Staging/g' packaged.yaml --semantic-version "1.0.0-staging"
+
+      # Remove the previous build
+      - aws serverlessrepo delete-application --application-id ${AppARN}
+        
       # Package our application with AWS SAM
       - sam publish --template packaged.yaml
 
+      # Share with the StagingAccount
+      - aws serverlessrepo put-application-policy --application-id ${AppARN} --statements Principals=${ShareWith},Actions=Deploy

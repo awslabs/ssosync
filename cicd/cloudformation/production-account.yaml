@@ -47,6 +47,9 @@ Metadata:
       CodeStarConnection:
         default: "arn:aws:codestar-connections:<AWS::Region>:<AWS::AccountId>:connection/abcd1234-ab12-ab12--ab12-abcdef123456"
 
+Conditions:
+  AddCodeBuildResource: !Equals [ !Ref StagingAccount, true ]
+
 Resources:
 
   CodePipelineLogGroup:
@@ -238,18 +241,16 @@ Resources:
                 Provider: CodeBuild
               OutputArtifacts:
                 - Name: Built
-              RunOrder: '2'
+              RunOrder: '1'
               Configuration: 
                 ProjectName: !Ref CodeBuildApp
-        - Name: Staging
-          Actions:
             - Name: PackageApp
               ActionTypeId:
                 Category: Build
                 Owner: AWS
                 Version: 1
                 Provider: CodeBuild
-              RunOrder: 1
+              RunOrder: 2
               Configuration:
                 ProjectName: !Ref CodeBuildPackage
                 PrimarySource: Source
@@ -258,13 +259,15 @@ Resources:
               InputArtifacts:
                 - Name: Built
                 - Name: Source
-            - Name: PublishStaging
+        - Name: Staging
+          Actions:
+            - Name: ReleaseCandidate
               ActionTypeId:
                 Category: Build
                 Owner: AWS
                 Version: 1
                 Provider: CodeBuild
-              RunOrder: '2'
+              RunOrder: '1'
               Configuration:
                 ProjectName: !Ref CodeBuildStaging
                 PrimarySource: Source
@@ -273,6 +276,30 @@ Resources:
               InputArtifacts:
                 - Name: Source
                 - Name: Packaged
+            - Name: Deploy
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS 
+                Version: '1'
+                Provider: CloudFormation
+              RunOrder: '2'
+              Configuration:
+                ActionMode: CREATE_UPDATE
+                Capabilities: CAPABILITY_NAMED_IAM,CAPABILITY_AUTO_EXPAND
+                ChangeSetName: pipeline-changeset
+                ParameterOverrides: !Sub '{"ApplicationArn": "arn:aws:serverlessrepo:${AWS::Region}:${AWS::AccountId}:applications/${ApplicationName}-Staging"}'
+                RoleArn:
+                  Fn::If:
+                  - AddCodeBuildResource
+                  - !Sub arn:aws:iam::${StagingAccount}:role/ProductionAcctCodePipelineCloudFormationRole
+                  - !Ref AWS::NoValue
+                StackName: !Sub Deploy-${ApplicationName}
+                TemplatePath: 'Source::cicd/deploy/stack.yml'
+                OutputFileName: 'stack-outputs.json'
+              OutputArtifacts:
+                - Name: Deployed
+              InputArtifacts:
+                - Name: Source
         - Name: Approvals
           Actions:
             - Name: PassedStaging
@@ -305,7 +332,7 @@ Resources:
       ServiceRole: !Ref CodeBuildImagesRole
       Source:
         Type: CODEPIPELINE
-        BuildSpec: "cicd/buildimage.yml"
+        BuildSpec: "cicd/buildimages/buildspec.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
         Image: aws/codebuild/standard:5.0
@@ -315,13 +342,13 @@ Resources:
           - Name: ImageRepo
             Value: golang
           - Name: ImageVersion
-            Value: "1.18.1"
+            Value: "1.18.2"
           - Name: AccountId
             Value: !Ref AWS::AccountId
           - Name: Region
             Value: !Ref AWS::Region
           - Name: DockerPath
-            Value: 'cicd/golang/'
+            Value: 'cicd/buildimages/golang/'
       Artifacts:
         Name: !Ref ApplicationName
         Type: CODEPIPELINE
@@ -360,7 +387,7 @@ Resources:
           - Name: Region
             Value: !Ref AWS::Region
           - Name: DockerPath
-            Value: 'cicd/sam/'
+            Value: 'cicd/buildimages/sam/'
       Artifacts:
         Name: !Ref ApplicationName
         Type: CODEPIPELINE
@@ -384,7 +411,7 @@ Resources:
       ServiceRole: !Ref CodeBuildAppRole
       Source:
         Type: CODEPIPELINE
-        BuildSpec: "cicd/buildapp.yml"
+        BuildSpec: "cicd/buildapp/buildspec.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
         Image: aws/codebuild/standard:5.0
@@ -393,7 +420,7 @@ Resources:
           - Name: ARTIFACT_S3_BUCKET
             Value: !Sub ${ArtifactBucket}
           - Name: GO_VERSION
-            Value: "1.18.1"
+            Value: "1.18.2"
           - Name: OUTPUT
             Value: main
           - Name: APP_NAME
@@ -421,7 +448,7 @@ Resources:
       ServiceRole: !Ref CodeBuildPackageRole
       Source:
         Type: CODEPIPELINE
-        BuildSpec: "cicd/package.yml"
+        BuildSpec: "cicd/package/buildspec.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
         Image: aws/codebuild/standard:5.0
@@ -456,7 +483,7 @@ Resources:
       ServiceRole: !Ref CodeBuildPublishRole
       Source:
         Type: CODEPIPELINE
-        BuildSpec: "cicd/publish.yml"
+        BuildSpec: "cicd/publish/buildspec.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
         Image: aws/codebuild/standard:5.0
@@ -464,10 +491,10 @@ Resources:
         EnvironmentVariables:
           - Name: ARTIFACT_S3_BUCKET
             Value: !Sub ${ArtifactBucket}
-          - Name: SDLC
-            Value: 'staging'
           - Name: ShareWith
             Value: !Ref StagingAccount
+          - Name: AppARN
+            Value: !Sub "arn:aws:serverlessrepo:${AWS::Region}:${AWS::AccountId}:applications/${ApplicationName}-Staging"
       Artifacts:
         Name: !Ref ApplicationName
         Type: CODEPIPELINE
@@ -492,7 +519,7 @@ Resources:
       ServiceRole: !Ref CodeBuildPublishRole
       Source:
         Type: CODEPIPELINE
-        BuildSpec: "cicd/publish.yml"
+        BuildSpec: "cicd/release/buildspec.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
         Image: aws/codebuild/standard:5.0
@@ -500,8 +527,6 @@ Resources:
         EnvironmentVariables:
           - Name: ARTIFACT_S3_BUCKET
             Value: !Sub ${ArtifactBucket}
-          - Name: SDLC
-            Value: release
       Artifacts:
         Name: !Ref ApplicationName
         Type: CODEPIPELINE

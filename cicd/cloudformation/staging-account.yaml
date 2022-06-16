@@ -1,0 +1,143 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: 
+  This CloudFormation template will deploy a an IAM role and some Secrets to 
+  allow the CI/CD pipeline in the production account to deploy candidate releases
+  (via privately shared app in the AWS Serverless Application Repository (SAR).
+
+Parameters:
+  ProductionAccount:
+    Description: AWS Account permited to depoy into this account
+    Type: String
+    AllowedPattern: '[0-9]+'
+  GoogleCredentials:
+    Description: Credentials to log into Google (content of credentials.json)
+    Type: String
+    NoEcho: true
+  GoogleAdminEmail:
+    Description: Google Admin email
+    Type: String
+    NoEcho: true
+  SCIMEndpointUrl:
+    Description: AWS SSO SCIM Endpoint Url
+    Type: String
+    NoEcho: true
+  SCIMEndpointAccessToken:
+    Description: AWS SSO SCIM AccessToken
+    Type: String
+    NoEcho: true  
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label: 
+          default: Pipeline
+        Parameters:
+          - ProductionAccount
+      - Label:
+          default: Google Workspace
+        Parameters:
+          - GoogleAdminEmail
+          - GoogleCredentials
+      - Label:
+          default: AWS SSO
+        Parameters:
+          - SCIMEndpointUrl
+          - SCIMEndpointAccessToken
+            
+    ParameterLabels:
+      ProductionAccount:
+        default: "123456789012"
+      GoogleCredentials:
+        default: "contents of credentials.json"
+      GoogleAdminEmail:
+        default: "admin@WorkspaceDomain"
+      SCIMEndpointUrl:
+        default: "https://scim.<region>.amazonaws.com/<instance id>/scim/v2/"
+      SCIMEndpointAccessToken:
+        default: "AWS SSO SCIM Access Token"
+
+Resources:
+  
+  GoogleCredentialSecret:
+    Type: "AWS::SecretsManager::Secret"
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Delete
+    Properties:
+      Name: E2ETestGoogleCredentials
+      SecretString: !Ref GoogleCredentials
+
+  GoogleAdminEmailSecret:
+    Type: "AWS::SecretsManager::Secret"
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Delete
+    Properties:
+      Name: E2ETestGoogleAdminEmail
+      SecretString: !Ref GoogleAdminEmail
+
+  SSoSCIMUrlSecret: # This can be moved to custom provider
+    Type: "AWS::SecretsManager::Secret"
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Delete
+    Properties:
+      Name: E2ETestSCIMEndpointUrl
+      SecretString: !Ref SCIMEndpointUrl
+
+  SSoSSCIMAccessTokenSecret: # This can be moved to custom provider
+    Type: "AWS::SecretsManager::Secret"
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Delete
+    Properties:
+      Name: E2ETestSCIMAccessToken
+      SecretString: !Ref SCIMEndpointAccessToken
+
+  ProductionAccountCloudformationRole:
+    Type: AWS::IAM::Role
+    Properties: 
+      RoleName: ProductionAcctCodePipelineCloudFormationRole
+      AssumeRolePolicyDocument:
+        Statement:
+        - Action: ['sts:AssumeRole']
+          Effect: Allow
+          Principal: 
+            AWS: !Ref ProductionAccount
+        Version: '2012-10-17'
+      Path: /
+      Policies: 
+        - PolicyName: ProductionAcctCodePipelineCloudFormation-Policy
+          PolicyDocument:                     
+            Version: '2012-10-17'
+            Statement: 
+            - Action:
+              - 'iam:PassRole'
+              - 'cloudformation:*'
+              Effect: Allow
+              Resource: '*'
+
+  CFDeployerRole:
+    Type: AWS::IAM::Role
+    Properties: 
+      RoleName: CloudFormationDeployerRole
+      AssumeRolePolicyDocument: 
+        Statement:
+        - Action: ['sts:AssumeRole']
+          Effect: Allow
+          Principal:  
+            Service: 'cloudformation.amazonaws.com' 
+        Version: '2012-10-17'
+      Path: /
+      Policies: 
+        - PolicyName: CloudFormation-Deployer-Policy
+          PolicyDocument:                     
+            Version: '2012-10-17'
+            Statement:
+            - Action: '*'
+              Effect: Allow
+              Resource: '*'
+
+Outputs:
+
+  ProductionAccountCloudformationRoleArn:
+    Description: The Role available to the Production account for deployment
+    Value: !GetAtt ProductionAccountCloudformationRole.Arn
+

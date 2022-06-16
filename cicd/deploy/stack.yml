@@ -1,0 +1,37 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: 'AWS::Serverless-2016-10-31'
+
+Description: 
+  This CloudFormation template will deploy an instance of the SSOSync-Staging
+  candidate releases (via privately shared app in the AWS Serverless Application
+  Repository (SAR) within the Staging Account.
+
+Parameters:
+  ApplicationArn:
+    Description: The candidate release in the SAR
+    Default: 'arn:aws:serverlessrepo:<AWS::Region>:<AccountId>:applications/<ApplicationName>'
+    Type: String
+ 
+Resources:
+  SARApp:
+    Type: AWS::Serverless::Application
+    Properties:
+      Location:
+        ApplicationId: 'arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync-Staging'
+        SemanticVersion: "1.0.0-staging"
+      Parameters:
+        GoogleAdminEmail: '{{resolve:secretsmanager:E2ETestGoogleAdminEmail}}'
+        GoogleCredentials: '{{resolve:secretsmanager:E2ETestGoogleCredentials}}'
+        SCIMEndpointUrl: '{{resolve:secretsmanager:E2ETestSCIMEndpointUrl}}'
+        SCIMEndpointAccessToken: '{{resolve:secretsmanager:E2ETestSCIMAccessToken}}'
+        SyncMethod: groups
+        GoogleUserMatch: 'name:*'
+        GoogleGroupMatch: 'name:AWS*'
+        LogLevel: warn
+        LogFormat: json
+        IgnoreUsers: None
+        IgnoreGroups: None
+        IncludeGroups: None
+        ScheduleExpression: 'rate(1 day)'
+ 
+
