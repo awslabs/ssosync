@@ -1,0 +1,7 @@
+
+Outputs:
+  FunctionArn:
+    Description: "The Arn of the deployed lambda function"
+    Value: !GetAtt SSOSyncFunction.Arn
+    Export:
+      Name: SSOSyncFunctionARN
