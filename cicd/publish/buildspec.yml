@@ -16,7 +16,7 @@ phases:
   pre_build:
     commands:
       # Copy in the package file
-      - cp ${CODEBUILD_SRC_DIR_Packaged}/packaged.yaml ./
+      - cat ${CODEBUILD_SRC_DIR_Packaged}/packaged.yaml ./cicd/publish/outputs.yaml >> packaged.yaml
 
       # Check we have the required file
       - ls packaged.yaml

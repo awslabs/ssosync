@@ -10,6 +10,14 @@ Parameters:
     Description: AWS Account permited to depoy into this account
     Type: String
     AllowedPattern: '[0-9]+'
+  ArtifactBucketArn:
+    Description: ARN of the ArtifactBucket in the ProductionAccount
+    AllowedPattern: '[0-9a-z/:-]+'
+    Type: String
+  ArtifactBucketKeyArn:
+    Description: ARN of the KMS key used by the ArtifactBucket in the ProductionAccount
+    AllowedPattern: '[0-9a-z/:-]+'
+    Type: String
   GoogleCredentials:
     Description: Credentials to log into Google (content of credentials.json)
     Type: String
@@ -34,6 +42,8 @@ Metadata:
           default: Pipeline
         Parameters:
           - ProductionAccount
+          - ArtifactBucketArn
+          - ArtifactBucketKeyArn
       - Label:
           default: Google Workspace
         Parameters:
@@ -64,7 +74,7 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Delete
     Properties:
-      Name: E2ETestGoogleCredentials
+      Name: TestGoogleCredentials
       SecretString: !Ref GoogleCredentials
 
   GoogleAdminEmailSecret:
@@ -72,7 +82,7 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Delete
     Properties:
-      Name: E2ETestGoogleAdminEmail
+      Name: TestGoogleAdminEmail
       SecretString: !Ref GoogleAdminEmail
 
   SSoSCIMUrlSecret: # This can be moved to custom provider
@@ -80,7 +90,7 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Delete
     Properties:
-      Name: E2ETestSCIMEndpointUrl
+      Name: TestSCIMEndpointUrl
       SecretString: !Ref SCIMEndpointUrl
 
   SSoSSCIMAccessTokenSecret: # This can be moved to custom provider
@@ -88,7 +98,7 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Delete
     Properties:
-      Name: E2ETestSCIMAccessToken
+      Name: TestSCIMAccessToken
       SecretString: !Ref SCIMEndpointAccessToken
 
   ProductionAccountCloudformationRole:
@@ -113,6 +123,22 @@ Resources:
               - 'cloudformation:*'
               Effect: Allow
               Resource: '*'
+            - Action:
+              - 's3:Get*'
+              - 's3:Put*'
+              - 's3::ListBucket'
+              Effect: Allow
+              Resource:
+              - !Sub ${ArtifactBucketArn}/*
+            - Action:
+              - 'kms:DescribeKey'
+              - 'kms:GenerateDataKey*'
+              - 'kms:Encrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:Decrypt'
+              Effect: Allow
+              Resource:
+              - !Ref ArtifactBucketKeyArn
 
   CFDeployerRole:
     Type: AWS::IAM::Role
@@ -134,10 +160,4 @@ Resources:
             - Action: '*'
               Effect: Allow
               Resource: '*'
-
-Outputs:
-
-  ProductionAccountCloudformationRoleArn:
-    Description: The Role available to the Production account for deployment
-    Value: !GetAtt ProductionAccountCloudformationRole.Arn
 

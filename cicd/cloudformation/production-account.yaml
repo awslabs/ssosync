@@ -57,13 +57,50 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Delete
     Properties: 
-      LogGroupName: !Ref ApplicationName
       RetentionInDays: 120
+
+  ArtifactBucketKey:
+    Type: AWS::KMS::Key
+    Properties: 
+      Description: Key for this CodePipeline
+      Enabled: true
+      KeySpec: SYMMETRIC_DEFAULT
+      KeyUsage: ENCRYPT_DECRYPT
+      MultiRegion: true
+      PendingWindowInDays: 7
+      KeyPolicy:
+        Version: 2012-10-17
+        Id: key-default-1
+        Statement:
+        - Sid: Enable IAM User Permissions
+          Effect: Allow
+          Principal:
+            AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+          Action: 'kms:*'
+          Resource: '*'
+        - Sid: Allow use of the key
+          Effect: Allow
+          Principal:
+            AWS: !Sub arn:aws:iam::${StagingAccount}:role/ProductionAcctCodePipelineCloudFormationRole
+          Action:
+            - 'kms:DescribeKey'
+            - 'kms:Encrypt'
+            - 'kms:Decrypt'
+            - 'kms:ReEncrypt*'
+            - 'kms:GenerateDataKey'
+            - 'kms:GenerateDataKeyWithoutPlaintext'
+          Resource: '*'
 
   ArtifactBucket:
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
     UpdateReplacePolicy: Delete
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: 'aws:kms'
+              KMSMasterKeyID: !GetAtt ArtifactBucketKey.Arn 
 
   ArtifactBucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -97,6 +134,18 @@ Resources:
           Condition: 
             Bool: 
               aws:SecureTransport: false
+        - Sid: AllowStagingAccount
+          Effect: Allow
+          Principal:
+            AWS:
+            - !Sub arn:aws:iam::${StagingAccount}:root
+          Action: 
+          - 's3:ListBucket'
+          - 's3:Get*'
+          - 's3:Put*'
+          Resource:
+          - !Sub ${ArtifactBucket.Arn}
+          - !Sub ${ArtifactBucket.Arn}/*
 
   AppBucket:
     Type: AWS::S3::Bucket
@@ -259,15 +308,13 @@ Resources:
               InputArtifacts:
                 - Name: Built
                 - Name: Source
-        - Name: Staging
-          Actions:
             - Name: ReleaseCandidate
               ActionTypeId:
                 Category: Build
                 Owner: AWS
                 Version: 1
                 Provider: CodeBuild
-              RunOrder: '1'
+              RunOrder: '3'
               Configuration:
                 ProjectName: !Ref CodeBuildStaging
                 PrimarySource: Source
@@ -276,30 +323,49 @@ Resources:
               InputArtifacts:
                 - Name: Source
                 - Name: Packaged
-            - Name: Deploy
+        - Name: Staging
+          Actions:
+            - Name: CreateChangeSetTest
               ActionTypeId:
                 Category: Deploy
-                Owner: AWS 
-                Version: '1'
+                Owner: AWS
+                Version: 1
                 Provider: CloudFormation
-              RunOrder: '2'
               Configuration:
-                ActionMode: CREATE_UPDATE
-                Capabilities: CAPABILITY_NAMED_IAM,CAPABILITY_AUTO_EXPAND
-                ChangeSetName: pipeline-changeset
+                ChangeSetName: !Sub Deploy-${ApplicationName}
+                ActionMode: CHANGE_SET_REPLACE
+                StackName: SmokeTest
+                Capabilities: CAPABILITY_IAM,_IAM,CAPABILITY_AUTO_EXPAND
+                TemplatePath: 'Source::cicd/deploy/stack.yml' 
+                RoleArn: !Sub arn:aws:iam::${StagingAccount}:role/CloudFormationDeployerRole
                 ParameterOverrides: !Sub '{"ApplicationArn": "arn:aws:serverlessrepo:${AWS::Region}:${AWS::AccountId}:applications/${ApplicationName}-Staging"}'
-                RoleArn:
-                  Fn::If:
-                  - AddCodeBuildResource
-                  - !Sub arn:aws:iam::${StagingAccount}:role/ProductionAcctCodePipelineCloudFormationRole
-                  - !Ref AWS::NoValue
-                StackName: !Sub Deploy-${ApplicationName}
-                TemplatePath: 'Source::cicd/deploy/stack.yml'
                 OutputFileName: 'stack-outputs.json'
-              OutputArtifacts:
-                - Name: Deployed
               InputArtifacts:
                 - Name: Source
+              RunOrder: 1
+              RoleArn: !Sub arn:aws:iam::${StagingAccount}:role/ProductionAcctCodePipelineCloudFormationRole
+            - Name: DeployChangeSetTest
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Version: 1
+                Provider: CloudFormation
+              Configuration:
+                ChangeSetName: !Sub Deploy-${ApplicationName}
+                ActionMode: CHANGE_SET_EXECUTE
+                StackName: SmokeTest
+                RoleArn: !Sub arn:aws:iam::${StagingAccount}:role/CloudFormationDeployerRole
+              InputArtifacts:
+                - Name: Source
+              RunOrder: 2
+              RoleArn: !Sub arn:aws:iam::${StagingAccount}:role/ProductionAcctCodePipelineCloudFormationRole
+            - Name: ManualTesting
+              ActionTypeId:
+                Category: Approval
+                Owner: AWS
+                Version: 1
+                Provider: Manual
+              RunOrder: 3
         - Name: Approvals
           Actions:
             - Name: PassedStaging
@@ -493,6 +559,9 @@ Resources:
             Value: !Sub ${ArtifactBucket}
           - Name: ShareWith
             Value: !Ref StagingAccount
+          - Name: SemanticVersion
+            Value: !Sub "1.0.0-#{SourceVariables.CommitId}"
+            Type: PLAINTEXT
           - Name: AppARN
             Value: !Sub "arn:aws:serverlessrepo:${AWS::Region}:${AWS::AccountId}:applications/${ApplicationName}-Staging"
       Artifacts:
@@ -592,6 +661,12 @@ Resources:
               - 's3:*'
               Resource:
               - !Sub ${ArtifactBucket.Arn}/*
+              Effect: Allow
+            - Action:
+              - 'sts:AssumeRole'
+              Resource:
+              - !Sub arn:aws:iam::${StagingAccount}:role/ProductionAcctCodePipelineCloudFormationRole
+              - !Sub arn:aws:iam::${StagingAccount}:role/CloudFormationDeployerRole
               Effect: Allow
 
   CodeBuildImagesRole:
@@ -739,9 +814,9 @@ Resources:
 
 Outputs:
 
-  PipelineURL:
-    Description: The URL for the created pipeline
-    Value: !Sub https://${AWS::Region}.console.aws.amazon.com/codepipeline/home?region=${AWS::Region}#/view/${ApplicationName}      
+  ProductionAccount:
+    Description: "The account id"
+    Value: !Ref AWS::AccountId
 
   ArtifactBucketARN:
     Description: "S3 bucket ARN Codepipeline is using"
@@ -749,9 +824,8 @@ Outputs:
     Export:
       Name: ArtifactBucketARN
 
-  AppBucketARN:
-    Description: "S3 bucket ARN where Codepipeline publishs the app"
-    Value: !GetAtt AppBucket.Arn
+  ArtifactBucketKeyARN:
+    Description: "KMS key used by the ArtifactBucket"
+    Value: !GetAtt ArtifactBucketKey.Arn
     Export:
-      Name: AppBucketARN
-
+      Name: ArtifactBucketKeyARN

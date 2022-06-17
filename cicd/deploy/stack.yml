@@ -20,10 +20,10 @@ Resources:
         ApplicationId: 'arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync-Staging'
         SemanticVersion: "1.0.0-staging"
       Parameters:
-        GoogleAdminEmail: '{{resolve:secretsmanager:E2ETestGoogleAdminEmail}}'
-        GoogleCredentials: '{{resolve:secretsmanager:E2ETestGoogleCredentials}}'
-        SCIMEndpointUrl: '{{resolve:secretsmanager:E2ETestSCIMEndpointUrl}}'
-        SCIMEndpointAccessToken: '{{resolve:secretsmanager:E2ETestSCIMAccessToken}}'
+        GoogleAdminEmail: '{{resolve:secretsmanager:TestGoogleAdminEmail}}'
+        GoogleCredentials: '{{resolve:secretsmanager:TestGoogleCredentials}}'
+        SCIMEndpointUrl: '{{resolve:secretsmanager:TestSCIMEndpointUrl}}'
+        SCIMEndpointAccessToken: '{{resolve:secretsmanager:TestSCIMAccessToken}}'
         SyncMethod: groups
         GoogleUserMatch: 'name:*'
         GoogleGroupMatch: 'name:AWS*'
@@ -33,5 +33,18 @@ Resources:
         IgnoreGroups: None
         IncludeGroups: None
         ScheduleExpression: 'rate(1 day)'
- 
 
+  FunctionParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: SSOSyncArn
+      Type: String
+      Value: !GetAtt SARApp.Outputs.SOSyncFunctionARN
+      Description: The Arn of the lambda function ssosync
+ 
+Outputs:
+  FunctionArn:
+    Description: "The Arn of the deployed lambda function"
+    Value: !GetAtt SARApp.Outputs.SOSyncFunctionARN
+    Export:
+      Name: SSOSyncFunctionARN
