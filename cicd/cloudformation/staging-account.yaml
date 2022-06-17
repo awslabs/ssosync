@@ -18,22 +18,6 @@ Parameters:
     Description: ARN of the KMS key used by the ArtifactBucket in the ProductionAccount
     AllowedPattern: '[0-9a-z/:-]+'
     Type: String
-  GoogleCredentials:
-    Description: Credentials to log into Google (content of credentials.json)
-    Type: String
-    NoEcho: true
-  GoogleAdminEmail:
-    Description: Google Admin email
-    Type: String
-    NoEcho: true
-  SCIMEndpointUrl:
-    Description: AWS SSO SCIM Endpoint Url
-    Type: String
-    NoEcho: true
-  SCIMEndpointAccessToken:
-    Description: AWS SSO SCIM AccessToken
-    Type: String
-    NoEcho: true  
 
 Metadata:
   AWS::CloudFormation::Interface:
@@ -44,64 +28,14 @@ Metadata:
           - ProductionAccount
           - ArtifactBucketArn
           - ArtifactBucketKeyArn
-      - Label:
-          default: Google Workspace
-        Parameters:
-          - GoogleAdminEmail
-          - GoogleCredentials
-      - Label:
-          default: AWS SSO
-        Parameters:
-          - SCIMEndpointUrl
-          - SCIMEndpointAccessToken
             
     ParameterLabels:
       ProductionAccount:
         default: "123456789012"
-      GoogleCredentials:
-        default: "contents of credentials.json"
-      GoogleAdminEmail:
-        default: "admin@WorkspaceDomain"
-      SCIMEndpointUrl:
-        default: "https://scim.<region>.amazonaws.com/<instance id>/scim/v2/"
-      SCIMEndpointAccessToken:
-        default: "AWS SSO SCIM Access Token"
 
 Resources:
-  
-  GoogleCredentialSecret:
-    Type: "AWS::SecretsManager::Secret"
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Delete
-    Properties:
-      Name: TestGoogleCredentials
-      SecretString: !Ref GoogleCredentials
 
-  GoogleAdminEmailSecret:
-    Type: "AWS::SecretsManager::Secret"
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Delete
-    Properties:
-      Name: TestGoogleAdminEmail
-      SecretString: !Ref GoogleAdminEmail
-
-  SSoSCIMUrlSecret: # This can be moved to custom provider
-    Type: "AWS::SecretsManager::Secret"
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Delete
-    Properties:
-      Name: TestSCIMEndpointUrl
-      SecretString: !Ref SCIMEndpointUrl
-
-  SSoSSCIMAccessTokenSecret: # This can be moved to custom provider
-    Type: "AWS::SecretsManager::Secret"
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Delete
-    Properties:
-      Name: TestSCIMAccessToken
-      SecretString: !Ref SCIMEndpointAccessToken
-
-  ProductionAccountCloudformationRole:
+  ProductionAccountCloudFormationRole:
     Type: AWS::IAM::Role
     Properties: 
       RoleName: ProductionAcctCodePipelineCloudFormationRole
@@ -126,7 +60,7 @@ Resources:
             - Action:
               - 's3:Get*'
               - 's3:Put*'
-              - 's3::ListBucket'
+              - 's3:ListBucket'
               Effect: Allow
               Resource:
               - !Sub ${ArtifactBucketArn}/*
