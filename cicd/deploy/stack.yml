@@ -39,12 +39,12 @@ Resources:
     Properties:
       Name: SSOSyncArn
       Type: String
-      Value: !GetAtt SARApp.Outputs.SSOSyncFunctionARN
+      Value: !GetAtt SARApp.Outputs.FunctionArn
       Description: The Arn of the lambda function ssosync
  
 Outputs:
   FunctionArn:
     Description: "The Arn of the deployed lambda function"
-    Value: !GetAtt SARApp.Outputs.SSOSyncFunctionARN
+    Value: !GetAtt SARApp.Outputs.FunctionArn
     Export:
       Name: FunctionArn

@@ -118,4 +118,17 @@ Resources:
                 Version: 1
                 Provider: Manual
               RunOrder: 3
+            - Name: CleanUp
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Version: 1
+                Provider: CloudFormation
+              Configuration:
+                ActionMode: DELETE_ONLY
+                StackName: SmokeTest
+                RoleArn: !Sub arn:aws:iam::${StagingAccount}:role/CloudFormationDeployerRole
+              InputArtifacts:
+                - Name: Source
+              RunOrder: 4
 
