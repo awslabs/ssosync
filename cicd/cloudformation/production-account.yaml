@@ -47,9 +47,6 @@ Metadata:
       CodeStarConnection:
         default: "arn:aws:codestar-connections:<AWS::Region>:<AWS::AccountId>:connection/abcd1234-ab12-ab12--ab12-abcdef123456"
 
-Conditions:
-  AddCodeBuildResource: !Equals [ !Ref StagingAccount, true ]
-
 Resources:
 
   CodePipelineLogGroup:
@@ -66,7 +63,7 @@ Resources:
       Enabled: true
       KeySpec: SYMMETRIC_DEFAULT
       KeyUsage: ENCRYPT_DECRYPT
-      MultiRegion: true
+      MultiRegion: false
       PendingWindowInDays: 7
       KeyPolicy:
         Version: 2012-10-17
@@ -81,7 +78,7 @@ Resources:
         - Sid: Allow use of the key
           Effect: Allow
           Principal:
-            AWS: !Sub arn:aws:iam::${StagingAccount}:role/ProductionAcctCodePipelineCloudFormationRole
+            AWS: !Sub "arn:aws:iam::${StagingAccount}:role/ProductionAcctCodePipelineCloudFormationRole"
           Action:
             - 'kms:DescribeKey'
             - 'kms:Encrypt'
@@ -101,6 +98,7 @@ Resources:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: 'aws:kms'
               KMSMasterKeyID: !GetAtt ArtifactBucketKey.Arn 
+            BucketKeyEnabled: true
 
   ArtifactBucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -126,6 +124,14 @@ Resources:
           Condition: 
             StringNotEquals: 
               s3:x-amz-server-side-encryption: aws:kms
+        - Sid: RequireKMSEncryption
+          Effect: Deny
+          Principal: "*"
+          Action: s3:PutObject
+          Resource: !Sub ${ArtifactBucket.Arn}/*
+          Condition:
+            StringNotLikeIfExists:
+              s3:x-amz-server-side-encryption-aws-kms-key-id: !GetAtt ArtifactBucketKey.Arn
         - Sid: DenyInsecureConnections
           Effect: Deny
           Principal: "*"
@@ -134,17 +140,22 @@ Resources:
           Condition: 
             Bool: 
               aws:SecureTransport: false
-        - Sid: AllowStagingAccount
-          Effect: Allow
+        - Effect: Allow
           Principal:
             AWS:
-            - !Sub arn:aws:iam::${StagingAccount}:root
+            - !Sub "arn:aws:iam::${StagingAccount}:role/ProductionAcctCodePipelineCloudFormationRole"
           Action: 
           - 's3:ListBucket'
+          Resource:
+          - !Sub ${ArtifactBucket.Arn}
+        - Effect: Allow
+          Principal:
+            AWS:
+            - !Sub "arn:aws:iam::${StagingAccount}:role/ProductionAcctCodePipelineCloudFormationRole"
+          Action:
           - 's3:Get*'
           - 's3:Put*'
           Resource:
-          - !Sub ${ArtifactBucket.Arn}
           - !Sub ${ArtifactBucket.Arn}/*
 
   AppBucket:
@@ -211,6 +222,9 @@ Resources:
       ArtifactStore:
         Type: S3
         Location: !Ref ArtifactBucket
+        EncryptionKey:
+          Type: KMS
+          Id: !GetAtt ArtifactBucketKey.Arn
       Stages:
         - Name: Source
           Actions:
@@ -261,6 +275,9 @@ Resources:
       ArtifactStore: 
         Type: S3
         Location: !Ref ArtifactBucket
+        EncryptionKey: 
+          Type: KMS
+          Id: !GetAtt ArtifactBucketKey.Arn
       Stages:
         - Name: Source
           Actions:
@@ -335,7 +352,7 @@ Resources:
                 ChangeSetName: !Sub Deploy-${ApplicationName}
                 ActionMode: CHANGE_SET_REPLACE
                 StackName: SmokeTest
-                Capabilities: CAPABILITY_IAM,_IAM,CAPABILITY_AUTO_EXPAND
+                Capabilities: CAPABILITY_IAM,CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND
                 TemplatePath: 'Source::cicd/deploy/stack.yml' 
                 RoleArn: !Sub arn:aws:iam::${StagingAccount}:role/CloudFormationDeployerRole
                 ParameterOverrides: !Sub '{"ApplicationArn": "arn:aws:serverlessrepo:${AWS::Region}:${AWS::AccountId}:applications/${ApplicationName}-Staging"}'
@@ -663,10 +680,18 @@ Resources:
               - !Sub ${ArtifactBucket.Arn}/*
               Effect: Allow
             - Action:
+              - 'kms:DescribeKey'
+              - 'kms:GenerateDataKey*'
+              - 'kms:Encrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:Decrypt'
+              Effect: Allow
+              Resource:
+              - !GetAtt ArtifactBucketKey.Arn
+            - Action:
               - 'sts:AssumeRole'
               Resource:
               - !Sub arn:aws:iam::${StagingAccount}:role/ProductionAcctCodePipelineCloudFormationRole
-              - !Sub arn:aws:iam::${StagingAccount}:role/CloudFormationDeployerRole
               Effect: Allow
 
   CodeBuildImagesRole:

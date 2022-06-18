@@ -47,4 +47,4 @@ Outputs:
     Description: "The Arn of the deployed lambda function"
     Value: !GetAtt SARApp.Outputs.SOSyncFunctionARN
     Export:
-      Name: SSOSyncFunctionARN
+      Name: FunctionArn
