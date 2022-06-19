@@ -24,7 +24,7 @@ phases:
   build:
     commands:
       # Replace App Name in template
-      - sed -i 's/ ssosync/ SSOSync/g' packaged.yaml
+      - patch packaged.yaml cicd/release/packaged.patch
         
       # Package our application with AWS SAM
       - sam publish --template packaged.yaml

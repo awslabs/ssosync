@@ -353,7 +353,7 @@ Resources:
                 ActionMode: CHANGE_SET_REPLACE
                 StackName: SmokeTest
                 Capabilities: CAPABILITY_IAM,CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND
-                TemplatePath: 'Source::cicd/deploy/stack.yml' 
+                TemplatePath: 'Source::cicd/deploy/stack.yml'
                 RoleArn: !Sub arn:aws:iam::${StagingAccount}:role/CloudFormationDeployerRole
                 ParameterOverrides: !Sub '{"ApplicationArn": "arn:aws:serverlessrepo:${AWS::Region}:${AWS::AccountId}:applications/${ApplicationName}-Staging"}'
                 OutputFileName: 'stack-outputs.json'
@@ -383,6 +383,21 @@ Resources:
                 Version: 1
                 Provider: Manual
               RunOrder: 3
+            - Name: CleanUp
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Version: 1
+                Provider: CloudFormation
+              Configuration:
+                ActionMode: DELETE_ONLY
+                StackName: SmokeTest
+                RoleArn: !Sub arn:aws:iam::${StagingAccount}:role/CloudFormationDeployerRole
+              InputArtifacts:
+                - Name: Source
+              RunOrder: 4
+              RoleArn: !Sub arn:aws:iam::${StagingAccount}:role/ProductionAcctCodePipelineCloudFormationRole
+        - Name: Production
         - Name: Approvals
           Actions:
             - Name: PassedStaging
@@ -391,8 +406,7 @@ Resources:
                 Owner: AWS
                 Version: 1
                 Provider: Manual  
-        - Name: Production
-          Actions:
+              RunOrder: 1
             - Name: Release
               ActionTypeId:
                 Category: Build
@@ -406,6 +420,7 @@ Resources:
                 - Name: Release
               InputArtifacts:
                 - Name: Packaged
+              RunOrder: 2
 
   CodeBuildGo:
     Type: AWS::CodeBuild::Project
@@ -717,6 +732,15 @@ Resources:
               - 'logs:PutLogEvents'
               Effect: Allow
               Resource: '*'
+            - Action:
+              - 'kms:DescribeKey'
+              - 'kms:GenerateDataKey*'
+              - 'kms:Encrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:Decrypt'
+              Effect: Allow
+              Resource:
+              - !GetAtt ArtifactBucketKey.Arn
             - Action: 's3:*'
               Effect: Allow
               Resource:
@@ -769,6 +793,15 @@ Resources:
               - 'logs:PutLogEvents'
               Effect: Allow
               Resource: '*'
+            - Action:
+              - 'kms:DescribeKey'
+              - 'kms:GenerateDataKey*'
+              - 'kms:Encrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:Decrypt'
+              Effect: Allow
+              Resource:
+              - !GetAtt ArtifactBucketKey.Arn
             - Action: 's3:*'
               Effect: Allow
               Resource:
@@ -797,6 +830,15 @@ Resources:
               - 'logs:PutLogEvents'
               Effect: Allow
               Resource: '*'
+            - Action:
+              - 'kms:DescribeKey'
+              - 'kms:GenerateDataKey*'
+              - 'kms:Encrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:Decrypt'
+              Effect: Allow
+              Resource:
+              - !GetAtt ArtifactBucketKey.Arn
             - Action: 's3:*'
               Effect: Allow
               Resource:
@@ -831,6 +873,15 @@ Resources:
               Resource:
               - !Sub ${ArtifactBucket.Arn}/*
               - !Sub ${AppBucket.Arn}/*
+            - Action:
+              - 'kms:DescribeKey'
+              - 'kms:GenerateDataKey*'
+              - 'kms:Encrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:Decrypt'
+              Effect: Allow
+              Resource:
+              - !GetAtt ArtifactBucketKey.Arn
             - Action: 'serverlessrepo:*'
               Effect: Allow
               Resource: 

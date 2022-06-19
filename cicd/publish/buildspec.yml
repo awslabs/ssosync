@@ -16,7 +16,7 @@ phases:
   pre_build:
     commands:
       # Copy in the package file
-      - cat ${CODEBUILD_SRC_DIR_Packaged}/packaged.yaml ./cicd/publish/outputs.yaml >> packaged.yaml
+      - cp ${CODEBUILD_SRC_DIR_Packaged}/packaged.yaml ./packaged.yaml
 
       # Check we have the required file
       - ls packaged.yaml
@@ -24,7 +24,7 @@ phases:
   build:
     commands:
       # Replace App Name in template
-      - sed -i 's/ ssosync/ SSOSync-Staging/g' packaged.yaml 
+      - patch packaged.yaml cicd/publish/packaged.patch
 
       # Remove the previous build
       - aws serverlessrepo delete-application --application-id ${AppARN}
