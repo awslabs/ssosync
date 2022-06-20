@@ -1,10 +1,10 @@
---- template.yaml	2022-06-17 16:02:16.000000000 +0100
-+++ release.yaml	2022-06-18 18:33:08.000000000 +0100
-@@ -25,7 +25,7 @@
-           - IncludeGroups
- 
+--- packaged.yaml	2022-06-15 10:05:16.000000000 +0100
++++ packaged-edit.yaml	2022-06-20 10:09:02.000000000 +0100
+@@ -23,7 +23,7 @@
+       - IgnoreGroups
+       - IncludeGroups
    AWS::ServerlessRepo::Application:
--    Name: "ssosync"
+-    Name: ssosync
 +    Name: SSOSync
      Description: Helping you populate AWS SSO directly with your Google Apps users.
      Author: Sebastian Doell

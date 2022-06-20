@@ -1,35 +1,35 @@
---- ../../template.yaml	2022-06-17 16:02:16.000000000 +0100
-+++ staging.yaml	2022-06-19 23:24:28.000000000 +0100
-@@ -25,8 +25,8 @@
-           - IncludeGroups
- 
+--- packaged.yaml	2022-06-15 10:05:16.000000000 +0100
++++ packaged-edit.yaml	2022-06-20 10:07:27.000000000 +0100
+@@ -23,8 +23,8 @@
+       - IgnoreGroups
+       - IncludeGroups
    AWS::ServerlessRepo::Application:
--    Name: "ssosync"
+-    Name: ssosync
 -    Description: Helping you populate AWS SSO directly with your Google Apps users.
-+    Name: SSOSync-Staging
++    Name: SSO-Staging
 +    Description: This build is for deployment and testing in the StagingAccount, do not publish as is.
      Author: Sebastian Doell
      SpdxLicenseId: Apache-2.0
-     # paths are relative to .aws-sam/build directory
-@@ -142,13 +142,6 @@
-                 - !Ref AWSGoogleAdminEmail
-                 - !Ref AWSSCIMEndpointSecret
-                 - !Ref AWSSCIMAccessTokenSecret
+     LicenseUrl: s3://production-appbucket-1pw05cx0wu3vu/34400b68072d710fecd0a2940a0d1658
+@@ -157,14 +157,6 @@
+           - Ref: AWSGoogleAdminEmail
+           - Ref: AWSSCIMEndpointSecret
+           - Ref: AWSSCIMAccessTokenSecret
 -      Events:
 -        SyncScheduledEvent:
 -          Type: Schedule
 -          Name: AWSSyncSchedule
 -          Properties:
 -            Enabled: true
--            Schedule: !Ref ScheduleExpression
- 
-   AWSGoogleCredentialsSecret:
-     Type: "AWS::SecretsManager::Secret"
-@@ -173,3 +166,10 @@
-     Properties:
-       Name: SSOSyncSCIMAccessToken
-       SecretString: !Ref SCIMEndpointAccessToken
-+
+-            Schedule:
+-              Ref: ScheduleExpression
+       CodeUri: s3://production-appbucket-1pw05cx0wu3vu/ed69298fc0c42bed18ea19ffd3a5f227
+     Metadata:
+       SamResourceId: SSOSyncFunction
+@@ -200,3 +192,9 @@
+         Ref: SCIMEndpointAccessToken
+     Metadata:
+       SamResourceId: AWSSCIMAccessTokenSecret
 +Outputs:
 +  FunctionArn:
 +    Description: "The Arn of the deployed lambda function"

@@ -398,7 +398,6 @@ Resources:
               RunOrder: 4
               RoleArn: !Sub arn:aws:iam::${StagingAccount}:role/ProductionAcctCodePipelineCloudFormationRole
         - Name: Production
-        - Name: Approvals
           Actions:
             - Name: PassedStaging
               ActionTypeId: 
