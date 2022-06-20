@@ -16,16 +16,13 @@ phases:
   pre_build:
     commands:
       # Copy in the package file
-      - cp ${CODEBUILD_SRC_DIR_Packaged}/packaged.yaml ./packaged.yaml
+      - cp ${CODEBUILD_SRC_DIR_Packaged}/packaged-staging.yaml ./packaged.yaml
 
       # Check we have the required file
       - ls packaged.yaml
 
   build:
     commands:
-      # Replace App Name in template
-      - patch packaged.yaml cicd/publish/packaged.patch
-
       # Remove the previous build
       - aws serverlessrepo delete-application --application-id ${AppARN}
         

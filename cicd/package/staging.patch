@@ -1,0 +1,35 @@
+--- ../../template.yaml	2022-06-20 12:09:46.000000000 +0100
++++ staging.yaml	2022-06-20 12:08:42.000000000 +0100
+@@ -25,7 +25,7 @@
+           - IncludeGroups
+ 
+   AWS::ServerlessRepo::Application:
+-    Name: ssosync
++    Name: SSOSync-Staging
+     Description: Helping you populate AWS SSO directly with your Google Apps users.
+     Author: Sebastian Doell
+     SpdxLicenseId: Apache-2.0
+@@ -142,13 +142,6 @@
+                 - !Ref AWSGoogleAdminEmail
+                 - !Ref AWSSCIMEndpointSecret
+                 - !Ref AWSSCIMAccessTokenSecret
+-      Events:
+-        SyncScheduledEvent:
+-          Type: Schedule
+-          Name: AWSSyncSchedule
+-          Properties:
+-            Enabled: true
+-            Schedule: !Ref ScheduleExpression
+ 
+   AWSGoogleCredentialsSecret:
+     Type: "AWS::SecretsManager::Secret"
+@@ -173,3 +166,9 @@
+     Properties:
+       Name: SSOSyncSCIMAccessToken
+       SecretString: !Ref SCIMEndpointAccessToken
++Outputs:
++  FunctionArn:
++    Description: "The Arn of the deployed lambda function"
++    Value: !GetAtt SSOSyncFunction.Arn
++    Export:
++      Name: SSOSyncFunctionARN

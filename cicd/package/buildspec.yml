@@ -27,13 +27,23 @@ phases:
 
   build:
     commands:
+      # Create staging & release variants of the template.yaml
+      - cp template.yaml staging.yaml
+      - patch staging.yaml staging.patch
+
+      - cp template.yaml release.yaml
+      - patch release.yaml release.patch
+
       # Package our application with AWS SAM
-      - sam package --no-progressbar --template-file template.yaml --s3-bucket ${S3Bucket} --output-template-file packaged.yaml
+      - sam package --no-progressbar --template-file staging.yaml --s3-bucket ${S3Bucket} --output-template-file packaged-staging.yaml
+      - sam package --no-progressbar --template-file release.yaml --s3-bucket ${S3Bucket} --output-template-file packaged-release.yaml
 
   post_build:
     commands:
-      - ls packaged.yaml
+      - ls packaged-staging.yaml
+      - ls packaged-release.yaml
 
 artifacts:
   files:
-    - packaged.yaml
+    - packaged-staging.yaml
+    - packaged-release.yaml
