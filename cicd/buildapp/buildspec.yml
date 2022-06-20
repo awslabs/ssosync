@@ -60,8 +60,8 @@ phases:
 
   post_build:
     commands:
-      # Make main 
-      - goreleaser build --snapshot --rm-dist
+      # Make main but only for the lambda (linux amd64)
+      - goreleaser build --snapshot --rm-dist --single-target
 
       - ls -la 
 
