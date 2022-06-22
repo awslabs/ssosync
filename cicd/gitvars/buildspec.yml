@@ -1,0 +1,53 @@
+version: 0.2
+            
+phases:
+  install:
+    commands:
+      - apt-get update
+      - apt-get -y install dotenv
+
+  pre_build: 
+    commands:
+      # Fetch all dependencies
+      - cicd/gitvars/codebuild-git-wrapper.sh $GitRepo $GitBranch
+
+  build:
+    commands:
+      - echo export #!/bin/bash >> ./Environmant
+      - echo export CI=true >> gitvars.env 
+      - echo export CodeBuild=true >> gitvars.env
+
+      - GitBranch=`git branch -a --contains HEAD | sed -n 2p | awk '{ printf $1 }'`
+      - echo export GitBranch=\"${GitBranch#remotes/origin/}\" >> gitvars.env
+
+      - echo export GitMessage=\"$(git log -1 --pretty=%B)\" >> gitvars.env
+      - echo export GitAuthor=\"$(git log -1 --pretty=%an)\" >> gitvars.env
+      - echo export GitAuthorEmail=\"$(git log -1 --pretty=%ae)\" >> gitvars.env
+      - echo export GitCommit=\"$(git log -1 --pretty=%H)\" >> gitvars.env
+      - export GitTag=$(git describe --tags --abbrev=0)
+      - echo export GitTag=\"${GitTag}\" >> gitvars.env
+
+      - echo export GitProject=\"${APP_NAME}\" >> gitvars.env
+      - echo export CodeBuildUrl=\"https://$AWS_DEFAULT_REGION.console.aws.amazon.com/codebuild/home?region=$AWS_DEFAULT_REGION#/builds/$CODEBUILD_BUILD_ID/view/new\" >> gitvars.env
+      - echo export GoVersion=\"${GoVersion}\" >> gitvars.env
+
+      - GitReleaseCommit=`git rev-list -n 1 tags/${GitTag}`
+      - echo $GitReleaseCommit
+
+      - |
+        if expr "${GitReleaseCommit}" : "${GitCommit}" >/dev/null; then
+          echo export GitReleaseCommit=true >> gitvars.env
+          echo "This is a Release"
+        else
+          echo export GitReleaseCommit=false >> gitvars.env
+          echo "Nope, not a release"
+        fi
+
+      - cat gitvars.env
+      - . ./gitvars.env
+
+      - env | grep Git
+
+artifacts:
+  files:
+    - gitvars.env

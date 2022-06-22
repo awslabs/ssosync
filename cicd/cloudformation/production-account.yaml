@@ -297,9 +297,24 @@ Resources:
                 DetectChanges: true
         - Name: Build
           Actions:
+            - Name: GitVars
+              InputArtifacts:
+                - Name: Source
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              OutputArtifacts:
+                - Name: GitHub
+              RunOrder: '1'
+              Configuration:
+                ProjectName: !Ref GitHubVars
+                PrimarySource: Source
             - Name: BuildApp
               InputArtifacts:
                 - Name: Source
+                - Name: GitHub
               ActionTypeId: 
                 Category: Build
                 Owner: AWS
@@ -307,7 +322,7 @@ Resources:
                 Provider: CodeBuild
               OutputArtifacts:
                 - Name: Built
-              RunOrder: '1'
+              RunOrder: '2'
               Configuration: 
                 ProjectName: !Ref CodeBuildApp
             - Name: PackageApp
@@ -316,7 +331,7 @@ Resources:
                 Owner: AWS
                 Version: 1
                 Provider: CodeBuild
-              RunOrder: 2
+              RunOrder: 3
               Configuration:
                 ProjectName: !Ref CodeBuildPackage
                 PrimarySource: Source
@@ -331,7 +346,7 @@ Resources:
                 Owner: AWS
                 Version: 1
                 Provider: CodeBuild
-              RunOrder: '3'
+              RunOrder: '4'
               Configuration:
                 ProjectName: !Ref CodeBuildStaging
                 PrimarySource: Source
@@ -339,6 +354,7 @@ Resources:
                 - Name: Staging
               InputArtifacts:
                 - Name: Source
+                - Name: GitHub
                 - Name: Packaged
         - Name: Staging
           Actions:
@@ -500,6 +516,43 @@ Resources:
       LogGroupName: !Ref CodePipelineLogGroup
       LogStreamName: !Sub "BuildImages-Build-SAM"
 
+  GitHubVars:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub "${ApplicationName}-GitHub-Vars"
+      Description: !Sub Build project for ${ApplicationName}
+      ServiceRole: !Ref CodeBuildAppRole
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: "cicd/gitvars/buildspec.yml"
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:5.0
+        Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: ARTIFACT_S3_BUCKET
+            Value: !Sub ${ArtifactBucket}
+          - Name: GoVersion
+            Value: "1.18.2"
+          - Name: GitRepo 
+            Value: "https://github.com/awslabs/ssosync"
+          - Name: GitBranch
+            Value: "CodePipeline"
+      Artifacts:
+        Name: !Ref ApplicationName
+        Type: CODEPIPELINE
+      LogsConfig:
+        CloudWatchLogs:
+          GroupName: !Ref CodePipelineLogGroup
+          StreamName: !Ref CodeBuildVarsLogs
+          Status: ENABLED
+
+  GitHubVarsLogs:
+    Type: AWS::Logs::LogStream
+    Properties:
+      LogGroupName: !Ref CodePipelineLogGroup
+      LogStreamName: !Sub "${ApplicationName}-GitHub-Vars"
+
   CodeBuildApp:
     Type: AWS::CodeBuild::Project
     Properties:
@@ -516,7 +569,7 @@ Resources:
         EnvironmentVariables:
           - Name: ARTIFACT_S3_BUCKET
             Value: !Sub ${ArtifactBucket}
-          - Name: GO_VERSION
+          - Name: GoVersion
             Value: "1.18.2"
           - Name: OUTPUT
             Value: main

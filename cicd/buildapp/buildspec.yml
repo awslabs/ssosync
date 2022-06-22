@@ -4,11 +4,11 @@ phases:
   install: 
     commands:
       # Install go.lang
-      - wget -q https://storage.googleapis.com/golang/go${GO_VERSION}.linux-amd64.tar.gz
+      - wget -q https://storage.googleapis.com/golang/go${GoVersion}.linux-amd64.tar.gz
       - rm -rf /go
-      - tar -C / -xzf go${GO_VERSION}.linux-amd64.tar.gz
+      - tar -C / -xzf go${GoVersion}.linux-amd64.tar.gz
       - export PATH="/go/bin:$PATH" && export GOPATH="/go" && export PATH="$GOPATH/bin:$PATH"
-      - rm go${GO_VERSION}.linux-amd64.tar.gz
+      - rm go${GoVersion}.linux-amd64.tar.gz
       - go version
 
       # Install golint
@@ -23,11 +23,14 @@ phases:
       # Install goreleaser
       - go install github.com/goreleaser/goreleaser@latest
 
+  pre_build: 
+    commands:
+      # Import vars from GitHub
+      - . ${CODEBUILD_SRC_DIR_Packaged}/gitvars.env
+
       # Print all environment variables (handy for AWS CodeBuild logs)
       - env
 
-  pre_build: 
-    commands:
       # Fetch all dependencies
       - go env -w GOPROXY=direct
       - go get ./...
@@ -61,10 +64,10 @@ phases:
   post_build:
     commands:
       # Tweak the .goreleaser.yml so it uses the vairables from .Env
-      - patch .goreleaser.yml cicd/buildapp/goreleaseer.patch
+      - patch .goreleaser.yml cicd/buildapp/goreleaser.patch
 
       #Fetch the GitHub variables
-      - source cicd/buildapp/githubvars.sh
+      - cicd/buildapp/githubvars.sh
       
       # Make main but only for the lambda (linux amd64)
       - goreleaser build --snapshot --rm-dist --single-target
