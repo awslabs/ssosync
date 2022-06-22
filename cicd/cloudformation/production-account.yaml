@@ -372,7 +372,7 @@ Resources:
                 Capabilities: CAPABILITY_IAM,CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND
                 TemplatePath: 'Source::cicd/deploy/stack.yml'
                 RoleArn: !Sub arn:aws:iam::${StagingAccount}:role/CloudFormationDeployerRole
-                ParameterOverrides: !Sub '{"ApplicationArn": "arn:aws:serverlessrepo:${AWS::Region}:${AWS::AccountId}:applications/${ApplicationName}-Staging"}'
+                ParameterOverrides: !Sub '{"ApplicationArn": "arn:aws:serverlessrepo:${AWS::Region}:${AWS::AccountId}:applications/${ApplicationName}-Staging", "SemanticVersion"; "0.0.0-#{SourceVariables.CommitId}"}'
                 OutputFileName: 'stack-outputs.json'
               InputArtifacts:
                 - Name: Source
@@ -416,13 +416,26 @@ Resources:
               RoleArn: !Sub arn:aws:iam::${StagingAccount}:role/ProductionAcctCodePipelineCloudFormationRole
         - Name: Production
           Actions:
+            - Name: ReleaseTag
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              RunOrder: '1'
+              Configuration:
+                ProjectName: !Ref CodeBuildApproveRelease
+                PrimarySource: Source
+              InputArtifacts:
+                - Name: Source
+                - Name: GitHub
             - Name: PassedStaging
               ActionTypeId: 
                 Category: Approval
                 Owner: AWS
                 Version: 1
                 Provider: Manual  
-              RunOrder: 1
+              RunOrder: 2
             - Name: Release
               ActionTypeId:
                 Category: Build
@@ -436,7 +449,7 @@ Resources:
                 - Name: Release
               InputArtifacts:
                 - Name: Packaged
-              RunOrder: 2
+              RunOrder: 3
 
   CodeBuildGo:
     Type: AWS::CodeBuild::Project
@@ -645,7 +658,7 @@ Resources:
           - Name: ShareWith
             Value: !Ref StagingAccount
           - Name: SemanticVersion
-            Value: !Sub "1.0.0-#{SourceVariables.CommitId}"
+            Value: !Sub "0.0.0-#{SourceVariables.CommitId}"
             Type: PLAINTEXT
           - Name: AppARN
             Value: !Sub "arn:aws:serverlessrepo:${AWS::Region}:${AWS::AccountId}:applications/${ApplicationName}-Staging"
@@ -664,6 +677,36 @@ Resources:
       LogGroupName: !Ref CodePipelineLogGroup
       LogStreamName: !Sub "${ApplicationName}-Staging"
 
+  CodeBuildApproveRelease
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub "${ApplicationName}-ApproveRelease"
+      Description: !Sub Use the GitHub metadata to determine whether this commit is a release
+      ServiceRole: !Ref CodeBuildPublishRole
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: "cicd/approverelease/buildspec.yml"
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:5.0
+        Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: ARTIFACT_S3_BUCKET
+            Value: !Sub ${ArtifactBucket}
+      Artifacts:
+        Name: !Ref ApplicationName
+        Type: CODEPIPELINE
+      LogsConfig:
+        CloudWatchLogs:
+          GroupName: !Ref CodePipelineLogGroup
+          StreamName: !Ref CodeBuildReleaseLogs
+          Status: ENABLED
+
+  CodeBuildReleaseLogs:
+    Type: AWS::Logs::LogStream
+    Properties:
+      LogGroupName: !Ref CodePipelineLogGroup
+      LogStreamName: !Sub "${ApplicationName}-ApproveRelease"
 
   CodeBuildRelease:
     Type: AWS::CodeBuild::Project

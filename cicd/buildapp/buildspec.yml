@@ -25,7 +25,7 @@ phases:
 
   pre_build: 
     commands:
-      # Import vars from GitHub
+      # Fetch the GitHub variables
       - . ${CODEBUILD_SRC_DIR_GitHub}/gitvars.env
 
       # Print all environment variables (handy for AWS CodeBuild logs)
@@ -66,13 +66,12 @@ phases:
       # Tweak the .goreleaser.yml so it uses the vairables from .Env
       - patch .goreleaser.yml cicd/buildapp/goreleaser.patch
 
-      #Fetch the GitHub variables
-      - cicd/buildapp/githubvars.sh
-      
       # Make main but only for the lambda (linux amd64)
       - goreleaser build --snapshot --rm-dist --single-target
 
-      - ls -la 
+
+      # Check we've packaged something useful
+      - ./dist/ssosync_darwin_amd64_v1/ssosync --version
 
 artifacts:
   files:

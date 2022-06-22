@@ -17,8 +17,8 @@ Resources:
     Type: AWS::Serverless::Application
     Properties:
       Location:
-        ApplicationId: 'arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync-Staging'
-        SemanticVersion: "1.0.0-staging"
+        ApplicationId: '${ApplicationArn}'
+        SemanticVersion: "${SemanticVersion}"
       Parameters:
         GoogleAdminEmail: '{{resolve:secretsmanager:TestGoogleAdminEmail}}'
         GoogleCredentials: '{{resolve:secretsmanager:TestGoogleCredentials}}'

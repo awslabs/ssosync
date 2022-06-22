@@ -1,0 +1,18 @@
+version: 0.2
+            
+phases:
+  pre_build: 
+    commands:
+      # Fetch the GitHub variables
+      - . ${CODEBUILD_SRC_DIR_GitHub}/gitvars.env
+
+  build:
+    commands:
+      # Check whether this is a commit on the default branch with a release tag
+      - |
+        if expr "${GitReleaseCommit}" : "true" >/dev/null; then
+          sys.exit(0)
+        else
+          sys.exit(-1) 
+        fi
+
