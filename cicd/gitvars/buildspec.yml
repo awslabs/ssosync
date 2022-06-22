@@ -1,14 +1,10 @@
 version: 0.2
             
 phases:
-  install:
-    commands:
-      - apt-get update
-      - apt-get -y install dotenv
-
   pre_build: 
     commands:
       # Fetch all dependencies
+      - chmod +x cicd/gitvars/codebuild-git-wrapper.sh
       - cicd/gitvars/codebuild-git-wrapper.sh $GitRepo $GitBranch
 
   build:
@@ -33,14 +29,11 @@ phases:
 
       - GitReleaseCommit=`git rev-list -n 1 tags/${GitTag}`
       - echo $GitReleaseCommit
-
       - |
         if expr "${GitReleaseCommit}" : "${GitCommit}" >/dev/null; then
           echo export GitReleaseCommit=true >> gitvars.env
-          echo "This is a Release"
         else
           echo export GitReleaseCommit=false >> gitvars.env
-          echo "Nope, not a release"
         fi
 
       - cat gitvars.env

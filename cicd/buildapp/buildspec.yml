@@ -26,7 +26,7 @@ phases:
   pre_build: 
     commands:
       # Import vars from GitHub
-      - . ${CODEBUILD_SRC_DIR_Packaged}/gitvars.env
+      - . ${CODEBUILD_SRC_DIR_GitHub}/gitvars.env
 
       # Print all environment variables (handy for AWS CodeBuild logs)
       - env

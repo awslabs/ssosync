@@ -325,6 +325,7 @@ Resources:
               RunOrder: '2'
               Configuration: 
                 ProjectName: !Ref CodeBuildApp
+                PrimarySource: Source
             - Name: PackageApp
               ActionTypeId:
                 Category: Build
@@ -544,7 +545,7 @@ Resources:
       LogsConfig:
         CloudWatchLogs:
           GroupName: !Ref CodePipelineLogGroup
-          StreamName: !Ref CodeBuildVarsLogs
+          StreamName: !Ref GitHubVarsLogs
           Status: ENABLED
 
   GitHubVarsLogs:
@@ -728,6 +729,7 @@ Resources:
               - 'codebuild:BatchGetBuilds'
               - 'codebuild:StartBuild'
               Resource:
+              - !Sub ${GitHubVars.Arn}
               - !Sub ${CodeBuildGo.Arn}
               - !Sub ${CodeBuildSAM.Arn}
               - !Sub ${CodeBuildApp.Arn}
