@@ -71,7 +71,7 @@ phases:
 
 
       # Check we've packaged something useful
-      - ./dist/ssosync_darwin_amd64_v1/ssosync --version
+      - ./dist/ssosync_linux_amd64_v1/ssosync --version
 
 artifacts:
   files:
