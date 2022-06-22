@@ -316,7 +316,7 @@ func (s *syncGSuite) SyncGroupsUsers(queries []string) error {
 		}
 
 		if len(groups) < 1 {
-			log.Warn("query provided no group results")
+			log.WithField("query", query).Debug("query provided no group results")
 		}
 
 		for _, g := range groups {
