@@ -20,7 +20,8 @@ phases:
       - echo export GitAuthor=\"$(git log -1 --pretty=%an)\" >> gitvars.env
       - echo export GitAuthorEmail=\"$(git log -1 --pretty=%ae)\" >> gitvars.env
       - echo export GitCommit=\"$(git log -1 --pretty=%H)\" >> gitvars.env
-      - echo export GitTag=\"$(git describe --tags --abbrev=0)\" >> gitvars.env
+      - export GitTag=`git describe --tags --abbrev=0`
+      - echo export GitTag=\"${GitTag}\" >> gitvars.env
 
       - echo export GitProject=\"${APP_NAME}\" >> gitvars.env
       - echo export CodeBuildUrl=\"https://$AWS_DEFAULT_REGION.console.aws.amazon.com/codebuild/home?region=$AWS_DEFAULT_REGION#/builds/$CODEBUILD_BUILD_ID/view/new\" >> gitvars.env
