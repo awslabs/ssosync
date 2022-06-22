@@ -11,6 +11,10 @@ Parameters:
     Description: The candidate release in the SAR
     Default: 'arn:aws:serverlessrepo:<AWS::Region>:<AccountId>:applications/<ApplicationName>'
     Type: String
+  SemanticVersion:
+    Description: The version of the candidate release in the SAR
+    Default: 'v1.0.0-Staging'
+    Type: String
  
 Resources:
   SARApp:
