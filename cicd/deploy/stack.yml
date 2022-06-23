@@ -13,7 +13,7 @@ Parameters:
     Type: String
   SemanticVersion:
     Description: The version of the candidate release in the SAR
-    Default: 'v1.0.0-Staging'
+    Default: 'v0.0.0-Staging'
     Type: String
  
 Resources:

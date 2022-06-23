@@ -373,7 +373,7 @@ Resources:
                 Capabilities: CAPABILITY_IAM,CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND
                 TemplatePath: 'Source::cicd/deploy/stack.yml'
                 RoleArn: !Sub arn:aws:iam::${StagingAccount}:role/CloudFormationDeployerRole
-                ParameterOverrides: !Sub '[{\"ApplicationArn\": \"arn:aws:serverlessrepo:${AWS::Region}:${AWS::AccountId}:applications/${ApplicationName}-Staging\"}, {\"SemanticVersion\": \"0.0.0-#{SourceVariables.CommitId}\"}]'
+                ParameterOverrides: !Sub '{"ApplicationArn": "arn:aws:serverlessrepo:${AWS::Region}:${AWS::AccountId}:applications/${ApplicationName}-Staging"}'
                 OutputFileName: 'stack-outputs.json'
               InputArtifacts:
                 - Name: Source
@@ -659,7 +659,7 @@ Resources:
           - Name: ShareWith
             Value: !Ref StagingAccount
           - Name: SemanticVersion
-            Value: !Sub "0.0.0-#{SourceVariables.CommitId}"
+            Value: "v0.0.0-Staging"
             Type: PLAINTEXT
           - Name: AppARN
             Value: !Sub "arn:aws:serverlessrepo:${AWS::Region}:${AWS::AccountId}:applications/${ApplicationName}-Staging"
