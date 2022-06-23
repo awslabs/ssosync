@@ -27,11 +27,8 @@ phases:
   build:
     commands:
 
-      # If this is a release, remove the previous builds
-      - |
-        if expr "${GitReleaseCommit}" : "true" >/dev/null; then
-          aws serverlessrepo delete-application --application-id ${AppARN}
-        fi
+      # remove the previous builds
+      - aws serverlessrepo delete-application --application-id ${AppARN}
         
       # Package our application with AWS SAM
       - echo sam publish --template packaged.yaml --semantic-version ${SemanticVersion}
