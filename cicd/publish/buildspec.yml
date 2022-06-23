@@ -34,7 +34,7 @@ phases:
         fi
         
       # Package our application with AWS SAM
-      - sam publish --template packaged.yaml --semantic-version "${SemanticVersion}"
+      - sam publish --template packaged.yaml --semantic-version ${SemanticVersion}
 
       # Share with the StagingAccount
       - aws serverlessrepo put-application-policy --application-id ${AppARN} --statements Principals=${ShareWith},Actions=Deploy
