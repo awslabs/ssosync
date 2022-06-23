@@ -34,6 +34,7 @@ phases:
         fi
         
       # Package our application with AWS SAM
+      - echo sam publish --template packaged.yaml --semantic-version ${SemanticVersion}
       - sam publish --template packaged.yaml --semantic-version ${SemanticVersion}
 
       # Share with the StagingAccount
