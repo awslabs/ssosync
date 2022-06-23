@@ -659,7 +659,7 @@ Resources:
           - Name: ShareWith
             Value: !Ref StagingAccount
           - Name: SemanticVersion
-            Value: "v0.0.0-Staging"
+            Value: "v1.0.0-Staging"
             Type: PLAINTEXT
           - Name: AppARN
             Value: !Sub "arn:aws:serverlessrepo:${AWS::Region}:${AWS::AccountId}:applications/${ApplicationName}-Staging"
