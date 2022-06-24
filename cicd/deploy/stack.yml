@@ -21,8 +21,8 @@ Resources:
     Type: AWS::Serverless::Application
     Properties:
       Location:
-        ApplicationId: '${ApplicationArn}'
-        SemanticVersion: "${SemanticVersion}"
+        ApplicationId: '{{resolve:ssm:SSOSync/Staging/SARArn}}'
+        SemanticVersion: '{{resolve:ssm:SSOSync/Staging/Version}}'
       Parameters:
         GoogleAdminEmail: '{{resolve:secretsmanager:TestGoogleAdminEmail}}'
         GoogleCredentials: '{{resolve:secretsmanager:TestGoogleCredentials}}'
@@ -41,7 +41,7 @@ Resources:
   FunctionParam:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: SSOSyncArn
+      Name: SSOSync/Staging/FunctionArn
       Type: String
       Value: !GetAtt SARApp.Outputs.FunctionArn
       Description: The Arn of the lambda function ssosync

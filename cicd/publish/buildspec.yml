@@ -3,10 +3,6 @@ version: 0.2
 phases:
   install:
     commands:
-      # Print all environment variables (handy for AWS CodeBuild logs)
-      - env
-      - ls -la
-
       # Update sam to latest version
       - wget -q https://github.com/aws/aws-sam-cli/releases/latest/download/aws-sam-cli-linux-x86_64.zip
       - unzip -q aws-sam-cli-linux-x86_64.zip -d sam-installation
@@ -18,6 +14,9 @@ phases:
       # Fetch the GitHub variables
       - . ${CODEBUILD_SRC_DIR_GitHub}/gitvars.env
 
+      # Print all environment variables (handy for AWS CodeBuild logs
+      - env
+
       # Copy in the package file
       - cp ${CODEBUILD_SRC_DIR_Packaged}/packaged-staging.yaml ./packaged.yaml
 
@@ -26,13 +25,19 @@ phases:
 
   build:
     commands:
+      # Create parameters
+      AppArn="arn:aws:serverlessrepo:${AWS::Region}:${AWS::AccountId}:applications/${ApplicationName}-Staging"
+      aws ssm put-parameter --name "SSOSync/Staging/SARArn" --value ${AppArn} --type String
+
+      AppVersion="${GitTag}-${GitVersionHash}"
+      aws ssm put-parameter --name "SSOSync/Staging/Version" --value ${AppVersion} --type String
 
       # remove the previous builds
-      - aws serverlessrepo delete-application --application-id ${AppARN}
+      #- aws serverlessrepo delete-application --application-id ${AppARN}
         
       # Package our application with AWS SAM
-      - echo sam publish --template packaged.yaml --semantic-version ${SemanticVersion}
-      - sam publish --template packaged.yaml --semantic-version ${SemanticVersion}
+      - echo sam publish --template packaged.yaml --semantic-version ${AppVersion}
+      - sam publish --template packaged.yaml --semantic-version ${AppVersion}
 
       # Share with the StagingAccount
       - aws serverlessrepo put-application-policy --application-id ${AppARN} --statements Principals=${ShareWith},Actions=Deploy
