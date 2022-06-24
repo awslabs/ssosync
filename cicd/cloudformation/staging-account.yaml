@@ -77,6 +77,13 @@ Resources:
               Effect: Allow
               Resource:
               - !Ref ArtifactBucketKeyArn
+            - Action:
+              - 'ssm:GetParameters'
+              - 'ssm:DescribeParameters'
+              Effect: Allow
+              Resource:
+              - !Sub arn:aws:ssm:${AWS::Region}:${ProductionAccount}:parameter/SSOSync/*
+
 
 
   CFDeployerRole:

@@ -1,5 +1,17 @@
 version: 0.2
-            
+
+env:
+  exported-variables:
+    - Project
+    - Branch
+    - Tag
+    - CommitId
+    - CommitMessage
+    - CommitAuthor
+    - CommitAuthorEmail
+    - CommitHash
+    - IsRelease        
+    
 phases:
   pre_build: 
     commands:
@@ -9,42 +21,42 @@ phases:
 
   build:
     commands:
-      - echo export #!/bin/bash >> ./Environmant
-      - echo export CI=true >> gitvars.env 
-      - echo export CodeBuild=true >> gitvars.env
+      - Branch=`git branch -a --contains HEAD | sed -n 2p | awk '{ printf $1 }'`
+      - export Branch="${Branch#remotes/origin/}"
+      - export Project="${APP_Name}"
+      - export Tag=`git describe --tags --abbrev=0`
+      - export CommitId="$(git log -1 --pretty=%H)"
+      - export CommitMessage="$(git log -1 --pretty=%B)"
+      - export CommitAuthor="$(git log -1 --pretty=%an)"
+      - export CommitAuthorEmail="$(git log -1 --pretty=%ae)"
+      - export CommitHash=`git rev-parse --short HEAD`
 
-      - GitBranch=`git branch -a --contains HEAD | sed -n 2p | awk '{ printf $1 }'`
-      - echo export GitBranch=\"${GitBranch#remotes/origin/}\" >> gitvars.env
-
-      - echo export GitMessage=\"$(git log -1 --pretty=%B)\" >> gitvars.env
-      - echo export GitAuthor=\"$(git log -1 --pretty=%an)\" >> gitvars.env
-      - echo export GitAuthorEmail=\"$(git log -1 --pretty=%ae)\" >> gitvars.env
-      - echo export GitCommit=\"$(git log -1 --pretty=%H)\" >> gitvars.env
-      - export GitTag=`git describe --tags --abbrev=0`
-      - echo export GitTag=\"${GitTag}\" >> gitvars.env
-
-      - echo export GitProject=\"${APP_NAME}\" >> gitvars.env
-      - echo export CodeBuildUrl=\"https://$AWS_DEFAULT_REGION.console.aws.amazon.com/codebuild/home?region=$AWS_DEFAULT_REGION#/builds/$CODEBUILD_BUILD_ID/view/new\" >> gitvars.env
-      - echo export GoVersion=\"${GoVersion}\" >> gitvars.env
-
-      - GitVersionHash=`git rev-parse --short HEAD`
-      - echo export GitVersionHash=\"${GitVersionHash}\"
-
-      - GitReleaseCommit=`git rev-list -n 1 tags/${GitTag}`
+      - GitReleaseCommit=`git rev-list -n 1 tags/${Tag}`
       - echo $GitReleaseCommit
       - |
         if expr "${GitReleaseCommit}" : "${GitCommit}" >/dev/null; then
-          GitReleaseCommit=true
+          IsRelease=true
         else
-          GitReleaseCommit=false
+          IsRelease=false
         fi
 
       - |
-        if expr "${GitBranch}" : "master" >/dev/null; then
-          GitReleaseCommit=false
+        if expr "${Branch}" : "master" >/dev/null; then
+          IsRelease=false
         fi
-      - echo export GitReleaseCommit=\"${GitReleaseCommit}\" >> gitvars.env
-     
+
+      - echo export #!/bin/bash >> gitvars.env
+      - echo export CI=true >> gitvars.env 
+      - echo export CodeBuild=true >> gitvars.env
+      - echo export GitProject=\"${APP_NAME}\" >> gitvars.env
+      - echo export GitBranch=\"${Branch}\" >> gitvars.env
+      - echo export GitTag=\"${Tag}\" >> gitvars.env
+      - echo export GitCommit=\"${CommitId}\" >> gitvars.env
+      - echo export GitMessage=\"${CommitMessage}\" >> gitvars.env
+      - echo export GitAuthor=\"${CommitAuthor}\" >> gitvars.env
+      - echo export GitAuthorEmail=\"${CommitAuthorEmail}\" >> gitvars.env
+      - echo export GitVersionHash=\"${CommitHash}\" >> gitvars.env
+      - echo export GitReleaseCommit=\"${IsRelease}\" >> gitvars.env
 
       - cat gitvars.env
       - . ./gitvars.env

@@ -1,5 +1,9 @@
 version: 0.2
 
+env:
+  parameter-store:
+    AppArn: "/SSOSync/Staging/AppArn"
+
 phases:
   install:
     commands:
@@ -26,11 +30,8 @@ phases:
   build:
     commands:
       # Create parameters
-      AppArn="arn:aws:serverlessrepo:${AWS::Region}:${AWS::AccountId}:applications/${ApplicationName}-Staging"
-      aws ssm put-parameter --name "SSOSync/Staging/SARArn" --value ${AppArn} --type String
-
-      AppVersion="${GitTag}-${GitVersionHash}"
-      aws ssm put-parameter --name "SSOSync/Staging/Version" --value ${AppVersion} --type String
+      - export AppVersion="${GitTag#v}.${GitVersionHash}"
+      - aws ssm put-parameter --name "/SSOSync/Staging/Version" --value ${AppVersion} --type String --overwrite
 
       # remove the previous builds
       #- aws serverlessrepo delete-application --application-id ${AppArn}

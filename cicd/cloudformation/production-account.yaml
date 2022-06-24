@@ -49,6 +49,14 @@ Metadata:
 
 Resources:
 
+  FunctionParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: "/SSOSync/Staging/AppArn"
+      Type: String
+      Value: !Sub "arn:aws:serverlessrepo:${AWS::Region}:${AWS::AccountId}:applications/${ApplicationName}-Staging"
+      Description: The Arn of the Staging build in SAR
+
   CodePipelineLogGroup:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Retain
@@ -373,7 +381,6 @@ Resources:
                 Capabilities: CAPABILITY_IAM,CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND
                 TemplatePath: 'Source::cicd/deploy/stack.yml'
                 RoleArn: !Sub arn:aws:iam::${StagingAccount}:role/CloudFormationDeployerRole
-                ParameterOverrides: !Sub '{"ApplicationArn": "arn:aws:serverlessrepo:${AWS::Region}:${AWS::AccountId}:applications/${ApplicationName}-Staging"}'
                 OutputFileName: 'stack-outputs.json'
               InputArtifacts:
                 - Name: Source
@@ -658,11 +665,6 @@ Resources:
             Value: !Sub ${ArtifactBucket}
           - Name: ShareWith
             Value: !Ref StagingAccount
-          - Name: SemanticVersion
-            Value: "v1.0.0-Staging"
-            Type: PLAINTEXT
-          - Name: AppARN
-            Value: !Sub "arn:aws:serverlessrepo:${AWS::Region}:${AWS::AccountId}:applications/${ApplicationName}-Staging"
       Artifacts:
         Name: !Ref ApplicationName
         Type: CODEPIPELINE
@@ -984,6 +986,16 @@ Resources:
               Effect: Allow
               Resource: 
               - !Sub arn:aws:serverlessrepo:${AWS::Region}:${AWS::AccountId}:applications/*
+            - Action: 
+              - 'ssm:GetParameters'
+              - 'ssm:PutParameter'
+              - 'ssm:DeleteParameter'
+              - 'ssm:DeleteParameters'
+              - 'ssm:DescribeParameters'
+              Effect: Allow
+              Resource:
+              - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/SSOSync/*
+      
 
 
 Outputs:

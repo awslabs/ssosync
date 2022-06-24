@@ -6,22 +6,12 @@ Description:
   candidate releases (via privately shared app in the AWS Serverless Application
   Repository (SAR) within the Staging Account.
 
-Parameters:
-  ApplicationArn:
-    Description: The candidate release in the SAR
-    Default: 'arn:aws:serverlessrepo:<AWS::Region>:<AccountId>:applications/<ApplicationName>'
-    Type: String
-  SemanticVersion:
-    Description: The version of the candidate release in the SAR
-    Default: 'v0.0.0-Staging'
-    Type: String
- 
 Resources:
   SARApp:
     Type: AWS::Serverless::Application
     Properties:
       Location:
-        ApplicationId: '{{resolve:ssm:SSOSync/Staging/SARArn}}'
+        ApplicationId: '{{resolve:ssm:SSOSync/Staging/AppArn}}'
         SemanticVersion: '{{resolve:ssm:SSOSync/Staging/Version}}'
       Parameters:
         GoogleAdminEmail: '{{resolve:secretsmanager:TestGoogleAdminEmail}}'
@@ -41,7 +31,7 @@ Resources:
   FunctionParam:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: SSOSync/Staging/FunctionArn
+      Name: "/SSOSync/Staging/FunctionArn"
       Type: String
       Value: !GetAtt SARApp.Outputs.FunctionArn
       Description: The Arn of the lambda function ssosync
