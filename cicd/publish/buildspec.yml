@@ -33,11 +33,11 @@ phases:
       aws ssm put-parameter --name "SSOSync/Staging/Version" --value ${AppVersion} --type String
 
       # remove the previous builds
-      #- aws serverlessrepo delete-application --application-id ${AppARN}
+      #- aws serverlessrepo delete-application --application-id ${AppArn}
         
       # Package our application with AWS SAM
       - echo sam publish --template packaged.yaml --semantic-version ${AppVersion}
       - sam publish --template packaged.yaml --semantic-version ${AppVersion}
 
       # Share with the StagingAccount
-      - aws serverlessrepo put-application-policy --application-id ${AppARN} --statements Principals=${ShareWith},Actions=Deploy
+      - aws serverlessrepo put-application-policy --application-id ${AppArn} --statements Principals=${ShareWith},Actions=Deploy
