@@ -6,13 +6,23 @@ Description:
   candidate releases (via privately shared app in the AWS Serverless Application
   Repository (SAR) within the Staging Account.
 
+Parameters:
+  AppArn:
+    Description: The candidate release in the SAR
+    Default: 'arn:aws:serverlessrepo:<AWS::Region>:<AccountId>:applications/<ApplicationName>'
+    Type: String
+  AppVersion:
+    Description: The version of this build in SAR
+    Default: 'v1.0.0-rc.10'
+    Type: String
+
 Resources:
   SARApp:
     Type: AWS::Serverless::Application
     Properties:
       Location:
-        ApplicationId: '{{resolve:ssm:SSOSync/Staging/AppArn}}'
-        SemanticVersion: '{{resolve:ssm:SSOSync/Staging/Version}}'
+        ApplicationId: !Ref AppArn
+        SemanticVersion: !Ref AppVersion
       Parameters:
         GoogleAdminEmail: '{{resolve:secretsmanager:TestGoogleAdminEmail}}'
         GoogleCredentials: '{{resolve:secretsmanager:TestGoogleCredentials}}'

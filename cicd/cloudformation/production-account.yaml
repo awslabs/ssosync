@@ -188,93 +188,6 @@ Resources:
             StringEquals:  
               aws:SourceAccount: !Ref AWS::AccountId
 
-  BuildImageGoRepo:
-    Type: AWS::ECR::Repository
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Delete
-    Properties:
-      RepositoryName: 'codebuild/golang'
-      RepositoryPolicyText:
-        Version: '2012-10-17'
-        Statement:
-          - Action:
-              - 'ecr:BatchCheckLayerAvailability'
-              - 'ecr:BatchGetImage'
-              - 'ecr:GetDownloadUrlForLayer'
-            Effect: Allow
-            Principal:
-              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
-
-  BuildImageSAMRepo:
-    Type: AWS::ECR::Repository
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Delete
-    Properties:
-      RepositoryName: 'codebuild/sam'
-      RepositoryPolicyText:
-        Version: '2012-10-17'
-        Statement:
-          - Action:
-              - ecr:BatchCheckLayerAvailability
-              - ecr:BatchGetImage
-              - ecr:GetDownloadUrlForLayer
-            Effect: Allow
-            Principal:
-              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
-
-  CodePipelineBuildImages:
-    Type: AWS::CodePipeline::Pipeline
-    Properties:
-      Name: BuildImages
-      RoleArn: !Sub ${CodePipelineRole.Arn}
-      ArtifactStore:
-        Type: S3
-        Location: !Ref ArtifactBucket
-        EncryptionKey:
-          Type: KMS
-          Id: !GetAtt ArtifactBucketKey.Arn
-      Stages:
-        - Name: Source
-          Actions:
-            - Name: GitHub
-              ActionTypeId:
-                Category: Source
-                Owner: AWS
-                Version: 1
-                Provider: CodeStarSourceConnection
-              OutputArtifacts:
-                - Name: Source
-              RunOrder: '1'
-              Configuration:
-                ConnectionArn: !Ref CodeStarConnection
-                FullRepositoryId: awslabs/ssosync
-                BranchName: CodePipeline
-                DetectChanges: true
-        - Name: BuildImages
-          Actions:
-            - Name: golang
-              InputArtifacts:
-                - Name: Source
-              ActionTypeId:
-                Category: Build
-                Owner: AWS
-                Version: 1
-                Provider: CodeBuild
-              RunOrder: '1'
-              Configuration:
-                ProjectName: !Ref CodeBuildGo
-            - Name: sam
-              InputArtifacts:
-                - Name: Source
-              ActionTypeId:
-                Category: Build
-                Owner: AWS
-                Version: 1
-                Provider: CodeBuild
-              RunOrder: '1'
-              Configuration:
-                ProjectName: !Ref CodeBuildSAM
-
   CodePipeline:
     Type: AWS::CodePipeline::Pipeline
     Properties:
@@ -290,7 +203,7 @@ Resources:
         - Name: Source
           Actions:
             - Name: GitHub
-              Namespace: SourceVariables
+              Namespace: GitHub
               ActionTypeId:
                 Category: Source
                 Owner: AWS
@@ -306,7 +219,8 @@ Resources:
                 DetectChanges: true
         - Name: Build
           Actions:
-            - Name: GitVars
+            - Name: Git
+              Namespace: Git
               InputArtifacts:
                 - Name: Source
               ActionTypeId:
@@ -315,15 +229,14 @@ Resources:
                 Version: 1
                 Provider: CodeBuild
               OutputArtifacts:
-                - Name: GitHub
+                - Name: GitVars
               RunOrder: '1'
               Configuration:
-                ProjectName: !Ref GitHubVars
+                ProjectName: !Ref GitMetadata
                 PrimarySource: Source
             - Name: BuildApp
               InputArtifacts:
                 - Name: Source
-                - Name: GitHub
               ActionTypeId: 
                 Category: Build
                 Owner: AWS
@@ -335,6 +248,7 @@ Resources:
               Configuration: 
                 ProjectName: !Ref CodeBuildApp
                 PrimarySource: Source
+                EnvironmentVariables: '[{"name":"GitTag","value":"#{Git.Tag}","type":"PLAINTEXT"},{"name":"GitCommit","value":"#{Git.CommitId}","type":"PLAINTEXT"}]'
             - Name: PackageApp
               ActionTypeId:
                 Category: Build
@@ -351,6 +265,7 @@ Resources:
                 - Name: Built
                 - Name: Source
             - Name: ReleaseCandidate
+              Namespace: RC
               ActionTypeId:
                 Category: Build
                 Owner: AWS
@@ -360,11 +275,11 @@ Resources:
               Configuration:
                 ProjectName: !Ref CodeBuildStaging
                 PrimarySource: Source
+                EnvironmentVariables: '[{"name":"GitVersionHash","value":"#{Git.CommitHash}","type":"PLAINTEXT"}]'
               OutputArtifacts:
                 - Name: Staging
               InputArtifacts:
                 - Name: Source
-                - Name: GitHub
                 - Name: Packaged
         - Name: Staging
           Actions:
@@ -380,6 +295,7 @@ Resources:
                 StackName: SmokeTest
                 Capabilities: CAPABILITY_IAM,CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND
                 TemplatePath: 'Source::cicd/deploy/stack.yml'
+                ParameterOverrides: '[{"AppArn":"#{RC.AppArn}"},{"AppVersion":"#{RC.AppVersion}"}]'
                 RoleArn: !Sub arn:aws:iam::${StagingAccount}:role/CloudFormationDeployerRole
                 OutputFileName: 'stack-outputs.json'
               InputArtifacts:
@@ -434,9 +350,9 @@ Resources:
               Configuration:
                 ProjectName: !Ref CodeBuildApproveRelease
                 PrimarySource: Source
+                EnvironmentVariables: '[{"name":"GitIsRelease","value":"#{Git.IsRelease}","type":"PLAINTEXT"}]'
               InputArtifacts:
                 - Name: Source
-                - Name: GitHub
             - Name: PassedStaging
               ActionTypeId: 
                 Category: Approval
@@ -459,89 +375,10 @@ Resources:
                 - Name: Packaged
               RunOrder: 3
 
-  CodeBuildGo:
+  GitMetadata:
     Type: AWS::CodeBuild::Project
     Properties:
-      Name: !Sub "BuildImages-Build-Go"
-      Description: !Sub Build project for a go.lang container
-      ServiceRole: !Ref CodeBuildImagesRole
-      Source:
-        Type: CODEPIPELINE
-        BuildSpec: "cicd/buildimages/buildspec.yml"
-      Environment:
-        ComputeType: BUILD_GENERAL1_SMALL
-        Image: aws/codebuild/standard:5.0
-        Type: LINUX_CONTAINER
-        PrivilegedMode: true
-        EnvironmentVariables:
-          - Name: ImageRepo
-            Value: golang
-          - Name: ImageVersion
-            Value: "1.18.2"
-          - Name: AccountId
-            Value: !Ref AWS::AccountId
-          - Name: Region
-            Value: !Ref AWS::Region
-          - Name: DockerPath
-            Value: 'cicd/buildimages/golang/'
-      Artifacts:
-        Name: !Ref ApplicationName
-        Type: CODEPIPELINE
-      LogsConfig:
-        CloudWatchLogs:
-          GroupName: !Ref CodePipelineLogGroup
-          StreamName: !Ref CodeBuildGoLogs
-          Status: ENABLED
-
-  CodeBuildGoLogs:
-    Type: AWS::Logs::LogStream
-    Properties:
-      LogGroupName: !Ref CodePipelineLogGroup
-      LogStreamName: !Sub "BuildImages-Build-go"
-
-  CodeBuildSAM:
-    Type: AWS::CodeBuild::Project
-    Properties:
-      Name: !Sub "BuildImages-Build-SAM"
-      Description: !Sub Build project for a SAM container
-      ServiceRole: !Ref CodeBuildImagesRole
-      Source:
-        Type: CODEPIPELINE
-      Environment:
-        ComputeType: BUILD_GENERAL1_SMALL
-        Image: aws/codebuild/standard:5.0
-        Type: LINUX_CONTAINER
-        PrivilegedMode: true
-        EnvironmentVariables:
-          - Name: ImageRepo
-            Value: sam
-          - Name: ImageVersion
-            Value: "1.18.1"
-          - Name: AccountId
-            Value: !Ref AWS::AccountId
-          - Name: Region
-            Value: !Ref AWS::Region
-          - Name: DockerPath
-            Value: 'cicd/buildimages/sam/'
-      Artifacts:
-        Name: !Ref ApplicationName
-        Type: CODEPIPELINE
-      LogsConfig:
-        CloudWatchLogs:
-          GroupName: !Ref CodePipelineLogGroup
-          StreamName: !Ref CodeBuildSAMLogs
-          Status: ENABLED
-
-  CodeBuildSAMLogs:
-    Type: AWS::Logs::LogStream
-    Properties:
-      LogGroupName: !Ref CodePipelineLogGroup
-      LogStreamName: !Sub "BuildImages-Build-SAM"
-
-  GitHubVars:
-    Type: AWS::CodeBuild::Project
-    Properties:
-      Name: !Sub "${ApplicationName}-GitHub-Vars"
+      Name: !Sub "${ApplicationName}-Git-Metadata"
       Description: !Sub Build project for ${ApplicationName}
       ServiceRole: !Ref CodeBuildAppRole
       Source:
@@ -566,14 +403,14 @@ Resources:
       LogsConfig:
         CloudWatchLogs:
           GroupName: !Ref CodePipelineLogGroup
-          StreamName: !Ref GitHubVarsLogs
+          StreamName: !Ref GitMetadataLogs
           Status: ENABLED
 
-  GitHubVarsLogs:
+  GitMetadataLogs:
     Type: AWS::Logs::LogStream
     Properties:
       LogGroupName: !Ref CodePipelineLogGroup
-      LogStreamName: !Sub "${ApplicationName}-GitHub-Vars"
+      LogStreamName: !Sub "${ApplicationName}-Git-Metadata"
 
   CodeBuildApp:
     Type: AWS::CodeBuild::Project
@@ -702,10 +539,10 @@ Resources:
       LogsConfig:
         CloudWatchLogs:
           GroupName: !Ref CodePipelineLogGroup
-          StreamName: !Ref CodeBuildReleaseLogs
+          StreamName: !Ref CodeBuildApproveReleaseLogs
           Status: ENABLED
 
-  CodeBuildReleaseLogs:
+  CodeBuildApproveReleaseLogs:
     Type: AWS::Logs::LogStream
     Properties:
       LogGroupName: !Ref CodePipelineLogGroup
@@ -775,9 +612,7 @@ Resources:
               - 'codebuild:BatchGetBuilds'
               - 'codebuild:StartBuild'
               Resource:
-              - !Sub ${GitHubVars.Arn}
-              - !Sub ${CodeBuildGo.Arn}
-              - !Sub ${CodeBuildSAM.Arn}
+              - !Sub ${GitMetadata.Arn}
               - !Sub ${CodeBuildApp.Arn}
               - !Sub ${CodeBuildPackage.Arn}
               - !Sub ${CodeBuildStaging.Arn}
@@ -851,24 +686,6 @@ Resources:
               - 'ecr:DescribeImages'
               Effect: Allow
               Resource: '*'
-            - Action:
-              - 'ecr:BatchCheckLayerAvailability'
-              - 'ecr:GetDownloadUrlForLayer'
-              - 'ecr:GetRepositoryPolicy'
-              - 'ecr:ListImages'
-              - 'ecr:BatchGetImage'
-              - 'ecr:GetLifecyclePolicy'
-              - 'ecr:GetLifecyclePolicyPreview'
-              - 'ecr:ListTagsForResource'
-              - 'ecr:DescribeImageScanFindings'
-              - 'ecr:InitiateLayerUpload'
-              - 'ecr:UploadLayerPart'
-              - 'ecr:CompleteLayerUploadr'
-              - 'ecr:PutImage'
-              Effect: Allow
-              Resource:
-              - !Sub ${BuildImageGoRepo.Arn}
-              - !Sub ${BuildImageSAMRepo.Arn}
 
   CodeBuildAppRole:
     Type: AWS::IAM::Role

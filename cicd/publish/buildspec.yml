@@ -4,6 +4,10 @@ env:
   parameter-store:
     AppArn: "/SSOSync/Staging/AppArn"
 
+  exported-variables:
+    - AppArn
+    - AppVersion
+
 phases:
   install:
     commands:
@@ -15,9 +19,6 @@ phases:
 
   pre_build:
     commands:
-      # Fetch the GitHub variables
-      - . ${CODEBUILD_SRC_DIR_GitHub}/gitvars.env
-
       # Print all environment variables (handy for AWS CodeBuild logs
       - env
 
