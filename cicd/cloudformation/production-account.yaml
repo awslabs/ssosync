@@ -49,14 +49,6 @@ Metadata:
 
 Resources:
 
-  FunctionParam:
-    Type: AWS::SSM::Parameter
-    Properties:
-      Name: "/SSOSync/Staging/AppArn"
-      Type: String
-      Value: !Sub "arn:aws:serverlessrepo:${AWS::Region}:${AWS::AccountId}:applications/${ApplicationName}-Staging"
-      Description: The Arn of the Staging build in SAR
-
   CodePipelineLogGroup:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Retain
@@ -264,7 +256,7 @@ Resources:
               InputArtifacts:
                 - Name: Built
                 - Name: Source
-            - Name: ReleaseCandidate
+            - Name: PublishRC
               Namespace: RC
               ActionTypeId:
                 Category: Build
@@ -275,7 +267,7 @@ Resources:
               Configuration:
                 ProjectName: !Ref CodeBuildStaging
                 PrimarySource: Source
-                EnvironmentVariables: '[{"name":"GitVersionHash","value":"#{Git.CommitHash}","type":"PLAINTEXT"}]'
+                EnvironmentVariables: '[{"name":"GitTag","value":"#{Git.Tag}","type":"PLAINTEXT"},{"name":"GitVersionHash","value":"#{Git.CommitHash}","type":"PLAINTEXT"}]'
               OutputArtifacts:
                 - Name: Staging
               InputArtifacts:
@@ -283,40 +275,21 @@ Resources:
                 - Name: Packaged
         - Name: Staging
           Actions:
-            - Name: CreateChangeSetTest
+            - Name: DeployRC
               ActionTypeId:
-                Category: Deploy
+                Category: Build
                 Owner: AWS
                 Version: 1
-                Provider: CloudFormation
-              Configuration:
-                ChangeSetName: !Sub Deploy-${ApplicationName}
-                ActionMode: CHANGE_SET_REPLACE
-                StackName: SmokeTest
-                Capabilities: CAPABILITY_IAM,CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND
-                TemplatePath: 'Source::cicd/deploy/stack.yml'
-                ParameterOverrides: '[{"AppArn":"#{RC.AppArn}"},{"AppVersion":"#{RC.AppVersion}"}]'
-                RoleArn: !Sub arn:aws:iam::${StagingAccount}:role/CloudFormationDeployerRole
-                OutputFileName: 'stack-outputs.json'
-              InputArtifacts:
-                - Name: Source
+                Provider: CodeBuild
               RunOrder: 1
-              RoleArn: !Sub arn:aws:iam::${StagingAccount}:role/ProductionAcctCodePipelineCloudFormationRole
-            - Name: DeployChangeSetTest
-              ActionTypeId:
-                Category: Deploy
-                Owner: AWS
-                Version: 1
-                Provider: CloudFormation
               Configuration:
-                ChangeSetName: !Sub Deploy-${ApplicationName}
-                ActionMode: CHANGE_SET_EXECUTE
-                StackName: SmokeTest
-                RoleArn: !Sub arn:aws:iam::${StagingAccount}:role/CloudFormationDeployerRole
+                ProjectName: !Ref CodeBuildDeploy
+                PrimarySource: Source
+                EnvironmentVariables: '[{"name":"AppArn","value":"#{RC.AppArn}","type":"PLAINTEXT"},{"name":"AppVersion","value":"#{RC.AppVersion}","type":"PLAINTEXT"}]'
+              OutputArtifacts:
+                - Name: ChangeSet
               InputArtifacts:
                 - Name: Source
-              RunOrder: 2
-              RoleArn: !Sub arn:aws:iam::${StagingAccount}:role/ProductionAcctCodePipelineCloudFormationRole
             - Name: ManualTesting
               ActionTypeId:
                 Category: Approval
@@ -517,6 +490,47 @@ Resources:
       LogGroupName: !Ref CodePipelineLogGroup
       LogStreamName: !Sub "${ApplicationName}-Staging"
 
+  CodeBuildDeploy:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub "${ApplicationName}-Deploy"
+      Description: !Sub "Perform test deployment into ${StagingAccount} to prove end to end functionality"
+      ServiceRole: !Ref CodeBuildDeployRole
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: "cicd/deploy/buildspec.yml"
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:5.0
+        Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: ARTIFACT_S3_BUCKET
+            Value: !Sub ${ArtifactBucket}
+          - Name: CloudFormationDeployerRole
+            Value: !Sub arn:aws:iam::${StagingAccount}:role/CloudFormationDeployerRole
+          - Name: StackName
+            Value: SmokeTest
+          - Name: Capabilities
+            Value: "CAPABILITY_IAM,CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND"
+          - Name: TemplatePath
+            Value: 'Source::cicd/deploy/stack.yml'
+          - Name: ChangeSetName
+            Value: !Sub Deploy-${ApplicationName}
+      Artifacts:
+        Name: !Ref ApplicationName
+        Type: CODEPIPELINE
+      LogsConfig:
+        CloudWatchLogs:
+          GroupName: !Ref CodePipelineLogGroup
+          StreamName: !Ref CodeBuildDeployLogs
+          Status: ENABLED
+
+  CodeBuildDeployLogs:
+    Type: AWS::Logs::LogStream
+    Properties:
+      LogGroupName: !Ref CodePipelineLogGroup
+      LogStreamName: !Sub "${ApplicationName}-Deploy"
+
   CodeBuildApproveRelease:
     Type: AWS::CodeBuild::Project
     Properties:
@@ -644,49 +658,6 @@ Resources:
               - !Sub arn:aws:iam::${StagingAccount}:role/ProductionAcctCodePipelineCloudFormationRole
               Effect: Allow
 
-  CodeBuildImagesRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub ${ApplicationName}-CodeBuild-Images-${AWS::Region}
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-        - Action: ['sts:AssumeRole']
-          Effect: Allow
-          Principal:
-            Service: [codebuild.amazonaws.com]
-      Path: /
-      Policies:
-        - PolicyName: !Sub ${ApplicationName}-CodeBuild-Images-${AWS::Region}
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-            - Action:
-              - 'logs:CreateLogGroup'
-              - 'logs:CreateLogStream'
-              - 'logs:PutLogEvents'
-              Effect: Allow
-              Resource: '*'
-            - Action:
-              - 'kms:DescribeKey'
-              - 'kms:GenerateDataKey*'
-              - 'kms:Encrypt'
-              - 'kms:ReEncrypt*'
-              - 'kms:Decrypt'
-              Effect: Allow
-              Resource:
-              - !GetAtt ArtifactBucketKey.Arn
-            - Action: 's3:*'
-              Effect: Allow
-              Resource:
-              - !Sub ${ArtifactBucket.Arn}/*
-            - Action: 
-              - 'ecr:GetAuthorizationToken'
-              - 'ecr:DescribeRepositories'
-              - 'ecr:DescribeImages'
-              Effect: Allow
-              Resource: '*'
-
   CodeBuildAppRole:
     Type: AWS::IAM::Role
     Properties:
@@ -813,7 +784,48 @@ Resources:
               Resource:
               - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/SSOSync/*
       
-
+  CodeBuildDeployRole:
+    Type: AWS::IAM::Role
+    Properties: 
+      RoleName: !Sub ${ApplicationName}-CodeBuild-Deploy-${AWS::Region}
+      AssumeRolePolicyDocument:
+        Statement:
+        - Action: ['sts:AssumeRole']
+          Effect: Allow
+          Principal: 
+            Service: [codebuild.amazonaws.com]
+        Version: '2012-10-17'
+      Path: /
+      Policies: 
+        - PolicyName: !Sub ${ApplicationName}-CodeBuild-Deploy-${AWS::Region}
+          PolicyDocument:                     
+            Version: '2012-10-17'
+            Statement: 
+            - Action:
+              - 'iam:PassRole'
+              - 'cloudformation:*'
+              Effect: Allow
+              Resource: '*'
+            - Action:
+              - 's3:ListBucket'
+              Effect: Allow
+              Resource:
+              - !Sub ${ArtifactBucket.Arn}
+            - Action:
+              - 's3:Get*'
+              - 's3:Put*'
+              Effect: Allow
+              Resource:
+              - !Sub ${ArtifactBucket.Arn}/*
+            - Action:
+              - 'kms:DescribeKey'
+              - 'kms:GenerateDataKey*'
+              - 'kms:Encrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:Decrypt'
+              Effect: Allow
+              Resource:
+              - !GetAtt ArtifactBucketKey.Arn
 
 Outputs:
 

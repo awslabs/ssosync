@@ -1,0 +1,33 @@
+version: 0.2
+    
+phases:
+  install:
+    commands:
+      # Update sam to latest version
+      - wget -q https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip
+      - unzip -q awscli-exe-linux-x86_64.zip -d aws-installation
+      - sudo ./aws-installation/install --update
+      - rm -rf ./aws-installation  awscli-exe-linux-x86_64.zip
+
+  pre_build: 
+    commands:
+      # Print all environment variables (handy for AWS CodeBuild logs)
+      - env
+
+  build:
+    commands:
+      - export TemplateBody=$(cat $TemplatePath)
+      # Create a changeset for the deployment
+      - aws cloudformation create-change-set \ 
+        --stack-name ${StackName} \
+        --template-body ${TemplateBody} \
+        --parameters "ParameterKey=AppArn,ParameterValue=${AppArn},ParemeterKey=AppVersion,ParameterValue=${AppVersion}" \
+        --capabilities "$Capabilities}" \
+        --role-arn "${CloudFormationDeployerRole}" \
+        --change-set-name "${ChangeSetName}" \
+        --change-set-type "CREATE" \
+
+      # Deploy the changeset
+      - aws cloudformation execute-change-set \
+        --change-set-name "${ChangeSetName}" \
+        
