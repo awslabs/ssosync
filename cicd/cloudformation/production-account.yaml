@@ -256,6 +256,8 @@ Resources:
               InputArtifacts:
                 - Name: Built
                 - Name: Source
+        - Name: Staging
+          Actions:
             - Name: PublishRC
               Namespace: RC
               ActionTypeId:
@@ -263,7 +265,7 @@ Resources:
                 Owner: AWS
                 Version: 1
                 Provider: CodeBuild
-              RunOrder: '4'
+              RunOrder: '1'
               Configuration:
                 ProjectName: !Ref CodeBuildStaging
                 PrimarySource: Source
@@ -273,15 +275,13 @@ Resources:
               InputArtifacts:
                 - Name: Source
                 - Name: Packaged
-        - Name: Staging
-          Actions:
             - Name: DeployRC
               ActionTypeId:
                 Category: Build
                 Owner: AWS
                 Version: 1
                 Provider: CodeBuild
-              RunOrder: 1
+              RunOrder: 2
               Configuration:
                 ProjectName: !Ref CodeBuildDeploy
                 PrimarySource: Source
@@ -475,6 +475,8 @@ Resources:
             Value: !Sub ${ArtifactBucket}
           - Name: ShareWith
             Value: !Ref StagingAccount
+          - Name: AppArn
+            Value: !Sub "arn:aws:serverlessrepo:${AWS::Region}:${AWS::AccountId}:applications/${ApplicationName}-Staging"
       Artifacts:
         Name: !Ref ApplicationName
         Type: CODEPIPELINE
@@ -508,12 +510,16 @@ Resources:
             Value: !Sub ${ArtifactBucket}
           - Name: CloudFormationDeployerRole
             Value: !Sub arn:aws:iam::${StagingAccount}:role/CloudFormationDeployerRole
+          - Name: ProductionAcctCodePipelineCloudFormationRole
+            Value: !Sub arn:aws:iam::${StagingAccount}:role/ProductionAcctCodePipelineCloudFormationRole
           - Name: StackName
             Value: SmokeTest
           - Name: Capabilities
-            Value: "CAPABILITY_IAM,CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND"
+            Value: "CAPABILITY_AUTO_EXPAND, CAPABILITY_NAMED_IAM, CAPABILITY_IAM"
           - Name: TemplatePath
-            Value: 'Source::cicd/deploy/stack.yml'
+            Value: 'cicd/deploy/stack.yml'
+          - Name: ParameterPath
+            Value: 'cicd/deploy/params.yml'
           - Name: ChangeSetName
             Value: !Sub Deploy-${ApplicationName}
       Artifacts:
@@ -629,6 +635,7 @@ Resources:
               - !Sub ${GitMetadata.Arn}
               - !Sub ${CodeBuildApp.Arn}
               - !Sub ${CodeBuildPackage.Arn}
+              - !Sub ${CodeBuildDeploy.Arn}
               - !Sub ${CodeBuildStaging.Arn}
               - !Sub ${CodeBuildRelease.Arn}
               Effect: Allow
@@ -807,6 +814,12 @@ Resources:
               Effect: Allow
               Resource: '*'
             - Action:
+              - 'logs:CreateLogGroup'
+              - 'logs:CreateLogStream'
+              - 'logs:PutLogEvents'
+              Effect: Allow
+              Resource: '*'
+            - Action:
               - 's3:ListBucket'
               Effect: Allow
               Resource:
@@ -826,6 +839,11 @@ Resources:
               Effect: Allow
               Resource:
               - !GetAtt ArtifactBucketKey.Arn
+            - Action:
+              - 'sts:AssumeRole'
+              Resource:
+              - !Sub arn:aws:iam::${StagingAccount}:role/ProductionAcctCodePipelineCloudFormationRole
+              Effect: Allow
 
 Outputs:
 

@@ -1,9 +1,6 @@
 version: 0.2
 
 env:
-  parameter-store:
-    AppArn: "/SSOSync/Staging/AppArn"
-
   exported-variables:
     - AppArn
     - AppVersion
