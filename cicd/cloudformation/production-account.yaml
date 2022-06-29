@@ -290,13 +290,20 @@ Resources:
                 - Name: ChangeSet
               InputArtifacts:
                 - Name: Source
-            - Name: ManualTesting
+            - Name: End2EndTest
               ActionTypeId:
-                Category: Approval
+                Category: Build
                 Owner: AWS
                 Version: 1
-                Provider: Manual
+                Provider: CodeBuild
               RunOrder: 3
+              Configuration:
+                ProjectName: !Ref CodeBuildE2ETest
+                PrimarySource: Source
+              OutputArtifacts:
+                - Name: E2ETest
+              InputArtifacts:
+                - Name: Source
             - Name: CleanUp
               ActionTypeId:
                 Category: Deploy
@@ -515,11 +522,9 @@ Resources:
           - Name: StackName
             Value: SmokeTest
           - Name: Capabilities
-            Value: "CAPABILITY_AUTO_EXPAND, CAPABILITY_NAMED_IAM, CAPABILITY_IAM"
+            Value: "CAPABILITY_AUTO_EXPAND CAPABILITY_IAM"
           - Name: TemplatePath
             Value: 'cicd/deploy/stack.yml'
-          - Name: ParameterPath
-            Value: 'cicd/deploy/params.yml'
           - Name: ChangeSetName
             Value: !Sub Deploy-${ApplicationName}
       Artifacts:
@@ -536,6 +541,41 @@ Resources:
     Properties:
       LogGroupName: !Ref CodePipelineLogGroup
       LogStreamName: !Sub "${ApplicationName}-Deploy"
+
+  CodeBuildE2ETest:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub "${ApplicationName}-Test-End2End"
+      Description: !Sub Use the GitHub metadata to determine whether this commit is a release
+      ServiceRole: !Ref CodeBuildTestRole
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: "cicd/test-end2end/buildspec.yml"
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:5.0
+        Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: ARTIFACT_S3_BUCKET
+            Value: !Sub ${ArtifactBucket}
+          - Name: CloudFormationDeployerRole
+            Value: !Sub arn:aws:iam::${StagingAccount}:role/CloudFormationDeployerRole
+          - Name: ProductionAcctCodePipelineCloudFormationRole
+            Value: !Sub arn:aws:iam::${StagingAccount}:role/ProductionAcctCodePipelineCloudFormationRole
+      Artifacts:
+        Name: !Ref ApplicationName
+        Type: CODEPIPELINE
+      LogsConfig:
+        CloudWatchLogs:
+          GroupName: !Ref CodePipelineLogGroup
+          StreamName: !Ref CodeBuildE2ETestLogs
+          Status: ENABLED
+
+  CodeBuildE2ETestLogs:
+    Type: AWS::Logs::LogStream
+    Properties:
+      LogGroupName: !Ref CodePipelineLogGroup
+      LogStreamName: !Sub "${ApplicationName}-E2ETest"
 
   CodeBuildApproveRelease:
     Type: AWS::CodeBuild::Project
@@ -637,6 +677,8 @@ Resources:
               - !Sub ${CodeBuildPackage.Arn}
               - !Sub ${CodeBuildDeploy.Arn}
               - !Sub ${CodeBuildStaging.Arn}
+              - !Sub ${CodeBuildE2ETest.Arn}
+              - !Sub ${CodeBuildApproveRelease.Arn}
               - !Sub ${CodeBuildRelease.Arn}
               Effect: Allow
             - Action:
@@ -844,6 +886,62 @@ Resources:
               Resource:
               - !Sub arn:aws:iam::${StagingAccount}:role/ProductionAcctCodePipelineCloudFormationRole
               Effect: Allow
+
+  CodeBuildTestRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${ApplicationName}-CodeBuild-Test-${AWS::Region}
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Action: ['sts:AssumeRole']
+          Effect: Allow
+          Principal:
+            Service: [codebuild.amazonaws.com]
+      Path: /
+      Policies:
+        - PolicyName: !Sub ${ApplicationName}-CodeBuild-Test-${AWS::Region}
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+            - Action:
+              - 'logs:CreateLogGroup'
+              - 'logs:CreateLogStream'
+              - 'logs:PutLogEvents'
+              Effect: Allow
+              Resource: '*'
+            - Action:
+              - 'kms:DescribeKey'
+              - 'kms:GenerateDataKey*'
+              - 'kms:Encrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:Decrypt'
+              Effect: Allow
+              Resource:
+              - !GetAtt ArtifactBucketKey.Arn
+            - Action: 's3:*'
+              Effect: Allow
+              Resource:
+              - !Sub ${ArtifactBucket.Arn}/*
+            - Action:
+              - 'kms:DescribeKey'
+              - 'kms:GenerateDataKey*'
+              - 'kms:Encrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:Decrypt'
+              Effect: Allow
+              Resource:
+              - !GetAtt ArtifactBucketKey.Arn
+            - Action:
+              - 'sts:AssumeRole'
+              Resource:
+              - !Sub arn:aws:iam::${StagingAccount}:role/ProductionAcctCodePipelineCloudFormationRole
+              Effect: Allow
+            - Action:
+              -  'lambda:invoke'
+              Effect: Allow
+              Resource: '*'
+              
 
 Outputs:
 
