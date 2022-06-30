@@ -333,13 +333,6 @@ Resources:
                 EnvironmentVariables: '[{"name":"GitIsRelease","value":"#{Git.IsRelease}","type":"PLAINTEXT"}]'
               InputArtifacts:
                 - Name: Source
-            - Name: PassedStaging
-              ActionTypeId: 
-                Category: Approval
-                Owner: AWS
-                Version: 1
-                Provider: Manual  
-              RunOrder: 2
             - Name: Release
               ActionTypeId:
                 Category: Build
@@ -353,7 +346,7 @@ Resources:
                 - Name: Release
               InputArtifacts:
                 - Name: Packaged
-              RunOrder: 3
+              RunOrder: 2
 
   GitMetadata:
     Type: AWS::CodeBuild::Project
