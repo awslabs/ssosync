@@ -12,7 +12,7 @@
 # Based on https://github.com/aws/aws-codebuild-docker-images/blob/master/ubuntu/standard/5.0/Dockerfile
 # and updated to reflect the build requirements of this project
 #
-FROM public.ecr.aws/ubuntu/standard:5.0 AS build
+FROM public.ecr.aws/codebuild/standard:5.0 AS build
 
 FROM build AS sam
 

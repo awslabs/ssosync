@@ -189,7 +189,7 @@ Resources:
           - Name: Region
             Value: !Ref AWS::Region
           - Name: DockerPath
-            Value: 'cicd/buildimages/golang/'
+            Value: 'cicd/buildimages/'
       Artifacts:
         Name: !Ref ApplicationName
         Type: CODEPIPELINE

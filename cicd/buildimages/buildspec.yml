@@ -1,4 +1,4 @@
-version: 0.2
+ersion: 0.2
 
 phases:
   pre_build:
@@ -20,7 +20,7 @@ phases:
       - cd ${DockerPath}
       - echo Build started on `date`
       - echo Building the Docker image...          
-      - docker build --build-arg ImageVersion=${ImageVersion} -t ${ImageRepo}:${ImageVersion} 
+      - docker build -t ${ImageRepo}:${ImageVersion} .
       - docker tag ${ImageRepo}:${ImageVersion} ${AccountId}.dkr.ecr.${Region}.amazonaws.com/${ImageRepo}:${ImageVersion}      
 
   post_build:
