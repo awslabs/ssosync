@@ -3,7 +3,7 @@ version: 0.2
 phases:
   pre_build:
     commands:
-      - echo Logging in to Amazon ECR...
+      # Logging in to Amazon ECR...
       - aws ecr get-login-password --region ${Region} | docker login --username AWS --password-stdin ${AccountId}.dkr.ecr.${Region}.amazonaws.com
       # Switch to the folder containing the Dockerfile
       - cd ${DockerPath}
