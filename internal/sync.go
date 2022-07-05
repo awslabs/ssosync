@@ -569,7 +569,7 @@ func getGroupOperations(awsGroups []*aws.Group, googleGroups []*admin.Group) (ad
 		googleMap[gGroup.Name] = struct{}{}
 	}
 
-	// AWS Groups found and not found in google
+	// Found Google groups which does not exist in AWS groups
 	for _, gGroup := range googleGroups {
 		if _, found := awsMap[gGroup.Name]; found {
 			equals = append(equals, awsMap[gGroup.Name])
@@ -578,7 +578,7 @@ func getGroupOperations(awsGroups []*aws.Group, googleGroups []*admin.Group) (ad
 		}
 	}
 
-	// Google Groups founds and not in aws
+	// Found AWS groups which does not exist in Google groups
 	for _, awsGroup := range awsGroups {
 		if _, found := googleMap[awsGroup.DisplayName]; !found {
 			delete = append(delete, aws.NewGroup(awsGroup.DisplayName))
