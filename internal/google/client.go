@@ -26,8 +26,10 @@ import (
 // Client is the Interface for the Client
 type Client interface {
 	GetUsers(string) ([]*admin.User, error)
+	GetUser(string) (*admin.User, error)
 	GetDeletedUsers() ([]*admin.User, error)
 	GetGroups(string) ([]*admin.Group, error)
+	GetGroup(string) (*admin.Group, error)
 	GetGroupMembers(*admin.Group) ([]*admin.Member, error)
 }
 
@@ -146,4 +148,30 @@ func (c *client) GetGroups(query string) ([]*admin.Group, error) {
 
 	}
 	return g, err
+}
+
+// GetGroup will get a single group from Google's Admin API
+// using the Method: groups.get with parameter "groupKey"
+// References:
+// * https://developers.google.com/admin-sdk/directory/reference/rest/v1/groups/get
+// groupKey possible values:
+//  group email address
+//  group alias
+//  unique group ID
+func (c *client) GetGroup(groupKey string) (*admin.Group, error) {
+	group, err := c.service.Groups.Get(groupKey).Context(context.TODO()).Do()
+	return group, err
+}
+
+// GetUser will get a single user from Google's Admin API
+// using the Method: users.get with parameter "userKey"
+// References:
+// * https://developers.google.com/admin-sdk/directory/reference/rest/v1/users/get
+// userKey possible values:
+//  users primary email address
+//  alias email address
+//  unique user ID
+func (c *client) GetUser(userKey string) (*admin.User, error) {
+	user, err := c.service.Users.Get(userKey).Context(context.TODO()).Do()
+	return user, err
 }
