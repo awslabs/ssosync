@@ -17,11 +17,11 @@ package internal
 
 import (
 	"encoding/json"
-	"log"
 	"reflect"
 	"testing"
 
 	"github.com/awslabs/ssosync/internal/aws"
+	log "github.com/sirupsen/logrus"
 	admin "google.golang.org/api/admin/directory/v1"
 )
 
