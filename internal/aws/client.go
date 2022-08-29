@@ -180,6 +180,7 @@ func (c *client) IsUserInGroup(u *User, g *Group) (bool, error) {
 	startURL.RawQuery = q.Encode()
 	resp, err := c.sendRequest(http.MethodGet, startURL.String())
 	if err != nil {
+		log.WithFields(log.Fields{"user": u.Username, "group": g.DisplayName}).Error(string(resp))
 		return false, err
 	}
 
@@ -222,10 +223,13 @@ func (c *client) groupChangeOperation(op OperationType, u *User, g *Group) error
 	}
 
 	startURL.Path = path.Join(startURL.Path, fmt.Sprintf("/Groups/%s", g.ID))
-	_, err = c.sendRequestWithBody(http.MethodPatch, startURL.String(), *gc)
+
+	resp, err := c.sendRequestWithBody(http.MethodPatch, startURL.String(), *gc)
 	if err != nil {
+		log.WithFields(log.Fields{"operations": op, "user": u.Username, "group": g.DisplayName}).Error(string(resp))
 		return err
 	}
+	log.WithFields(log.Fields{"operations": op, "user": u.Username, "group": g.DisplayName}).Debug(string(resp))
 
 	return nil
 }
@@ -257,6 +261,7 @@ func (c *client) FindUserByEmail(email string) (*User, error) {
 
 	resp, err := c.sendRequest(http.MethodGet, startURL.String())
 	if err != nil {
+		log.WithFields(log.Fields{"email": email}).Error(string(resp))
 		return nil, err
 	}
 
@@ -284,6 +289,7 @@ func (c *client) FindUserByID(id string) (*User, error) {
 
 	resp, err := c.sendRequest(http.MethodGet, startURL.String())
 	if err != nil {
+		log.WithFields(log.Fields{"id": id}).Error(string(resp))
 		return nil, err
 	}
 
@@ -317,6 +323,7 @@ func (c *client) FindGroupByDisplayName(name string) (*Group, error) {
 
 	resp, err := c.sendRequest(http.MethodGet, startURL.String())
 	if err != nil {
+		log.WithFields(log.Fields{"name": name}).Error(string(resp))
 		return nil, err
 	}
 
@@ -348,6 +355,7 @@ func (c *client) CreateUser(u *User) (*User, error) {
 	startURL.Path = path.Join(startURL.Path, "/Users")
 	resp, err := c.sendRequestWithBody(http.MethodPost, startURL.String(), *u)
 	if err != nil {
+		log.WithFields(log.Fields{"user": u.Username}).Error(string(resp))
 		return nil, err
 	}
 
@@ -378,6 +386,7 @@ func (c *client) UpdateUser(u *User) (*User, error) {
 	startURL.Path = path.Join(startURL.Path, fmt.Sprintf("/Users/%s", u.ID))
 	resp, err := c.sendRequestWithBody(http.MethodPut, startURL.String(), *u)
 	if err != nil {
+		log.WithFields(log.Fields{"user": u.Username}).Error(string(resp))
 		return nil, err
 	}
 
@@ -405,10 +414,13 @@ func (c *client) DeleteUser(u *User) error {
 	}
 
 	startURL.Path = path.Join(startURL.Path, fmt.Sprintf("/Users/%s", u.ID))
-	_, err = c.sendRequest(http.MethodDelete, startURL.String())
+	resp, err := c.sendRequest(http.MethodDelete, startURL.String())
 	if err != nil {
+		log.WithFields(log.Fields{"user": u.Username}).Error(string(resp))
 		return err
 	}
+
+	log.WithFields(log.Fields{"user": u.Username}).Debug(string(resp))
 
 	return nil
 }
@@ -428,6 +440,7 @@ func (c *client) CreateGroup(g *Group) (*Group, error) {
 	startURL.Path = path.Join(startURL.Path, "/Groups")
 	resp, err := c.sendRequestWithBody(http.MethodPost, startURL.String(), *g)
 	if err != nil {
+		log.WithFields(log.Fields{"group": g.DisplayName}).Error(string(resp))
 		return nil, err
 	}
 
@@ -471,6 +484,7 @@ func (c *client) GetGroups() ([]*Group, error) {
 
 	resp, err := c.sendRequest(http.MethodGet, startURL.String())
 	if err != nil {
+		log.Error(string(resp))
 		return nil, err
 	}
 
@@ -513,6 +527,7 @@ func (c *client) GetGroupMembers(g *Group) ([]*User, error) {
 
 	resp, err := c.sendRequest(http.MethodGet, startURL.String())
 	if err != nil {
+		log.WithFields(log.Fields{"group": g.DisplayName}).Error(string(resp))
 		return nil, err
 	}
 
@@ -548,6 +563,7 @@ func (c *client) GetUsers() ([]*User, error) {
 
 	resp, err := c.sendRequest(http.MethodGet, startURL.String())
 	if err != nil {
+		log.Error(string(resp))
 		return nil, err
 	}
 

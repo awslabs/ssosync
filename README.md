@@ -8,7 +8,7 @@
 
 > Helping you populate AWS SSO directly with your Google Apps users
 
-SSO Sync will run on any platform that Go can build for. It is available in the [AWS Serverless Application Repository](https://console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync)
+SSO Sync will run on any platform that Go can build for. It is available in the [AWS Serverless Application Repository](https://console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:eu-west-1:084703771460:applications/ssosync).
 
 > :warning: there are breaking changes for versions `>= 0.02`
 
@@ -133,8 +133,12 @@ Flags:
 
 The function has `two behaviour` and these are controlled by the `--sync-method` flag, this behavior could be
 
-1. `groups`: __(default)__ The sync procedure work base on Groups, gets the Google Workspace groups and their members, then creates in AWS SSO the users (members of the Google Workspace groups), then the groups and at the end assign the users to their respective groups.
-2. `users_groups`: __(original behavior, previous versions)__ The sync procedure is simple, gets the Google Workspace users and creates these in AWS SSO Users; then gets Google Workspace groups and creates these in AWS SSO Groups and assigns users to belong to the AWS SSO Groups.
+1. `groups`: __(default)__
+   * The sync procedure work base on Groups, gets the Google Workspace groups and their members, then creates in AWS SSO the users (members of the Google Workspace groups), then the groups and at the end assign the users to their respective groups.
+   * This method use: `Google Workspace groups name` --> `AWS SSO groups name`
+2. `users_groups`: __(original behavior, previous versions)__
+   * The sync procedure is simple, gets the Google Workspace users and creates these in AWS SSO Users; then gets Google Workspace groups and creates these in AWS SSO Groups and assigns users to belong to the AWS SSO Groups.
+   * This method use: `Google Workspace groups email` --> `AWS SSO groups name`
 
 Flags Notes:
 
@@ -148,6 +152,7 @@ NOTES:
 
 1. Depending on the number of users and groups you have, maybe you can get `AWS SSO SCIM API rate limits errors`, and more frequently happens if you execute the sync many times in a short time.
 2. Depending on the number of users and groups you have, `--debug` flag generate too much logs lines in your AWS Lambda function.  So test it in locally with the `--debug` flag enabled and disable it when you use a AWS Lambda function.
+3. `--sync-method "Groups"` and `--sync-method "users_groups"` are incompatible, because the first use the Google group name as an AWS group name and the second one use the Google group email, take this into consideration.
 
 ## AWS Lambda Usage
 
@@ -157,7 +162,7 @@ the pricing for AWS Lambda and CloudWatch before continuing.
 Running ssosync once means that any changes to your Google directory will not appear in
 AWS SSO. To sync. regularly, you can run ssosync via AWS Lambda.
 
-:warning: You find it in the [AWS Serverless Application Repository](https://eu-west-1.console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync).
+:warning: You find it in the [AWS Serverless Application Repository](https://console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:eu-west-1:084703771460:applications/ssosync).
 
 ## SAM
 
