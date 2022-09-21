@@ -207,7 +207,7 @@ Resources:
               Configuration:
                 ConnectionArn: !Ref CodeStarConnection
                 FullRepositoryId: awslabs/ssosync
-                BranchName: Master
+                BranchName: master
                 DetectChanges: true
         - Name: Build
           Actions:
