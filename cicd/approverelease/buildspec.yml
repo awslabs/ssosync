@@ -10,7 +10,7 @@ phases:
     commands:
       # Check whether this is a commit on the default branch with a release tag
       - |
-        if expr "${GitReleaseCommit}" : "true" >/dev/null; then
+        if expr "${GitIsRelease}" : "true" >/dev/null; then
           sys.exit(0)
         else
           sys.exit(-1) 
