@@ -241,7 +241,7 @@ Resources:
               InputArtifacts:
                 - Name: Built
                 - Name: Source
-        - Name: Staging
+        - Name: Deploy
           Actions:
             - Name: PublishRC
               Namespace: RC
@@ -275,13 +275,15 @@ Resources:
                 - Name: ChangeSet
               InputArtifacts:
                 - Name: Source
-            - Name: E2ELambda
+        - Name: TestsEnd2End
+          Actions:
+            - Name: TestLambda
               ActionTypeId:
                 Category: Test
                 Owner: AWS
                 Version: 1
                 Provider: CodeBuild
-              RunOrder: 3
+              RunOrder: 1
               Configuration:
                 ProjectName: !Ref CodeBuildE2ETest
                 PrimarySource: Source
@@ -289,20 +291,22 @@ Resources:
                 - Name: E2ELambda
               InputArtifacts:
                 - Name: Source
-            - Name: E2ECodePipeline
+            - Name: TestCodePipeline
               ActionTypeId:
                 Category: Invoke
                 Owner: AWS
                 Version: 1
                 Provider: Lambda
-              RunOrder: 4
+              RunOrder: 2
               Configuration:
                 FunctionName: SSOSyncFunction 
               OutputArtifacts:
                 - Name: E2ECodePipeline
               InputArtifacts:
                 - Name: Source
-            - Name: CleanUp
+        - Name: CleanUp
+          Actions:
+            - Name: DeleteStack
               ActionTypeId:
                 Category: Deploy
                 Owner: AWS
@@ -314,7 +318,7 @@ Resources:
                 RoleArn: !Sub arn:aws:iam::${AWS::AccountId}:role/CloudFormationDeployerRole
               InputArtifacts:
                 - Name: Source
-              RunOrder: 5
+              RunOrder: 1
               RoleArn: !Sub arn:aws:iam::${AWS::AccountId}:role/CodePipelineCloudFormationRole
 
   GitMetadata:
