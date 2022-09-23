@@ -23,6 +23,7 @@ import (
 	"github.com/awslabs/ssosync/internal"
 	"github.com/awslabs/ssosync/internal/config"
 
+        "github.com/aws/aws-sdk-go/service/codepipeline"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/secretsmanager"
@@ -77,6 +78,7 @@ func init() {
 	// init config
 	cfg = config.New()
 	cfg.IsLambda = len(os.Getenv("_LAMBDA_SERVER_PORT")) > 0
+        cfg.IsLambdaRunningInCodePipeline = os.Getenv("RUNNING_IN_CODEPIPELINE") == "True"
 
 	// initialize cobra
 	cobra.OnInitialize(initConfig)
