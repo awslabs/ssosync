@@ -38,13 +38,20 @@ Resources:
         IncludeGroups: None
         ScheduleExpression: 'rate(1 day)'
 
-  FunctionParam:
+  FunctionArnParam:
     Type: AWS::SSM::Parameter
     Properties:
       Name: "/SSOSync/Staging/FunctionArn"
       Type: String
       Value: !GetAtt SARApp.Outputs.FunctionArn
       Description: The Arn of the lambda function ssosync
+  FunctionNameParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: "/SSOSync/Staging/FunctionName"
+      Type: String
+      Value: !GetAtt SARApp.Outputs.FunctionName
+      Description: The Name of the lambda function ssosync
  
 Outputs:
   FunctionArn:
@@ -52,3 +59,8 @@ Outputs:
     Value: !GetAtt SARApp.Outputs.FunctionArn
     Export:
       Name: FunctionArn
+  FunctionName:
+    Description: "The Name of the deployed lambda function"
+    Value: !GetAtt SARApp.Outputs.FunctionName
+    Export:
+      Name: FunctionName

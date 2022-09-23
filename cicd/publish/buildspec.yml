@@ -1,6 +1,8 @@
 version: 0.2
 
 env:
+  variables:
+    ShareWith: "NOT-SHARED"
   exported-variables:
     - AppArn
     - AppVersion
@@ -39,4 +41,9 @@ phases:
       - sam publish --template packaged.yaml --semantic-version ${AppVersion}
 
       # Share with the StagingAccount
-      - aws serverlessrepo put-application-policy --application-id ${AppArn} --statements Principals=${ShareWith},Actions=Deploy
+      - |
+        if expr "${ShareWith}" : "NOT-SHARED" >/dev/null; then
+          echo "Skipping Sharing"
+        else
+          aws serverlessrepo put-application-policy --application-id ${AppArn} --statements Principals=${ShareWith},Actions=Deploy
+        fi
