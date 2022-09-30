@@ -177,7 +177,7 @@ func (s *syncGSuite) SyncGroups(query string) error {
 
 	for _, g := range googleGroups {
 
-		if ShouldIncludeGroup(g.Email, s.cfg) {
+		if ! ShouldIncludeGroup(g.Email, s.cfg) {
 			continue
 		}
 
