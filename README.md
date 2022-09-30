@@ -138,7 +138,7 @@ The function has `two behaviour` and these are controlled by the `--sync-method`
 
 Flags Notes:
 
-* `--include-groups` only works when `--sync-method` is `users_groups`
+* `--include-groups` only works when `--sync-method` is `users_groups`.  
 * `--ignore-users` works for both `--sync-method` values.  Example: `--ignore-users user1@example.com,user2@example.com` or `SSOSYNC_IGNORE_USERS=user1@example.com,user2@example.com`
 * `--ignore-groups` works for both `--sync-method` values. Example: --ignore-groups group1@example.com,group1@example.com` or `SSOSYNC_IGNORE_GROUPS=group1@example.com,group1@example.com`
 * `--group-match` works for both `--sync-method` values and also in combination with `--ignore-groups` and `--ignore-users`.  This is the filter query passed to the [Google Workspace Directory API when search Groups](https://developers.google.com/admin-sdk/directory/v1/guides/search-groups), if the flag is not used, groups are not filtered.
@@ -148,6 +148,12 @@ NOTES:
 
 1. Depending on the number of users and groups you have, maybe you can get `AWS SSO SCIM API rate limits errors`, and more frequently happens if you execute the sync many times in a short time.
 2. Depending on the number of users and groups you have, `--debug` flag generate too much logs lines in your AWS Lambda function.  So test it in locally with the `--debug` flag enabled and disable it when you use a AWS Lambda function.
+
+### Filtering Groups
+There are three stages to filtering groups that interact as follows:
+1. `--group-match/-g` is used to filter the selection set of the Google Admin API query.  If not supplied, all groups in the Google IAM directory will be returned
+2. `--include-groups` (if provided) will ensure only the groups that match are synced to AWS.  This parameter is optional and should be a comma-separated list of group email addresses `--include-groups abc@foo.bar,xyz@foo.bar`
+3. `--ignore-groups` can be used to further filter the results of the group query by ignoring specific groups, using a string match of the group's email address.
 
 ## AWS Lambda Usage
 

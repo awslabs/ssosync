@@ -109,7 +109,7 @@ func (s *syncGSuite) SyncUsers(query string) error {
 	}
 
 	for _, u := range googleUsers {
-		if s.ignoreUser(u.PrimaryEmail) {
+		if StringInSlice(s.cfg.IgnoreUsers,u.PrimaryEmail) {
 			continue
 		}
 
@@ -176,7 +176,8 @@ func (s *syncGSuite) SyncGroups(query string) error {
 	correlatedGroups := make(map[string]*aws.Group)
 
 	for _, g := range googleGroups {
-		if s.ignoreGroup(g.Email) || !s.includeGroup(g.Email) {
+
+		if ShouldIncludeGroup(g.Email, s.cfg) {
 			continue
 		}
 
@@ -279,7 +280,7 @@ func (s *syncGSuite) SyncGroupsUsers(query string) error {
 	}
 	filteredGoogleGroups := []*admin.Group{}
 	for _, g := range googleGroups {
-		if s.ignoreGroup(g.Email) {
+		if StringInSlice(s.cfg.IgnoreGroups, g.Email) {
 			log.WithField("group", g.Email).Debug("ignoring group")
 			continue
 		}
@@ -480,7 +481,7 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(googleGroups []*admin.Group) ([]*ad
 
 		log := log.WithFields(log.Fields{"group": g.Name})
 
-		if s.ignoreGroup(g.Email) {
+		if StringInSlice(s.cfg.IgnoreGroups, g.Email) {
 			log.Debug("ignoring group")
 			continue
 		}
@@ -495,8 +496,7 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(googleGroups []*admin.Group) ([]*ad
 		membersUsers := make([]*admin.User, 0)
 
 		for _, m := range groupMembers {
-
-			if s.ignoreUser(m.Email) {
+			if StringInSlice(s.cfg.IgnoreUsers, m.Email) {
 				log.WithField("id", m.Email).Debug("ignoring user")
 				continue
 			}
@@ -722,32 +722,26 @@ func DoSync(ctx context.Context, cfg *config.Config) error {
 	return nil
 }
 
-func (s *syncGSuite) ignoreUser(name string) bool {
-	for _, u := range s.cfg.IgnoreUsers {
-		if u == name {
-			return true
-		}
-	}
-
-	return false
-}
-
-func (s *syncGSuite) ignoreGroup(name string) bool {
-	for _, g := range s.cfg.IgnoreGroups {
+func StringInSlice(slice []string, name string) bool {
+	for _, g := range slice {
 		if g == name {
 			return true
 		}
 	}
-
 	return false
 }
 
-func (s *syncGSuite) includeGroup(name string) bool {
-	for _, g := range s.cfg.IncludeGroups {
-		if g == name {
-			return true
-		}
+func ShouldIncludeGroup(group string, config *config.Config) bool {
+	// include groups should have precedence over ignore
+	// if includeGroups specified, only take a match
+	// elsif ignoreGroups, filter it out
+	inclSlice := config.IncludeGroups
+	inclFlag := len(inclSlice) > 0
+	if (inclFlag) {
+		return StringInSlice(inclSlice,group)
 	}
-
-	return false
+	if StringInSlice(config.IgnoreGroups, group) {
+		return false
+	}
+	return true
 }
