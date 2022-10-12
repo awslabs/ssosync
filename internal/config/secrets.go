@@ -26,6 +26,14 @@ func (s *Secrets) GoogleAdminEmail(secretArn string) (string, error) {
      return s.getSecret(secretArn)
 }
 
+// GoogleSAEmail ...
+func (s *Secrets) GoogleSAEmail(secretArn string) (string, error) {
+     if len([]rune(secretArn)) == 0 {
+        return s.getSecret("SSOSyncGoogleSAEmail")
+     }
+     return s.getSecret(secretArn)
+}
+
 // SCIMAccessToken ...
 func (s *Secrets) SCIMAccessToken(secretArn string) (string, error) {
      if len([]rune(secretArn)) == 0 {

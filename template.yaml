@@ -16,10 +16,11 @@ Metadata:
           - Region
           - IdentityStoreID
       - Label:
-          default: Google Workspace Credentials 
+          default: Google Workspace Credentials
         Parameters:
           - GoogleAdminEmail
           - GoogleCredentials
+          - GoogleSAEmail
       - Label:
           default: Sync Configuration
         Parameters:
@@ -117,7 +118,7 @@ Parameters:
     AllowedValues:
       - json
       - text
-        
+
   TimeOut:
     Type: Number
     Description: |
@@ -142,6 +143,12 @@ Parameters:
     Default: ""
     AllowedPattern: '(?!.*\s)|(([a-zA-Z0-9.+=_-]{0,61})@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*)'
     NoEcho: true
+
+  GoogleSAEmail:
+    Type: String
+    Description: |
+      Google service account email used to impersonate Google Admin. Providing a value enables Workload Identity Federation: https://cloud.google.com/iam/docs/workload-identity-federation
+    Default: ""
 
   SCIMEndpointUrl:
     Type: String
@@ -209,14 +216,14 @@ Parameters:
 
   SyncMethod:
     Type: String
-    Description: Sync method to use 
+    Description: Sync method to use
     Default: groups
     AllowedValues:
       - groups
       - users_groups
 
 Conditions:
-  SetFunctionName: !Not 
+  SetFunctionName: !Not
     - !Equals
         - !Ref FunctionName
         - ""
@@ -228,7 +235,7 @@ Conditions:
     - !Equals
         - !Ref SyncMethod
         - "groups"
-  SetGoogleGroupMatch: !And 
+  SetGoogleGroupMatch: !And
     - !Not
         - !Equals
             - !Ref GoogleGroupMatch
@@ -236,7 +243,7 @@ Conditions:
     - !Equals
         - !Ref SyncMethod
         - "groups"
-  SetIgnoreGroups: !Not 
+  SetIgnoreGroups: !Not
     - !Equals
         - !Ref IgnoreGroups
         - ""
@@ -442,10 +449,11 @@ Resources:
                 Resource:
                   - !If [CreateSecrets, !Ref SecretGoogleCredentials, !Select [0, !Split [',', !Ref CrossStackConfig]]]
                   - !If [CreateSecrets, !Ref SecretGoogleAdminEmail, !Select [1, !Split [',', !Ref CrossStackConfig]]]
-                  - !If [CreateSecrets, !Ref SecretSCIMEndpoint, !Select [2, !Split [',', !Ref CrossStackConfig]]]
-                  - !If [CreateSecrets, !Ref SecretSCIMAccessToken, !Select [3, !Split [',', !Ref CrossStackConfig]]]
-                  - !If [CreateSecrets, !Ref SecretRegion, !Select [4, !Split [',', !Ref CrossStackConfig]]]
-                  - !If [CreateSecrets, !Ref SecretIdentityStoreID, !Select [5, !Split [',', !Ref CrossStackConfig]]]
+                  - !If [CreateSecrets, !Ref SecretGoogleSAEmail, !Select [2, !Split [',', !Ref CrossStackConfig]]]
+                  - !If [CreateSecrets, !Ref SecretSCIMEndpoint, !Select [3, !Split [',', !Ref CrossStackConfig]]]
+                  - !If [CreateSecrets, !Ref SecretSCIMAccessToken, !Select [4, !Split [',', !Ref CrossStackConfig]]]
+                  - !If [CreateSecrets, !Ref SecretRegion, !Select [5, !Split [',', !Ref CrossStackConfig]]]
+                  - !If [CreateSecrets, !Ref SecretIdentityStoreID, !Select [6, !Split [',', !Ref CrossStackConfig]]]
               - Sid: IdentityStoreAccesPolicy
                 Effect: Allow
                 Action:
@@ -497,16 +505,17 @@ Resources:
                 Resource:
                   - !Select [0, !Split [',', !Ref CrossStackConfig]] # GoogleCredentials
                   - !Select [1, !Split [',', !Ref CrossStackConfig]] # GoogleAdminEmail
-                  - !Select [2, !Split [',', !Ref CrossStackConfig]] # SCIMEndpointUrl
-                  - !Select [3, !Split [',', !Ref CrossStackConfig]] # SCIMEndpointAccessToken
-                  - !Select [4, !Split [',', !Ref CrossStackConfig]] # Region
-                  - !Select [5, !Split [',', !Ref CrossStackConfig]] # IdentityStoreID
+                  - !Select [2, !Split [',', !Ref CrossStackConfig]] # GoogleSAEmail
+                  - !Select [3, !Split [',', !Ref CrossStackConfig]] # SCIMEndpointUrl
+                  - !Select [4, !Split [',', !Ref CrossStackConfig]] # SCIMEndpointAccessToken
+                  - !Select [5, !Split [',', !Ref CrossStackConfig]] # Region
+                  - !Select [6, !Split [',', !Ref CrossStackConfig]] # IdentityStoreID
               - Sid: KMSDecryptPolicy
                 Effect: Allow
                 Action:
                   - kms:Decrypt
                 Resource:
-                  -  !Select [6, !Split [',', !Ref CrossStackConfig]] # KMSSecret
+                  -  !Select [7, !Split [',', !Ref CrossStackConfig]] # KMSSecret
               - Sid: IdentityStoreAccesPolicy
                 Effect: Allow
                 Action:
@@ -548,6 +557,7 @@ Resources:
           LOG_FORMAT: !Ref LogFormat
           GOOGLE_CREDENTIALS: !If [CreateSecrets, !Ref SecretGoogleCredentials, !Select [0, !Split [',', !Ref CrossStackConfig]]]
           GOOGLE_ADMIN: !If [CreateSecrets, !Ref SecretGoogleAdminEmail, !Select [1, !Split [',', !Ref CrossStackConfig]]]
+          GOOGLE_SA_EMAIL: !If [CreateSecrets, !Ref SecretGoogleSAEmail, !Select [1, !Split [',', !Ref CrossStackConfig]]]
           SCIM_ENDPOINT: !If [CreateSecrets, !Ref SecretSCIMEndpoint, !Select [2, !Split [',', !Ref CrossStackConfig]]]
           SCIM_ACCESS_TOKEN: !If [CreateSecrets, !Ref SecretSCIMAccessToken, !Select [3, !Split [',', !Ref CrossStackConfig]]]
           REGION: !If [CreateSecrets, !Ref SecretRegion, !Select [4, !Split [',', !Ref CrossStackConfig]]]
@@ -649,6 +659,28 @@ Resources:
             - secretsmanager:GetSecretValue
           Resource: '*'
 
+  SecretGoogleSAEmail:
+    Type: "AWS::SecretsManager::Secret"
+    Properties:
+      Name: SSOSyncGoogleSAEmail
+      SecretString: !Ref GoogleSAEmail
+      KmsKeyId: !If [CreateKey, !Ref KeyAlias, alias/aws/secretsmanager]
+
+  SecretGoogleSAEmailPolicy:
+    Type: AWS::SecretsManager::ResourcePolicy
+    Condition: CreateKey
+    Properties:
+      SecretId: !Ref GoogleSAEmail
+      ResourcePolicy:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${CrossStackConfig}:root
+            Action:
+              - secretsmanager:GetSecretValue
+            Resource: '*'
+
   SecretSCIMEndpoint: # This can be moved to custom provider
     Type: "AWS::SecretsManager::Secret"
     Condition: CreateSecrets
@@ -671,7 +703,7 @@ Resources:
           Action:
             - secretsmanager:GetSecretValue
           Resource: '*'
-        
+
   SecretSCIMAccessToken: # This can be moved to custom provider
     Type: "AWS::SecretsManager::Secret"
     Condition: CreateSecrets
@@ -694,7 +726,7 @@ Resources:
           Action:
             - secretsmanager:GetSecretValue
           Resource: '*'
-        
+
   SecretRegion:
     Type: "AWS::SecretsManager::Secret"
     Condition: CreateSecrets
@@ -717,7 +749,7 @@ Resources:
           Action:
             - secretsmanager:GetSecretValue
           Resource: '*'
-                
+
   SecretIdentityStoreID:
     Type: "AWS::SecretsManager::Secret"
     Condition: CreateSecrets
