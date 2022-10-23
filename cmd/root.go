@@ -109,6 +109,8 @@ func initConfig() {
 		"user_match",
 		"group_match",
 		"sync_method",
+		"region",
+		"identity_store_id",
 	}
 
 	for _, e := range appEnvVars {
@@ -157,6 +159,18 @@ func configLambda() {
 		log.Fatalf(errors.Wrap(err, "cannot read config").Error())
 	}
 	cfg.SCIMEndpoint = unwrap
+
+	unwrap, err = secrets.Region()
+	if err != nil {
+		log.Fatalf(errors.Wrap(err, "cannot read config").Error())
+	}
+	cfg.Region = unwrap
+
+	unwrap, err = secrets.IdentityStoreID()
+	if err != nil {
+		log.Fatalf(errors.Wrap(err, "cannot read config").Error())
+	}
+	cfg.IdentityStoreID = unwrap
 }
 
 func addFlags(cmd *cobra.Command, cfg *config.Config) {
@@ -174,6 +188,8 @@ func addFlags(cmd *cobra.Command, cfg *config.Config) {
 	rootCmd.Flags().StringVarP(&cfg.UserMatch, "user-match", "m", "", "Google Workspace Users filter query parameter, example: 'name:John* email:admin*', see: https://developers.google.com/admin-sdk/directory/v1/guides/search-users")
 	rootCmd.Flags().StringVarP(&cfg.GroupMatch, "group-match", "g", "", "Google Workspace Groups filter query parameter, example: 'name:Admin* email:aws-*', see: https://developers.google.com/admin-sdk/directory/v1/guides/search-groups")
 	rootCmd.Flags().StringVarP(&cfg.SyncMethod, "sync-method", "s", config.DefaultSyncMethod, "Sync method to use (users_groups|groups)")
+	rootCmd.Flags().StringVarP(&cfg.Region, "region", "r", "", "AWS Region where AWS SSO is enabled")
+	rootCmd.Flags().StringVarP(&cfg.IdentityStoreID, "identity-store-id", "i", "", "Identifier of Identity Store in AWS SSO")
 }
 
 func logConfig(cfg *config.Config) {
