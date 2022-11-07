@@ -65,13 +65,60 @@ Complete documentation is available at https://github.com/awslabs/ssosync`,
 // running inside of AWS Lambda, we use the Lambda
 // execution path.
 func Execute() {
-	if cfg.IsLambda {
+	if cfg.IsLambdaRunningInCodePipeline {
+        	lambda.Start(Handler) 
+        }
+	else if cfg.IsLambda {
 		lambda.Start(rootCmd.Execute)
 	}
 
 	if err := rootCmd.Execute(); err != nil {
 		log.Fatal(err)
 	}
+}
+
+func Handler(ctx context.Context, event events.CodePipelineEvent) (string, error) {
+    log.Debug(event)
+    err := rootCmd.Execute()
+    if err != nil {
+    	// notify codepipeline and mark its job execution as Failure
+    	s := session.Must(session.NewSession())
+    	cpl := codepipeline.New(s)
+    	log.Fatal("Notifying CodePipeline and mark its job execution as Failure")
+    	jobID := event.CodePipelineJob.ID
+    	if len(jobID) == 0 {
+    		panic("CodePipeline Job ID is not set")
+    	}
+    	// mark the job as Failure.
+    	cplFailure := &codepipeline.PutJobFailureResultInput{
+    		JobId: aws.String(jobID),
+    		FailureDetails: &codepipeline.FailureDetails{
+    			Message: aws.String(err.Error()),
+    			Type: aws.String("JobFailed"),
+    		},
+    	}
+    	_, cplErr := cpl.PutJobFailureResult(cplFailure)
+    	if cplErr != nil {
+    		log.Fatal("Failed to update CodePipeline jobID %s status with: %s", jobID, cplErr.Error())
+    	}
+    	return "Failure", err
+    }
+    s := session.Must(session.NewSession())
+    cpl := codepipeline.New(s)
+    log.Info("Notifying CodePipeline and mark its job execution as Success")
+    jobID := event.CodePipelineJob.ID
+    if len(jobID) == 0 {
+    	panic("CodePipeline Job ID is not set")
+    }
+    // mark the job as Success.
+    cplSuccess := &codepipeline.PutJobSuccessResultInput{
+    	JobId: aws.String(jobID),
+    }
+    _, cplErr := cpl.PutJobSuccessResult(cplSuccess)
+    if cplErr != nil {
+    	log.Fatal("Failed to update CodePipeline jobID %s status with: %s", jobID, cplErr.Error())
+    }
+    return "Success", nil
 }
 
 func init() {
