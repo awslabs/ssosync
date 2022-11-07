@@ -22,7 +22,8 @@ import (
 
 	"github.com/awslabs/ssosync/internal"
 	"github.com/awslabs/ssosync/internal/config"
-
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-lambda-go/events"
         "github.com/aws/aws-sdk-go/service/codepipeline"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go/aws/session"
