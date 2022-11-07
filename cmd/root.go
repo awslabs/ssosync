@@ -84,7 +84,7 @@ func Handler(ctx context.Context, event events.CodePipelineEvent) (string, error
     cpl := codepipeline.New(s)
     if err != nil {
     	// notify codepipeline and mark its job execution as Failure
-    	log.Fatal("Notifying CodePipeline and mark its job execution as Failure")
+    	log.Fatalf(errors.Wrap(err, ("Notifying CodePipeline and mark its job execution as Failure").Error())
     	jobID := event.CodePipelineJob.ID
     	if len(jobID) == 0 {
     		panic("CodePipeline Job ID is not set")
@@ -99,7 +99,7 @@ func Handler(ctx context.Context, event events.CodePipelineEvent) (string, error
     	}
     	_, cplErr := cpl.PutJobFailureResult(cplFailure)
     	if cplErr != nil {
-    		log.Fatal("Failed to update CodePipeline jobID %s status with: %s", jobID, cplErr.Error())
+                log.Fatalf(errors.Wrap(err, "Failed to update CodePipeline jobID status").Error())
     	}
     	return "Failure", err
     }
@@ -114,7 +114,7 @@ func Handler(ctx context.Context, event events.CodePipelineEvent) (string, error
     }
     _, cplErr := cpl.PutJobSuccessResult(cplSuccess)
     if cplErr != nil {
-    	log.Fatal("Failed to update CodePipeline jobID %s status with: %s", jobID, cplErr.Error())
+        log.Fatalf(errors.Wrap(err, "Failed to update CodePipeline jobID status").Error())
     }
     return "Success", nil
 }
