@@ -67,8 +67,10 @@ Complete documentation is available at https://github.com/awslabs/ssosync`,
 // execution path.
 func Execute() {
 	if cfg.IsLambdaRunningInCodePipeline {
+                log.Info("Executing as Lambda within CodePipeline")
         	lambda.Start(Handler) 
         } else if cfg.IsLambda {
+                log.Info("Executing as Lambda")
 		lambda.Start(rootCmd.Execute)
 	}
 
