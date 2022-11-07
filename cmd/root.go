@@ -67,8 +67,7 @@ Complete documentation is available at https://github.com/awslabs/ssosync`,
 func Execute() {
 	if cfg.IsLambdaRunningInCodePipeline {
         	lambda.Start(Handler) 
-        }
-	else if cfg.IsLambda {
+        } else if cfg.IsLambda {
 		lambda.Start(rootCmd.Execute)
 	}
 
