@@ -83,7 +83,6 @@ func Handler(ctx context.Context, event events.CodePipelineEvent) (string, error
     if err != nil {
     	// notify codepipeline and mark its job execution as Failure
     	s := session.Must(session.NewSession())
-    	cpl := codepipeline.New(s)
     	log.Fatal("Notifying CodePipeline and mark its job execution as Failure")
     	jobID := event.CodePipelineJob.ID
     	if len(jobID) == 0 {
