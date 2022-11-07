@@ -80,9 +80,10 @@ func Execute() {
 func Handler(ctx context.Context, event events.CodePipelineEvent) (string, error) {
     log.Debug(event)
     err := rootCmd.Execute()
+    s := session.Must(session.NewSession())
+    cpl := codepipeline.New(s)
     if err != nil {
     	// notify codepipeline and mark its job execution as Failure
-    	s := session.Must(session.NewSession())
     	log.Fatal("Notifying CodePipeline and mark its job execution as Failure")
     	jobID := event.CodePipelineJob.ID
     	if len(jobID) == 0 {
@@ -102,8 +103,6 @@ func Handler(ctx context.Context, event events.CodePipelineEvent) (string, error
     	}
     	return "Failure", err
     }
-    s := session.Must(session.NewSession())
-    cpl := codepipeline.New(s)
     log.Info("Notifying CodePipeline and mark its job execution as Success")
     jobID := event.CodePipelineJob.ID
     if len(jobID) == 0 {
