@@ -42,11 +42,11 @@ func NewClient(ctx context.Context, adminEmail string, serviceAccountKey []byte)
 		admin.AdminDirectoryGroupMemberReadonlyScope,
 		admin.AdminDirectoryUserReadonlyScope)
 
-	config.Subject = adminEmail
-
 	if err != nil {
 		return nil, err
 	}
+
+	config.Subject = adminEmail
 
 	ts := config.TokenSource(ctx)
 
