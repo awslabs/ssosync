@@ -1,5 +1,5 @@
---- template.yaml	2022-09-21 17:41:56.000000000 +0100
-+++ staging.yaml	2022-11-07 15:25:30.000000000 +0000
+--- template.yaml	2022-11-07 17:26:38.000000000 +0000
++++ staging.yaml	2022-11-07 17:27:01.000000000 +0000
 @@ -25,7 +25,7 @@
            - IncludeGroups
  
@@ -17,7 +17,7 @@
        Runtime: go1.x
        Handler: dist/ssosync_linux_amd64_v1/ssosync
        Timeout: 300
-@@ -142,13 +143,6 @@
+@@ -142,13 +143,12 @@
                  - !Ref AWSGoogleAdminEmail
                  - !Ref AWSSCIMEndpointSecret
                  - !Ref AWSSCIMAccessTokenSecret
@@ -28,10 +28,16 @@
 -          Properties:
 -            Enabled: true
 -            Schedule: !Ref ScheduleExpression
++            - Sid: CodePipelinePolicy
++              Effect: Allow
++              Action:
++                - codepipeline:PutJobSuccessResult
++                - codepipeline:PutJobFailureResult
++              Resource: *
  
    AWSGoogleCredentialsSecret:
      Type: "AWS::SecretsManager::Secret"
-@@ -173,3 +167,9 @@
+@@ -173,3 +173,9 @@
      Properties:
        Name: SSOSyncSCIMAccessToken
        SecretString: !Ref SCIMEndpointAccessToken
