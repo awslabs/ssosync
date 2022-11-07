@@ -599,6 +599,10 @@ Resources:
               Resource:
               - !Sub arn:aws:iam::${AWS::AccountId}:role/CodePipelineCloudFormationRole
               Effect: Allow
+            - Action:
+              - 'lambda:InvokeFunction'
+              Resource:
+              - !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:SSOSyncFunction
 
   CodeBuildAppRole:
     Type: AWS::IAM::Role
