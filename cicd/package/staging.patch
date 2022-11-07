@@ -1,5 +1,5 @@
 --- template.yaml	2022-11-07 17:26:38.000000000 +0000
-+++ staging.yaml	2022-11-07 17:27:01.000000000 +0000
++++ staging.yaml	2022-11-07 20:50:10.000000000 +0000
 @@ -25,7 +25,7 @@
            - IncludeGroups
  
@@ -33,7 +33,7 @@
 +              Action:
 +                - codepipeline:PutJobSuccessResult
 +                - codepipeline:PutJobFailureResult
-+              Resource: *
++              Resource: "*"
  
    AWSGoogleCredentialsSecret:
      Type: "AWS::SecretsManager::Secret"
