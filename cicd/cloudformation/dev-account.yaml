@@ -616,6 +616,7 @@ Resources:
               - !Sub ${CodeBuildPackage.Arn}
               - !Sub ${CodeBuildDeploy.Arn}
               - !Sub ${CodeBuildStaging.Arn}
+              - !Sub ${CodeBuildEnvVarConfig.Arn}
               - !Sub ${CodeBuildE2ETest.Arn}
               Effect: Allow
             - Action:
@@ -880,9 +881,10 @@ Resources:
               - !Sub arn:aws:iam::${AWS::AccountId}:role/CodePipelineCloudFormationRole
               Effect: Allow
             - Action:
-              -  'lambda:invoke'
+              - 'lambda:invoke'
+              - 'lambda:UpdateFunctionConfiguration'
               Effect: Allow
-              Resource: '*'
+              Resource: !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:SSOSyncFunction
 
   CodePipelineCloudFormationRole:
     Type: AWS::IAM::Role
