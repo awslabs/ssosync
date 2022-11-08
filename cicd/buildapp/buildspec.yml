@@ -1,5 +1,10 @@
 version: 0.2
-            
+
+env:
+  variables:
+    GO111MODULE: "on"
+    git-credential-helper: yes            
+
 phases:
   install: 
     commands:
