@@ -125,7 +125,7 @@ func init() {
 	// init config
 	cfg = config.New()
 	cfg.IsLambda = len(os.Getenv("_LAMBDA_SERVER_PORT")) > 0
-        cfg.IsLambdaRunningInCodePipeline = os.Getenv("RUNNING_IN_CODEPIPELINE") == "True"
+        cfg.IsLambdaRunningInCodePipeline = len(event.CodePipelineJob.ID) > 0
 
 	// initialize cobra
 	cobra.OnInitialize(initConfig)
