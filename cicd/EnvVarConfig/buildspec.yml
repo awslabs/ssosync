@@ -1,0 +1,21 @@
+version: 0.2
+    
+phases:
+  install:
+    commands:
+      # Update sam to latest version
+      - wget -q https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip
+      - unzip -q awscli-exe-linux-x86_64.zip
+      - sudo ./aws/install --update
+      - rm -rf ./aws  awscli-exe-linux-x86_64.zip
+
+  pre_build: 
+    commands:
+      # Print all environment variables (handy for AWS CodeBuild logs)
+      - env
+
+  build:
+    commands:
+      # Set the Environment Variable to enable CodePipeline
+      aws lambda update-function-configuration --function-name SSOSyncFunction --environment "Variables={RUNNING_IN_CODEPIPELINE=True}" --query "Environment"
+

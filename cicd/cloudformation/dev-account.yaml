@@ -291,13 +291,27 @@ Resources:
                 - Name: E2ELambda
               InputArtifacts:
                 - Name: Source
+            - Name: EnvVarConfig
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              RunOrder: 2
+              Configuration:
+                ProjectName: !Ref CodeBuildEnvVarConfig
+                PrimarySource: Source
+              OutputArtifacts:
+                - Name: EnvVarConfig
+              InputArtifacts:
+                - Name: Source
             - Name: TestCodePipeline
               ActionTypeId:
                 Category: Invoke
                 Owner: AWS
                 Version: 1
                 Provider: Lambda
-              RunOrder: 2
+              RunOrder: 3
               Configuration:
                 FunctionName: SSOSyncFunction 
               OutputArtifacts:
@@ -506,6 +520,37 @@ Resources:
       LogGroupName: !Ref CodePipelineLogGroup
       LogStreamName: !Sub "${ApplicationName}-Deploy"
 
+  CodeBuildEnvVarConfig:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub "${ApplicationName}-Set-EnvVar"
+      Description: !Sub Use the GitHub metadata to determine whether this commit is a release
+      ServiceRole: !Ref CodeBuildTestRole
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: "cicd/EnvVarConfig/buildspec.yml"
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:5.0
+        Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: FunctionName
+            Value: SSOSyncFunction
+      Artifacts:
+        Name: !Ref ApplicationName
+        Type: CODEPIPELINE
+      LogsConfig:
+        CloudWatchLogs:
+          GroupName: !Ref CodePipelineLogGroup
+          StreamName: !Ref CodeBuildEnvVarConfigLogs
+          Status: ENABLED
+
+  CodeBuildEnvVarConfigLogs:
+    Type: AWS::Logs::LogStream
+    Properties:
+      LogGroupName: !Ref CodePipelineLogGroup
+      LogStreamName: !Sub "${ApplicationName}-EnvVarConfig"
+
   CodeBuildE2ETest:
     Type: AWS::CodeBuild::Project
     Properties:
@@ -540,7 +585,6 @@ Resources:
     Properties:
       LogGroupName: !Ref CodePipelineLogGroup
       LogStreamName: !Sub "${ApplicationName}-E2ETest"
-
 
   CodePipelineRole:
     Type: AWS::IAM::Role
@@ -603,6 +647,7 @@ Resources:
               - 'lambda:InvokeFunction'
               Resource:
               - !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:SSOSyncFunction
+              Effect: Allow
 
   CodeBuildAppRole:
     Type: AWS::IAM::Role
