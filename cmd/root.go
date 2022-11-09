@@ -123,7 +123,7 @@ func Handler(ctx context.Context, event events.CodePipelineEvent) (string, error
             }
             return "Success", nil
         }
-    else {
+    } else {
         if err != nil {
             return "Failure", err
         } else {
