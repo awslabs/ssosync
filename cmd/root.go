@@ -66,12 +66,9 @@ Complete documentation is available at https://github.com/awslabs/ssosync`,
 // running inside of AWS Lambda, we use the Lambda
 // execution path.
 func Execute() {
-	if cfg.IsLambdaRunningInCodePipeline {
-                log.Info("Executing as Lambda within CodePipeline")
-        	lambda.Start(Handler) 
-        } else if cfg.IsLambda {
+        if cfg.IsLambda {
                 log.Info("Executing as Lambda")
-		lambda.Start(rootCmd.Execute)
+        	lambda.Start(Handler) 
 	}
 
 	if err := rootCmd.Execute(); err != nil {
@@ -84,48 +81,61 @@ func Handler(ctx context.Context, event events.CodePipelineEvent) (string, error
     err := rootCmd.Execute()
     s := session.Must(session.NewSession())
     cpl := codepipeline.New(s)
-    if err != nil {
-    	// notify codepipeline and mark its job execution as Failure
-    	log.Fatalf(errors.Wrap(err, "Notifying CodePipeline and mark its job execution as Failure").Error())
-    	jobID := event.CodePipelineJob.ID
-    	if len(jobID) == 0 {
+
+    cfg.IsLambdaRunningInCodePipeline = len(event.CodePipelineJob.ID) > 0
+
+    if cfg.IsLambdaRunningInCodePipeline {
+        log.Info("Lambda has been invoked by CodePipeline")
+
+        if err != nil {
+    	    // notify codepipeline and mark its job execution as Failure
+    	    log.Fatalf(errors.Wrap(err, "Notifying CodePipeline and mark its job execution as Failure").Error())
+    	    jobID := event.CodePipelineJob.ID
+    	    if len(jobID) == 0 {
     		panic("CodePipeline Job ID is not set")
-    	}
-    	// mark the job as Failure.
-    	cplFailure := &codepipeline.PutJobFailureResultInput{
+    	    }  
+    	    // mark the job as Failure.
+    	    cplFailure := &codepipeline.PutJobFailureResultInput{
     		JobId: aws.String(jobID),
     		FailureDetails: &codepipeline.FailureDetails{
     			Message: aws.String(err.Error()),
     			Type: aws.String("JobFailed"),
     		},
-    	}
-    	_, cplErr := cpl.PutJobFailureResult(cplFailure)
-    	if cplErr != nil {
+    	    }
+    	    _, cplErr := cpl.PutJobFailureResult(cplFailure)
+    	    if cplErr != nil {
                 log.Fatalf(errors.Wrap(err, "Failed to update CodePipeline jobID status").Error())
-    	}
-    	return "Failure", err
+    	    }
+    	    return "Failure", err
+        } else {
+            log.Info("Notifying CodePipeline and mark its job execution as Success")
+            jobID := event.CodePipelineJob.ID
+            if len(jobID) == 0 {
+    	       panic("CodePipeline Job ID is not set")
+            }
+            // mark the job as Success.
+            cplSuccess := &codepipeline.PutJobSuccessResultInput{
+    	       JobId: aws.String(jobID),
+            }
+            _, cplErr := cpl.PutJobSuccessResult(cplSuccess)
+            if cplErr != nil {
+                log.Fatalf(errors.Wrap(err, "Failed to update CodePipeline jobID status").Error())
+            }
+            return "Success", nil
+        }
+    else {
+        if err != nil {
+            return "Failure", err
+        } else {
+            return "Success", nil
+        }
     }
-    log.Info("Notifying CodePipeline and mark its job execution as Success")
-    jobID := event.CodePipelineJob.ID
-    if len(jobID) == 0 {
-    	panic("CodePipeline Job ID is not set")
-    }
-    // mark the job as Success.
-    cplSuccess := &codepipeline.PutJobSuccessResultInput{
-    	JobId: aws.String(jobID),
-    }
-    _, cplErr := cpl.PutJobSuccessResult(cplSuccess)
-    if cplErr != nil {
-        log.Fatalf(errors.Wrap(err, "Failed to update CodePipeline jobID status").Error())
-    }
-    return "Success", nil
 }
 
 func init() {
 	// init config
 	cfg = config.New()
 	cfg.IsLambda = len(os.Getenv("_LAMBDA_SERVER_PORT")) > 0
-        cfg.IsLambdaRunningInCodePipeline = len(event.CodePipelineJob.ID) > 0
 
 	// initialize cobra
 	cobra.OnInitialize(initConfig)
