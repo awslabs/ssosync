@@ -275,7 +275,7 @@ Resources:
                 - Name: ChangeSet
               InputArtifacts:
                 - Name: Source
-        - Name: TestsEnd2End
+        - Name: Test
           Actions:
             - Name: TestLambda
               ActionTypeId:
@@ -285,13 +285,13 @@ Resources:
                 Provider: CodeBuild
               RunOrder: 1
               Configuration:
-                ProjectName: !Ref CodeBuildE2ETest
+                ProjectName: !Ref CodeBuildTestLambda
                 PrimarySource: Source
               OutputArtifacts:
-                - Name: E2ELambda
+                - Name: TestLambda
               InputArtifacts:
                 - Name: Source
-            - Name: EnvVarConfig
+            - Name: TestContainer
               ActionTypeId:
                 Category: Build
                 Owner: AWS
@@ -299,12 +299,13 @@ Resources:
                 Provider: CodeBuild
               RunOrder: 2
               Configuration:
-                ProjectName: !Ref CodeBuildEnvVarConfig
+                ProjectName: !Ref CodeBuildTestContainer
                 PrimarySource: Source
               OutputArtifacts:
-                - Name: EnvVarConfig
+                - Name: TestContainer
               InputArtifacts:
                 - Name: Source
+                - Name: Built
             - Name: TestCodePipeline
               ActionTypeId:
                 Category: Invoke
@@ -315,7 +316,7 @@ Resources:
               Configuration:
                 FunctionName: SSOSyncFunction 
               OutputArtifacts:
-                - Name: E2ECodePipeline
+                - Name: TestCodePipeline
               InputArtifacts:
                 - Name: Source
         - Name: CleanUp
@@ -520,46 +521,52 @@ Resources:
       LogGroupName: !Ref CodePipelineLogGroup
       LogStreamName: !Sub "${ApplicationName}-Deploy"
 
-  CodeBuildEnvVarConfig:
+  CodeBuildTestContainer:
     Type: AWS::CodeBuild::Project
     Properties:
-      Name: !Sub "${ApplicationName}-Set-EnvVar"
+      Name: !Sub "${ApplicationName}-Test-Container"
       Description: !Sub Use the GitHub metadata to determine whether this commit is a release
       ServiceRole: !Ref CodeBuildTestRole
       Source:
         Type: CODEPIPELINE
-        BuildSpec: "cicd/EnvVarConfig/buildspec.yml"
+        BuildSpec: "cicd/test-container/buildspec.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
         Image: aws/codebuild/standard:5.0
         Type: LINUX_CONTAINER
         EnvironmentVariables:
-          - Name: FunctionName
-            Value: SSOSyncFunction
+          - Name: GoogleAdminEmailArn
+            Value: '{{resolve:secretsmanager:TestGoogleAdminEmail}}'
+          - Name: GoogleCredentialsArn
+            Value: '{{resolve:secretsmanager:TestGoogleCredentials}}'
+          - Name: SCIMEndpointUrlArn
+            Value: '{{resolve:secretsmanager:TestSCIMEndpointUrl}}'
+          - Name: SCIMEndpointAccessTokenArn
+            Value: '{{resolve:secretsmanager:TestSCIMAccessToken}}'
       Artifacts:
         Name: !Ref ApplicationName
         Type: CODEPIPELINE
       LogsConfig:
         CloudWatchLogs:
           GroupName: !Ref CodePipelineLogGroup
-          StreamName: !Ref CodeBuildEnvVarConfigLogs
+          StreamName: !Ref CodeBuildTestContainerLogs
           Status: ENABLED
 
-  CodeBuildEnvVarConfigLogs:
+  CodeBuildTestContainerLogs:
     Type: AWS::Logs::LogStream
     Properties:
       LogGroupName: !Ref CodePipelineLogGroup
-      LogStreamName: !Sub "${ApplicationName}-EnvVarConfig"
+      LogStreamName: !Sub "${ApplicationName}-TestContainer"
 
-  CodeBuildE2ETest:
+  CodeBuildTestLambda:
     Type: AWS::CodeBuild::Project
     Properties:
-      Name: !Sub "${ApplicationName}-Test-End2End"
+      Name: !Sub "${ApplicationName}-Test-Lambda"
       Description: !Sub Use the GitHub metadata to determine whether this commit is a release
       ServiceRole: !Ref CodeBuildTestRole
       Source:
         Type: CODEPIPELINE
-        BuildSpec: "cicd/test-end2end/buildspec.yml"
+        BuildSpec: "cicd/test-lambda/buildspec.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
         Image: aws/codebuild/standard:5.0
@@ -577,14 +584,14 @@ Resources:
       LogsConfig:
         CloudWatchLogs:
           GroupName: !Ref CodePipelineLogGroup
-          StreamName: !Ref CodeBuildE2ETestLogs
+          StreamName: !Sub "${ApplicationName}-CodeBuildTestLambda"
           Status: ENABLED
 
-  CodeBuildE2ETestLogs:
+  CodeBuildTestLambdaLogs:
     Type: AWS::Logs::LogStream
     Properties:
       LogGroupName: !Ref CodePipelineLogGroup
-      LogStreamName: !Sub "${ApplicationName}-E2ETest"
+      LogStreamName: !Sub "${ApplicationName}-TestLambda"
 
   CodePipelineRole:
     Type: AWS::IAM::Role
@@ -616,8 +623,8 @@ Resources:
               - !Sub ${CodeBuildPackage.Arn}
               - !Sub ${CodeBuildDeploy.Arn}
               - !Sub ${CodeBuildStaging.Arn}
-              - !Sub ${CodeBuildEnvVarConfig.Arn}
-              - !Sub ${CodeBuildE2ETest.Arn}
+              - !Sub ${CodeBuildTestContainer.Arn}
+              - !Sub ${CodeBuildTestLambda.Arn}
               Effect: Allow
             - Action:
               - 's3:GetBucketPolicy'

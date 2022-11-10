@@ -1,5 +1,10 @@
 version: 0.2
-    
+
+env:
+  variables:
+
+  secrets-manager:
+        
 phases:
   install:
     commands:
@@ -16,9 +21,6 @@ phases:
 
   build:
     commands:
-      # Set the Environment Variable to enable CodePipeline
-      - NEW_ENVVARS=$(aws lambda get-function-configuration --function-name SSOSyncFunction --query "Environment.Variables | merge(@, \`{\"RUNNING_IN_CODEPIPELIN\":\"True\"}\`)")
-      - aws lambda update-function-configuration --function-name SSOSyncFunction --environment "{ \"Variables\": $NEW_ENVVARS }"
 
 
 
