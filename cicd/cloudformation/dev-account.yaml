@@ -293,7 +293,7 @@ Resources:
                 - Name: Source
             - Name: TestContainer
               ActionTypeId:
-                Category: Build
+                Category: Test
                 Owner: AWS
                 Version: 1
                 Provider: CodeBuild
@@ -525,7 +525,7 @@ Resources:
     Type: AWS::CodeBuild::Project
     Properties:
       Name: !Sub "${ApplicationName}-Test-Container"
-      Description: !Sub Use the GitHub metadata to determine whether this commit is a release
+      Description: "Execute within a container on the cli to prove cli invokation"
       ServiceRole: !Ref CodeBuildTestRole
       Source:
         Type: CODEPIPELINE
@@ -534,15 +534,6 @@ Resources:
         ComputeType: BUILD_GENERAL1_SMALL
         Image: aws/codebuild/standard:5.0
         Type: LINUX_CONTAINER
-        EnvironmentVariables:
-          - Name: GoogleAdminEmailArn
-            Value: '{{resolve:secretsmanager:TestGoogleAdminEmail}}'
-          - Name: GoogleCredentialsArn
-            Value: '{{resolve:secretsmanager:TestGoogleCredentials}}'
-          - Name: SCIMEndpointUrlArn
-            Value: '{{resolve:secretsmanager:TestSCIMEndpointUrl}}'
-          - Name: SCIMEndpointAccessTokenArn
-            Value: '{{resolve:secretsmanager:TestSCIMAccessToken}}'
       Artifacts:
         Name: !Ref ApplicationName
         Type: CODEPIPELINE
@@ -562,7 +553,7 @@ Resources:
     Type: AWS::CodeBuild::Project
     Properties:
       Name: !Sub "${ApplicationName}-Test-Lambda"
-      Description: !Sub Use the GitHub metadata to determine whether this commit is a release
+      Description: "Execute Lambda from within a container, to test invokation without codepipeline event handling"
       ServiceRole: !Ref CodeBuildTestRole
       Source:
         Type: CODEPIPELINE
@@ -886,6 +877,11 @@ Resources:
               - 'sts:AssumeRole'
               Resource:
               - !Sub arn:aws:iam::${AWS::AccountId}:role/CodePipelineCloudFormationRole
+              Effect: Allow
+            - Action:
+                - "secretsmanager:Get*"
+              Resource:
+                - "*"
               Effect: Allow
             - Action:
               - 'lambda:invoke'
