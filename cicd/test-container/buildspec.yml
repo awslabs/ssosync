@@ -1,19 +1,12 @@
 version: 0.2
 
 env:
-  variables:
-
   secrets-manager:
-        
+    GoogleAdminEmail: TestGoogleAdminEmail
+    SCIMEndpointUrl: TestSCIMEndpointUrl
+    SCIMAccessToken: TestSCIMAccessToken
+    
 phases:
-  install:
-    commands:
-      # Update sam to latest version
-      - wget -q https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip
-      - unzip -q awscli-exe-linux-x86_64.zip
-      - sudo ./aws/install --update
-      - rm -rf ./aws  awscli-exe-linux-x86_64.zip
-
   pre_build: 
     commands:
       # Print all environment variables (handy for AWS CodeBuild logs)
@@ -21,6 +14,8 @@ phases:
 
   build:
     commands:
+      - ${CODEBUILD_SRC_DIR_Built}/dist/ssosync_linux_amd64_v1/ssosync --version
+      - aws secretsmanager  get-secret-value --secret-id=TestGoogleCredentials --query SecretString --output text | jq '.' > credentials.json
+      - cat credentials.json
 
-
-
+      - ${CODEBUILD_SRC_DIR_Built}/dist/ssosync_linux_amd64_v1/ssosync -t "${SCIMAccessToken}" -e "${SCIMEndpointUrl}" -u "${GoogleAdminEmail}" -s "groups" -g "name:AWS*" 
