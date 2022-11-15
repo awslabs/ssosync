@@ -5,6 +5,8 @@ package config
 type Config struct {
 	// Verbose toggles the verbosity
 	Debug bool
+	// Delete is whether to delete on AWS
+	Delete bool
 	// LogLevel is the level with with to log for this config
 	LogLevel string `mapstructure:"log_level"`
 	// LogFormat is the format that is used for logging
@@ -44,12 +46,15 @@ const (
 	DefaultGoogleCredentials = "credentials.json"
 	// DefaultSyncMethod is the default sync method to use.
 	DefaultSyncMethod = "groups"
+	// DefaultDelete is whether to delete users and groups from AWS
+	DefaultDelete = false
 )
 
 // New returns a new Config
 func New() *Config {
 	return &Config{
 		Debug:             DefaultDebug,
+		Delete:            DefaultDelete,
 		LogLevel:          DefaultLogLevel,
 		LogFormat:         DefaultLogFormat,
 		SyncMethod:        DefaultSyncMethod,
