@@ -1,0 +1,36 @@
+version: 0.2
+    
+phases:
+  install:
+    commands:
+      # Update sam to latest version
+      - wget -q https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip
+      - unzip -q awscli-exe-linux-x86_64.zip
+      - sudo ./aws/install --update
+      - rm -rf ./aws  awscli-exe-linux-x86_64.zip
+
+  pre_build: 
+    commands:
+      # Print all environment variables (handy for AWS CodeBuild logs)
+      - env
+
+  build:
+    commands:
+      - Parameters="[{\"ParameterKey\":\"AppArn\",\"ParameterValue\":\"${AppArn}\"}, {\"ParameterKey\":\"AppVersion\",\"ParameterValue\":\"${AppVersion}\"}]"
+      - echo ${Parameters}
+
+      - Capabilities="CAPABILITY_IAM CAPABILITY_AUTO_EXPAND"
+
+      # Assume correct role on the staging account
+      - export $(printf "AWS_ACCESS_KEY_ID=%s AWS_SECRET_ACCESS_KEY=%s AWS_SESSION_TOKEN=%s" $(aws sts assume-role --role-arn "${ProductionAcctCodePipelineCloudFormationRole}" --role-session-name "CloudFormationRole" --query "Credentials.[AccessKeyId,SecretAccessKey,SessionToken]" --output text))
+
+      # Create a changeset for the deployment
+      - echo aws cloudformation create-change-set --stack-name "${StackName}" --template-body "file://${TemplatePath}" --parameters "${Parameters}" --capabilities ${Capabilities} --role-arn "${CloudFormationDeployerRole}" --change-set-name "${ChangeSetName}" --client-token "${ChangeSetName}" --change-set-type "CREATE"
+      - aws cloudformation create-change-set --stack-name "${StackName}" --template-body "file://${TemplatePath}" --parameters "${Parameters}" --capabilities ${Capabilities} --role-arn "${CloudFormationDeployerRole}" --change-set-name "${ChangeSetName}" --client-token "${ChangeSetName}" --change-set-type "CREATE"
+
+      # Wait for the change set to be created
+      - aws cloudformation wait change-set-create-complete --stack-name "${StackName}" --change-set-name "${ChangeSetName}"
+
+      # Deploy the changeset
+      - aws cloudformation execute-change-set --stack-name "${StackName}" --change-set-name "${ChangeSetName}"
+        

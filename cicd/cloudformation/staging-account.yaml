@@ -1,0 +1,115 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: 
+  This CloudFormation template will deploy a an IAM role and some Secrets to 
+  allow the CI/CD pipeline in the production account to deploy candidate releases
+  (via privately shared app in the AWS Serverless Application Repository (SAR).
+
+Parameters:
+  ProductionAccount:
+    Description: AWS Account permited to depoy into this account
+    Type: String
+    AllowedPattern: '[0-9]+'
+  ArtifactBucketArn:
+    Description: ARN of the ArtifactBucket in the ProductionAccount
+    AllowedPattern: '[0-9a-z/:-]+'
+    Type: String
+  ArtifactBucketKeyArn:
+    Description: ARN of the KMS key used by the ArtifactBucket in the ProductionAccount
+    AllowedPattern: '[0-9a-z/:-]+'
+    Type: String
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label: 
+          default: Pipeline
+        Parameters:
+          - ProductionAccount
+          - ArtifactBucketArn
+          - ArtifactBucketKeyArn
+            
+    ParameterLabels:
+      ProductionAccount:
+        default: "123456789012"
+
+Resources:
+
+  ProductionAccountCloudFormationRole:
+    Type: AWS::IAM::Role
+    Properties: 
+      RoleName: ProductionAcctCodePipelineCloudFormationRole
+      AssumeRolePolicyDocument:
+        Statement:
+        - Action: ['sts:AssumeRole']
+          Effect: Allow
+          Principal: 
+            AWS: !Ref ProductionAccount
+        Version: '2012-10-17'
+      Path: /
+      Policies: 
+        - PolicyName: ProductionAcctCodePipelineCloudFormation-Policy
+          PolicyDocument:                     
+            Version: '2012-10-17'
+            Statement: 
+            - Action:
+              - 'iam:PassRole'
+              - 'cloudformation:*'
+              Effect: Allow
+              Resource: '*'
+            - Action:
+              - 's3:ListBucket'
+              Effect: Allow
+              Resource:
+              - !Sub ${ArtifactBucketArn}
+            - Action:
+              - 's3:Get*'
+              - 's3:Put*'
+              Effect: Allow
+              Resource:
+              - !Sub ${ArtifactBucketArn}/*
+            - Action:
+              - 'kms:DescribeKey'
+              - 'kms:GenerateDataKey*'
+              - 'kms:Encrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:Decrypt'
+              Effect: Allow
+              Resource:
+              - !Ref ArtifactBucketKeyArn
+            - Action:
+              - 'ssm:GetParameters'
+              - 'ssm:GetParameter'
+              - 'ssm:DescribeParameters'
+              Effect: Allow
+              Resource:
+              - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/SSOSync/*
+            - Action:
+              - 'lambda:InvokeFunction'
+              Effect: Allow
+              Resource:
+              - !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:*
+
+
+
+  CFDeployerRole:
+    Type: AWS::IAM::Role
+    Properties: 
+      RoleName: CloudFormationDeployerRole
+      AssumeRolePolicyDocument: 
+        Statement:
+        - Action: ['sts:AssumeRole']
+          Effect: Allow
+          Principal:  
+            Service: 'cloudformation.amazonaws.com' 
+        Version: '2012-10-17'
+      Path: /
+      Policies: 
+        - PolicyName: CloudFormation-Deployer-Policy
+          PolicyDocument:                     
+            Version: '2012-10-17'
+            Statement:
+            - Action: '*'
+              Effect: Allow
+              Resource: '*'
+
