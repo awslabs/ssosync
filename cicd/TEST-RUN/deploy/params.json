@@ -1,0 +1,14 @@
+{
+	"Parameters": {
+		"AppArn": "arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync-Staging",
+		"AppVersion": "1.0.0-rc.10.23db2bd"
+	},
+	"StackPolicy": {
+		"Statement": [{
+			"Effect": "Allow",
+			"NotAction": "Update:Delete",
+			"Principal": "*",
+			"Resource": "*"
+		}]
+	}
+}

@@ -885,7 +885,6 @@ Resources:
               Effect: Allow
             - Action:
               - 'lambda:invoke'
-              - 'lambda:UpdateFunctionConfiguration'
               Effect: Allow
               Resource: !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:SSOSyncFunction
 

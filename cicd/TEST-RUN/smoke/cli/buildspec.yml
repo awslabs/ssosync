@@ -1,0 +1,22 @@
+version: 0.2
+
+env:
+  secrets-manager:
+    GoogleAdminEmail: TestGoogleAdminEmail
+    SCIMEndpointUrl: TestSCIMEndpointUrl
+    SCIMAccessToken: TestSCIMAccessToken
+    
+phases:
+  pre_build: 
+    commands:
+      # Print all environment variables (handy for AWS CodeBuild logs)
+      - env
+
+  build:
+    commands:
+      - ls -la
+      - ./ssosync --version
+      - aws secretsmanager  get-secret-value --secret-id=TestGoogleCredentials --query SecretString --output text | jq '.' > credentials.json
+      - cat credentials.json
+
+      - ./ssosync -t "${SCIMAccessToken}" -e "${SCIMEndpointUrl}" -u "${GoogleAdminEmail}" -s "groups" -g "name:AWS*" 
