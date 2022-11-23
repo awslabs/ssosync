@@ -1,0 +1,50 @@
+version: 0.2
+
+env:
+  variables:
+    pipeline: "SSOSync"
+    interval: 10
+    Success: '"Succeeded"'
+    InProgress: '"InProgress"'
+    
+phases:
+  install:
+    commands:
+      # Update sam to latest version
+      - wget -q https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip
+      - unzip -q awscli-exe-linux-x86_64.zip
+      - sudo ./aws/install --update
+      - rm -rf ./aws  awscli-exe-linux-x86_64.zip
+
+  pre_build: 
+    commands:
+      # Print all environment variables (handy for AWS CodeBuild logs)
+      - env
+
+  build:
+    commands:
+      - export $(printf "AWS_ACCESS_KEY_ID=%s AWS_SECRET_ACCESS_KEY=%s AWS_SESSION_TOKEN=%s" $(aws sts assume-role --role-arn "${ProductionAcctCodePipelineRole}" --role-session-name "CodePipelineRole" --query "Credentials.[AccessKeyId,SecretAccessKey,SessionToken]" --output text))
+
+      # Start the test pipeline in the staging account
+      - export ExecutionId=$(aws --profile=ssosync-dev codepipeline start-pipeline-execution --name $pipeline --output text)
+      - echo "ExecutionId=" $ExecutionId
+
+      - export Status=$(aws --profile=ssosync-dev codepipeline get-pipeline-execution --pipeline-name $pipeline --output json --pipeline-execution-id $ExecutionId --query "pipelineExecution.status")
+      - |
+        while [ "$Status" == "$InProgress" ]
+        do
+          sleep $interval
+          export Status="$(aws --profile=ssosync-dev codepipeline get-pipeline-execution --pipeline-name $pipeline --output json --pipeline-execution-id $ExecutionId --query "pipelineExecution.status")"
+          echo $Status
+        done
+
+      - echo "We are done: $Status"
+      - |
+        if [ $Status = "$Success" ]; then
+          echo "return success"
+          exit 0
+        else
+          echo "return failed"
+          exit 252
+        fi
+
