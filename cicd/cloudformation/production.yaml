@@ -13,6 +13,10 @@ Parameters:
     Description: AWS Account where staging build is automatically deployed and tested
     Type: String
     AllowedPattern: '[0-9]+'
+  TargetBucket:
+    Description: Where we upload the tests.zip
+    Type: String
+    AllowedPattern: '[A-Za-z0-9:/-]+'
   CodeStarConnection:
     Description:  Resource ARN for the CodeStar Connection to use
     Type: String
@@ -22,9 +26,9 @@ Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
       - Label:
-          default: End 2 End Test environment
+          default: The bucket name in the End 2 End Test environment
         Parameters:
-          - StagingAccount
+          - TargetBucket
       - Label:
           default: Connection id for the CodeStar Connection to use
         Parameters:
@@ -35,6 +39,8 @@ Metadata:
         default: "123456789012"
       CodeStarConnection:
         default: "arn:aws:codestar-connections:<AWS::Region>:<AWS::AccountId>:connection/abcd1234-ab12-ab12--ab12-abcdef123456"
+      TargetBucket:
+        default: "staging-stagingbucket-10swep1lrlrau"
 
 Resources:
 
@@ -261,10 +267,11 @@ Resources:
                 PrimarySource: Source
                 EnvironmentVariables: '[{"name":"GitTag","value":"#{Git.Tag}","type":"PLAINTEXT"},{"name":"GitVersionHash","value":"#{Git.CommitHash}","type":"PLAINTEXT"}]'
               OutputArtifacts:
-                - Name: Staging
+                - Name: Tests
               InputArtifacts:
                 - Name: Source
                 - Name: Packaged
+                - Name: Built
             - Name: Testing
               ActionTypeId:
                 Category: Build
@@ -275,7 +282,6 @@ Resources:
               Configuration:
                 ProjectName: !Ref CodeBuildTesting
                 PrimarySource: Source
-                EnvironmentVariables: '[{"name":"AppArn","value":"#{RC.AppArn}","type":"PLAINTEXT"},{"name":"AppVersion","value":"#{RC.AppVersion}","type":"PLAINTEXT"}]'
               InputArtifacts:
                 - Name: Source
         - Name: Release
@@ -316,7 +322,7 @@ Resources:
       ServiceRole: !Ref CodeBuildAppRole
       Source:
         Type: CODEPIPELINE
-        BuildSpec: "cicd/gitvars/buildspec.yml"
+        BuildSpec: "cicd/build/gitvars/buildspec.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
         Image: aws/codebuild/standard:5.0
@@ -390,7 +396,7 @@ Resources:
       ServiceRole: !Ref CodeBuildPackageRole
       Source:
         Type: CODEPIPELINE
-        BuildSpec: "cicd/production/build/package/buildspec.yml"
+        BuildSpec: "cicd/build/package/buildspec.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
         Image: aws/codebuild/standard:5.0
@@ -425,7 +431,7 @@ Resources:
       ServiceRole: !Ref CodeBuildPublishRole
       Source:
         Type: CODEPIPELINE
-        BuildSpec: "cicd/production/testing/staging/buildspec.yml"
+        BuildSpec: "cicd/staging/buildspec.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
         Image: aws/codebuild/standard:5.0
@@ -460,14 +466,14 @@ Resources:
       ServiceRole: !Ref CodeBuildTestRole
       Source:
         Type: CODEPIPELINE
-        BuildSpec: "cicd/production/testing/testing/buildspec.yml"
+        BuildSpec: "cicd/staging/testing/buildspec.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
         Image: aws/codebuild/standard:5.0
         Type: LINUX_CONTAINER
         EnvironmentVariables:
-          - Name: ARTIFACT_S3_BUCKET
-            Value: !Sub ${ArtifactBucket}
+          - Name: TARGETS3BUCKET
+            Value: !Sub ${TargetBucket}
       Artifacts:
         Name: SSOSync-Build
         Type: CODEPIPELINE
@@ -491,7 +497,7 @@ Resources:
       ServiceRole: !Ref CodeBuildPublishRole
       Source:
         Type: CODEPIPELINE
-        BuildSpec: "cicd/production/release/approve/buildspec.yml"
+        BuildSpec: "cicd/release/approve/buildspec.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
         Image: aws/codebuild/standard:5.0
@@ -522,7 +528,7 @@ Resources:
       ServiceRole: !Ref CodeBuildPublishRole
       Source:
         Type: CODEPIPELINE
-        BuildSpec: "cicd/production/release/release/buildspec.yml"
+        BuildSpec: "cicd/release/release/buildspec.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
         Image: aws/codebuild/standard:5.0
