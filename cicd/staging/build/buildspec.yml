@@ -3,19 +3,8 @@ version: 0.2
 env:
   variables:
     ShareWith: "NOT-SHARED"
-  exported-variables:
-    - AppArn
-    - AppVersion
 
 phases:
-  install:
-    commands:
-      # Update sam to latest version
-      - wget -q https://github.com/aws/aws-sam-cli/releases/latest/download/aws-sam-cli-linux-x86_64.zip
-      - unzip -q aws-sam-cli-linux-x86_64.zip -d sam-installation
-      - sudo ./sam-installation/install --update
-      - rm -rf ./sam-installation  aws-sam-cli-linux-x86_64.zip
-
   pre_build:
     commands:
       # Print all environment variables (handy for AWS CodeBuild logs
@@ -35,7 +24,7 @@ phases:
 
       # remove the previous builds
       #- aws serverlessrepo delete-application --application-id ${AppArn}
-        
+
       # Package our application with AWS SAM
       - echo sam publish --template packaged.yaml --semantic-version ${AppVersion}
       - sam publish --template packaged.yaml --semantic-version ${AppVersion}
@@ -47,3 +36,26 @@ phases:
         else
           aws serverlessrepo put-application-policy --application-id ${AppArn} --statements Principals=${ShareWith},Actions=Deploy
         fi
+
+  post_build:
+    commands:
+      # Copy in the executable
+      - cp ${CODEBUILD_SRC_DIR_Built}/dist/ssosync_linux_amd64_v1/ssosync ./
+
+      # Copy in the tests
+      - cp cicd/tests ./
+
+      # Copy in the stack and params templates
+      - mkdir deploy
+      - cp cicd/staging/build/params.json ./deploy/
+      - cp cicd/staging/build/stack.yml ./deploy/
+
+      # Update params with the values for this run
+      - sed -i 's/APPARN/${AppArn}/g' params.json
+      - sed -i 's/APPVERSION/${AppVersion}/g' params.json
+
+artifacts:
+  files:
+    - ssosync
+    - deploy/**/*
+    - tests/**/*
