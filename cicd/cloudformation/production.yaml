@@ -359,7 +359,7 @@ Resources:
       ServiceRole: !Ref CodeBuildAppRole
       Source:
         Type: CODEPIPELINE
-        BuildSpec: "cicd/production/build/build/buildspec.yml"
+        BuildSpec: "cicd/build/build/buildspec.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
         Image: aws/codebuild/standard:5.0
