@@ -51,8 +51,8 @@ phases:
       - cp cicd/staging/build/stack.yml ./deploy/
 
       # Update params with the values for this run
-      - sed -i 's/APPARN/${AppArn}/g' params.json
-      - sed -i 's/APPVERSION/${AppVersion}/g' params.json
+      - sed -i 's/APPARN/${AppArn}/g' ./deploy/params.json
+      - sed -i 's/APPVERSION/${AppVersion}/g' ./deploy/params.json
 
 artifacts:
   files:
