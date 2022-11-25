@@ -793,17 +793,15 @@ func Test_CreateUserIDtoUserObjMap(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	type Name struct {
-		FamilyName string `json:"familyName"`
-		GivenName  string `json:"givenName"`
-	}
-
 	sampleInput := []*aws.User{
 		{
 			ID:       "user-1-test-id",
 			Schemas:  []string{"urn:ietf:params:scim:schemas:core:2.0:User"},
 			Username: "user-1@example.com",
-			Name: Name{
+			Name: struct {
+				FamilyName string `json:"familyName"`
+				GivenName  string `json:"givenName"`
+			}{
 				FamilyName: "1",
 				GivenName:  "User",
 			},
@@ -817,7 +815,10 @@ func Test_CreateUserIDtoUserObjMap(t *testing.T) {
 			ID:       "user-2-test-id",
 			Schemas:  []string{"urn:ietf:params:scim:schemas:core:2.0:User"},
 			Username: "user-2@example.com",
-			Name: Name{
+			Name: struct {
+				FamilyName string `json:"familyName"`
+				GivenName  string `json:"givenName"`
+			}{
 				FamilyName: "2",
 				GivenName:  "User",
 			},
@@ -836,7 +837,10 @@ func Test_CreateUserIDtoUserObjMap(t *testing.T) {
 		ID:       "user-1-test-id",
 		Schemas:  []string{"urn:ietf:params:scim:schemas:core:2.0:User"},
 		Username: "user-1@example.com",
-		Name: Name{
+		Name: struct {
+			FamilyName string `json:"familyName"`
+			GivenName  string `json:"givenName"`
+		}{
 			FamilyName: "1",
 			GivenName:  "User",
 		},
@@ -851,7 +855,10 @@ func Test_CreateUserIDtoUserObjMap(t *testing.T) {
 		ID:       "user-2-test-id",
 		Schemas:  []string{"urn:ietf:params:scim:schemas:core:2.0:User"},
 		Username: "user-2@example.com",
-		Name: Name{
+		Name: struct {
+			FamilyName string `json:"familyName"`
+			GivenName  string `json:"givenName"`
+		}{
 			FamilyName: "2",
 			GivenName:  "User",
 		},
@@ -996,7 +1003,7 @@ func Test_IsUserInGroup(t *testing.T) {
 
 	mockIdentityStoreClient.EXPECT().IsMemberInGroups(gomock.Any()).MaxTimes(1).Return(nil, sampleResponseErr)
 
-	actualOutput, err = mockClient.IsUserInGroup(sampleUserInput, sampleGroupInput)
+	actualOutput, _ = mockClient.IsUserInGroup(sampleUserInput, sampleGroupInput)
 
 	assert.True(t, reflect.DeepEqual(sampleResponseErr.Error(), expectedResponse.Error()))
 	assert.Nil(t, actualOutput)

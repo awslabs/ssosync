@@ -579,36 +579,6 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(googleGroups []*admin.Group) ([]*ad
 	return gUsers, gGroupsUsers, nil
 }
 
-// getAWSGroupsAndUsers return a list of google users members of googleGroups
-// and a map of google groups and its users' list
-func (s *syncGSuite) getAWSGroupsAndUsers(awsGroups []*aws.Group, awsUsers []*aws.User) (map[string][]*aws.User, error) {
-	awsGroupsUsers := make(map[string][]*aws.User)
-
-	for _, awsGroup := range awsGroups {
-
-		users := make([]*aws.User, 0)
-		log := log.WithFields(log.Fields{"group": awsGroup.DisplayName})
-
-		log.Debug("get group members from aws")
-		// NOTE: AWS has not implemented yet some method to get the groups members https://docs.aws.amazon.com/singlesignon/latest/developerguide/listgroups.html
-		// so, we need to check each user in each group which are too many unnecessary API calls
-		for _, user := range awsUsers {
-
-			log.Debug("checking if user is member of")
-			found, err := s.IsUserInGroup(user, awsGroup)
-			if err != nil {
-				return nil, err
-			}
-			if *found {
-				users = append(users, user)
-			}
-		}
-
-		awsGroupsUsers[awsGroup.DisplayName] = users
-	}
-	return awsGroupsUsers, nil
-}
-
 // getGroupOperations returns the groups of AWS that must be added, deleted and are equals
 func getGroupOperations(awsGroups []*aws.Group, googleGroups []*admin.Group) (add []*aws.Group, delete []*aws.Group, equals []*aws.Group) {
 
