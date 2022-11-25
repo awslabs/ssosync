@@ -144,7 +144,7 @@ Resources:
                 Version: 1
                 Provider: S3
               OutputArtifacts:
-                - Name: Source
+                - Name: Tests
               RunOrder: '1'
               Configuration:
                 S3Bucket: !Ref StagingBucket
@@ -163,10 +163,10 @@ Resources:
                 Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND
                 StackName: SmokeTest
                 RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
-                TemplateConfiguration: !Sub 'Source::deploy/params.json'
-                TemplatePath: !Sub 'Source::deploy/stack.yml'
+                TemplateConfiguration: !Sub 'Tests::deploy/params.json'
+                TemplatePath: !Sub 'Tests::deploy/stack.yml'
               InputArtifacts:
-                - Name: Source
+                - Name: Tests
               RunOrder: 1
         - Name: SmokeTests
           Actions:
@@ -179,11 +179,11 @@ Resources:
               RunOrder: 1
               Configuration:
                 ProjectName: !Ref CodeBuildSmokeLambda
-                PrimarySource: Source
+                PrimarySource: Tests
               OutputArtifacts:
                 - Name: SmokeLambda
               InputArtifacts:
-                - Name: Source
+                - Name: Tests
             - Name: CLI
               ActionTypeId:
                 Category: Test
@@ -193,11 +193,11 @@ Resources:
               RunOrder: 2
               Configuration:
                 ProjectName: !Ref CodeBuildSmokeCLI
-                PrimarySource: Source
+                PrimarySource: Tests
               OutputArtifacts:
                 - Name: SmokeCLI
               InputArtifacts:
-                - Name: Source
+                - Name: Tests
             - Name: CodePipeline
               ActionTypeId:
                 Category: Invoke
@@ -210,7 +210,7 @@ Resources:
               OutputArtifacts:
                 - Name: SmokeCodePipeline
               InputArtifacts:
-                - Name: Source
+                - Name: Tests
         - Name: CleanUp
           Actions:
             - Name: RemoveStack
@@ -224,7 +224,7 @@ Resources:
                 StackName: SmokeTest
                 RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
               InputArtifacts:
-                - Name: Source
+                - Name: Tests
               RunOrder: 1
 
 

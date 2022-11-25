@@ -9,12 +9,6 @@ Description:
 
 Parameters:
    
-  ApplicationName: 
-    Description: This will be used to name the pipeline and build resources
-    Default: SSOSync
-    Type: String
-    AllowedPattern: '[A-Za-z0-9-]+'
-  
   RepoName:
     Description: The repo name on github
     Default: ssosync
@@ -40,10 +34,6 @@ Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
       - Label:
-          default: Application Configuration
-        Parameters:
-          - ApplicationName
-      - Label:
           default: GitHub Repo
         Parameters:
           - OwnerName
@@ -55,8 +45,6 @@ Metadata:
           - GitHubOAuthToken
 
     ParameterLabels:
-      ApplicationName:
-        default: "Application Name"
       RepoName:
         default: "Repository Name"
       OwnerName:
@@ -169,7 +157,7 @@ Resources:
   CodePipeline:
     Type: AWS::CodePipeline::Pipeline
     Properties:
-      Name: !Ref ApplicationName
+      Name: SSOSync
       RoleArn: !Sub ${CodePipelineRole.Arn}
       ArtifactStore: 
         Type: S3
@@ -194,7 +182,7 @@ Resources:
                 Repo: !Ref RepoName
                 Branch: !Ref BranchName
                 OAuthToken: !Ref GitHubOAuthToken
-        - Name: Build
+        - Name: App
           Actions:
             - Name: Git
               Namespace: Git
@@ -211,7 +199,7 @@ Resources:
               Configuration:
                 ProjectName: !Ref GitMetadata
                 PrimarySource: Source
-            - Name: BuildApp
+            - Name: Build
               InputArtifacts:
                 - Name: Source
               ActionTypeId:
@@ -226,7 +214,7 @@ Resources:
                 ProjectName: !Ref CodeBuildApp
                 PrimarySource: Source
                 EnvironmentVariables: '[{"name":"GitTag","value":"#{Git.Tag}","type":"PLAINTEXT"},{"name":"GitCommit","value":"#{Git.CommitId}","type":"PLAINTEXT"}]'
-            - Name: PackageApp
+            - Name: Package
               ActionTypeId:
                 Category: Build
                 Owner: AWS
@@ -241,43 +229,45 @@ Resources:
               InputArtifacts:
                 - Name: Built
                 - Name: Source
-        - Name: Deploy
+        - Name: Test
           Actions:
-            - Name: PublishRC
+            - Name: Staging
               Namespace: RC
               ActionTypeId:
                 Category: Build
                 Owner: AWS
                 Version: 1
                 Provider: CodeBuild
-              RunOrder: '1'
+              RunOrder: 1
               Configuration:
                 ProjectName: !Ref CodeBuildStaging
                 PrimarySource: Source
                 EnvironmentVariables: '[{"name":"GitTag","value":"#{Git.Tag}","type":"PLAINTEXT"},{"name":"GitVersionHash","value":"#{Git.CommitHash}","type":"PLAINTEXT"}]'
               OutputArtifacts:
-                - Name: Staging
+                - Name: Tests
               InputArtifacts:
                 - Name: Source
                 - Name: Packaged
-            - Name: DeployRC
+                - Name: Built
+            - Name: Deploy
               ActionTypeId:
-                Category: Build
+                Category: Deploy
                 Owner: AWS
-                Version: 1
-                Provider: CodeBuild
-              RunOrder: 2
+                Version: '1'
+                Provider: CloudFormation
               Configuration:
-                ProjectName: !Ref CodeBuildDeploy
-                PrimarySource: Source
-                EnvironmentVariables: '[{"name":"AppArn","value":"#{RC.AppArn}","type":"PLAINTEXT"},{"name":"AppVersion","value":"#{RC.AppVersion}","type":"PLAINTEXT"}]'
-              OutputArtifacts:
-                - Name: ChangeSet
+                ActionMode: CREATE_UPDATE
+                Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND
+                StackName: SmokeTest
+                RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
+                TemplateConfiguration: !Sub 'Tests::deploy/params.json'
+                TemplatePath: !Sub 'Tests::deploy/stack.yml'
               InputArtifacts:
-                - Name: Source
-        - Name: Test
+                - Name: Tests
+              RunOrder: 2
+        - Name: SmokeTests
           Actions:
-            - Name: TestLambda
+            - Name: Lambda
               ActionTypeId:
                 Category: Test
                 Owner: AWS
@@ -285,13 +275,13 @@ Resources:
                 Provider: CodeBuild
               RunOrder: 1
               Configuration:
-                ProjectName: !Ref CodeBuildTestLambda
+                ProjectName: !Ref CodeBuildSmokeLambda
                 PrimarySource: Source
               OutputArtifacts:
-                - Name: TestLambda
+                - Name: SmokeLambda
               InputArtifacts:
-                - Name: Source
-            - Name: TestContainer
+                - Name: Tests
+            - Name: CLI
               ActionTypeId:
                 Category: Test
                 Owner: AWS
@@ -299,14 +289,12 @@ Resources:
                 Provider: CodeBuild
               RunOrder: 2
               Configuration:
-                ProjectName: !Ref CodeBuildTestContainer
-                PrimarySource: Source
+                ProjectName: !Ref CodeBuildSmokeCLI
               OutputArtifacts:
-                - Name: TestContainer
+                - Name: SmokeCLI
               InputArtifacts:
-                - Name: Source
-                - Name: Built
-            - Name: TestCodePipeline
+                - Name: Tests
+            - Name: CodePipeline
               ActionTypeId:
                 Category: Invoke
                 Owner: AWS
@@ -314,14 +302,14 @@ Resources:
                 Provider: Lambda
               RunOrder: 3
               Configuration:
-                FunctionName: SSOSyncFunction 
+                FunctionName: SSOSyncFunction
               OutputArtifacts:
-                - Name: TestCodePipeline
+                - Name: SmokeCodePipeline
               InputArtifacts:
-                - Name: Source
+                - Name: Tests
         - Name: CleanUp
           Actions:
-            - Name: DeleteStack
+            - Name: RemoveStack
               ActionTypeId:
                 Category: Deploy
                 Owner: AWS
@@ -330,21 +318,21 @@ Resources:
               Configuration:
                 ActionMode: DELETE_ONLY
                 StackName: SmokeTest
-                RoleArn: !Sub arn:aws:iam::${AWS::AccountId}:role/CloudFormationDeployerRole
+                RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
               InputArtifacts:
-                - Name: Source
+                - Name: Tests
               RunOrder: 1
-              RoleArn: !Sub arn:aws:iam::${AWS::AccountId}:role/CodePipelineCloudFormationRole
+
 
   GitMetadata:
     Type: AWS::CodeBuild::Project
     Properties:
-      Name: !Sub "${ApplicationName}-Git-Metadata"
-      Description: !Sub Build project for ${ApplicationName}
+      Name: SSOSync-Git-Metadata
+      Description: Build project for SSOSync
       ServiceRole: !Ref CodeBuildAppRole
       Source:
         Type: CODEPIPELINE
-        BuildSpec: "cicd/gitvars/buildspec.yml"
+        BuildSpec: "cicd/build/gitvars/buildspec.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
         Image: aws/codebuild/standard:5.0
@@ -359,7 +347,7 @@ Resources:
           - Name: GitBranch
             Value: "CodePipeline"
       Artifacts:
-        Name: !Ref ApplicationName
+        Name: SSOSync
         Type: CODEPIPELINE
       LogsConfig:
         CloudWatchLogs:
@@ -371,17 +359,17 @@ Resources:
     Type: AWS::Logs::LogStream
     Properties:
       LogGroupName: !Ref CodePipelineLogGroup
-      LogStreamName: !Sub "${ApplicationName}-Git-Metadata"
+      LogStreamName: SSOSync-Git-Metadata
 
   CodeBuildApp:
     Type: AWS::CodeBuild::Project
     Properties:
-      Name: !Sub "${ApplicationName}-Build-App"
-      Description: !Sub Build project for ${ApplicationName}
+      Name: SSOSync-Build-App
+      Description: Build project for SSOSync
       ServiceRole: !Ref CodeBuildAppRole
       Source:
         Type: CODEPIPELINE
-        BuildSpec: "cicd/buildapp/buildspec.yml"
+        BuildSpec: "cicd/build/build/buildspec.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
         Image: aws/codebuild/standard:5.0
@@ -396,7 +384,7 @@ Resources:
           - Name: APP_NAME
             Value: ssosync
       Artifacts:
-        Name: !Ref ApplicationName
+        Name: SSOSync
         Type: CODEPIPELINE
       LogsConfig:
         CloudWatchLogs:
@@ -408,17 +396,17 @@ Resources:
     Type: AWS::Logs::LogStream
     Properties: 
       LogGroupName: !Ref CodePipelineLogGroup
-      LogStreamName: !Sub "${ApplicationName}-Build-App"
+      LogStreamName: SSOSync-Build-App
 
   CodeBuildPackage:
     Type: AWS::CodeBuild::Project
     Properties:
-      Name: !Sub "${ApplicationName}-Package"
-      Description: !Sub SAM package for ${ApplicationName}
+      Name: SSOSync-Package
+      Description: SAM package for SSOSync
       ServiceRole: !Ref CodeBuildPackageRole
       Source:
         Type: CODEPIPELINE
-        BuildSpec: "cicd/package/buildspec.yml"
+        BuildSpec: "cicd/build/package/buildspec.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
         Image: aws/codebuild/standard:5.0
@@ -431,7 +419,7 @@ Resources:
           - Name: Template
             Value: template.yaml
       Artifacts:
-        Name: !Ref ApplicationName
+        Name: SSOSync
         Type: CODEPIPELINE
       LogsConfig:
         CloudWatchLogs:
@@ -443,17 +431,17 @@ Resources:
     Type: AWS::Logs::LogStream
     Properties:
       LogGroupName: !Ref CodePipelineLogGroup
-      LogStreamName: !Sub "${ApplicationName}-Package"
+      LogStreamName: SSOSync-Package
 
   CodeBuildStaging:
     Type: AWS::CodeBuild::Project
     Properties:
-      Name: !Sub "${ApplicationName}-Staging"
-      Description: !Sub Publish ${ApplicationName} to Serverless Application Repository in Staging
+      Name: SSOSync-Staging
+      Description: Publish SSOSync to Serverless Application Repository in Staging
       ServiceRole: !Ref CodeBuildPublishRole
       Source:
         Type: CODEPIPELINE
-        BuildSpec: "cicd/publish/buildspec.yml"
+        BuildSpec: "cicd/staging/build/buildspec.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
         Image: aws/codebuild/standard:5.0
@@ -462,9 +450,9 @@ Resources:
           - Name: ARTIFACT_S3_BUCKET
             Value: !Sub ${ArtifactBucket}
           - Name: AppArn
-            Value: !Sub "arn:aws:serverlessrepo:${AWS::Region}:${AWS::AccountId}:applications/${ApplicationName}-Staging"
+            Value: !Sub "arn:aws:serverlessrepo:${AWS::Region}:${AWS::AccountId}:applications/SSOSync-Staging"
       Artifacts:
-        Name: !Ref ApplicationName
+        Name: SSOSync
         Type: CODEPIPELINE
       LogsConfig:
         CloudWatchLogs:
@@ -476,118 +464,69 @@ Resources:
     Type: AWS::Logs::LogStream
     Properties:
       LogGroupName: !Ref CodePipelineLogGroup
-      LogStreamName: !Sub "${ApplicationName}-Staging"
+      LogStreamName: SSOSync-Staging
 
-  CodeBuildDeploy:
+  CodeBuildSmokeCLI:
     Type: AWS::CodeBuild::Project
     Properties:
-      Name: !Sub "${ApplicationName}-Deploy"
-      Description: !Sub "Perform test deployment within this account to prove end to end functionality"
-      ServiceRole: !Ref CodeBuildDeployRole
-      Source:
-        Type: CODEPIPELINE
-        BuildSpec: "cicd/deploy/buildspec.yml"
-      Environment:
-        ComputeType: BUILD_GENERAL1_SMALL
-        Image: aws/codebuild/standard:5.0
-        Type: LINUX_CONTAINER
-        EnvironmentVariables:
-          - Name: ARTIFACT_S3_BUCKET
-            Value: !Sub ${ArtifactBucket}
-          - Name: CloudFormationDeployerRole
-            Value: !Sub arn:aws:iam::${AWS::AccountId}:role/CloudFormationDeployerRole
-          - Name: ProductionAcctCodePipelineCloudFormationRole
-            Value: !Sub arn:aws:iam::${AWS::AccountId}:role/CodePipelineCloudFormationRole
-          - Name: StackName
-            Value: SmokeTest
-          - Name: Capabilities
-            Value: "CAPABILITY_AUTO_EXPAND CAPABILITY_IAM"
-          - Name: TemplatePath
-            Value: 'cicd/deploy/stack.yml'
-          - Name: ChangeSetName
-            Value: !Sub Deploy-${ApplicationName}
-      Artifacts:
-        Name: !Ref ApplicationName
-        Type: CODEPIPELINE
-      LogsConfig:
-        CloudWatchLogs:
-          GroupName: !Ref CodePipelineLogGroup
-          StreamName: !Ref CodeBuildDeployLogs
-          Status: ENABLED
-
-  CodeBuildDeployLogs:
-    Type: AWS::Logs::LogStream
-    Properties:
-      LogGroupName: !Ref CodePipelineLogGroup
-      LogStreamName: !Sub "${ApplicationName}-Deploy"
-
-  CodeBuildTestContainer:
-    Type: AWS::CodeBuild::Project
-    Properties:
-      Name: !Sub "${ApplicationName}-Test-Container"
+      Name: SSOSync-Smoke-CLI
       Description: "Execute within a container on the cli to prove cli invokation"
       ServiceRole: !Ref CodeBuildTestRole
       Source:
         Type: CODEPIPELINE
-        BuildSpec: "cicd/test-container/buildspec.yml"
+        BuildSpec: "tests/smoke/cli/buildspec.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
         Image: aws/codebuild/standard:5.0
         Type: LINUX_CONTAINER
       Artifacts:
-        Name: !Ref ApplicationName
+        Name: SSOSync
         Type: CODEPIPELINE
       LogsConfig:
         CloudWatchLogs:
           GroupName: !Ref CodePipelineLogGroup
-          StreamName: !Ref CodeBuildTestContainerLogs
+          StreamName: !Ref CodeBuildSmokeCLILogs
           Status: ENABLED
 
-  CodeBuildTestContainerLogs:
+  CodeBuildSmokeCLILogs:
     Type: AWS::Logs::LogStream
     Properties:
       LogGroupName: !Ref CodePipelineLogGroup
-      LogStreamName: !Sub "${ApplicationName}-TestContainer"
+      LogStreamName: SSOSync-Smoke-CLI
 
-  CodeBuildTestLambda:
+  CodeBuildSmokeLambda:
     Type: AWS::CodeBuild::Project
     Properties:
-      Name: !Sub "${ApplicationName}-Test-Lambda"
+      Name: SSOSync-Smoke-Lambda
       Description: "Execute Lambda from within a container, to test invokation without codepipeline event handling"
       ServiceRole: !Ref CodeBuildTestRole
       Source:
         Type: CODEPIPELINE
-        BuildSpec: "cicd/test-lambda/buildspec.yml"
+        BuildSpec: "tests/smoke/lambda/buildspec.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
         Image: aws/codebuild/standard:5.0
         Type: LINUX_CONTAINER
-        EnvironmentVariables:
-          - Name: ARTIFACT_S3_BUCKET
-            Value: !Sub ${ArtifactBucket}
-          - Name: CloudFormationDeployerRole
-            Value: !Sub arn:aws:iam::${AWS::AccountId}:role/CloudFormationDeployerRole
-          - Name: ProductionAcctCodePipelineCloudFormationRole
-            Value: !Sub arn:aws:iam::${AWS::AccountId}:role/CodePipelineCloudFormationRole
       Artifacts:
-        Name: !Ref ApplicationName
+        Name: SSOSync
         Type: CODEPIPELINE
       LogsConfig:
         CloudWatchLogs:
           GroupName: !Ref CodePipelineLogGroup
-          StreamName: !Sub "${ApplicationName}-CodeBuildTestLambda"
+          StreamName: !Ref CodeBuildSmokeLambdaLogs
           Status: ENABLED
 
-  CodeBuildTestLambdaLogs:
+  CodeBuildSmokeLambdaLogs:
     Type: AWS::Logs::LogStream
     Properties:
       LogGroupName: !Ref CodePipelineLogGroup
-      LogStreamName: !Sub "${ApplicationName}-TestLambda"
+      LogStreamName: SSOSync-Smoke-Lambda
+
 
   CodePipelineRole:
     Type: AWS::IAM::Role
     Properties: 
-      RoleName: !Sub ${ApplicationName}-CodePipeline-${AWS::Region}
+      RoleName: !Sub SSOSync-CodePipeline-${AWS::Region}
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -597,7 +536,7 @@ Resources:
             Service: [codepipeline.amazonaws.com] 
       Path: /
       Policies: 
-        - PolicyName: !Sub ${ApplicationName}-CodePipeline-${AWS::Region}
+        - PolicyName: !Sub SSOSync-CodePipeline-${AWS::Region}
           PolicyDocument:                     
             Version: '2012-10-17'
             Statement: 
@@ -612,10 +551,9 @@ Resources:
               - !Sub ${GitMetadata.Arn}
               - !Sub ${CodeBuildApp.Arn}
               - !Sub ${CodeBuildPackage.Arn}
-              - !Sub ${CodeBuildDeploy.Arn}
               - !Sub ${CodeBuildStaging.Arn}
-              - !Sub ${CodeBuildTestContainer.Arn}
-              - !Sub ${CodeBuildTestLambda.Arn}
+              - !Sub ${CodeBuildSmokeCLI.Arn}
+              - !Sub ${CodeBuildSmokeLambda.Arn}
               Effect: Allow
             - Action:
               - 's3:GetBucketPolicy'
@@ -638,20 +576,28 @@ Resources:
               Resource:
               - !GetAtt ArtifactBucketKey.Arn
             - Action:
-              - 'sts:AssumeRole'
-              Resource:
-              - !Sub arn:aws:iam::${AWS::AccountId}:role/CodePipelineCloudFormationRole
-              Effect: Allow
-            - Action:
               - 'lambda:InvokeFunction'
               Resource:
               - !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:SSOSyncFunction
+              Effect: Allow
+            - Action:
+              - 'cloudformation:CreateStack'
+              - 'cloudformation:DescribeStacks'
+              - 'cloudformation:DeleteStack'
+              - 'cloudformation:UpdateStack'
+              - 'cloudformation:CreateChangeSet'
+              - 'cloudformation:ExecuteChangeSet'
+              - 'cloudformation:DeleteChangeSet'
+              - 'cloudformation:DescribeChangeSet'
+              - 'cloudformation:SetStackPolicy'
+              Resource:
+              - '*'
               Effect: Allow
 
   CodeBuildAppRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub ${ApplicationName}-CodeBuild-App-${AWS::Region}
+      RoleName: !Sub SSOSync-CodeBuild-App-${AWS::Region}
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -661,7 +607,7 @@ Resources:
             Service: [codebuild.amazonaws.com]
       Path: /
       Policies:
-        - PolicyName: !Sub ${ApplicationName}-CodeBuild-App-${AWS::Region}
+        - PolicyName: !Sub SSOSync-CodeBuild-App-${AWS::Region}
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
@@ -688,7 +634,7 @@ Resources:
   CodeBuildPackageRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub ${ApplicationName}-CodeBuild-Package-${AWS::Region}
+      RoleName: !Sub SSOSync-CodeBuild-Package-${AWS::Region}
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -698,7 +644,7 @@ Resources:
             Service: [codebuild.amazonaws.com]
       Path: /
       Policies:
-        - PolicyName: !Sub ${ApplicationName}-CodeBuild-Package-${AWS::Region}
+        - PolicyName: !Sub SSOSync-CodeBuild-Package-${AWS::Region}
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
@@ -726,7 +672,7 @@ Resources:
   CodeBuildPublishRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub ${ApplicationName}-CodeBuild-Publish-${AWS::Region}
+      RoleName: !Sub SSOSync-CodeBuild-Publish-${AWS::Region}
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -736,7 +682,7 @@ Resources:
             Service: [codebuild.amazonaws.com]
       Path: /
       Policies:
-        - PolicyName: !Sub ${ApplicationName}-CodeBuild-Publish-${AWS::Region}
+        - PolicyName: !Sub SSOSync-CodeBuild-Publish-${AWS::Region}
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
@@ -774,64 +720,10 @@ Resources:
               Resource:
               - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/SSOSync/*
 
-  CodeBuildDeployRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub ${ApplicationName}-CodeBuild-Deploy-${AWS::Region}
-      AssumeRolePolicyDocument:
-        Statement:
-        - Action: ['sts:AssumeRole']
-          Effect: Allow
-          Principal:
-            Service: [codebuild.amazonaws.com]
-        Version: '2012-10-17'
-      Path: /
-      Policies:
-        - PolicyName: !Sub ${ApplicationName}-CodeBuild-Deploy-${AWS::Region}
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-            - Action:
-              - 'iam:PassRole'
-              - 'cloudformation:*'
-              Effect: Allow
-              Resource: '*'
-            - Action:
-              - 'logs:CreateLogGroup'
-              - 'logs:CreateLogStream'
-              - 'logs:PutLogEvents'
-              Effect: Allow
-              Resource: '*'
-            - Action:
-              - 's3:ListBucket'
-              Effect: Allow
-              Resource:
-              - !Sub ${ArtifactBucket.Arn}
-            - Action:
-              - 's3:Get*'
-              - 's3:Put*'
-              Effect: Allow
-              Resource:
-              - !Sub ${ArtifactBucket.Arn}/*
-            - Action:
-              - 'kms:DescribeKey'
-              - 'kms:GenerateDataKey*'
-              - 'kms:Encrypt'
-              - 'kms:ReEncrypt*'
-              - 'kms:Decrypt'
-              Effect: Allow
-              Resource:
-              - !GetAtt ArtifactBucketKey.Arn
-            - Action:
-              - 'sts:AssumeRole'
-              Resource:
-              - !Sub arn:aws:iam::${AWS::AccountId}:role/CodePipelineCloudFormationRole
-              Effect: Allow
-
   CodeBuildTestRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub ${ApplicationName}-CodeBuild-Test-${AWS::Region}
+      RoleName: !Sub SSOSync-CodeBuild-Test-${AWS::Region}
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -841,7 +733,7 @@ Resources:
             Service: [codebuild.amazonaws.com]
       Path: /
       Policies:
-        - PolicyName: !Sub ${ApplicationName}-CodeBuild-Test-${AWS::Region}
+        - PolicyName: !Sub SSOSync-CodeBuild-Test-${AWS::Region}
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
@@ -865,105 +757,42 @@ Resources:
               Resource:
               - !Sub ${ArtifactBucket.Arn}/*
             - Action:
-              - 'kms:DescribeKey'
-              - 'kms:GenerateDataKey*'
-              - 'kms:Encrypt'
-              - 'kms:ReEncrypt*'
-              - 'kms:Decrypt'
+              -  'lambda:invokeFunction'
               Effect: Allow
-              Resource:
-              - !GetAtt ArtifactBucketKey.Arn
-            - Action:
-              - 'sts:AssumeRole'
-              Resource:
-              - !Sub arn:aws:iam::${AWS::AccountId}:role/CodePipelineCloudFormationRole
-              Effect: Allow
+              Resource: '*'
             - Action:
                 - "secretsmanager:Get*"
               Resource:
                 - "*"
               Effect: Allow
-            - Action:
-              - 'lambda:invoke'
-              Effect: Allow
-              Resource: !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:SSOSyncFunction
 
-  CodePipelineCloudFormationRole:
+  CloudFormationDeployerRole:
     Type: AWS::IAM::Role
-    Properties: 
-      RoleName: CodePipelineCloudFormationRole
+    Properties:
+      RoleName: !Sub SSOSync-CloudFormationDeployerRole-${AWS::Region}
       AssumeRolePolicyDocument:
         Statement:
         - Action: ['sts:AssumeRole']
           Effect: Allow
-          Principal: 
-            AWS: !Ref AWS::AccountId
-        Version: '2012-10-17'
-      Path: /
-      Policies: 
-        - PolicyName: CodePipelineCloudFormation-Policy
-          PolicyDocument:                     
-            Version: '2012-10-17'
-            Statement: 
-            - Action:
-              - 'iam:PassRole'
-              - 'cloudformation:*'
-              Effect: Allow
-              Resource: '*'
-            - Action:
-              - 's3:ListBucket'
-              Effect: Allow
-              Resource:
-              - !Sub ${ArtifactBucket.Arn}
-            - Action:
-              - 's3:Get*'
-              - 's3:Put*'
-              Effect: Allow
-              Resource:
-              - !Sub ${ArtifactBucket.Arn}/*
-            - Action:
-              - 'kms:DescribeKey'
-              - 'kms:GenerateDataKey*'
-              - 'kms:Encrypt'
-              - 'kms:ReEncrypt*'
-              - 'kms:Decrypt'
-              Effect: Allow
-              Resource:
-              - !GetAtt ArtifactBucketKey.Arn
-            - Action:
-              - 'ssm:GetParameters'
-              - 'ssm:GetParameter'
-              - 'ssm:DescribeParameters'
-              Effect: Allow
-              Resource:
-              - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/SSOSync/*
-            - Action:
-              - 'lambda:InvokeFunction'
-              Effect: Allow
-              Resource:
-              - !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:*
-
-  BetaCloudFormationDeployerRole:
-    Type: AWS::IAM::Role
-    Properties: 
-      RoleName: CloudFormationDeployerRole
-      AssumeRolePolicyDocument: 
-        Statement:
+          Principal:
+            Service: [cloudformation.amazonaws.com]
         - Action: ['sts:AssumeRole']
           Effect: Allow
-          Principal:  
-            Service: 'cloudformation.amazonaws.com' 
+          Principal:
+            AWS: !Ref AWS::AccountId
+        - Action: ['sts:AssumeRole']
+          Effect: Allow
+          Principal:
+            Service: [codepipeline.amazonaws.com]
         Version: '2012-10-17'
       Path: /
-      Policies: 
+      Policies:
         - PolicyName: CloudFormation-Deployer-Policy
-          PolicyDocument:                     
+          PolicyDocument:
             Version: '2012-10-17'
             Statement:
-            - Action: ['iam:PassRole']
-              Effect: Allow
-              Resource: '*'
             - Action: '*'
               Effect: Allow
               Resource: '*'
+
 
