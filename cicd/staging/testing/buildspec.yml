@@ -33,7 +33,7 @@ phases:
       - echo "ExecutionId=" $ExecutionId
 
       - |
-        while [ "$Status" == "$InProgress" ]; do
+        while expr "$Status" : "$InProgress" >/dev/null; do
           sleep $interval
           export Status="$(aws codepipeline get-pipeline-execution --pipeline-name $pipeline --output json --pipeline-execution-id $ExecutionId --query "pipelineExecution.status")"
           echo $Status
@@ -42,11 +42,9 @@ phases:
       - echo "We are done"
 
       - |
-        if [ $Status = "$Success" ]; then
-          echo "return success"
+        if expr "$Status" = "$Success" >/dev/null; then
           exit 0
         else
-          echo "return failed"
           exit 252
         fi
 
