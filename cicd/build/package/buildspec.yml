@@ -6,12 +6,6 @@ phases:
       # Print all environment variables (handy for AWS CodeBuild logs)
       - env
 
-      # Update sam to latest version
-      - wget -q https://github.com/aws/aws-sam-cli/releases/latest/download/aws-sam-cli-linux-x86_64.zip
-      - unzip -q aws-sam-cli-linux-x86_64.zip -d sam-installation
-      - sudo ./sam-installation/install --update
-      - rm -rf ./sam-installation  aws-sam-cli-linux-x86_64.zip
-  
   pre_build:
     commands:
       - cp -r ${CODEBUILD_SRC_DIR_Built}/* ./
@@ -29,11 +23,11 @@ phases:
     commands:
       # Create staging & release variants of the template.yaml
       - cp template.yaml staging.yaml
-      - patch staging.yaml cicd/package/staging.patch
+      - patch staging.yaml cicd/build/package/staging.patch
       - sam package --no-progressbar --template-file staging.yaml --s3-bucket ${S3Bucket} --output-template-file packaged-staging.yaml
 
       - cp template.yaml release.yaml
-      - patch release.yaml cicd/package/release.patch
+      - patch release.yaml cicd/build/package/release.patch
       - sam package --no-progressbar --template-file release.yaml --s3-bucket ${S3Bucket} --output-template-file packaged-release.yaml
 
   post_build:
