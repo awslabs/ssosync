@@ -38,7 +38,7 @@ Resources:
         IncludeGroups: None
         ScheduleExpression: 'rate(1 day)'
 
-  FunctionParam:
+  FunctionArnParam:
     Type: AWS::SSM::Parameter
     Properties:
       Name: "/SSOSync/Staging/FunctionArn"
