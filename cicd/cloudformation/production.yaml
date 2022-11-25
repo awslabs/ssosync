@@ -284,6 +284,7 @@ Resources:
                 PrimarySource: Source
               InputArtifacts:
                 - Name: Source
+                - Name: Tests
         - Name: Release
           Actions:
             - Name: ForRelease
@@ -474,6 +475,8 @@ Resources:
         EnvironmentVariables:
           - Name: TARGETS3BUCKET
             Value: !Sub ${TargetBucket}
+          - Name: StagingRole
+            Value: !Sub "arn:aws:iam::${StagingAccount}:role/SSOSync-ProdAccount-${AWS::Region}"
       Artifacts:
         Name: SSOSync-Build
         Type: CODEPIPELINE
@@ -797,7 +800,7 @@ Resources:
             - Action:
               - 'sts:AssumeRole'
               Resource:
-              - !Sub arn:aws:iam::${StagingAccount}:role/ProductionAcctCodePipelineRole
+              - !Sub arn:aws:iam::${StagingAccount}:role/SSOSync-ProdAccount-${AWS::Region}
               Effect: Allow
             - Action:
               -  'lambda:invoke'
@@ -810,15 +813,3 @@ Outputs:
   ProductionAccount:
     Description: "The account id"
     Value: !Ref AWS::AccountId
-
-  ArtifactBucketARN:
-    Description: "S3 bucket ARN Codepipeline is using"
-    Value: !GetAtt ArtifactBucket.Arn
-    Export:
-      Name: ArtifactBucketARN
-
-  ArtifactBucketKeyARN:
-    Description: "KMS key used by the ArtifactBucket"
-    Value: !GetAtt ArtifactBucketKey.Arn
-    Export:
-      Name: ArtifactBucketKeyARN
