@@ -66,7 +66,7 @@ phases:
   post_build:
     commands:
       # Tweak the .goreleaser.yml so it uses the vairables from .Env
-      - patch .goreleaser.yml cicd/buildapp/goreleaser.patch
+      - patch .goreleaser.yml cicd/build/build/goreleaser.patch
 
       # Make main but only for the lambda (linux amd64)
       - goreleaser build --snapshot --rm-dist --single-target
