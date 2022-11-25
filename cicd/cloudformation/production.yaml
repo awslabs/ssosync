@@ -40,7 +40,7 @@ Metadata:
       CodeStarConnection:
         default: "arn:aws:codestar-connections:<AWS::Region>:<AWS::AccountId>:connection/abcd1234-ab12-ab12--ab12-abcdef123456"
       TargetBucket:
-        default: "staging-stagingbucket-10swep1lrlrau"
+        default: "my-bucket"
 
 Resources:
 
