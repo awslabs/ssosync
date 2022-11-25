@@ -17,7 +17,7 @@ phases:
     commands:
       # Fetch all dependencies
       - chmod +x cicd/gitvars/codebuild-git-wrapper.sh
-      - cicd/gitvars/codebuild-git-wrapper.sh $GitRepo $GitBranch
+      - cicd/build/gitvars/codebuild-git-wrapper.sh $GitRepo $GitBranch
 
   build:
     commands:
