@@ -312,6 +312,7 @@ Resources:
               OutputArtifacts:
                 - Name: Release
               InputArtifacts:
+                - Name: Source
                 - Name: Packaged
               RunOrder: 2
 
