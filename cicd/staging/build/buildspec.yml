@@ -19,7 +19,7 @@ phases:
   build:
     commands:
       # Create parameters
-      - export AppVersion="${GitTag#v}.${GitVersionHash}"
+      - export AppVersion="${GitTag#v}-${GitVersionHash}"
       - aws ssm put-parameter --name "/SSOSync/Staging/Version" --value ${AppVersion} --type String --overwrite
 
       # remove the previous builds
