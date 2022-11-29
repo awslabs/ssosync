@@ -23,8 +23,5 @@ phases:
 
   build:
     commands:
-      # Replace App Name in template
-      - patch packaged.yaml cicd/release/packaged.patch
-        
       # Package our application with AWS SAM
       - sam publish --template packaged.yaml
