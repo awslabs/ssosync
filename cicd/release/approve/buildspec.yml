@@ -13,6 +13,6 @@ phases:
         if expr "${GitIsRelease}" : "true" >/dev/null; then
           exit 0
         else
-          exit -252
+          exit 252
         fi
 

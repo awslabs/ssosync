@@ -10,10 +10,10 @@ env:
     - CommitAuthor
     - CommitAuthorEmail
     - CommitHash
-    - IsRelease        
-    
+    - IsRelease
+
 phases:
-  pre_build: 
+  pre_build:
     commands:
       # Fetch all dependencies
       - chmod +x cicd/build/gitvars/codebuild-git-wrapper.sh
@@ -32,16 +32,15 @@ phases:
       - export CommitHash=`git rev-parse --short HEAD`
 
       - GitReleaseCommit=`git rev-list -n 1 tags/${Tag}`
-      - echo $GitReleaseCommit
+      - echo GitReleaseCommit=$GitReleaseCommit
+      - echo CommitId=$CommitId
+
       - |
-        if expr "${GitReleaseCommit}" : "${GitCommit}" >/dev/null; then
+        if expr "${GitReleaseCommit}" : "${CommitId}" >/dev/null; then
           IsRelease=true
         else
           IsRelease=false
         fi
 
-      - |
-        if expr "${Branch}" : "master" >/dev/null; then
-          IsRelease=false
-        fi
+      - echo $IsRelease
 

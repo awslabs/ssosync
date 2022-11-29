@@ -199,7 +199,7 @@ Resources:
                 Provider: CodeStarSourceConnection
               OutputArtifacts:
                 - Name: Source
-              RunOrder: '1'
+              RunOrder: 1
               Configuration:
                 ConnectionArn: !Ref CodeStarConnection
                 FullRepositoryId: awslabs/ssosync
@@ -218,7 +218,7 @@ Resources:
                 Provider: CodeBuild
               OutputArtifacts:
                 - Name: GitVars
-              RunOrder: '1'
+              RunOrder: 1
               Configuration:
                 ProjectName: !Ref GitMetadata
                 PrimarySource: Source
@@ -232,7 +232,7 @@ Resources:
                 Provider: CodeBuild
               OutputArtifacts:
                 - Name: Built
-              RunOrder: '2'
+              RunOrder: 2
               Configuration: 
                 ProjectName: !Ref CodeBuildApp
                 PrimarySource: Source
@@ -312,6 +312,7 @@ Resources:
               OutputArtifacts:
                 - Name: Release
               InputArtifacts:
+                - Name: Source
                 - Name: Packaged
               RunOrder: 2
 
@@ -336,7 +337,7 @@ Resources:
           - Name: GitRepo 
             Value: "https://github.com/awslabs/ssosync"
           - Name: GitBranch
-            Value: "CodePipeline"
+            Value: "master"
       Artifacts:
         Name: SSOSync-Build
         Type: CODEPIPELINE
@@ -531,7 +532,7 @@ Resources:
       ServiceRole: !Ref CodeBuildPublishRole
       Source:
         Type: CODEPIPELINE
-        BuildSpec: "cicd/release/release/buildspec.yml"
+        BuildSpec: "cicd/release/public/buildspec.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
         Image: aws/codebuild/standard:5.0
