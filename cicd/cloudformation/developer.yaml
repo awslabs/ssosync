@@ -229,9 +229,9 @@ Resources:
               InputArtifacts:
                 - Name: Built
                 - Name: Source
-        - Name: Test
+        - Name: Prep
           Actions:
-            - Name: Staging
+            - Name: Publish
               Namespace: RC
               ActionTypeId:
                 Category: Build
@@ -761,10 +761,21 @@ Resources:
               Effect: Allow
               Resource: '*'
             - Action:
-                - "secretsmanager:Get*"
-              Resource:
-                - "*"
+                - "identitystore:DeleteUser"
+                - "identitystore:CreateGroup"
+                - "identitystore:CreateGroupMembership"
+                - "identitystore:ListGroups"
+                - "identitystore:ListUsers"
+                - "identitystore:ListGroupMemberships"
+                - "identitystore:IsMemberInGroups"
+                - "identitystore:GetGroupMembershipId"
+                - "identitystore:DeleteGroupMembership"
               Effect: Allow
+              Resource: '*'
+            - Action:
+                - "secretsmanager:Get*"
+              Effect: Allow
+              Resource: '*'
 
   CloudFormationDeployerRole:
     Type: AWS::IAM::Role

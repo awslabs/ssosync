@@ -5,6 +5,8 @@ env:
     GoogleAdminEmail: TestGoogleAdminEmail
     SCIMEndpointUrl: TestSCIMEndpointUrl
     SCIMAccessToken: TestSCIMAccessToken
+    IdentityStoreID: TestIdentityStoreId
+    Region: TestRegion
     
 phases:
   pre_build: 
@@ -18,4 +20,4 @@ phases:
       - aws secretsmanager  get-secret-value --secret-id=TestGoogleCredentials --query SecretString --output text | jq '.' > credentials.json
       - cat credentials.json
 
-      - ./ssosync -t "${SCIMAccessToken}" -e "${SCIMEndpointUrl}" -u "${GoogleAdminEmail}" -s "groups" -g "name:AWS*" 
+      - ./ssosync -t "${SCIMAccessToken}" -e "${SCIMEndpointUrl}" -u "${GoogleAdminEmail}" -i "${IdentityStoreID}" -r "${Region}" -s "groups" -g "name:AWS*" 
