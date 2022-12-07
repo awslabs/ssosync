@@ -125,6 +125,7 @@ func Handler(ctx context.Context, event events.CodePipelineEvent) (string, error
         }
     } else {
         if err != nil {
+            log.Fatalf(errors.Wrap(err, "Notifying Lambda and mark this execution as Failure").Error())
             return "Failure", err
         } else {
             return "Success", nil
