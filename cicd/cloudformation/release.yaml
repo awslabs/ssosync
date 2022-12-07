@@ -9,11 +9,27 @@ Description:
   is also a release, then the app will also be published to the public SAR entry.
 
 Parameters:
-  StagingAccount:
+  ManagementAccount:
     Description: AWS Account where staging build is automatically deployed and tested
     Type: String
     AllowedPattern: '[0-9]+'
-  TargetBucket:
+  ManagementBucket:
+    Description: Where we upload the tests.zip
+    Type: String
+    AllowedPattern: '[A-Za-z0-9:/-]+'
+  DelegatedAccount:
+    Description: AWS Account where staging build is automatically deployed and tested
+    Type: String
+    AllowedPattern: '[0-9]+'
+  DelegatedBucket:
+    Description: Where we upload the tests.zip
+    Type: String
+    AllowedPattern: '[A-Za-z0-9:/-]+'
+  NonDelegatedAccount:
+    Description: AWS Account where staging build is automatically deployed and tested
+    Type: String
+    AllowedPattern: '[0-9]+'
+  NonDelegatedBucket:
     Description: Where we upload the tests.zip
     Type: String
     AllowedPattern: '[A-Za-z0-9:/-]+'
@@ -25,21 +41,40 @@ Parameters:
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
-      - Label:
-          default: The bucket name in the End 2 End Test environment
+      - Label: 
+          default: The Management account of the End 2 End Test environment
         Parameters:
-          - TargetBucket
+          - ManagementAccount
+          - ManagementBucket
+      - Label: 
+          default: The Delegated Admin account of the End 2 End Test environment
+        Parameters:
+          - DelegatedAccount
+          - DelegatedBucket
+      - Label:
+          default: A Non-delegated Admin account of the End 2 End Test environment
+        Parameters:
+          - NonDelegatedAccount
+          - NonDelegatedBucket
       - Label:
           default: Connection id for the CodeStar Connection to use
         Parameters:
           - CodeStarConnection
             
     ParameterLabels:
-      StagingAccount:
-        default: "123456789012"
       CodeStarConnection:
         default: "arn:aws:codestar-connections:<AWS::Region>:<AWS::AccountId>:connection/abcd1234-ab12-ab12--ab12-abcdef123456"
-      TargetBucket:
+      ManagementAccount:
+        default: "123456789012"
+      ManagementBucket:
+        default: "my-bucket"
+      DelegatedAccount:
+        default: "123456789012"
+      DelegatedBucket:
+        default: "my-bucket"
+      NonDelegatedAccount:
+        default: "123456789012"
+      NonDelegatedBucket:
         default: "my-bucket"
 
 Resources:
@@ -70,18 +105,6 @@ Resources:
           Principal:
             AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
           Action: 'kms:*'
-          Resource: '*'
-        - Sid: Allow use of the key
-          Effect: Allow
-          Principal:
-            AWS: !Sub "arn:aws:iam::${StagingAccount}:role/ProductionAcctCodePipelineCloudFormationRole"
-          Action:
-            - 'kms:DescribeKey'
-            - 'kms:Encrypt'
-            - 'kms:Decrypt'
-            - 'kms:ReEncrypt*'
-            - 'kms:GenerateDataKey'
-            - 'kms:GenerateDataKeyWithoutPlaintext'
           Resource: '*'
 
   ArtifactBucket:
@@ -136,23 +159,6 @@ Resources:
           Condition: 
             Bool: 
               aws:SecureTransport: false
-        - Effect: Allow
-          Principal:
-            AWS:
-            - !Sub "arn:aws:iam::${StagingAccount}:role/ProductionAcctCodePipelineCloudFormationRole"
-          Action: 
-          - 's3:ListBucket'
-          Resource:
-          - !Sub ${ArtifactBucket.Arn}
-        - Effect: Allow
-          Principal:
-            AWS:
-            - !Sub "arn:aws:iam::${StagingAccount}:role/ProductionAcctCodePipelineCloudFormationRole"
-          Action:
-          - 's3:Get*'
-          - 's3:Put*'
-          Resource:
-          - !Sub ${ArtifactBucket.Arn}/*
 
   AppBucket:
     Type: AWS::S3::Bucket
@@ -272,7 +278,7 @@ Resources:
                 - Name: Source
                 - Name: Packaged
                 - Name: Built
-            - Name: Testing
+            - Name: Management
               ActionTypeId:
                 Category: Build
                 Owner: AWS
@@ -280,7 +286,33 @@ Resources:
                 Provider: CodeBuild
               RunOrder: 2
               Configuration:
-                ProjectName: !Ref CodeBuildTesting
+                ProjectName: !Ref CodeBuildTestingManagement
+                PrimarySource: Source
+              InputArtifacts:
+                - Name: Source
+                - Name: Tests
+            - Name: Delegated
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              RunOrder: 3
+              Configuration:
+                ProjectName: !Ref CodeBuildTestingDelegated
+                PrimarySource: Source
+              InputArtifacts:
+                - Name: Source
+                - Name: Tests
+            - Name: NonDelegated
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              RunOrder: 4
+              Configuration:
+                ProjectName: !Ref CodeBuildTestingNonDelegated
                 PrimarySource: Source
               InputArtifacts:
                 - Name: Source
@@ -442,7 +474,7 @@ Resources:
           - Name: ARTIFACT_S3_BUCKET
             Value: !Sub ${ArtifactBucket}
           - Name: ShareWith
-            Value: !Ref StagingAccount
+            Value: !Sub "${ManagementAccount},${DelegatedAccount},${NonDelegatedAccount}"
           - Name: AppArn
             Value: !Sub "arn:aws:serverlessrepo:${AWS::Region}:${AWS::AccountId}:applications/SSOSync-Staging"
       Artifacts:
@@ -460,10 +492,10 @@ Resources:
       LogGroupName: !Ref CodePipelineLogGroup
       LogStreamName: "SSOSync-Staging"
 
-  CodeBuildTesting:
+  CodeBuildTestingManagement:
     Type: AWS::CodeBuild::Project
     Properties:
-      Name: "SSOSync-Testing"
+      Name: "SSOSync-Testing-Management"
       Description: "Triggers the testing pipeline in the staging account and waits for it to complete"
       ServiceRole: !Ref CodeBuildTestRole
       Source:
@@ -475,10 +507,64 @@ Resources:
         Type: LINUX_CONTAINER
         EnvironmentVariables:
           - Name: TARGETS3BUCKET
-            Value: !Sub ${TargetBucket}
+            Value: !Sub ${ManagementBucket}
           - Name: StagingRole
-            Value: !Sub "arn:aws:iam::${StagingAccount}:role/SSOSync-ProdAccount-${AWS::Region}"
+            Value: !Sub "arn:aws:iam::${ManagementAccount}:role/SSOSync-ProdAccount-${AWS::Region}"
       Artifacts:
+        Name: SSOSync-Build
+        Type: CODEPIPELINE
+      LogsConfig:
+        CloudWatchLogs:
+          GroupName: !Ref CodePipelineLogGroup
+          StreamName: !Ref CodeBuildTestingLogs
+          Status: ENABLED
+
+  CodeBuildTestingDelegated:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: "SSOSync-Testing-Delegated"
+      Description: "Triggers the testing pipeline in the staging account and waits for it to complete"
+      ServiceRole: !Ref CodeBuildTestRole
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: "cicd/staging/testing/buildspec.yml"
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:5.0
+        Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: TARGETS3BUCKET
+            Value: !Sub ${DelegatedBucket}
+          - Name: StagingRole
+            Value: !Sub "arn:aws:iam::${DelegatedAccount}:role/SSOSync-ProdAccount-${AWS::Region}"
+      Artifacts:
+        Name: SSOSync-Build
+        Type: CODEPIPELINE
+      LogsConfig:
+        CloudWatchLogs:
+          GroupName: !Ref CodePipelineLogGroup
+          StreamName: !Ref CodeBuildTestingLogs
+          Status: ENABLED
+
+  CodeBuildTestingNonDelegated:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: "SSOSync-Testing-NonDelegated"
+      Description: "Triggers the testing pipeline in the staging account and waits for it to complete"
+      ServiceRole: !Ref CodeBuildTestRole
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: "cicd/staging/testing/buildspec.yml"
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:5.0
+        Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: TARGETS3BUCKET
+            Value: !Sub ${NonDelegatedBucket}
+          - Name: StagingRole
+            Value: !Sub "arn:aws:iam::${NonDelegatedAccount}:role/SSOSync-ProdAccount-${AWS::Region}"
+      Artifacts:      
         Name: SSOSync-Build
         Type: CODEPIPELINE
       LogsConfig:
@@ -592,7 +678,9 @@ Resources:
               - !Sub ${CodeBuildApp.Arn}
               - !Sub ${CodeBuildPackage.Arn}
               - !Sub ${CodeBuildStaging.Arn}
-              - !Sub ${CodeBuildTesting.Arn}
+              - !Sub ${CodeBuildTestingManagement.Arn}
+              - !Sub ${CodeBuildTestingDelegated.Arn}
+              - !Sub ${CodeBuildTestingNonDelegated.Arn}
               - !Sub ${CodeBuildApproveRelease.Arn}
               - !Sub ${CodeBuildRelease.Arn}
               Effect: Allow
@@ -619,12 +707,9 @@ Resources:
             - Action:
               - 'sts:AssumeRole'
               Resource:
-              - !Sub arn:aws:iam::${StagingAccount}:role/ProductionAcctCodePipelineCloudFormationRole
-              Effect: Allow
-            - Action:
-              - 'lambda:InvokeFunction'
-              Resource:
-              - !Sub arn:aws:lambda:${AWS::Region}:${StagingAccount}:function:SSOSyncFunction
+              - !Sub arn:aws:iam::${ManagementAccount}:role/ProductionAcctCodePipelineCloudFormationRole
+              - !Sub arn:aws:iam::${DelegatedAccount}:role/ProductionAcctCodePipelineCloudFormationRole
+              - !Sub arn:aws:iam::${NonDelegatedAccount}:role/ProductionAcctCodePipelineCloudFormationRole
               Effect: Allow
 
   CodeBuildAppRole:
@@ -801,7 +886,9 @@ Resources:
             - Action:
               - 'sts:AssumeRole'
               Resource:
-              - !Sub arn:aws:iam::${StagingAccount}:role/SSOSync-ProdAccount-${AWS::Region}
+              - !Sub arn:aws:iam::${ManagementAccount}:role/SSOSync-ProdAccount-${AWS::Region}
+              - !Sub arn:aws:iam::${DelegatedAccount}:role/SSOSync-ProdAccount-${AWS::Region}
+              - !Sub arn:aws:iam::${NonDelegatedAccount}:role/SSOSync-ProdAccount-${AWS::Region}
               Effect: Allow
             - Action:
               -  'lambda:invoke'

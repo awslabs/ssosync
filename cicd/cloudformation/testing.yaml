@@ -429,6 +429,18 @@ Resources:
               Effect: Allow
               Resource: '*'
             - Action:
+                - "identitystore:DeleteUser"
+                - "identitystore:CreateGroup"
+                - "identitystore:CreateGroupMembership"
+                - "identitystore:ListGroups"
+                - "identitystore:ListUsers"
+                - "identitystore:ListGroupMemberships"
+                - "identitystore:IsMemberInGroups"
+                - "identitystore:GetGroupMembershipId"
+                - "identitystore:DeleteGroupMembership"
+              Effect: Allow
+              Resource: '*'
+            - Action:
                 - "secretsmanager:Get*"
               Resource:
                 - "*"
