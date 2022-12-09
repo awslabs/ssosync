@@ -12,6 +12,14 @@ Parameters:
     Default: "004480582608"
     Type: String
     AllowedPattern: '[0-9]+'
+  TestAccount:
+    Description: The test account type
+    Default: "Management"
+    Type: String
+    AllowedValues:
+      - Management
+      - Delegated
+      - NonDelegated
 
 Metadata:
   AWS::CloudFormation::Interface:
@@ -20,10 +28,21 @@ Metadata:
           default: Production Account
         Parameters:
           - ProductionAccount
+      - Label:
+          default: Testing Account
+        Parameters:
+          - TestAccount
             
     ParameterLabels:
       ProductionAccount:
-        default: "123456789012"
+        default: "ProductionAccount"
+      TestAccount:
+        default: "Account Type"
+
+Conditions:
+  DeployManagement: !Equals [ !Ref TestAccount, Management]
+  DeployDelegated: !Equals [ !Ref TestAccount, Delegated]
+  DeployNonDelegated: !Equals [ !Ref TestAccount, NonDelegated]
 
 Resources:
 
@@ -127,10 +146,10 @@ Resources:
     Properties:
       Name: SSOSync-Test
       RoleArn: !Sub ${CodePipelineRole.Arn}
-      ArtifactStore: 
+      ArtifactStore:
         Type: S3
         Location: !Ref ArtifactBucket
-        EncryptionKey: 
+        EncryptionKey:
           Type: KMS
           Id: !GetAtt ArtifactBucketKey.Arn
       Stages:
@@ -198,19 +217,22 @@ Resources:
                 - Name: SmokeCLI
               InputArtifacts:
                 - Name: Tests
-            - Name: CodePipeline
-              ActionTypeId:
-                Category: Invoke
-                Owner: AWS
-                Version: 1
-                Provider: Lambda
-              RunOrder: 3
-              Configuration:
-                FunctionName: SSOSyncFunction 
-              OutputArtifacts:
-                - Name: SmokeCodePipeline
-              InputArtifacts:
-                - Name: Tests
+            - !If
+               - DeployDelegated
+               - Name: CodePipeline
+                 ActionTypeId:
+                   Category: Invoke
+                   Owner: AWS
+                   Version: 1
+                   Provider: Lambda
+                 RunOrder: 3
+                 Configuration:
+                   FunctionName: SSOSyncFunction
+                 OutputArtifacts:
+                   - Name: SmokeCodePipeline
+                 InputArtifacts:
+                   - Name: Tests
+               - !Ref AWS::NoValue
         - Name: CleanUp
           Actions:
             - Name: RemoveStack
@@ -241,6 +263,9 @@ Resources:
         ComputeType: BUILD_GENERAL1_SMALL
         Image: aws/codebuild/standard:5.0
         Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: ExpectedResponse
+            Value: !If [DeployNonDelegated, "true", "false"]
       Artifacts:
         Name: SSOSync
         Type: CODEPIPELINE
@@ -269,6 +294,9 @@ Resources:
         ComputeType: BUILD_GENERAL1_SMALL
         Image: aws/codebuild/standard:5.0
         Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: ExpectedResponse
+            Value: !If [DeployNonDelegated, "true", "false"]
       Artifacts:
         Name: SSOSync
         Type: CODEPIPELINE
@@ -477,9 +505,27 @@ Resources:
 
 Outputs:
 
-  StagingAccount:
+  ManagementAccount:
+    Condition: DeployManagement
     Description: "The account id"
     Value: !Ref AWS::AccountId
-  TargetBucket:
-    Description: "Bucket name"
+  ManagementBucket:
+    Condition: DeployManagement
+    Description: "Management account bucket name"
+    Value: !Ref StagingBucket
+  DelegatedAccount:
+    Condition: DeployDelegated
+    Description: "The account id"
+    Value: !Ref AWS::AccountId
+  DelegatedBucket:
+    Condition: DeployDelegated
+    Description: "Delegated account bucket name"
+    Value: !Ref StagingBucket
+  NonDelegatedAccount:
+    Condition: DeployNonDelegated
+    Description: "The account id"
+    Value: !Ref AWS::AccountId
+  NonDelegatedBucket:
+    Condition: DeployNonDelegated
+    Description: "Delegated account bucket name"
     Value: !Ref StagingBucket

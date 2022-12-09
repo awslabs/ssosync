@@ -1,5 +1,9 @@
 version: 0.2
-    
+
+env:
+  variables:
+    ExpectedResponse: "false"    
+
 phases:
   pre_build: 
     commands:
@@ -8,8 +12,18 @@ phases:
 
   build:
     commands:
-      # Create a changeset for the deployment
-      - aws lambda invoke --function-name "SSOSyncFunction" response.json
+      # Execute the lambda
+      - FunctionError=$(aws lambda invoke --function-name "SSOSyncFunction" response.json | jq 'has("FunctionError")') 
+
+      - |
+        if expr "${FunctionError}" : "${ExpectedRespsone}" >/dev/null; then
+          echo "We got what we expected"
+          exit 1
+        else 
+          echo "We have an error"
+          exit 252
+        fi
+
 
 artifacts:
   files:
