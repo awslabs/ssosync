@@ -264,8 +264,8 @@ Resources:
         Image: aws/codebuild/standard:5.0
         Type: LINUX_CONTAINER
         EnvironmentVariables:
-          - Name: ExpectedResponse
-            Value: !If [DeployNonDelegated, "true", "false"]
+          - Name: ExpectedExitState
+            Value: !If [DeployNonDelegated, 1, 0]
       Artifacts:
         Name: SSOSync
         Type: CODEPIPELINE
