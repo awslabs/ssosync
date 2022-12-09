@@ -18,10 +18,10 @@ phases:
       - |
         if expr "${FunctionError}" : "${ExpectedResponse}" >/dev/null; then
           echo "We got what we expected"
-          exit 1
+          exit 0
         else 
-          echo "We have an error"
-          exit 252
+          echo "We didn't get what we expected"
+          exit 1
         fi
 
 
