@@ -24,4 +24,4 @@ phases:
   build:
     commands:
       # Package our application with AWS SAM
-      - sam publish --template packaged.yaml
+      - sam publish --template packaged.yaml --semantic-version ${AppVersion}
