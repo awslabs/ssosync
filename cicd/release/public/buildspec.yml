@@ -21,6 +21,8 @@ phases:
       # Check we have the required file
       - ls packaged.yaml
 
+      - export AppVersion="${GitTag#v}"
+
   build:
     commands:
       # Package our application with AWS SAM
