@@ -9,9 +9,9 @@ env:
     Region: TestRegion
   variables:
     ExpectedExitState: 0
-    
+  
 phases:
-  pre_build: 
+  pre_build:
     commands:
       # Print all environment variables (handy for AWS CodeBuild logs)
       - env
@@ -32,3 +32,4 @@ phases:
           echo "We didn't get what we expected"
           exit 1
         fi
+

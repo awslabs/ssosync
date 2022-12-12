@@ -14,7 +14,9 @@ SSO Sync will run on any platform that Go can build for. It is available in the 
 
 > :warning: `>= 1.0.0-rc.5` groups to do not get deleted in AWS SSO when deleted in the Google Directory, and groups are synced by their email address
 
-> 🤔 we hope to support other providers in the future
+> :warning: `>= 2.0.0` this makes use of the **Identity Store API** which means:
+* if deploying the lambda from the [AWS Serverless Application Repository](https://console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync) then it needs to be deployed into the [IAM Identity Center delegated administration](https://docs.aws.amazon.com/singlesignon/latest/userguide/delegated-admin.html) account. Technically you could deploy in the management account but we would recommend against this.
+* if you are running the project as a cli tool, then the environment will need to be using credentials of a user in the [IAM Identity Center delegated administration](https://docs.aws.amazon.com/singlesignon/latest/userguide/delegated-admin.html) account, with appropriate permissions.
 
 ## Why?
 
@@ -43,9 +45,18 @@ what it is going to do.
  * [SCIM Protocol RFC](https://tools.ietf.org/html/rfc7644)
  * [AWS SSO - Connect to Your External Identity Provider](https://docs.aws.amazon.com/singlesignon/latest/userguide/manage-your-identity-source-idp.html)
  * [AWS SSO - Automatic Provisioning](https://docs.aws.amazon.com/singlesignon/latest/userguide/provision-automatically.html)
+ * [AWS IAM Identity Center - Identity Store API](https://docs.aws.amazon.com/singlesignon/latest/IdentityStoreAPIReference/welcome.html)
 
 ## Installation
 
+The recommended installation is:
+* [Setup IAM Identity Center](https://docs.aws.amazon.com/singlesignon/latest/userguide/get-started-enable-identity-center.html), in the management account of your organization
+* Created a linked account `Identity` Account from which to manage IAM Identity Center
+* [Delegate administration](https://docs.aws.amazon.com/singlesignon/latest/userguide/delegated-admin.html) to the `Identity' account
+* Deploy the [SSOSync app](https://console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync) from the AWS Serverless Application Repository
+
+
+You can also:
 You can `go get github.com/awslabs/ssosync` or grab a Release binary from the release page. The binary
 can be used from your local computer, or you can deploy to AWS Lambda to run on a CloudWatch Event
 for regular synchronization.
