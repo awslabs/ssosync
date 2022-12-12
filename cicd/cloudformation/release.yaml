@@ -341,7 +341,7 @@ Resources:
               Configuration:
                 ProjectName: !Ref CodeBuildRelease
                 PrimarySource: Source
-                EnvironmentVariables: '[{"name":"AppVersion","value":"#{Git.Tag}","type":"PLAINTEXT"}]'
+                EnvironmentVariables: '[{"name":"GitTag","value":"#{Git.Tag}","type":"PLAINTEXT"}]'
               OutputArtifacts:
                 - Name: Release
               InputArtifacts:
