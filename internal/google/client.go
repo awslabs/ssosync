@@ -75,7 +75,7 @@ func (c *client) GetDeletedUsers() ([]*admin.User, error) {
 // GetGroupMembers will get the members of the group specified
 func (c *client) GetGroupMembers(g *admin.Group) ([]*admin.Member, error) {
 	m := make([]*admin.Member, 0)
-	err := c.service.Members.List(g.Id).Pages(context.TODO(), func(members *admin.Members) error {
+	err := c.service.Members.List(g.Id).IncludeDerivedMembership(true).Pages(context.TODO(), func(members *admin.Members) error {
 		m = append(m, members.Members...)
 		return nil
 	})
@@ -89,13 +89,14 @@ func (c *client) GetGroupMembers(g *admin.Group) ([]*admin.Member, error) {
 // * https://developers.google.com/admin-sdk/directory/reference/rest/v1/users/list
 // * https://developers.google.com/admin-sdk/directory/v1/guides/search-users
 // query possible values:
-// '' --> empty or not defined
-//  name:'Jane'
-//  email:admin*
-//  isAdmin=true
-//  manager='janesmith@example.com'
-//  orgName=Engineering orgTitle:Manager
-//  EmploymentData.projects:'GeneGnomes'
+// ” --> empty or not defined
+//
+//	name:'Jane'
+//	email:admin*
+//	isAdmin=true
+//	manager='janesmith@example.com'
+//	orgName=Engineering orgTitle:Manager
+//	EmploymentData.projects:'GeneGnomes'
 func (c *client) GetUsers(query string) ([]*admin.User, error) {
 	u := make([]*admin.User, 0)
 	var err error
@@ -122,13 +123,14 @@ func (c *client) GetUsers(query string) ([]*admin.User, error) {
 // * https://developers.google.com/admin-sdk/directory/reference/rest/v1/groups/list
 // * https://developers.google.com/admin-sdk/directory/v1/guides/search-groups
 // query possible values:
-// '' --> empty or not defined
-//  name='contact'
-//  email:admin*
-//  memberKey=user@company.com
-//  name:contact* email:contact*
-//  name:Admin* email:aws-*
-//  email:aws-*
+// ” --> empty or not defined
+//
+//	name='contact'
+//	email:admin*
+//	memberKey=user@company.com
+//	name:contact* email:contact*
+//	name:Admin* email:aws-*
+//	email:aws-*
 func (c *client) GetGroups(query string) ([]*admin.Group, error) {
 	g := make([]*admin.Group, 0)
 	var err error
