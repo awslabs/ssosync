@@ -170,6 +170,7 @@ Resources:
                 - "identitystore:IsMemberInGroups"
                 - "identitystore:GetGroupMembershipId"
                 - "identitystore:DeleteGroupMembership"
+                - "identitystore:DeleteGroup"
               Resource:
                 - "*"
       Events:
