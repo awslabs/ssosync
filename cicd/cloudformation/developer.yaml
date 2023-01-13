@@ -345,7 +345,7 @@ Resources:
           - Name: GitRepo
             Value: "https://github.com/awslabs/ssosync"
           - Name: GitBranch
-            Value: "CodePipeline"
+            Value: !Ref BranchName
       Artifacts:
         Name: SSOSync
         Type: CODEPIPELINE
