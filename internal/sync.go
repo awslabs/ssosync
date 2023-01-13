@@ -17,7 +17,6 @@ package internal
 
 import (
 	"context"
-	"fmt"
 	"io/ioutil"
 
 	"github.com/awslabs/ssosync/internal/aws"
@@ -522,6 +521,56 @@ func (s *syncGSuite) SyncGroupsUsers(query string) error {
 	return nil
 }
 
+// getAllGroupMembers return a slice of google group members of googleGroups
+// whereby all the members are of USER type and inherited groups are resolved.
+func (s *syncGSuite) getAllGroupMembers(group *admin.Group) ([]*admin.Member, error) {
+	members := make([]*admin.Member, 0)
+
+	groupMembers, err := s.google.GetGroupMembers(group)
+	if err != nil {
+		return nil, err
+	}
+
+	seenUsers := make(map[string]bool)
+
+	for _, m := range groupMembers {
+		switch m.Type {
+		case "GROUP":
+			// get group
+
+			nestedGroup, err := s.google.GetGroup(m.Id)
+			if err != nil {
+				return nil, err
+			}
+
+			log.WithFields(log.Fields{"group": nestedGroup.Name}).Debug("get group members from google")
+			additionalGroupMembers, err := s.getAllGroupMembers(nestedGroup)
+			if err != nil {
+				return nil, err
+			}
+
+			// Dedupe users by ID
+			for _, additionalMember := range additionalGroupMembers {
+				if _, exists := seenUsers[additionalMember.Id]; !exists {
+					members = append(members, additionalMember)
+					seenUsers[additionalMember.Id] = true
+				}
+			}
+
+		case "USER":
+			// Dedupe users by ID
+			if _, exists := seenUsers[m.Id]; !exists {
+				members = append(members, m)
+				seenUsers[m.Id] = true
+			}
+		default:
+			log.WithFields(log.Fields{"member_type": m.Type}).Warn("Unknown group member type")
+		}
+	}
+
+	return members, nil
+}
+
 // getGoogleGroupsAndUsers return a list of google users members of googleGroups
 // and a map of google groups and its users' list
 func (s *syncGSuite) getGoogleGroupsAndUsers(googleGroups []*admin.Group) ([]*admin.User, map[string][]*admin.User, error) {
@@ -540,7 +589,7 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(googleGroups []*admin.Group) ([]*ad
 		}
 
 		log.Debug("get group members from google")
-		groupMembers, err := s.google.GetGroupMembers(g)
+		groupMembers, err := s.getAllGroupMembers(g)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -556,17 +605,16 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(googleGroups []*admin.Group) ([]*ad
 			}
 
 			log.WithField("id", m.Email).Debug("get user")
-			q := fmt.Sprintf("email:%s", m.Email)
-			u, err := s.google.GetUsers(q) // TODO: implement GetUser(m.Email)
+			u, err := s.google.GetUser(m.Id)
 			if err != nil {
 				return nil, nil, err
 			}
 
-			membersUsers = append(membersUsers, u[0])
+			membersUsers = append(membersUsers, u)
 
 			_, ok := gUniqUsers[m.Email]
 			if !ok {
-				gUniqUsers[m.Email] = u[0]
+				gUniqUsers[m.Email] = u
 			}
 		}
 		gGroupsUsers[g.Name] = membersUsers
