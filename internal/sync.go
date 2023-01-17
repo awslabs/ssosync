@@ -558,6 +558,7 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(googleGroups []*admin.Group) ([]*ad
 			log.WithField("id", m.Email).Debug("get user")
 			q := fmt.Sprintf("email:%s", m.Email)
 			u, err := s.google.GetUsers(q) // TODO: implement GetUser(m.Email)
+
 			if err != nil {
 				return nil, nil, err
 			}
@@ -855,6 +856,12 @@ func ConvertSdkUserObjToNative(user *identitystore.User) *aws.User {
 	userEmails := make([]aws.UserEmail, 0)
 
 	for _, email := range user.Emails {
+		if email.Value == nil || email.Type == nil || email.Primary == nil {
+              		# This must be a user created by AWS Control Tower
+                        # Need feature development to make how these users are treated
+			# configurable.
+			continue
+		}
 		userEmails = append(userEmails, aws.UserEmail{
 			Value:   *email.Value,
 			Type:    *email.Type,
