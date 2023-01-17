@@ -861,9 +861,9 @@ func ConvertSdkUserObjToNative(user *identitystore.User) *aws.User {
 
 	for _, email := range user.Emails {
 		if email.Value == nil || email.Type == nil || email.Primary == nil {
-              		# This must be a user created by AWS Control Tower
-                        # Need feature development to make how these users are treated
-			# configurable.
+              		// This must be a user created by AWS Control Tower
+                        // Need feature development to make how these users are treated
+			// configurable.
 			continue
 		}
 		userEmails = append(userEmails, aws.UserEmail{
