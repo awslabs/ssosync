@@ -1,3 +1,19 @@
+## 2.0.2
+- Fixes panic on IdentityStore user without primary email (common to users created by AWS Control Tower)
+- Fixes panic on Google Directory Group with external users with group be synced
+
+## 2.0.1
+- Fixes m,issing IAM permission identityStore:DeleteGroup
+- Updates to developer CICD pipeline
+## 2.0.0
+- Introduced the use of the IdentityStore api to overcome various scaling challenge
+- Improvements to CICD to allow for testing in different accounts type within an AWS organization
+- Strong recommendation to deploy in IAM Identity Center - delegated administration account
+
+## 1.1.0
+- Added Cloudformation deployable CICD pipelines 
+- To consistently build and test the application
+
 ## 1.0.0-rc.10
 - #44 fix: ensure old behaviour is supported
 - #43 fix: fix ignore-group flag
