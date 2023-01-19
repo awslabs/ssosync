@@ -73,6 +73,8 @@ func New(cfg *config.Config, a aws.Client, g google.Client, ids identitystoreifa
 //  orgName=Engineering orgTitle:Manager
 //  EmploymentData.projects:'GeneGnomes'
 func (s *syncGSuite) SyncUsers(query string) error {
+
+	log.Debug("SyncUsers()")
 	log.Debug("get deleted users")
 	deletedUsers, err := s.google.GetDeletedUsers()
 	if err != nil {
@@ -172,6 +174,8 @@ func (s *syncGSuite) SyncUsers(query string) error {
 //  name:Admin* email:aws-*
 //  email:aws-*
 func (s *syncGSuite) SyncGroups(query string) error {
+
+        log.Debug("SyncGroups()")
 
 	log.WithField("query", query).Debug("get google groups")
 	googleGroups, err := s.google.GetGroups(query)
@@ -285,6 +289,8 @@ func (s *syncGSuite) SyncGroups(query string) error {
 //  5) validate equals aws an google groups members
 //  6) delete groups in aws, these were deleted in google
 func (s *syncGSuite) SyncGroupsUsers(query string) error {
+
+        log.Debug("SyncGroupsUsers()")
 
 	log.WithField("query", query).Info("get google groups")
 	googleGroups, err := s.google.GetGroups(query)
@@ -525,6 +531,9 @@ func (s *syncGSuite) SyncGroupsUsers(query string) error {
 // getGoogleGroupsAndUsers return a list of google users members of googleGroups
 // and a map of google groups and its users' list
 func (s *syncGSuite) getGoogleGroupsAndUsers(googleGroups []*admin.Group) ([]*admin.User, map[string][]*admin.User, error) {
+
+        log.Debug("getGoogleGroupsAndUsers()")
+
 	gUsers := make([]*admin.User, 0)
 	gGroupsUsers := make(map[string][]*admin.User)
 
@@ -587,6 +596,8 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(googleGroups []*admin.Group) ([]*ad
 // getGroupOperations returns the groups of AWS that must be added, deleted and are equals
 func getGroupOperations(awsGroups []*aws.Group, googleGroups []*admin.Group) (add []*aws.Group, delete []*aws.Group, equals []*aws.Group) {
 
+        log.Debug("getGroupOperations()")
+
 	awsMap := make(map[string]*aws.Group)
 	googleMap := make(map[string]struct{})
 
@@ -619,6 +630,8 @@ func getGroupOperations(awsGroups []*aws.Group, googleGroups []*admin.Group) (ad
 
 // getUserOperations returns the users of AWS that must be added, deleted, updated and are equals
 func getUserOperations(awsUsers []*aws.User, googleUsers []*admin.User) (add []*aws.User, delete []*aws.User, update []*aws.User, equals []*aws.User) {
+
+	log.Debug("getUserOperations()")
 
 	awsMap := make(map[string]*aws.User)
 	googleMap := make(map[string]struct{})
@@ -659,6 +672,8 @@ func getUserOperations(awsUsers []*aws.User, googleUsers []*admin.User) (add []*
 // groupUsersOperations returns the groups and its users of AWS that must be delete from these groups and what are equals
 func getGroupUsersOperations(gGroupsUsers map[string][]*admin.User, awsGroupsUsers map[string][]*aws.User) (delete map[string][]*aws.User, equals map[string][]*aws.User) {
 
+        log.Debug("getGroupUsersOperations()")
+
 	mbG := make(map[string]map[string]struct{})
 
 	// get user in google groups that are in aws groups and
@@ -689,6 +704,9 @@ func getGroupUsersOperations(gGroupsUsers map[string][]*admin.User, awsGroupsUse
 // DoSync will create a logger and run the sync with the paths
 // given to do the sync.
 func DoSync(ctx context.Context, cfg *config.Config) error {
+
+        log.Debug("DoSync()")
+
 	log.Info("Syncing AWS users and groups from Google Workspace SAML Application")
 
 	creds := []byte(cfg.GoogleCredentials)
@@ -801,6 +819,9 @@ func (s *syncGSuite) includeGroup(name string) bool {
 var awsGroups []*aws.Group
 
 func (s *syncGSuite) GetGroups() ([]*aws.Group, error) {
+
+        log.Debug("GetGroups()")
+
 	awsGroups = make([]*aws.Group, 0)
 
 	err := s.identityStoreClient.ListGroupsPages(
@@ -833,6 +854,9 @@ func ListGroupsPagesCallbackFn(page *identitystore.ListGroupsOutput, lastPage bo
 var awsUsers []*aws.User
 
 func (s *syncGSuite) GetUsers() ([]*aws.User, error) {
+
+        log.Debug("GetUsers()")
+
 	awsUsers = make([]*aws.User, 0)
 
 	err := s.identityStoreClient.ListUsersPages(
