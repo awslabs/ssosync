@@ -137,7 +137,7 @@ func (c *client) GetGroups(query string) ([]*admin.Group, error) {
 	if query != "" {
                 // In case we have multiple queries to process split on delimiter
                 queries := strings.Split(query, ",")
-		for i, subQuery := irange queries {
+		for i, subQuery := range queries {
 			err = c.service.Groups.List().Customer("my_customer").Query(subQuery).Pages(context.TODO(), func(groups *admin.Groups) error {
 				g = append(g, groups.Groups...)
 				return nil
