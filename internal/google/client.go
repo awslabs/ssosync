@@ -17,6 +17,7 @@ package google
 
 import (
 	"context"
+        "strings"
 
 	"golang.org/x/oauth2/google"
 	admin "google.golang.org/api/admin/directory/v1"
@@ -134,10 +135,14 @@ func (c *client) GetGroups(query string) ([]*admin.Group, error) {
 	var err error
 
 	if query != "" {
-		err = c.service.Groups.List().Customer("my_customer").Query(query).Pages(context.TODO(), func(groups *admin.Groups) error {
-			g = append(g, groups.Groups...)
-			return nil
-		})
+                // In case we have multiple queries to process split on delimiter
+                queries := strings.Split(query, ",")
+		for i, subQuery := irange queries {
+			err = c.service.Groups.List().Customer("my_customer").Query(subQuery).Pages(context.TODO(), func(groups *admin.Groups) error {
+				g = append(g, groups.Groups...)
+				return nil
+			})
+		}
 	} else {
 		err = c.service.Groups.List().Customer("my_customer").Pages(context.TODO(), func(groups *admin.Groups) error {
 			g = append(g, groups.Groups...)
