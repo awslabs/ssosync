@@ -101,7 +101,12 @@ func (c *client) GetUsers(query string) ([]*admin.User, error) {
 	u := make([]*admin.User, 0)
 	var err error
 
-	if query != "" {
+	if query == "*" {
+                err = c.service.Users.List().Customer("my_customer").Pages(c.ctx, func(users *admin.Users) error {
+                        u = append(u, users.Users...)
+                        return nil
+                })
+	} else if query != "" {
                 // In case we have multiple queries to process split on delimiter
                 queries := strings.Split(query, ",")
                 for _, subQuery := range queries {
@@ -110,12 +115,6 @@ func (c *client) GetUsers(query string) ([]*admin.User, error) {
 				return nil
 			})
 		}
-
-	} else {
-		err = c.service.Users.List().Customer("my_customer").Pages(c.ctx, func(users *admin.Users) error {
-			u = append(u, users.Users...)
-			return nil
-		})
 	}
 
 	return u, err
@@ -138,7 +137,12 @@ func (c *client) GetGroups(query string) ([]*admin.Group, error) {
 	g := make([]*admin.Group, 0)
 	var err error
 
-	if query != "" {
+	if query == "*" {
+                err = c.service.Groups.List().Customer("my_customer").Pages(context.TODO(), func(groups *admin.Groups) error {
+                        g = append(g, groups.Groups...)
+                        return nil
+                })
+	} else if query != "" {
                 // In case we have multiple queries to process split on delimiter
                 queries := strings.Split(query, ",")
 		for _, subQuery := range queries {
@@ -147,11 +151,6 @@ func (c *client) GetGroups(query string) ([]*admin.Group, error) {
 				return nil
 			})
 		}
-	} else {
-		err = c.service.Groups.List().Customer("my_customer").Pages(context.TODO(), func(groups *admin.Groups) error {
-			g = append(g, groups.Groups...)
-			return nil
-		})
 
 	}
 	return g, err
