@@ -466,6 +466,7 @@ Resources:
                 - "identitystore:IsMemberInGroups"
                 - "identitystore:GetGroupMembershipId"
                 - "identitystore:DeleteGroupMembership"
+                - "identitystore:DeleteGroup"
               Effect: Allow
               Resource: '*'
             - Action:

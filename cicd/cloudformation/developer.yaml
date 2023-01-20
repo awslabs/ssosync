@@ -597,6 +597,7 @@ Resources:
               - !Sub ${CodeBuildStaging.Arn}
               - !Sub ${CodeBuildSmokeCLI.Arn}
               - !Sub ${CodeBuildSmokeLambda.Arn}
+              - !Sub ${CodeBuildFunctionalGroups.Arn}
               Effect: Allow
             - Action:
               - 's3:GetBucketPolicy'
@@ -813,6 +814,7 @@ Resources:
                 - "identitystore:IsMemberInGroups"
                 - "identitystore:GetGroupMembershipId"
                 - "identitystore:DeleteGroupMembership"
+                - "identitystore:DeleteGroup"
               Effect: Allow
               Resource: '*'
             - Action:
