@@ -37,7 +37,7 @@ import (
 type SyncGSuite interface {
 	SyncUsers(string) error
 	SyncGroups(string) error
-	SyncGroupsUsers(string) error
+	SyncGroupsUsers(string, string) error
 }
 
 // SyncGSuite is an object type that will synchronize real users and groups
@@ -288,12 +288,12 @@ func (s *syncGSuite) SyncGroups(query string) error {
 //  4) add groups in aws and add its members, these were added in google
 //  5) validate equals aws an google groups members
 //  6) delete groups in aws, these were deleted in google
-func (s *syncGSuite) SyncGroupsUsers(query string) error {
+func (s *syncGSuite) SyncGroupsUsers(groupQuery string, userQuery string) error {
 
         log.Debug("SyncGroupsUsers()")
 
-	log.WithField("query", query).Info("get google groups")
-	googleGroups, err := s.google.GetGroups(query)
+	log.WithField("groupMatch", groupQuery).Info("get google groups")
+	googleGroups, err := s.google.GetGroups(groupQuery)
 	if err != nil {
 		return err
 	}
@@ -305,10 +305,27 @@ func (s *syncGSuite) SyncGroupsUsers(query string) error {
 		}
 		filteredGoogleGroups = append(filteredGoogleGroups, g)
 	}
-	googleGroups = filteredGoogleGroups
+
+        googleGroups = filteredGoogleGroups
+
+	log.WithField("userMatch", userQuery).Info("get google users")
+        googleUsers, err := s.google.GetUsers(userQuery)
+        if err != nil {
+                return err
+        }
+        filteredGoogleUsers := []*admin.User{}
+        for _, g := range googleUsers {
+                if s.ignoreUser(g.Email) {
+                        log.WithField("user", g.Email).Debug("ignoring user")
+                        continue
+                }
+                filteredGoogleUsers = append(filteredGoogleUsers, g)
+        }
+
+	googleUsers = filteredGoogleUsers
 
 	log.Debug("preparing list of google users and then google groups and their members")
-	googleUsers, googleGroupsUsers, err := s.getGoogleGroupsAndUsers(googleGroups)
+	googleUsers, googleGroupsUsers, err := s.getGoogleGroupsAndUsers(googleGroups, googleUsers)
 	if err != nil {
 		return err
 	}
@@ -535,6 +552,7 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(googleGroups []*admin.Group) ([]*ad
         log.Debug("getGoogleGroupsAndUsers()")
 
 	gUsers := make([]*admin.User, 0)
+
 	gGroupsUsers := make(map[string][]*admin.User)
 
 	gUniqUsers := make(map[string]*admin.User)
@@ -767,7 +785,7 @@ func DoSync(ctx context.Context, cfg *config.Config) error {
 
 	log.WithField("sync_method", cfg.SyncMethod).Info("syncing")
 	if cfg.SyncMethod == config.DefaultSyncMethod {
-		err = c.SyncGroupsUsers(cfg.GroupMatch)
+		err = c.SyncGroupsUsers(cfg.GroupMatch, cfg.UserMatch)
 		if err != nil {
 			return err
 		}

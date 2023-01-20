@@ -71,7 +71,7 @@ phases:
         fi
 
       # Group with Nested Groups, should sync all groups matching either prefix
-      - ./ssosync -t "${SCIMAccessToken}" -e "${SCIMEndpointUrl}" -u "${GoogleAdminEmail}" -i "${IdentityStoreID}" -r "${Region}" -s "groups" -g "name:NestedGroupsTest"; ExitState=$?
+      - ./ssosync -t "${SCIMAccessToken}" -e "${SCIMEndpointUrl}" -u "${GoogleAdminEmail}" -i "${IdentityStoreID}" -r "${Region}" -s "groups" -g "name:NestedGroupsTest*"; ExitState=$?
 
       - |
         if expr "${ExitState}" : "${ExpectedExitState}" >/dev/null; then

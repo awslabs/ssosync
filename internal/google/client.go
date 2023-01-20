@@ -102,10 +102,14 @@ func (c *client) GetUsers(query string) ([]*admin.User, error) {
 	var err error
 
 	if query != "" {
-		err = c.service.Users.List().Query(query).Customer("my_customer").Pages(c.ctx, func(users *admin.Users) error {
-			u = append(u, users.Users...)
-			return nil
-		})
+                // In case we have multiple queries to process split on delimiter
+                queries := strings.Split(query, ",")
+                for _, subQuery := range queries {
+			err = c.service.Users.List().Query(query).Customer("my_customer").Pages(c.ctx, func(users *admin.Users) error {
+				u = append(u, users.Users...)
+				return nil
+			})
+		}
 
 	} else {
 		err = c.service.Users.List().Customer("my_customer").Pages(c.ctx, func(users *admin.Users) error {
