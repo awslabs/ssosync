@@ -314,12 +314,12 @@ func (s *syncGSuite) SyncGroupsUsers(groupQuery string, userQuery string) error 
                 return err
         }
         filteredGoogleUsers := []*admin.User{}
-        for _, g := range googleUsers {
-                if s.ignoreUser(g.Email) {
-                        log.WithField("user", g.Email).Debug("ignoring user")
+        for _, u := range googleUsers {
+                if s.ignoreUser(u.PrimaryEmail) {
+                        log.WithField("user", u.PrimaryEmail).Debug("ignoring user")
                         continue
                 }
-                filteredGoogleUsers = append(filteredGoogleUsers, g)
+                filteredGoogleUsers = append(filteredGoogleUsers, u)
         }
 
 	googleUsers = filteredGoogleUsers
@@ -547,7 +547,7 @@ func (s *syncGSuite) SyncGroupsUsers(groupQuery string, userQuery string) error 
 
 // getGoogleGroupsAndUsers return a list of google users members of googleGroups
 // and a map of google groups and its users' list
-func (s *syncGSuite) getGoogleGroupsAndUsers(googleGroups []*admin.Group) ([]*admin.User, map[string][]*admin.User, error) {
+func (s *syncGSuite) getGoogleGroupsAndUsers(googleGroups []*admin.Group, googleUsers []*admin.User) ([]*admin.User, map[string][]*admin.User, error) {
 
         log.Debug("getGoogleGroupsAndUsers()")
 
