@@ -47,7 +47,7 @@ phases:
         fi
 
       # Multi-prefix, should sync all groups matching either prefix
-      - ./ssosync -t "${SCIMAccessToken}" -e "${SCIMEndpointUrl}" -u "${GoogleAdminEmail}" -i "${IdentityStoreID}" -r "${Region}" -s "groups" -g "name:PrefixA*,name:PrefixB"; ExitState=$?
+      - ./ssosync -t "${SCIMAccessToken}" -e "${SCIMEndpointUrl}" -u "${GoogleAdminEmail}" -i "${IdentityStoreID}" -r "${Region}" -s "groups" -g "name:PrefixA*,name:PrefixB*"; ExitState=$?	
 
       - |
         if expr "${ExitState}" : "${ExpectedExitState}" >/dev/null; then
