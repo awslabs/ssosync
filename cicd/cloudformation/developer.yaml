@@ -265,7 +265,7 @@ Resources:
               InputArtifacts:
                 - Name: Tests
               RunOrder: 2
-        - Name: SmokeTests
+        - Name: ExecutionTests
           Actions:
             - Name: Lambda
               ActionTypeId:
@@ -305,6 +305,21 @@ Resources:
                 FunctionName: SSOSyncFunction
               OutputArtifacts:
                 - Name: SmokeCodePipeline
+              InputArtifacts:
+                - Name: Tests
+        - Name: FunctionalTests
+          Actions:
+            - Name: Groups
+              ActionTypeId:
+                Category: Test
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              RunOrder: 1
+              Configuration:
+                ProjectName: !Ref CodeBuildFunctionalGroups
+              OutputArtifacts:
+                - Name: Groups
               InputArtifacts:
                 - Name: Tests
         - Name: CleanUp
@@ -521,6 +536,34 @@ Resources:
     Properties:
       LogGroupName: !Ref CodePipelineLogGroup
       LogStreamName: SSOSync-Smoke-Lambda
+
+  CodeBuildFunctionalGroups:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: SSOSync-Functional-Groups
+      Description: "Test for correctional behaviour with different group scenarions"
+      ServiceRole: !Ref CodeBuildTestRole
+      Source:   
+        Type: CODEPIPELINE
+        BuildSpec: "tests/functional/groups/buildspec.yml"
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:5.0
+        Type: LINUX_CONTAINER
+      Artifacts:
+        Name: SSOSync
+        Type: CODEPIPELINE
+      LogsConfig:
+        CloudWatchLogs: 
+          GroupName: !Ref CodePipelineLogGroup
+          StreamName: !Ref CodeBuildFunctionalGroupLogs
+          Status: ENABLED
+                
+  CodeBuildFunctionalGroupLogs:
+    Type: AWS::Logs::LogStream
+    Properties: 
+      LogGroupName: !Ref CodePipelineLogGroup
+      LogStreamName: SSOSync-Functional-GroupFiltering
 
 
   CodePipelineRole:
