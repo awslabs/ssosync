@@ -134,7 +134,7 @@ Flags:
   -e, --endpoint string             AWS SSO SCIM API Endpoint
   -u, --google-admin string         Google Workspace admin user email
   -c, --google-credentials string   path to Google Workspace credentials file (default "credentials.json")
-  -g, --group-match string          Google Workspace Groups filter query parameter, example: 'name:Admin* email:aws-*', see: https://developers.google.com/admin-sdk/directory/v1/guides/search-groups
+  -g, --group-match string          Google Workspace Groups is a comma separated list of filter queries, examples: 'name:Admin* email:aws-*' or 'name:Admin*, name:Dev*', see: https://developers.google.com/admin-sdk/directory/v1/guides/search-groups
   -h, --help                        help for ssosync
       --ignore-groups strings       ignores these Google Workspace groups
       --ignore-users strings        ignores these Google Workspace users
@@ -142,7 +142,7 @@ Flags:
       --log-format string           log format (default "text")
       --log-level string            log level (default "info")
   -s, --sync-method string          Sync method to use (users_groups|groups) (default "groups")
-  -m, --user-match string           Google Workspace Users filter query parameter, example: 'name:John* email:admin*', see: https://developers.google.com/admin-sdk/directory/v1/guides/search-users
+  -m, --user-match string           Google Workspace Users is a comma separated list of filter queries, examples: 'name:John* email:admin*' or 'name:John*, name:Jane*', see: https://developers.google.com/admin-sdk/directory/v1/guides/search-users
   -v, --version                     version for ssosync
   -r, --region                      AWS region where identity store exists
   -i, --identity-store-id           AWS Identity Store ID

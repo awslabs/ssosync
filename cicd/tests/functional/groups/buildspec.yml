@@ -34,6 +34,18 @@ phases:
           exit 1
         fi
 
+      # no groupMatch paramer, should sync all groups in the directory
+      - ./ssosync -t "${SCIMAccessToken}" -e "${SCIMEndpointUrl}" -u "${GoogleAdminEmail}" -i "${IdentityStoreID}" -r "${Region}" -s "groups"; ExitState=$?
+
+      - |
+        if expr "${ExitState}" : "${ExpectedExitState}" >/dev/null; then
+          echo "We got what we expected"
+          exit 0
+        else
+          echo "We didn't get what we expected"
+          exit 1
+        fi
+
       # Single Prefix, should sync only sync those groups with the prefix
       - ./ssosync -t "${SCIMAccessToken}" -e "${SCIMEndpointUrl}" -u "${GoogleAdminEmail}" -i "${IdentityStoreID}" -r "${Region}" -s "groups" -g "name:PrefixA*"; ExitState=$?
 
