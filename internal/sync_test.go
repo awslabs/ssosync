@@ -408,6 +408,7 @@ func Test_ShouldIncludeGroup(t *testing.T) {
 			}
 		})
 	}
+}
 
 func Test_GetGroupsWithoutPagination(t *testing.T) {
 	ctrl := gomock.NewController(t)
