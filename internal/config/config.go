@@ -50,6 +50,10 @@ const (
 	DefaultGoogleCredentials = "credentials.json"
 	// DefaultSyncMethod is the default sync method to use.
 	DefaultSyncMethod = "groups"
+	// DefaultUserMatch
+	DefaultUserMatch = ""
+	// DefaultGroupMatch
+	DefaultGroupMatch = ""
 )
 
 // New returns a new Config
@@ -60,5 +64,7 @@ func New() *Config {
 		LogFormat:         DefaultLogFormat,
 		SyncMethod:        DefaultSyncMethod,
 		GoogleCredentials: DefaultGoogleCredentials,
+		UserMatch:	   DefaultUserMatch,
+		GroupMatch:	   DefaultGroupMatch,
 	}
 }
