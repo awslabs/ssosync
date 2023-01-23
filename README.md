@@ -105,7 +105,7 @@ SSOSYNC_SCIM_ACCESS_TOKEN=<YOUR_TOKEN>
 SSOSYNC_SCIM_ENDPOINT=<YOUR_ENDPOINT>
 ```
 
-Additionally, authenticate your AWS credentials. Follow this  [section](https://docs.aws.amazon.com/sdk-for-go/v1/developer-guide/configuring-sdk.html#:~:text=Creating%20the%20Credentials%20File) to create a Shared Credentials File in the home directory or export your Credentials with Environment Variables. Ensure that the default credentials are for the AWS account you intended to be synced.
+Additionally, authenticate your AWS credentials. Follow this  [section](https://docs.aws.amazon.com/sdk-for-go/v1/developer-guide/configuring-sdk.html#:~:text=Creating%20the%20Credentials%20File) to create a Shared Credentials File in the home directory or export your Credentials with Environment Variables. Ensure that the default credentials are for the AWS account you delegated admin for AWS IAM Identity Center to. This should be credntials for permissions limited IAM User, it can't be a user in AWS IAM Identity Center since the sync process is going to make changes. The cloudformation template (template.yaml) in this repository includes an IAM policy that grants the minimal set of rights for SSOSync to function.
 
 To obtain your `Identity store ID`, go to the AWS Identity Center console and select settings. Under the `Identity Source` section, copy the `Identity store ID`.
 
