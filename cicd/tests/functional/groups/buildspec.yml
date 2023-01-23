@@ -71,7 +71,7 @@ phases:
         fi
 
       # Group with External Users, should sync all groups matching either prefix
-      - ./ssosync -t "${SCIMAccessToken}" -e "${SCIMEndpointUrl}" -u "${GoogleAdminEmail}" -i "${IdentityStoreID}" -r "${Region}" -s "groups" -g "name:ExternalUserTest"; ExitState=$?
+      - ./ssosync -t "${SCIMAccessToken}" -e "${SCIMEndpointUrl}" -u "${GoogleAdminEmail}" -i "${IdentityStoreID}" -r "${Region}" -s "groups" -g "name:ExternalUserTest*"; ExitState=$?
 
       - |
         if expr "${ExitState}" : "${ExpectedExitState}" >/dev/null; then
