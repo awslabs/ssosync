@@ -31,8 +31,8 @@ Resources:
         Region: '{{resolve:secretsmanager:TestRegion}}'
         IdentityStoreID: '{{resolve:secretsmanager:TestIdentityStoreId}}'
         SyncMethod: groups
-        GoogleUserMatch: 'name:*'
         GoogleGroupMatch: 'name:AWS*'
+        GoogleUserMatch: '*'
         LogLevel: debug
         LogFormat: json
         IgnoreUsers: None

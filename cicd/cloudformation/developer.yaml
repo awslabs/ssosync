@@ -267,7 +267,7 @@ Resources:
               RunOrder: 2
         - Name: ExecutionTests
           Actions:
-            - Name: Lambda
+            - Name: CLI
               ActionTypeId:
                 Category: Test
                 Owner: AWS
@@ -275,13 +275,12 @@ Resources:
                 Provider: CodeBuild
               RunOrder: 1
               Configuration:
-                ProjectName: !Ref CodeBuildSmokeLambda
-                PrimarySource: Source
+                ProjectName: !Ref CodeBuildSmokeCLI
               OutputArtifacts:
-                - Name: SmokeLambda
+                - Name: SmokeCLI
               InputArtifacts:
                 - Name: Tests
-            - Name: CLI
+            - Name: Lambda
               ActionTypeId:
                 Category: Test
                 Owner: AWS
@@ -289,9 +288,10 @@ Resources:
                 Provider: CodeBuild
               RunOrder: 2
               Configuration:
-                ProjectName: !Ref CodeBuildSmokeCLI
+                ProjectName: !Ref CodeBuildSmokeLambda
+                PrimarySource: Source
               OutputArtifacts:
-                - Name: SmokeCLI
+                - Name: SmokeLambda
               InputArtifacts:
                 - Name: Tests
             - Name: CodePipeline
