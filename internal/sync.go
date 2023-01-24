@@ -17,6 +17,7 @@ package internal
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io/ioutil"
 
@@ -403,6 +404,11 @@ func (s *syncGSuite) SyncGroupsUsers(query string) error {
 		log.Info("creating user")
 		_, err := s.aws.CreateUser(awsUser)
 		if err != nil {
+			errHttp := new(aws.ErrHttpNotOK)
+			if errors.As(err, &errHttp) && errHttp.StatusCode == 409 {
+				log.WithField("user", awsUser.Username).Warn("user already exists")
+				continue
+			}
 			log.Error("error creating user")
 			return err
 		}
