@@ -1,0 +1,56 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: 'AWS::Serverless-2016-10-31'
+
+Description: 
+  This CloudFormation template will deploy an instance of the SSOSync-Staging
+  candidate releases (via privately shared app in the AWS Serverless Application
+  Repository (SAR) within the Staging Account.
+
+Parameters:
+  AppArn:
+    Description: The candidate release in the SAR
+    Default: 'arn:aws:serverlessrepo:<AWS::Region>:<AccountId>:applications/<ApplicationName>'
+    Type: String
+  AppVersion:
+    Description: The version of this build in SAR
+    Default: 'v1.0.0-rc.10'
+    Type: String
+
+Resources:
+  SARApp:
+    Type: AWS::Serverless::Application
+    Properties:
+      Location:
+        ApplicationId: !Ref AppArn
+        SemanticVersion: !Ref AppVersion
+      Parameters:
+        GoogleAdminEmail: '{{resolve:secretsmanager:TestGoogleAdminEmail}}'
+        GoogleCredentials: '{{resolve:secretsmanager:TestGoogleCredentials}}'
+        SCIMEndpointUrl: '{{resolve:secretsmanager:TestSCIMEndpointUrl}}'
+        SCIMEndpointAccessToken: '{{resolve:secretsmanager:TestSCIMAccessToken}}'
+        Region: '{{resolve:secretsmanager:TestRegion}}'
+        IdentityStoreID: '{{resolve:secretsmanager:TestIdentityStoreId}}'
+        SyncMethod: groups
+        GoogleUserMatch: 'name:*'
+        GoogleGroupMatch: 'name:AWS*'
+        LogLevel: warn
+        LogFormat: json
+        IgnoreUsers: None
+        IgnoreGroups: None
+        IncludeGroups: None
+        ScheduleExpression: 'rate(1 day)'
+
+  FunctionArnParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: "/SSOSync/Staging/FunctionArn"
+      Type: String
+      Value: !GetAtt SARApp.Outputs.FunctionArn
+      Description: The Arn of the lambda function ssosync
+ 
+Outputs:
+  FunctionArn:
+    Description: "The Arn of the deployed lambda function"
+    Value: !GetAtt SARApp.Outputs.FunctionArn
+    Export:
+      Name: FunctionArn

@@ -39,6 +39,16 @@ func (s *Secrets) GoogleCredentials() (string, error) {
 	return s.getSecret("SSOSyncGoogleCredentials")
 }
 
+// Region ...
+func (s *Secrets) Region() (string, error) {
+	return s.getSecret("SSOSyncRegion")
+}
+
+// Identity Store ID ...
+func (s *Secrets) IdentityStoreID() (string, error) {
+	return s.getSecret("SSOSyncIdentityStoreID")
+}
+
 func (s *Secrets) getSecret(secretKey string) (string, error) {
 	r, err := s.svc.GetSecretValue(&secretsmanager.GetSecretValueInput{
 		SecretId:     aws.String(secretKey),

@@ -1,0 +1,30 @@
+version: 0.2
+
+env:
+  variables:
+    ExpectedResponse: "false"    
+
+phases:
+  pre_build: 
+    commands:
+      # Print all environment variables (handy for AWS CodeBuild logs)
+      - env
+
+  build:
+    commands:
+      # Execute the lambda
+      - FunctionError=$(aws lambda invoke --function-name "SSOSyncFunction" response.json | jq 'has("FunctionError")') 
+
+      - |
+        if expr "${FunctionError}" : "${ExpectedResponse}" >/dev/null; then
+          echo "We got what we expected"
+          exit 0
+        else 
+          echo "We didn't get what we expected"
+          exit 1
+        fi
+
+
+artifacts:
+  files:
+    - response.json

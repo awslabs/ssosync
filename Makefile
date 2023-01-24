@@ -3,8 +3,9 @@ RELEASER = goreleaser
 PACKAGED_TEMPLATE = packaged.yaml
 STACK_NAME := $(STACK_NAME)
 S3_BUCKET := $(S3_BUCKET)
+S3_PREFIX := $(S3_PREFIX)
 TEMPLATE = template.yaml
-APP_NAME 	 ?= ssosync
+APP_NAME ?= ssosync
 
 
 .PHONY: test
@@ -44,7 +45,7 @@ publish:
 
 .PHONY: package
 package: build
-	sam package --template-file $(TEMPLATE) --s3-bucket $(S3_BUCKET) --output-template-file $(PACKAGED_TEMPLATE)
+	sam package --s3-bucket $(S3_BUCKET) --output-template-file $(PACKAGED_TEMPLATE) --s3-prefix $(S3_PREFIX)
 
 .PHONY: deploy
 deploy: package

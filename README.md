@@ -8,13 +8,15 @@
 
 > Helping you populate AWS SSO directly with your Google Apps users
 
-SSO Sync will run on any platform that Go can build for. It is available in the [AWS Serverless Application Repository](https://console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:eu-west-1:084703771460:applications/ssosync).
+SSO Sync will run on any platform that Go can build for. It is available in the [AWS Serverless Application Repository](https://console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync)
 
 > :warning: there are breaking changes for versions `>= 0.02`
 
 > :warning: `>= 1.0.0-rc.5` groups to do not get deleted in AWS SSO when deleted in the Google Directory, and groups are synced by their email address
 
-> 🤔 we hope to support other providers in the future
+> :warning: `>= 2.0.0` this makes use of the **Identity Store API** which means:
+* if deploying the lambda from the [AWS Serverless Application Repository](https://console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync) then it needs to be deployed into the [IAM Identity Center delegated administration](https://docs.aws.amazon.com/singlesignon/latest/userguide/delegated-admin.html) account. Technically you could deploy in the management account but we would recommend against this.
+* if you are running the project as a cli tool, then the environment will need to be using credentials of a user in the [IAM Identity Center delegated administration](https://docs.aws.amazon.com/singlesignon/latest/userguide/delegated-admin.html) account, with appropriate permissions.
 
 ## Why?
 
@@ -43,9 +45,18 @@ what it is going to do.
  * [SCIM Protocol RFC](https://tools.ietf.org/html/rfc7644)
  * [AWS SSO - Connect to Your External Identity Provider](https://docs.aws.amazon.com/singlesignon/latest/userguide/manage-your-identity-source-idp.html)
  * [AWS SSO - Automatic Provisioning](https://docs.aws.amazon.com/singlesignon/latest/userguide/provision-automatically.html)
+ * [AWS IAM Identity Center - Identity Store API](https://docs.aws.amazon.com/singlesignon/latest/IdentityStoreAPIReference/welcome.html)
 
 ## Installation
 
+The recommended installation is:
+* [Setup IAM Identity Center](https://docs.aws.amazon.com/singlesignon/latest/userguide/get-started-enable-identity-center.html), in the management account of your organization
+* Created a linked account `Identity` Account from which to manage IAM Identity Center
+* [Delegate administration](https://docs.aws.amazon.com/singlesignon/latest/userguide/delegated-admin.html) to the `Identity' account
+* Deploy the [SSOSync app](https://console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync) from the AWS Serverless Application Repository
+
+
+You can also:
 You can `go get github.com/awslabs/ssosync` or grab a Release binary from the release page. The binary
 can be used from your local computer, or you can deploy to AWS Lambda to run on a CloudWatch Event
 for regular synchronization.
@@ -93,6 +104,10 @@ SSOSYNC_SCIM_ACCESS_TOKEN=<YOUR_TOKEN>
 SSOSYNC_SCIM_ENDPOINT=<YOUR_ENDPOINT>
 ```
 
+Additionally, authenticate your AWS credentials. Follow this  [section](https://docs.aws.amazon.com/sdk-for-go/v1/developer-guide/configuring-sdk.html#:~:text=Creating%20the%20Credentials%20File) to create a Shared Credentials File in the home directory or export your Credentials with Environment Variables. Ensure that the default credentials are for the AWS account you intended to be synced.
+
+To obtain your `Identity store ID`, go to the AWS Identity Center console and select settings. Under the `Identity Source` section, copy the `Identity store ID`.
+
 ## Local Usage
 
 ```bash
@@ -129,6 +144,8 @@ Flags:
   -s, --sync-method string          Sync method to use (users_groups|groups) (default "groups")
   -m, --user-match string           Google Workspace Users filter query parameter, example: 'name:John* email:admin*', see: https://developers.google.com/admin-sdk/directory/v1/guides/search-users
   -v, --version                     version for ssosync
+  -r, --region                      AWS region where identity store exists
+  -i, --identity-store-id           AWS Identity Store ID
 ```
 
 The function has `two behaviour` and these are controlled by the `--sync-method` flag, this behavior could be
@@ -157,7 +174,7 @@ the pricing for AWS Lambda and CloudWatch before continuing.
 Running ssosync once means that any changes to your Google directory will not appear in
 AWS SSO. To sync. regularly, you can run ssosync via AWS Lambda.
 
-:warning: You find it in the [AWS Serverless Application Repository](https://console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:eu-west-1:084703771460:applications/ssosync).
+:warning: You find it in the [AWS Serverless Application Repository](https://eu-west-1.console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync).
 
 ## SAM
 

@@ -30,3 +30,7 @@ packaged.yaml
 
 # Local binary
 ssosync
+
+# Noise from os/editors
+.DS_Store
+*.swp

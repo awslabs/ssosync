@@ -1,0 +1,531 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: 'AWS::Serverless-2016-10-31'
+
+Description: 
+  This CloudFormation template will deploy a full CI/CD pipeline for testing SSO
+  Sync, within a staging account, triggered from a build pipeline in a production
+  account.
+
+Parameters:
+  ProductionAccount:
+    Description: AWS Account where the build pipeline in deployed
+    Default: "004480582608"
+    Type: String
+    AllowedPattern: '[0-9]+'
+  TestAccount:
+    Description: The test account type
+    Default: "Management"
+    Type: String
+    AllowedValues:
+      - Management
+      - Delegated
+      - NonDelegated
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Production Account
+        Parameters:
+          - ProductionAccount
+      - Label:
+          default: Testing Account
+        Parameters:
+          - TestAccount
+            
+    ParameterLabels:
+      ProductionAccount:
+        default: "ProductionAccount"
+      TestAccount:
+        default: "Account Type"
+
+Conditions:
+  DeployManagement: !Equals [ !Ref TestAccount, Management]
+  DeployDelegated: !Equals [ !Ref TestAccount, Delegated]
+  DeployNonDelegated: !Equals [ !Ref TestAccount, NonDelegated]
+
+Resources:
+
+  CodePipelineLogGroup:
+    Type: AWS::Logs::LogGroup
+    UpdateReplacePolicy: Delete
+    Properties: 
+      LogGroupName: SSOSync-Test
+      RetentionInDays: 120
+
+  ArtifactBucketKey:
+    Type: AWS::KMS::Key
+    Properties: 
+      Description: Key for this CodePipeline
+      Enabled: true
+      KeySpec: SYMMETRIC_DEFAULT
+      KeyUsage: ENCRYPT_DECRYPT
+      MultiRegion: false
+      PendingWindowInDays: 7
+      KeyPolicy:
+        Version: 2012-10-17
+        Id: key-default-1
+        Statement:
+        - Sid: Enable IAM User Permissions
+          Effect: Allow
+          Principal:
+            AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+          Action: 'kms:*'
+          Resource: '*'
+
+  ArtifactBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Delete
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: 'aws:kms'
+              KMSMasterKeyID: !GetAtt ArtifactBucketKey.Arn 
+            BucketKeyEnabled: true
+
+  ArtifactBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ArtifactBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Sid: DenyUnEncryptedObjectUploads
+          Effect: Deny
+          Principal: "*"
+          Action: s3:PutObject
+          Resource: !Sub ${ArtifactBucket.Arn}/*
+          Condition: 
+            StringNotEquals: 
+              s3:x-amz-server-side-encryption: aws:kms
+        - Sid: RequireKMSEncryption
+          Effect: Deny
+          Principal: "*"
+          Action: s3:PutObject
+          Resource: !Sub ${ArtifactBucket.Arn}/*
+          Condition:
+            StringNotLikeIfExists:
+              s3:x-amz-server-side-encryption-aws-kms-key-id: !GetAtt ArtifactBucketKey.Arn
+        - Sid: DenyInsecureConnections
+          Effect: Deny
+          Principal: "*"
+          Action: "s3:*"
+          Resource: !Sub ${ArtifactBucket.Arn}/*
+          Condition: 
+            Bool: 
+              aws:SecureTransport: false
+
+  StagingBucket:
+    Type: AWS::S3::Bucket
+    UpdateReplacePolicy: Delete
+    Properties:
+      VersioningConfiguration:
+        Status: Enabled
+
+  StagingBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref StagingBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Action: ['s3:GetObject']
+          Effect: Allow
+          Principal:
+            Service: 'codepipeline.amazonaws.com'
+          Resource:
+          - !Sub ${StagingBucket.Arn}/*
+          Condition:
+            StringEquals:
+              aws:SourceAccount: !Ref AWS::AccountId
+
+  CodePipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      Name: SSOSync-Test
+      RoleArn: !Sub ${CodePipelineRole.Arn}
+      ArtifactStore:
+        Type: S3
+        Location: !Ref ArtifactBucket
+        EncryptionKey:
+          Type: KMS
+          Id: !GetAtt ArtifactBucketKey.Arn
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: Tests
+              Namespace: Test
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Version: 1
+                Provider: S3
+              OutputArtifacts:
+                - Name: Tests
+              RunOrder: '1'
+              Configuration:
+                S3Bucket: !Ref StagingBucket
+                S3ObjectKey: tests.zip
+                PollForSourceChanges: false
+        - Name: Deploy
+          Actions:
+            - Name: Deploy
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Version: '1'
+                Provider: CloudFormation
+              Configuration:
+                ActionMode: CREATE_UPDATE
+                Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND
+                StackName: SmokeTest
+                RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
+                TemplateConfiguration: !Sub 'Tests::deploy/params.json'
+                TemplatePath: !Sub 'Tests::deploy/stack.yml'
+              InputArtifacts:
+                - Name: Tests
+              RunOrder: 1
+        - Name: SmokeTests
+          Actions:
+            - Name: Lambda
+              ActionTypeId:
+                Category: Test
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              RunOrder: 1
+              Configuration:
+                ProjectName: !Ref CodeBuildSmokeLambda
+                PrimarySource: Tests
+              OutputArtifacts:
+                - Name: SmokeLambda
+              InputArtifacts:
+                - Name: Tests
+            - Name: CLI
+              ActionTypeId:
+                Category: Test
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              RunOrder: 2
+              Configuration:
+                ProjectName: !Ref CodeBuildSmokeCLI
+                PrimarySource: Tests
+              OutputArtifacts:
+                - Name: SmokeCLI
+              InputArtifacts:
+                - Name: Tests
+            - !If
+               - DeployDelegated
+               - Name: CodePipeline
+                 ActionTypeId:
+                   Category: Invoke
+                   Owner: AWS
+                   Version: 1
+                   Provider: Lambda
+                 RunOrder: 3
+                 Configuration:
+                   FunctionName: SSOSyncFunction
+                 OutputArtifacts:
+                   - Name: SmokeCodePipeline
+                 InputArtifacts:
+                   - Name: Tests
+               - !Ref AWS::NoValue
+        - Name: CleanUp
+          Actions:
+            - Name: RemoveStack
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Version: 1
+                Provider: CloudFormation
+              Configuration:
+                ActionMode: DELETE_ONLY
+                StackName: SmokeTest
+                RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
+              InputArtifacts:
+                - Name: Tests
+              RunOrder: 1
+
+
+  CodeBuildSmokeCLI:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: SSOSync-Smoke-CLI
+      Description: "Execute within a container on the cli to prove cli invokation"
+      ServiceRole: !Ref CodeBuildTestRole
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: "tests/smoke/cli/buildspec.yml"
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:5.0
+        Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: ExpectedExitState
+            Value: !If [DeployNonDelegated, 1, 0]
+      Artifacts:
+        Name: SSOSync
+        Type: CODEPIPELINE
+      LogsConfig:
+        CloudWatchLogs:
+          GroupName: !Ref CodePipelineLogGroup
+          StreamName: !Ref CodeBuildSmokeCLILogs
+          Status: ENABLED
+
+  CodeBuildSmokeCLILogs:
+    Type: AWS::Logs::LogStream
+    Properties:
+      LogGroupName: !Ref CodePipelineLogGroup
+      LogStreamName: SSOSync-Smoke-CLI
+
+  CodeBuildSmokeLambda:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: SSOSync-Smoke-Lambda
+      Description: "Execute Lambda from within a container, to test invokation without codepipeline event handling"
+      ServiceRole: !Ref CodeBuildTestRole
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: "tests/smoke/lambda/buildspec.yml"
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:5.0
+        Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: ExpectedResponse
+            Value: !If [DeployNonDelegated, "true", "false"]
+      Artifacts:
+        Name: SSOSync
+        Type: CODEPIPELINE
+      LogsConfig:
+        CloudWatchLogs:
+          GroupName: !Ref CodePipelineLogGroup
+          StreamName: !Ref CodeBuildSmokeLambdaLogs
+          Status: ENABLED
+
+  CodeBuildSmokeLambdaLogs:
+    Type: AWS::Logs::LogStream
+    Properties:
+      LogGroupName: !Ref CodePipelineLogGroup
+      LogStreamName: SSOSync-Smoke-Lambda
+
+
+  CodePipelineRole:
+    Type: AWS::IAM::Role
+    Properties: 
+      RoleName: !Sub SSOSync-CodePipeline-${AWS::Region}
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Action: ['sts:AssumeRole']
+          Effect: Allow
+          Principal: 
+            Service: [codepipeline.amazonaws.com] 
+      Path: /
+      Policies: 
+        - PolicyName: !Sub SSOSync-CodePipeline-${AWS::Region}
+          PolicyDocument:                     
+            Version: '2012-10-17'
+            Statement: 
+            - Action:
+              - 'iam:PassRole'
+              Effect: Allow
+              Resource: '*'
+            - Action:
+              - 'codebuild:BatchGetBuilds'
+              - 'codebuild:StartBuild'
+              Resource:
+              - !Sub ${CodeBuildSmokeCLI.Arn}
+              - !Sub ${CodeBuildSmokeLambda.Arn}
+              Effect: Allow
+            - Action:
+              - 's3:GetBucketPolicy'
+              - 's3:GetBucketVersioning'
+              Resource:
+              - !Sub ${ArtifactBucket.Arn}
+              - !Sub ${StagingBucket.Arn}
+              Effect: Allow
+            - Action:
+              - 's3:*'
+              Resource:
+              - !Sub ${ArtifactBucket.Arn}/*
+              - !Sub ${StagingBucket.Arn}/*
+              Effect: Allow
+            - Action:
+              - 'kms:DescribeKey'
+              - 'kms:GenerateDataKey*'
+              - 'kms:Encrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:Decrypt'
+              Effect: Allow
+              Resource:
+              - !GetAtt ArtifactBucketKey.Arn
+            - Action:
+              - 'lambda:InvokeFunction'
+              Resource:
+              - !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:SSOSyncFunction
+              Effect: Allow
+            - Action:
+              - 'cloudformation:CreateStack'
+              - 'cloudformation:DescribeStacks'
+              - 'cloudformation:DeleteStack'
+              - 'cloudformation:UpdateStack'
+              - 'cloudformation:CreateChangeSet'
+              - 'cloudformation:ExecuteChangeSet'
+              - 'cloudformation:DeleteChangeSet'
+              - 'cloudformation:DescribeChangeSet'
+              - 'cloudformation:SetStackPolicy'
+              Resource:
+              - '*'
+              Effect: Allow
+
+  ProdAccountRole:
+    Type: AWS::IAM::Role
+    Properties: 
+      RoleName: !Sub SSOSync-ProdAccount-${AWS::Region}
+      AssumeRolePolicyDocument:
+        Statement:
+        - Action: ['sts:AssumeRole']
+          Effect: Allow
+          Principal: 
+            AWS: !Ref ProductionAccount
+        Version: '2012-10-17'
+      Path: /
+      Policies: 
+        - PolicyName: !Sub SSOSync-ProdAccount-${AWS::Region}
+          PolicyDocument:                     
+            Version: '2012-10-17'
+            Statement: 
+            - Action:
+              - 'codepipeline:*'
+              Effect: Allow
+              Resource:
+              - '*'
+            - Action:
+              - 's3:GetBucketPolicy'
+              - 's3:GetBucketVersioning'
+              Resource:
+              - !Sub ${StagingBucket.Arn}
+              Effect: Allow
+            - Action:
+              - 's3:*'
+              Resource:
+              - !Sub ${StagingBucket.Arn}/*
+              Effect: Allow
+
+  CodeBuildTestRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub SSOSync-CodeBuild-Test-${AWS::Region}
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Action: ['sts:AssumeRole']
+          Effect: Allow
+          Principal:
+            Service: [codebuild.amazonaws.com]
+      Path: /
+      Policies:
+        - PolicyName: !Sub SSOSync-CodeBuild-Test-${AWS::Region}
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+            - Action:
+              - 'logs:CreateLogGroup'
+              - 'logs:CreateLogStream'
+              - 'logs:PutLogEvents'
+              Effect: Allow
+              Resource: '*'
+            - Action:
+              - 'kms:DescribeKey'
+              - 'kms:GenerateDataKey*'
+              - 'kms:Encrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:Decrypt'
+              Effect: Allow
+              Resource:
+              - !GetAtt ArtifactBucketKey.Arn
+            - Action: 's3:*'
+              Effect: Allow
+              Resource:
+              - !Sub ${ArtifactBucket.Arn}/*
+            - Action:
+              -  'lambda:invokeFunction'
+              Effect: Allow
+              Resource: '*'
+            - Action:
+                - "identitystore:DeleteUser"
+                - "identitystore:CreateGroup"
+                - "identitystore:CreateGroupMembership"
+                - "identitystore:ListGroups"
+                - "identitystore:ListUsers"
+                - "identitystore:ListGroupMemberships"
+                - "identitystore:IsMemberInGroups"
+                - "identitystore:GetGroupMembershipId"
+                - "identitystore:DeleteGroupMembership"
+              Effect: Allow
+              Resource: '*'
+            - Action:
+                - "secretsmanager:Get*"
+              Resource:
+                - "*"
+              Effect: Allow
+
+  CloudFormationDeployerRole:
+    Type: AWS::IAM::Role
+    Properties: 
+      RoleName: !Sub SSOSync-CloudFormationDeployerRole-${AWS::Region}
+      AssumeRolePolicyDocument: 
+        Statement:
+        - Action: ['sts:AssumeRole']
+          Effect: Allow
+          Principal:  
+            Service: [cloudformation.amazonaws.com] 
+        - Action: ['sts:AssumeRole']
+          Effect: Allow
+          Principal:
+            AWS: !Ref AWS::AccountId
+        - Action: ['sts:AssumeRole']
+          Effect: Allow
+          Principal:
+            Service: [codepipeline.amazonaws.com]
+        Version: '2012-10-17'
+      Path: /
+      Policies: 
+        - PolicyName: CloudFormation-Deployer-Policy
+          PolicyDocument:                     
+            Version: '2012-10-17'
+            Statement:
+            - Action: '*'
+              Effect: Allow
+              Resource: '*'
+
+Outputs:
+
+  ManagementAccount:
+    Condition: DeployManagement
+    Description: "The account id"
+    Value: !Ref AWS::AccountId
+  ManagementBucket:
+    Condition: DeployManagement
+    Description: "Management account bucket name"
+    Value: !Ref StagingBucket
+  DelegatedAccount:
+    Condition: DeployDelegated
+    Description: "The account id"
+    Value: !Ref AWS::AccountId
+  DelegatedBucket:
+    Condition: DeployDelegated
+    Description: "Delegated account bucket name"
+    Value: !Ref StagingBucket
+  NonDelegatedAccount:
+    Condition: DeployNonDelegated
+    Description: "The account id"
+    Value: !Ref AWS::AccountId
+  NonDelegatedBucket:
+    Condition: DeployNonDelegated
+    Description: "Delegated account bucket name"
+    Value: !Ref StagingBucket

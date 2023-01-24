@@ -1,0 +1,18 @@
+version: 0.2
+            
+phases:
+  pre_build:
+    commands:
+      # Print all environment variables (handy for AWS CodeBuild logs)
+      - env
+
+  build:
+    commands:
+      # Check whether this is a commit on the default branch with a release tag
+      - |
+        if expr "${GitIsRelease}" : "true" >/dev/null; then
+          exit 0
+        else
+          exit 252
+        fi
+

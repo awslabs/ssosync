@@ -1,3 +1,6 @@
+# .goreleaser.yml
+project_name: ssosync
+
 before:
   hooks:
     - go mod download

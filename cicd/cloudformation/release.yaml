@@ -1,0 +1,904 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: 'AWS::Serverless-2016-10-31'
+
+Description: 
+  This CloudFormation template will deploy a full CI/CD pipeline for SSO
+  Sync. It includes building with AWS CodeBuild, publishing to a
+  staging (private) AWS Serverless Application Repository (SAR), deployment
+  of the beta into a staging environment via AWS CloudFormation. If the commit
+  is also a release, then the app will also be published to the public SAR entry.
+
+Parameters:
+  ManagementAccount:
+    Description: AWS Account where staging build is automatically deployed and tested
+    Type: String
+    AllowedPattern: '[0-9]+'
+  ManagementBucket:
+    Description: Where we upload the tests.zip
+    Type: String
+    AllowedPattern: '[A-Za-z0-9:/-]+'
+  DelegatedAccount:
+    Description: AWS Account where staging build is automatically deployed and tested
+    Type: String
+    AllowedPattern: '[0-9]+'
+  DelegatedBucket:
+    Description: Where we upload the tests.zip
+    Type: String
+    AllowedPattern: '[A-Za-z0-9:/-]+'
+  NonDelegatedAccount:
+    Description: AWS Account where staging build is automatically deployed and tested
+    Type: String
+    AllowedPattern: '[0-9]+'
+  NonDelegatedBucket:
+    Description: Where we upload the tests.zip
+    Type: String
+    AllowedPattern: '[A-Za-z0-9:/-]+'
+  CodeStarConnection:
+    Description:  Resource ARN for the CodeStar Connection to use
+    Type: String
+    AllowedPattern: '[A-Za-z0-9:/-]+'
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label: 
+          default: The Management account of the End 2 End Test environment
+        Parameters:
+          - ManagementAccount
+          - ManagementBucket
+      - Label: 
+          default: The Delegated Admin account of the End 2 End Test environment
+        Parameters:
+          - DelegatedAccount
+          - DelegatedBucket
+      - Label:
+          default: A Non-delegated Admin account of the End 2 End Test environment
+        Parameters:
+          - NonDelegatedAccount
+          - NonDelegatedBucket
+      - Label:
+          default: Connection id for the CodeStar Connection to use
+        Parameters:
+          - CodeStarConnection
+            
+    ParameterLabels:
+      CodeStarConnection:
+        default: "arn:aws:codestar-connections:<AWS::Region>:<AWS::AccountId>:connection/abcd1234-ab12-ab12--ab12-abcdef123456"
+      ManagementAccount:
+        default: "123456789012"
+      ManagementBucket:
+        default: "my-bucket"
+      DelegatedAccount:
+        default: "123456789012"
+      DelegatedBucket:
+        default: "my-bucket"
+      NonDelegatedAccount:
+        default: "123456789012"
+      NonDelegatedBucket:
+        default: "my-bucket"
+
+Resources:
+
+  CodePipelineLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Delete
+    Properties: 
+      LogGroupName: SSOSync-Build
+      RetentionInDays: 120
+
+  ArtifactBucketKey:
+    Type: AWS::KMS::Key
+    Properties: 
+      Description: Key for this CodePipeline
+      Enabled: true
+      KeySpec: SYMMETRIC_DEFAULT
+      KeyUsage: ENCRYPT_DECRYPT
+      MultiRegion: false
+      PendingWindowInDays: 7
+      KeyPolicy:
+        Version: 2012-10-17
+        Id: key-default-1
+        Statement:
+        - Sid: Enable IAM User Permissions
+          Effect: Allow
+          Principal:
+            AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+          Action: 'kms:*'
+          Resource: '*'
+
+  ArtifactBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Delete
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: 'aws:kms'
+              KMSMasterKeyID: !GetAtt ArtifactBucketKey.Arn 
+            BucketKeyEnabled: true
+
+  ArtifactBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ArtifactBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Action: ['s3:GetObject']
+          Effect: Allow
+          Principal:
+            Service: 'serverlessrepo.amazonaws.com'
+          Resource:
+          - !Sub ${ArtifactBucket.Arn}/*
+          Condition: 
+            StringEquals: 
+              aws:SourceAccount: !Ref AWS::AccountId
+        - Sid: DenyUnEncryptedObjectUploads
+          Effect: Deny
+          Principal: "*"
+          Action: s3:PutObject
+          Resource: !Sub ${ArtifactBucket.Arn}/*
+          Condition: 
+            StringNotEquals: 
+              s3:x-amz-server-side-encryption: aws:kms
+        - Sid: RequireKMSEncryption
+          Effect: Deny
+          Principal: "*"
+          Action: s3:PutObject
+          Resource: !Sub ${ArtifactBucket.Arn}/*
+          Condition:
+            StringNotLikeIfExists:
+              s3:x-amz-server-side-encryption-aws-kms-key-id: !GetAtt ArtifactBucketKey.Arn
+        - Sid: DenyInsecureConnections
+          Effect: Deny
+          Principal: "*"
+          Action: "s3:*"
+          Resource: !Sub ${ArtifactBucket.Arn}/*
+          Condition: 
+            Bool: 
+              aws:SecureTransport: false
+
+  AppBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Delete
+
+  AppBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref AppBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Action: ['s3:GetObject']
+          Effect: Allow
+          Principal:
+            Service: 'serverlessrepo.amazonaws.com'
+          Resource: 
+          - !Sub ${AppBucket.Arn}/*
+          Condition:
+            StringEquals:  
+              aws:SourceAccount: !Ref AWS::AccountId
+
+  CodePipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      Name: SSOSync-Build
+      RoleArn: !Sub ${CodePipelineRole.Arn}
+      ArtifactStore: 
+        Type: S3
+        Location: !Ref ArtifactBucket
+        EncryptionKey: 
+          Type: KMS
+          Id: !GetAtt ArtifactBucketKey.Arn
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: GitHub
+              Namespace: GitHub
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Version: 1
+                Provider: CodeStarSourceConnection
+              OutputArtifacts:
+                - Name: Source
+              RunOrder: 1
+              Configuration:
+                ConnectionArn: !Ref CodeStarConnection
+                FullRepositoryId: awslabs/ssosync
+                BranchName: master
+                DetectChanges: true
+        - Name: App
+          Actions:
+            - Name: Git
+              Namespace: Git
+              InputArtifacts:
+                - Name: Source
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              OutputArtifacts:
+                - Name: GitVars
+              RunOrder: 1
+              Configuration:
+                ProjectName: !Ref GitMetadata
+                PrimarySource: Source
+            - Name: Build
+              InputArtifacts:
+                - Name: Source
+              ActionTypeId: 
+                Category: Build
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              OutputArtifacts:
+                - Name: Built
+              RunOrder: 2
+              Configuration: 
+                ProjectName: !Ref CodeBuildApp
+                PrimarySource: Source
+                EnvironmentVariables: '[{"name":"GitTag","value":"#{Git.Tag}","type":"PLAINTEXT"},{"name":"GitCommit","value":"#{Git.CommitId}","type":"PLAINTEXT"}]'
+            - Name: Package
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              RunOrder: 3
+              Configuration:
+                ProjectName: !Ref CodeBuildPackage
+                PrimarySource: Source
+              OutputArtifacts:
+                - Name: Packaged
+              InputArtifacts:
+                - Name: Built
+                - Name: Source
+        - Name: Test
+          Actions:
+            - Name: Staging
+              Namespace: RC
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              RunOrder: 1
+              Configuration:
+                ProjectName: !Ref CodeBuildStaging
+                PrimarySource: Source
+                EnvironmentVariables: '[{"name":"GitTag","value":"#{Git.Tag}","type":"PLAINTEXT"},{"name":"GitVersionHash","value":"#{Git.CommitHash}","type":"PLAINTEXT"}]'
+              OutputArtifacts:
+                - Name: Tests
+              InputArtifacts:
+                - Name: Source
+                - Name: Packaged
+                - Name: Built
+            - Name: Management
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              RunOrder: 2
+              Configuration:
+                ProjectName: !Ref CodeBuildTestingManagement
+                PrimarySource: Source
+              InputArtifacts:
+                - Name: Source
+                - Name: Tests
+            - Name: Delegated
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              RunOrder: 3
+              Configuration:
+                ProjectName: !Ref CodeBuildTestingDelegated
+                PrimarySource: Source
+              InputArtifacts:
+                - Name: Source
+                - Name: Tests
+            - Name: NonDelegated
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              RunOrder: 4
+              Configuration:
+                ProjectName: !Ref CodeBuildTestingNonDelegated
+                PrimarySource: Source
+              InputArtifacts:
+                - Name: Source
+                - Name: Tests
+        - Name: Release
+          Actions:
+            - Name: ForRelease
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              RunOrder: '1'
+              Configuration:
+                ProjectName: !Ref CodeBuildApproveRelease
+                PrimarySource: Source
+                EnvironmentVariables: '[{"name":"GitIsRelease","value":"#{Git.IsRelease}","type":"PLAINTEXT"}]'
+              InputArtifacts:
+                - Name: Source
+            - Name: Release
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              Configuration:
+                ProjectName: !Ref CodeBuildRelease
+                PrimarySource: Source
+                EnvironmentVariables: '[{"name":"GitTag","value":"#{Git.Tag}","type":"PLAINTEXT"}]'
+              OutputArtifacts:
+                - Name: Release
+              InputArtifacts:
+                - Name: Source
+                - Name: Packaged
+              RunOrder: 2
+
+  GitMetadata:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name:  "SSOSync-Git-Metadata"
+      Description: Build project for SSOSync
+      ServiceRole: !Ref CodeBuildAppRole
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: "cicd/build/gitvars/buildspec.yml"
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:5.0
+        Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: ARTIFACT_S3_BUCKET
+            Value: !Sub ${ArtifactBucket}
+          - Name: GoVersion
+            Value: "1.18.2"
+          - Name: GitRepo 
+            Value: "https://github.com/awslabs/ssosync"
+          - Name: GitBranch
+            Value: "master"
+      Artifacts:
+        Name: SSOSync-Build
+        Type: CODEPIPELINE
+      LogsConfig:
+        CloudWatchLogs:
+          GroupName: !Ref CodePipelineLogGroup
+          StreamName: !Ref GitMetadataLogs
+          Status: ENABLED
+
+  GitMetadataLogs:
+    Type: AWS::Logs::LogStream
+    Properties:
+      LogGroupName: !Ref CodePipelineLogGroup
+      LogStreamName: SSOSync-Git-Metadata"
+
+  CodeBuildApp:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: "SSOSync-Build-App"
+      Description: "Build project for SSOSync"
+      ServiceRole: !Ref CodeBuildAppRole
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: "cicd/build/build/buildspec.yml"
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:5.0
+        Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: ARTIFACT_S3_BUCKET
+            Value: !Sub ${ArtifactBucket}
+          - Name: GoVersion
+            Value: "1.18.2"
+          - Name: OUTPUT
+            Value: main
+          - Name: APP_NAME
+            Value: ssosync
+      Artifacts:
+        Name: SSOSync-Build
+        Type: CODEPIPELINE
+      LogsConfig:
+        CloudWatchLogs:
+          GroupName: !Ref CodePipelineLogGroup
+          StreamName: !Ref CodeBuildAppLogs
+          Status: ENABLED
+
+  CodeBuildAppLogs:
+    Type: AWS::Logs::LogStream
+    Properties: 
+      LogGroupName: !Ref CodePipelineLogGroup
+      LogStreamName: "SSOSync-Build-App"
+
+  CodeBuildPackage:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: "SSOSync-Package"
+      Description: "SAM package for SSOSync"
+      ServiceRole: !Ref CodeBuildPackageRole
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: "cicd/build/package/buildspec.yml"
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:5.0
+        Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: ARTIFACT_S3_BUCKET
+            Value: !Sub ${ArtifactBucket}
+          - Name: S3Bucket
+            Value: !Ref AppBucket
+          - Name: Template
+            Value: template.yaml
+      Artifacts:
+        Name: SSOSync-Build
+        Type: CODEPIPELINE
+      LogsConfig:
+        CloudWatchLogs:
+          GroupName: !Ref CodePipelineLogGroup
+          StreamName: !Ref CodeBuildPackageLogs
+          Status: ENABLED
+
+  CodeBuildPackageLogs:
+    Type: AWS::Logs::LogStream
+    Properties:
+      LogGroupName: !Ref CodePipelineLogGroup
+      LogStreamName: "SSOSync-Package"
+
+  CodeBuildStaging:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: "SSOSync-Staging"
+      Description: "Publish SSOSync to Serverless Application Repository in Staging"
+      ServiceRole: !Ref CodeBuildPublishRole
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: "cicd/staging/build/buildspec.yml"
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:5.0
+        Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: ARTIFACT_S3_BUCKET
+            Value: !Sub ${ArtifactBucket}
+          - Name: ShareWith
+            Value: !Sub "${ManagementAccount},${DelegatedAccount},${NonDelegatedAccount}"
+          - Name: AppArn
+            Value: !Sub "arn:aws:serverlessrepo:${AWS::Region}:${AWS::AccountId}:applications/SSOSync-Staging"
+      Artifacts:
+        Name: SSOSync-Build
+        Type: CODEPIPELINE
+      LogsConfig:
+        CloudWatchLogs:
+          GroupName: !Ref CodePipelineLogGroup
+          StreamName: !Ref CodeBuildStagingLogs
+          Status: ENABLED
+
+  CodeBuildStagingLogs:
+    Type: AWS::Logs::LogStream
+    Properties:
+      LogGroupName: !Ref CodePipelineLogGroup
+      LogStreamName: "SSOSync-Staging"
+
+  CodeBuildTestingManagement:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: "SSOSync-Testing-Management"
+      Description: "Triggers the testing pipeline in the staging account and waits for it to complete"
+      ServiceRole: !Ref CodeBuildTestRole
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: "cicd/staging/testing/buildspec.yml"
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:5.0
+        Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: TARGETS3BUCKET
+            Value: !Sub ${ManagementBucket}
+          - Name: StagingRole
+            Value: !Sub "arn:aws:iam::${ManagementAccount}:role/SSOSync-ProdAccount-${AWS::Region}"
+      Artifacts:
+        Name: SSOSync-Build
+        Type: CODEPIPELINE
+      LogsConfig:
+        CloudWatchLogs:
+          GroupName: !Ref CodePipelineLogGroup
+          StreamName: !Ref CodeBuildTestingLogs
+          Status: ENABLED
+
+  CodeBuildTestingDelegated:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: "SSOSync-Testing-Delegated"
+      Description: "Triggers the testing pipeline in the staging account and waits for it to complete"
+      ServiceRole: !Ref CodeBuildTestRole
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: "cicd/staging/testing/buildspec.yml"
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:5.0
+        Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: TARGETS3BUCKET
+            Value: !Sub ${DelegatedBucket}
+          - Name: StagingRole
+            Value: !Sub "arn:aws:iam::${DelegatedAccount}:role/SSOSync-ProdAccount-${AWS::Region}"
+      Artifacts:
+        Name: SSOSync-Build
+        Type: CODEPIPELINE
+      LogsConfig:
+        CloudWatchLogs:
+          GroupName: !Ref CodePipelineLogGroup
+          StreamName: !Ref CodeBuildTestingLogs
+          Status: ENABLED
+
+  CodeBuildTestingNonDelegated:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: "SSOSync-Testing-NonDelegated"
+      Description: "Triggers the testing pipeline in the staging account and waits for it to complete"
+      ServiceRole: !Ref CodeBuildTestRole
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: "cicd/staging/testing/buildspec.yml"
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:5.0
+        Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: TARGETS3BUCKET
+            Value: !Sub ${NonDelegatedBucket}
+          - Name: StagingRole
+            Value: !Sub "arn:aws:iam::${NonDelegatedAccount}:role/SSOSync-ProdAccount-${AWS::Region}"
+      Artifacts:      
+        Name: SSOSync-Build
+        Type: CODEPIPELINE
+      LogsConfig:
+        CloudWatchLogs:
+          GroupName: !Ref CodePipelineLogGroup
+          StreamName: !Ref CodeBuildTestingLogs
+          Status: ENABLED
+
+  CodeBuildTestingLogs:
+    Type: AWS::Logs::LogStream
+    Properties:
+      LogGroupName: !Ref CodePipelineLogGroup
+      LogStreamName: "SSOSync-Testing"
+
+  CodeBuildApproveRelease:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: "SSOSync-ApproveRelease"
+      Description: !Sub Use the GitHub metadata to determine whether this commit is a release
+      ServiceRole: !Ref CodeBuildPublishRole
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: "cicd/release/approve/buildspec.yml"
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:5.0
+        Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: ARTIFACT_S3_BUCKET
+            Value: !Sub ${ArtifactBucket}
+      Artifacts:
+        Name: SSOSync-Build
+        Type: CODEPIPELINE
+      LogsConfig:
+        CloudWatchLogs:
+          GroupName: !Ref CodePipelineLogGroup
+          StreamName: !Ref CodeBuildApproveReleaseLogs
+          Status: ENABLED
+
+  CodeBuildApproveReleaseLogs:
+    Type: AWS::Logs::LogStream
+    Properties:
+      LogGroupName: !Ref CodePipelineLogGroup
+      LogStreamName: "SSOSync-ApproveRelease"
+
+  CodeBuildRelease:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: "SSOSync-Release"
+      Description: "Publish SSOSync to Serverless Application Repository in Production"
+      ServiceRole: !Ref CodeBuildPublishRole
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: "cicd/release/public/buildspec.yml"
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:5.0
+        Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: ARTIFACT_S3_BUCKET
+            Value: !Sub ${ArtifactBucket}
+      Artifacts:
+        Name: SSOSync-Build
+        Type: CODEPIPELINE
+      LogsConfig:
+        CloudWatchLogs:
+          GroupName: !Ref CodePipelineLogGroup
+          StreamName: !Ref CodeBuildReleaseLogs
+          Status: ENABLED
+
+  CodeBuildReleaseLogs:
+    Type: AWS::Logs::LogStream
+    Properties:
+      LogGroupName: !Ref CodePipelineLogGroup
+      LogStreamName: "SSOSync-Release"
+
+
+  CodePipelineRole:
+    Type: AWS::IAM::Role
+    Properties: 
+      RoleName: !Sub "SSOSync-CodePipeline-${AWS::Region}"
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Action: ['sts:AssumeRole']
+          Effect: Allow
+          Principal: 
+            Service: [codepipeline.amazonaws.com] 
+      Path: /
+      Policies:
+        - PolicyName: !Sub "SSOSync-CodePipeline-${AWS::Region}"
+          PolicyDocument:                     
+            Version: '2012-10-17'
+            Statement: 
+            - Action:
+              - 'iam:PassRole'
+              Effect: Allow
+              Resource: '*'
+            - Action:
+              - 'codestar-connections:UseConnection'
+              - 'codestar-connections:GetConnection'
+              - 'codestar-connections:ListConnections'
+              - 'codestar-connections:ListTagsForResource'
+              Resource: !Ref CodeStarConnection
+              Effect: Allow
+            - Action:
+              - 'codebuild:BatchGetBuilds'
+              - 'codebuild:StartBuild'
+              Resource:
+              - !Sub ${GitMetadata.Arn}
+              - !Sub ${CodeBuildApp.Arn}
+              - !Sub ${CodeBuildPackage.Arn}
+              - !Sub ${CodeBuildStaging.Arn}
+              - !Sub ${CodeBuildTestingManagement.Arn}
+              - !Sub ${CodeBuildTestingDelegated.Arn}
+              - !Sub ${CodeBuildTestingNonDelegated.Arn}
+              - !Sub ${CodeBuildApproveRelease.Arn}
+              - !Sub ${CodeBuildRelease.Arn}
+              Effect: Allow
+            - Action:
+              - 's3:GetBucketPolicy'
+              - 's3:GetBucketVersioning'
+              Resource:
+              - !Sub ${ArtifactBucket.Arn}
+              Effect: Allow
+            - Action:
+              - 's3:*'
+              Resource:
+              - !Sub ${ArtifactBucket.Arn}/*
+              Effect: Allow
+            - Action:
+              - 'kms:DescribeKey'
+              - 'kms:GenerateDataKey*'
+              - 'kms:Encrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:Decrypt'
+              Effect: Allow
+              Resource:
+              - !GetAtt ArtifactBucketKey.Arn
+            - Action:
+              - 'sts:AssumeRole'
+              Resource:
+              - !Sub arn:aws:iam::${ManagementAccount}:role/ProductionAcctCodePipelineCloudFormationRole
+              - !Sub arn:aws:iam::${DelegatedAccount}:role/ProductionAcctCodePipelineCloudFormationRole
+              - !Sub arn:aws:iam::${NonDelegatedAccount}:role/ProductionAcctCodePipelineCloudFormationRole
+              Effect: Allow
+
+  CodeBuildAppRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub SSOSync-CodeBuild-App-${AWS::Region}
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Action: ['sts:AssumeRole']
+          Effect: Allow
+          Principal:
+            Service: [codebuild.amazonaws.com]
+      Path: /
+      Policies:
+        - PolicyName: !Sub SSOSync-CodeBuild-App-${AWS::Region}
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+            - Action:
+              - 'logs:CreateLogGroup'
+              - 'logs:CreateLogStream'
+              - 'logs:PutLogEvents'
+              Effect: Allow
+              Resource: '*'
+            - Action:
+              - 'kms:DescribeKey'
+              - 'kms:GenerateDataKey*'
+              - 'kms:Encrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:Decrypt'
+              Effect: Allow
+              Resource:
+              - !GetAtt ArtifactBucketKey.Arn
+            - Action: 's3:*'
+              Effect: Allow
+              Resource:
+              - !Sub ${ArtifactBucket.Arn}/*
+
+  CodeBuildPackageRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub SSOSync-CodeBuild-Package-${AWS::Region}
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Action: ['sts:AssumeRole']
+          Effect: Allow
+          Principal:
+            Service: [codebuild.amazonaws.com]
+      Path: /
+      Policies:
+        - PolicyName: !Sub SSOSync-CodeBuild-Package-${AWS::Region}
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+            - Action:
+              - 'logs:CreateLogGroup'
+              - 'logs:CreateLogStream'
+              - 'logs:PutLogEvents'
+              Effect: Allow
+              Resource: '*'
+            - Action:
+              - 'kms:DescribeKey'
+              - 'kms:GenerateDataKey*'
+              - 'kms:Encrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:Decrypt'
+              Effect: Allow
+              Resource:
+              - !GetAtt ArtifactBucketKey.Arn
+            - Action: 's3:*'
+              Effect: Allow
+              Resource:
+              - !Sub ${ArtifactBucket.Arn}/*
+              - !Sub ${AppBucket.Arn}/*
+
+  CodeBuildPublishRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub SSOSync-CodeBuild-Publish-${AWS::Region}
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Action: ['sts:AssumeRole']
+          Effect: Allow
+          Principal:
+            Service: [codebuild.amazonaws.com]
+      Path: /
+      Policies:
+        - PolicyName: !Sub SSOSync-CodeBuild-Publish-${AWS::Region}
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+            - Action:
+              - 'logs:CreateLogGroup'
+              - 'logs:CreateLogStream'
+              - 'logs:PutLogEvents'
+              Effect: Allow
+              Resource: '*'  
+            - Action: 's3:*'
+              Effect: Allow
+              Resource:
+              - !Sub ${ArtifactBucket.Arn}/*
+              - !Sub ${AppBucket.Arn}/*
+            - Action:
+              - 'kms:DescribeKey'
+              - 'kms:GenerateDataKey*'
+              - 'kms:Encrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:Decrypt'
+              Effect: Allow
+              Resource:
+              - !GetAtt ArtifactBucketKey.Arn
+            - Action: 'serverlessrepo:*'
+              Effect: Allow
+              Resource: 
+              - !Sub arn:aws:serverlessrepo:${AWS::Region}:${AWS::AccountId}:applications/*
+            - Action: 
+              - 'ssm:GetParameters'
+              - 'ssm:PutParameter'
+              - 'ssm:DeleteParameter'
+              - 'ssm:DeleteParameters'
+              - 'ssm:DescribeParameters'
+              Effect: Allow
+              Resource:
+              - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/SSOSync/*
+      
+  CodeBuildTestRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub SSOSync-CodeBuild-Test-${AWS::Region}
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Action: ['sts:AssumeRole']
+          Effect: Allow
+          Principal:
+            Service: [codebuild.amazonaws.com]
+      Path: /
+      Policies:
+        - PolicyName: !Sub SSOSync-CodeBuild-Test-${AWS::Region}
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+            - Action:
+              - 'logs:CreateLogGroup'
+              - 'logs:CreateLogStream'
+              - 'logs:PutLogEvents'
+              Effect: Allow
+              Resource: '*'
+            - Action:
+              - 'kms:DescribeKey'
+              - 'kms:GenerateDataKey*'
+              - 'kms:Encrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:Decrypt'
+              Effect: Allow
+              Resource:
+              - !GetAtt ArtifactBucketKey.Arn
+            - Action: 's3:*'
+              Effect: Allow
+              Resource:
+              - !Sub ${ArtifactBucket.Arn}/*
+            - Action:
+              - 'kms:DescribeKey'
+              - 'kms:GenerateDataKey*'
+              - 'kms:Encrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:Decrypt'
+              Effect: Allow
+              Resource:
+              - !GetAtt ArtifactBucketKey.Arn
+            - Action:
+              - 'sts:AssumeRole'
+              Resource:
+              - !Sub arn:aws:iam::${ManagementAccount}:role/SSOSync-ProdAccount-${AWS::Region}
+              - !Sub arn:aws:iam::${DelegatedAccount}:role/SSOSync-ProdAccount-${AWS::Region}
+              - !Sub arn:aws:iam::${NonDelegatedAccount}:role/SSOSync-ProdAccount-${AWS::Region}
+              Effect: Allow
+            - Action:
+              -  'lambda:invoke'
+              Effect: Allow
+              Resource: '*'
+              
+
+Outputs:
+
+  ProductionAccount:
+    Description: "The account id"
+    Value: !Ref AWS::AccountId

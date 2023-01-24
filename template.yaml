@@ -11,6 +11,8 @@ Metadata:
           - GoogleAdminEmail
           - SCIMEndpointUrl
           - SCIMEndpointAccessToken
+          - Region
+          - IdentityStoreID
       - Label:
           default: "Advanced Configuration"
         Parameters:
@@ -79,6 +81,14 @@ Parameters:
     Type: String
     Description: AWS SSO SCIM AccessToken
     NoEcho: true
+  Region:
+    Type: String
+    Description: AWS Region where AWS SSO is enabled
+    NoEcho: true
+  IdentityStoreID:
+    Type: String
+    Description: Identifier of Identity Store in AWS SSO
+    NoEcho: true
   GoogleUserMatch:
     Type: String
     Description: |
@@ -97,7 +107,7 @@ Parameters:
       Ignore these Google Workspace users
   IncludeGroups:
     Type: String
-    Description: | 
+    Description: |
       Include only these Google Workspace groups. (Only applicable for SyncMethod user_groups)
   SyncMethod:
     Type: String
@@ -106,25 +116,27 @@ Parameters:
     AllowedValues:
       - groups
       - users_groups
-      
-      
-      
+
+
+
 
 Resources:
   SSOSyncFunction:
     Type: AWS::Serverless::Function
     Properties:
       Runtime: go1.x
-      Handler: dist/ssosync_linux_amd64/ssosync
+      Handler: dist/ssosync_linux_amd64_v1/ssosync
       Timeout: 300
       Environment:
         Variables:
           SSOSYNC_LOG_LEVEL: !Ref LogLevel
           SSOSYNC_LOG_FORMAT: !Ref LogFormat
           SSOSYNC_GOOGLE_CREDENTIALS: !Ref AWSGoogleCredentialsSecret
-          SSOSYNC_GOOGLE_ADMIN: !Ref AWSGoogleAdminEamil
+          SSOSYNC_GOOGLE_ADMIN: !Ref AWSGoogleAdminEmail
           SSOSYNC_SCIM_ENDPOINT: !Ref AWSSCIMEndpointSecret
           SSOSYNC_SCIM_ACCESS_TOKEN: !Ref AWSSCIMAccessTokenSecret
+          SSOSYNC_REGION: !Ref AWSRegionSecret
+          SSOSYNC_IDENTITY_STORE_ID: !Ref AWSIdentityStoreIDSecret
           SSOSYNC_USER_MATCH: !Ref GoogleUserMatch
           SSOSYNC_GROUP_MATCH: !Ref GoogleGroupMatch
           SSOSYNC_SYNC_METHOD: !Ref SyncMethod
@@ -139,9 +151,28 @@ Resources:
                 - "secretsmanager:Get*"
               Resource:
                 - !Ref AWSGoogleCredentialsSecret
-                - !Ref AWSGoogleAdminEamil
+                - !Ref AWSGoogleAdminEmail
                 - !Ref AWSSCIMEndpointSecret
                 - !Ref AWSSCIMAccessTokenSecret
+                - !Ref AWSRegionSecret
+                - !Ref AWSIdentityStoreIDSecret
+        - Version: '2012-10-17'
+          Statement:
+            - Sid: IdentityStoreAccesPolicy
+              Effect: Allow
+              Action:
+                - "identitystore:DeleteUser"
+                - "identitystore:CreateGroup"
+                - "identitystore:CreateGroupMembership"
+                - "identitystore:ListGroups"
+                - "identitystore:ListUsers"
+                - "identitystore:ListGroupMemberships"
+                - "identitystore:IsMemberInGroups"
+                - "identitystore:GetGroupMembershipId"
+                - "identitystore:DeleteGroupMembership"
+                - "identitystore:DeleteGroup"
+              Resource:
+                - "*"
       Events:
         SyncScheduledEvent:
           Type: Schedule
@@ -156,7 +187,7 @@ Resources:
       Name: SSOSyncGoogleCredentials
       SecretString: !Ref GoogleCredentials
 
-  AWSGoogleAdminEamil:
+  AWSGoogleAdminEmail:
     Type: "AWS::SecretsManager::Secret"
     Properties:
       Name: SSOSyncGoogleAdminEmail
@@ -173,3 +204,15 @@ Resources:
     Properties:
       Name: SSOSyncSCIMAccessToken
       SecretString: !Ref SCIMEndpointAccessToken
+
+  AWSRegionSecret:
+    Type: "AWS::SecretsManager::Secret"
+    Properties:
+      Name: SSOSyncRegion
+      SecretString: !Ref Region
+
+  AWSIdentityStoreIDSecret:
+    Type: "AWS::SecretsManager::Secret"
+    Properties:
+      Name: SSOSyncIdentityStoreID
+      SecretString: !Ref IdentityStoreID

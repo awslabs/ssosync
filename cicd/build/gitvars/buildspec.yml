@@ -1,0 +1,46 @@
+version: 0.2
+
+env:
+  exported-variables:
+    - Project
+    - Branch
+    - Tag
+    - CommitId
+    - CommitMessage
+    - CommitAuthor
+    - CommitAuthorEmail
+    - CommitHash
+    - IsRelease
+
+phases:
+  pre_build:
+    commands:
+      # Fetch all dependencies
+      - chmod +x cicd/build/gitvars/codebuild-git-wrapper.sh
+      - cicd/build/gitvars/codebuild-git-wrapper.sh $GitRepo $GitBranch
+
+  build:
+    commands:
+      - Branch=`git branch -a --contains HEAD | sed -n 2p | awk '{ printf $1 }'`
+      - export Branch="${Branch#remotes/origin/}"
+      - export Project="${APP_Name}"
+      - export Tag=`git describe --tags --abbrev=0`
+      - export CommitId="$(git log -1 --pretty=%H)"
+      - export CommitMessage="$(git log -1 --pretty=%B)"
+      - export CommitAuthor="$(git log -1 --pretty=%an)"
+      - export CommitAuthorEmail="$(git log -1 --pretty=%ae)"
+      - export CommitHash=`git rev-parse --short HEAD`
+
+      - GitReleaseCommit=`git rev-list -n 1 tags/${Tag}`
+      - echo GitReleaseCommit=$GitReleaseCommit
+      - echo CommitId=$CommitId
+
+      - |
+        if expr "${GitReleaseCommit}" : "${CommitId}" >/dev/null; then
+          IsRelease=true
+        else
+          IsRelease=false
+        fi
+
+      - echo $IsRelease
+

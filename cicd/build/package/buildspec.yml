@@ -1,0 +1,41 @@
+version: 0.2
+
+phases:
+  install:
+    commands:
+      # Print all environment variables (handy for AWS CodeBuild logs)
+      - env
+
+  pre_build:
+    commands:
+      - cp -r ${CODEBUILD_SRC_DIR_Built}/* ./
+      - ls -la
+
+      # Check that the files need to package exist
+      - ls README.md
+      - ls SAR.md
+      - ls dist/ssosync_linux_amd64_v1/ssosync
+ 
+      # Check that the executable works
+      - ./dist/ssosync_linux_amd64_v1/ssosync --version 
+
+  build:
+    commands:
+      # Create staging & release variants of the template.yaml
+      - cp template.yaml staging.yaml
+      - patch staging.yaml cicd/build/package/staging.patch
+      - sam package --no-progressbar --template-file staging.yaml --s3-bucket ${S3Bucket} --output-template-file packaged-staging.yaml
+
+      - cp template.yaml release.yaml
+      - patch release.yaml cicd/build/package/release.patch
+      - sam package --no-progressbar --template-file release.yaml --s3-bucket ${S3Bucket} --output-template-file packaged-release.yaml
+
+  post_build:
+    commands:
+      - ls packaged-staging.yaml
+      - ls packaged-release.yaml
+
+artifacts:
+  files:
+    - packaged-staging.yaml
+    - packaged-release.yaml
