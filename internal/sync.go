@@ -117,7 +117,7 @@ func (s *syncGSuite) SyncUsers(query string) error {
 	}
 
 	for _, u := range googleUsers {
-		if s.ignoreUser(u.PrimaryEmail) {
+		if StringInSlice(s.cfg.IgnoreUsers,u.PrimaryEmail) {
 			continue
 		}
 
@@ -186,7 +186,8 @@ func (s *syncGSuite) SyncGroups(query string) error {
 	correlatedGroups := make(map[string]*aws.Group)
 
 	for _, g := range googleGroups {
-		if s.ignoreGroup(g.Email) || !s.includeGroup(g.Email) {
+
+		if ! ShouldIncludeGroup(g.Email, s.cfg) {
 			continue
 		}
 
@@ -299,7 +300,7 @@ func (s *syncGSuite) SyncGroupsUsers(groupQuery string, userQuery string) error 
 	}
 	filteredGoogleGroups := []*admin.Group{}
 	for _, g := range googleGroups {
-		if s.ignoreGroup(g.Email) {
+		if StringInSlice(s.cfg.IgnoreGroups, g.Email) {
 			log.WithField("group", g.Email).Debug("ignoring group")
 			continue
 		}
@@ -561,7 +562,7 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(googleGroups []*admin.Group, google
 
 		log := log.WithFields(log.Fields{"group": g.Name})
 
-		if s.ignoreGroup(g.Email) {
+		if StringInSlice(s.cfg.IgnoreGroups, g.Email) {
 			log.Debug("ignoring group")
 			continue
 		}
@@ -576,8 +577,7 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(googleGroups []*admin.Group, google
 		membersUsers := make([]*admin.User, 0)
 
 		for _, m := range groupMembers {
-
-			if s.ignoreUser(m.Email) {
+			if StringInSlice(s.cfg.IgnoreUsers, m.Email) {
 				log.WithField("id", m.Email).Debug("ignoring user")
 				continue
 			}
@@ -804,34 +804,224 @@ func DoSync(ctx context.Context, cfg *config.Config) error {
 	return nil
 }
 
-func (s *syncGSuite) ignoreUser(name string) bool {
-	for _, u := range s.cfg.IgnoreUsers {
-		if u == name {
-			return true
-		}
-	}
-
-	return false
-}
-
-func (s *syncGSuite) ignoreGroup(name string) bool {
-	for _, g := range s.cfg.IgnoreGroups {
+func StringInSlice(slice []string, name string) bool {
+	for _, g := range slice {
 		if g == name {
 			return true
 		}
 	}
-
 	return false
 }
 
-func (s *syncGSuite) includeGroup(name string) bool {
-	for _, g := range s.cfg.IncludeGroups {
-		if g == name {
-			return true
+func ShouldIncludeGroup(group string, config *config.Config) bool {
+	// include groups should have precedence over ignore
+	// if includeGroups specified, only take a match
+	// elsif ignoreGroups, filter it out
+	inclSlice := config.IncludeGroups
+	inclFlag := len(inclSlice) > 0
+	if (inclFlag) {
+		return StringInSlice(inclSlice,group)
+	}
+	if StringInSlice(config.IgnoreGroups, group) {
+		return false
+	}
+	return true
+}
+
+var awsGroups []*aws.Group
+
+func (s *syncGSuite) GetGroups() ([]*aws.Group, error) {
+	awsGroups = make([]*aws.Group, 0)
+
+	err := s.identityStoreClient.ListGroupsPages(
+		&identitystore.ListGroupsInput{IdentityStoreId: &s.cfg.IdentityStoreID},
+		ListGroupsPagesCallbackFn,
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return awsGroups, nil
+}
+
+func ListGroupsPagesCallbackFn(page *identitystore.ListGroupsOutput, lastPage bool) bool {
+	// Loop through each Group returned
+	for _, group := range page.Groups {
+		// Convert to native Group object
+		awsGroups = append(awsGroups, &aws.Group{
+			ID:          *group.GroupId,
+			Schemas:     []string{"urn:ietf:params:scim:schemas:core:2.0:Group"},
+			DisplayName: *group.DisplayName,
+			Members:     []string{},
+		})
+	}
+
+	return !lastPage
+}
+
+var awsUsers []*aws.User
+
+func (s *syncGSuite) GetUsers() ([]*aws.User, error) {
+	awsUsers = make([]*aws.User, 0)
+
+	err := s.identityStoreClient.ListUsersPages(
+		&identitystore.ListUsersInput{IdentityStoreId: &s.cfg.IdentityStoreID},
+		ListUsersPagesCallbackFn,
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return awsUsers, nil
+}
+
+func ListUsersPagesCallbackFn(page *identitystore.ListUsersOutput, lastPage bool) bool {
+	// Loop through each User in ListUsersOutput and convert to native User object
+	for _, user := range page.Users {
+		awsUsers = append(awsUsers, ConvertSdkUserObjToNative(user))
+	}
+	return !lastPage
+}
+
+func ConvertSdkUserObjToNative(user *identitystore.User) *aws.User {
+	// Convert emails into native Email object
+	userEmails := make([]aws.UserEmail, 0)
+
+	for _, email := range user.Emails {
+		if email.Value == nil || email.Type == nil || email.Primary == nil {
+              		// This must be a user created by AWS Control Tower
+                        // Need feature development to make how these users are treated
+			// configurable.
+			continue
+		}
+		userEmails = append(userEmails, aws.UserEmail{
+			Value:   *email.Value,
+			Type:    *email.Type,
+			Primary: *email.Primary,
+		})
+	}
+
+	// Convert addresses into native Address object
+	userAddresses := make([]aws.UserAddress, 0)
+
+	for _, address := range user.Addresses {
+		userAddresses = append(userAddresses, aws.UserAddress{
+			Type: *address.Type,
+		})
+	}
+
+	return &aws.User{
+		ID:       *user.UserId,
+		Schemas:  []string{"urn:ietf:params:scim:schemas:core:2.0:User"},
+		Username: *user.UserName,
+		Name: struct {
+			FamilyName string `json:"familyName"`
+			GivenName  string `json:"givenName"`
+		}{
+			FamilyName: *user.Name.FamilyName,
+			GivenName:  *user.Name.GivenName,
+		},
+		DisplayName: *user.DisplayName,
+		Emails:      userEmails,
+		Addresses:   userAddresses,
+	}
+}
+
+func CreateUserIDtoUserObjMap(awsUsers []*aws.User) map[string]*aws.User {
+	awsUsersMap := make(map[string]*aws.User)
+
+	for _, awsUser := range awsUsers {
+		awsUsersMap[awsUser.ID] = awsUser
+	}
+
+	return awsUsersMap
+}
+
+var ListGroupMembershipPagesCallbackFn func(page *identitystore.ListGroupMembershipsOutput, lastPage bool) bool
+
+func (s *syncGSuite) GetGroupMembershipsLists(awsGroups []*aws.Group, awsUsersMap map[string]*aws.User) (map[string][]*aws.User, error) {
+	awsGroupsUsers := make(map[string][]*aws.User)
+	curGroup := &aws.Group{}
+
+	ListGroupMembershipPagesCallbackFn = func(page *identitystore.ListGroupMembershipsOutput, lastPage bool) bool {
+		for _, member := range page.GroupMemberships { // For every member in the group
+			userId := member.MemberId.UserId
+			user := awsUsersMap[*userId]
+
+			// Append new user onto existing list of users
+			awsGroupsUsers[curGroup.DisplayName] = append(awsGroupsUsers[curGroup.DisplayName], user)
+		}
+
+		return !lastPage
+	}
+
+	// For every group, get the members and assign in awsGroupsUsers map
+	for _, group := range awsGroups {
+		curGroup = group
+		awsGroupsUsers[curGroup.DisplayName] = make([]*aws.User, 0)
+
+		// Get User ID of every member in group
+		err := s.identityStoreClient.ListGroupMembershipsPages(
+			&identitystore.ListGroupMembershipsInput{
+				IdentityStoreId: &s.cfg.IdentityStoreID,
+				GroupId:         &group.ID,
+			}, ListGroupMembershipPagesCallbackFn)
+
+		if err != nil {
+			return nil, err
 		}
 	}
 
-	return false
+	return awsGroupsUsers, nil
+}
+
+func (s *syncGSuite) IsUserInGroup(user *aws.User, group *aws.Group) (*bool, error) {
+	isUserInGroupOutput, err := s.identityStoreClient.IsMemberInGroups(
+		&identitystore.IsMemberInGroupsInput{
+			IdentityStoreId: &s.cfg.IdentityStoreID,
+			GroupIds:        []*string{&group.ID},
+			MemberId:        &identitystore.MemberId{UserId: &user.ID},
+		},
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	isUserInGroup := isUserInGroupOutput.Results[0].MembershipExists
+
+	return isUserInGroup, nil
+}
+
+func (s *syncGSuite) RemoveUserFromGroup(userId *string, groupId *string) error {
+	memberIdOutput, err := s.identityStoreClient.GetGroupMembershipId(
+		&identitystore.GetGroupMembershipIdInput{
+			IdentityStoreId: &s.cfg.IdentityStoreID,
+			GroupId:         groupId,
+			MemberId:        &identitystore.MemberId{UserId: userId},
+		},
+	)
+
+	if err != nil {
+		return err
+	}
+
+	memberId := memberIdOutput.MembershipId
+
+	_, err = s.identityStoreClient.DeleteGroupMembership(
+		&identitystore.DeleteGroupMembershipInput{
+			IdentityStoreId: &s.cfg.IdentityStoreID,
+			MembershipId:    memberId,
+		},
+	)
+
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 var awsGroups []*aws.Group
