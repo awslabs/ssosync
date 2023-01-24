@@ -6,56 +6,54 @@
 [![License Apache 2](https://img.shields.io/badge/License-Apache2-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 [![Taylor Swift](https://img.shields.io/badge/secured%20by-taylor%20swift-brightgreen.svg)](https://twitter.com/SwiftOnSecurity)
 
-> Helping you populate AWS IAM Identity Center directly with your Google Apps users
+> Helping you populate AWS SSO directly with your Google Apps users
 
 SSO Sync will run on any platform that Go can build for. It is available in the [AWS Serverless Application Repository](https://console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync)
 
 > :warning: there are breaking changes for versions `>= 0.02`
 
-> :warning: `>= 1.0.0-rc.5` groups to do not get deleted in AWS IAM Identity Center when deleted in the Google Directory, and groups are synced by their email address
+> :warning: `>= 1.0.0-rc.5` groups to do not get deleted in AWS SSO when deleted in the Google Directory, and groups are synced by their email address
 
 > :warning: `>= 2.0.0` this makes use of the **Identity Store API** which means:
 * if deploying the lambda from the [AWS Serverless Application Repository](https://console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync) then it needs to be deployed into the [IAM Identity Center delegated administration](https://docs.aws.amazon.com/singlesignon/latest/userguide/delegated-admin.html) account. Technically you could deploy in the management account but we would recommend against this.
-
-* if you are running the project as a cli tool, then the environment will need to be using credentials of a user in the [AWS IAM Identity Center delegated administration](https://docs.aws.amazon.com/singlesignon/latest/userguide/delegated-admin.html) account, with appropriate permissions.
+* if you are running the project as a cli tool, then the environment will need to be using credentials of a user in the [IAM Identity Center delegated administration](https://docs.aws.amazon.com/singlesignon/latest/userguide/delegated-admin.html) account, with appropriate permissions.
 
 ## Why?
 
-As per the [AWS IAM Identity Center](https://aws.amazon.com/single-sign-on/) Homepage:
+As per the [AWS SSO](https://aws.amazon.com/single-sign-on/) Homepage:
 
-> AWS IAM Identity Center makes it easy to centrally manage access
+> AWS Single Sign-On (SSO) makes it easy to centrally manage access
 > to multiple AWS accounts and business applications and provide users
 > with single sign-on access to all their assigned accounts and applications
 > from one place.
 
 Key part further down:
 
-> With AWS IAM Identity Center, you can create and manage user identities in AWS IAM Identity Center’s
+> With AWS SSO, you can create and manage user identities in AWS SSO’s
 >identity store, or easily connect to your existing identity source including
 > Microsoft Active Directory and **Azure Active Directory (Azure AD)**.
 
-AWS IAM Identity Center can use other Identity Providers as well... such as Google Apps for Domains. Although AWS IAM Identity Center
+AWS SSO can use other Identity Providers as well... such as Google Apps for Domains. Although AWS SSO
 supports a subset of the SCIM protocol for populating users, it currently only has support for Azure AD.
 
-This project provides a CLI tool to pull users and groups from Google and push them into AWS IAM Identity Center.
+This project provides a CLI tool to pull users and groups from Google and push them into AWS SSO.
 `ssosync` deals with removing users as well. The heavily commented code provides you with the detail of
 what it is going to do.
 
 ### References
 
  * [SCIM Protocol RFC](https://tools.ietf.org/html/rfc7644)
- * [AWS IAM Identity Center - Connect to Your External Identity Provider](https://docs.aws.amazon.com/singlesignon/latest/userguide/manage-your-identity-source-idp.html)
- * [AWS IAM Identity Center - Automatic Provisioning](https://docs.aws.amazon.com/singlesignon/latest/userguide/provision-automatically.html)
+ * [AWS SSO - Connect to Your External Identity Provider](https://docs.aws.amazon.com/singlesignon/latest/userguide/manage-your-identity-source-idp.html)
+ * [AWS SSO - Automatic Provisioning](https://docs.aws.amazon.com/singlesignon/latest/userguide/provision-automatically.html)
  * [AWS IAM Identity Center - Identity Store API](https://docs.aws.amazon.com/singlesignon/latest/IdentityStoreAPIReference/welcome.html)
- * [AWS IAM Identity Center delegated administration](https://docs.aws.amazon.com/singlesignon/latest/userguide/delegated-admin.html)
 
 ## Installation
 
 The recommended installation is:
-* [Setup AWS IAM Identity Center](https://docs.aws.amazon.com/singlesignon/latest/userguide/get-started-enable-identity-center.html), in the management account of your organization
-* Created a linked account `Identity` Account from which to manage AWS IAM Identity Center
-* [Delegate administration](https://docs.aws.amazon.com/singlesignon/latest/userguide/delegated-admin.html) to the `Identity` account
-* Deploy the [SSOSync app](https://console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync) from the AWS Serverless Application Repository, into the `Identity` account.
+* [Setup IAM Identity Center](https://docs.aws.amazon.com/singlesignon/latest/userguide/get-started-enable-identity-center.html), in the management account of your organization
+* Created a linked account `Identity` Account from which to manage IAM Identity Center
+* [Delegate administration](https://docs.aws.amazon.com/singlesignon/latest/userguide/delegated-admin.html) to the `Identity' account
+* Deploy the [SSOSync app](https://console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync) from the AWS Serverless Application Repository
 
 
 You can also:
@@ -67,7 +65,7 @@ for regular synchronization.
 
 You need a few items of configuration. One side from AWS, and the other
 from Google Cloud to allow for API access to each. You should have configured
-Google as your Identity Provider for AWS IAM Identity Center already.
+Google as your Identity Provider for AWS SSO already.
 
 You will need the files produced by these steps for AWS Lambda deployment as well
 as locally running the ssosync tool.
@@ -93,7 +91,7 @@ You will have to specify the email address of an admin via `--google-admin` to a
 
 ### AWS
 
-Go to the AWS Single Sign-On console in the region you have set up AWS IAM Identity Center and select
+Go to the AWS Single Sign-On console in the region you have set up AWS SSO and select
 Settings. Click `Enable automatic provisioning`.
 
 A pop up will appear with URL and the Access Token. The Access Token will only appear
@@ -106,7 +104,7 @@ SSOSYNC_SCIM_ACCESS_TOKEN=<YOUR_TOKEN>
 SSOSYNC_SCIM_ENDPOINT=<YOUR_ENDPOINT>
 ```
 
-Additionally, authenticate your AWS credentials. Follow this  [section](https://docs.aws.amazon.com/sdk-for-go/v1/developer-guide/configuring-sdk.html#:~:text=Creating%20the%20Credentials%20File) to create a Shared Credentials File in the home directory or export your Credentials with Environment Variables. Ensure that the default credentials are for the AWS account you delegated admin for AWS IAM Identity Center to. This should be credntials for permissions limited IAM User, it can't be a user in AWS IAM Identity Center since the sync process is going to make changes. The cloudformation template (template.yaml) in this repository includes an IAM policy that grants the minimal set of rights for SSOSync to function.
+Additionally, authenticate your AWS credentials. Follow this  [section](https://docs.aws.amazon.com/sdk-for-go/v1/developer-guide/configuring-sdk.html#:~:text=Creating%20the%20Credentials%20File) to create a Shared Credentials File in the home directory or export your Credentials with Environment Variables. Ensure that the default credentials are for the AWS account you intended to be synced.
 
 To obtain your `Identity store ID`, go to the AWS Identity Center console and select settings. Under the `Identity Source` section, copy the `Identity store ID`.
 
@@ -124,16 +122,16 @@ make go-build
 
 ```bash
 A command line tool to enable you to synchronise your Google
-Apps (Google Workspace) users to AWS IAM Identity Center
+Apps (Google Workspace) users to AWS Single Sign-on (AWS SSO)
 Complete documentation is available at https://github.com/awslabs/ssosync
 
 Usage:
   ssosync [flags]
 
 Flags:
-  -t, --access-token string         AWS IAM Identity Center SCIM API Access Token
+  -t, --access-token string         AWS SSO SCIM API Access Token
   -d, --debug                       enable verbose / debug logging
-  -e, --endpoint string             AWS IAM Identity Center SCIM API Endpoint
+  -e, --endpoint string             AWS SSO SCIM API Endpoint
   -u, --google-admin string         Google Workspace admin user email
   -c, --google-credentials string   path to Google Workspace credentials file (default "credentials.json")
   -g, --group-match string          Google Workspace Groups filter query parameter, example: 'name:Admin* email:aws-*', see: https://developers.google.com/admin-sdk/directory/v1/guides/search-groups
@@ -152,12 +150,12 @@ Flags:
 
 The function has `two behaviour` and these are controlled by the `--sync-method` flag, this behavior could be
 
-1. `groups`: __(default)__ The sync procedure work base on Groups, gets the Google Workspace groups and their members, then creates in AWS IAM Identity Center the users (members of the Google Workspace groups), then the groups and at the end assign the users to their respective groups.
-2. `users_groups`: __(original behavior, previous versions)__ The sync procedure is simple, gets the Google Workspace users and creates these in AWS IAM Identity Center Users; then gets Google Workspace groups and creates these in AWS IAM Identity Center Groups and assigns users to belong to the AWS IAM Identity Center Groups.
+1. `groups`: __(default)__ The sync procedure work base on Groups, gets the Google Workspace groups and their members, then creates in AWS SSO the users (members of the Google Workspace groups), then the groups and at the end assign the users to their respective groups.
+2. `users_groups`: __(original behavior, previous versions)__ The sync procedure is simple, gets the Google Workspace users and creates these in AWS SSO Users; then gets Google Workspace groups and creates these in AWS SSO Groups and assigns users to belong to the AWS SSO Groups.
 
 Flags Notes:
 
-* `--include-groups` only works when `--sync-method` is `users_groups`.  
+* `--include-groups` only works when `--sync-method` is `users_groups`
 * `--ignore-users` works for both `--sync-method` values.  Example: `--ignore-users user1@example.com,user2@example.com` or `SSOSYNC_IGNORE_USERS=user1@example.com,user2@example.com`
 * `--ignore-groups` works for both `--sync-method` values. Example: --ignore-groups group1@example.com,group1@example.com` or `SSOSYNC_IGNORE_GROUPS=group1@example.com,group1@example.com`
 * `--group-match` works for both `--sync-method` values and also in combination with `--ignore-groups` and `--ignore-users`.  This is the filter query passed to the [Google Workspace Directory API when search Groups](https://developers.google.com/admin-sdk/directory/v1/guides/search-groups), if the flag is not used, groups are not filtered.
@@ -165,14 +163,8 @@ Flags Notes:
 
 NOTES:
 
-1. Depending on the number of users and groups you have, maybe you can get `AWS IAM Identity Center SCIM API rate limits errors`, and more frequently happens if you execute the sync many times in a short time.
+1. Depending on the number of users and groups you have, maybe you can get `AWS SSO SCIM API rate limits errors`, and more frequently happens if you execute the sync many times in a short time.
 2. Depending on the number of users and groups you have, `--debug` flag generate too much logs lines in your AWS Lambda function.  So test it in locally with the `--debug` flag enabled and disable it when you use a AWS Lambda function.
-
-### Filtering Groups
-There are three stages to filtering groups that interact as follows:
-1. `--group-match/-g` is used to filter the selection set of the Google Admin API query.  If not supplied, all groups in the Google IAM directory will be returned
-2. `--include-groups` (if provided) will ensure only the groups that match are synced to AWS.  This parameter is optional and should be a comma-separated list of group email addresses `--include-groups abc@foo.bar,xyz@foo.bar`
-3. `--ignore-groups` can be used to further filter the results of the group query by ignoring specific groups, using a string match of the group's email address.
 
 ## AWS Lambda Usage
 
@@ -180,7 +172,7 @@ NOTE: Using Lambda may incur costs in your AWS account. Please make sure you hav
 the pricing for AWS Lambda and CloudWatch before continuing.
 
 Running ssosync once means that any changes to your Google directory will not appear in
-AWS IAM Identity Center. To sync. regularly, you can run ssosync via AWS Lambda.
+AWS SSO. To sync. regularly, you can run ssosync via AWS Lambda.
 
 :warning: You find it in the [AWS Serverless Application Repository](https://eu-west-1.console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync).
 
