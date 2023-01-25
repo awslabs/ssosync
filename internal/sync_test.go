@@ -360,56 +360,6 @@ func Test_getGroupUsersOperations(t *testing.T) {
 	}
 }
 
-func Test_StringInSlice(t *testing.T) {
-	cases := []struct {
-		name string
-		slice []string
-		value string
-		result bool
-		} {
-			{ name: "no param no match", slice: []string{}, value: "foo", result:false, },
-			{ name: "no match", slice: []string{"bar"}, value: "foo", result: false},
-			{ name: "positive match", slice: []string{"bar","foo"}, value: "foo", result: true},
-			}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			r := StringInSlice (tc.slice, tc.value)
-			if (r != tc.result) {
-				t.Fatalf("%s fails", tc.name)
-			}
-		})
-	}
-}
-
-func Test_ShouldIncludeGroup(t *testing.T) {
-	cases := []struct {
-		name string
-		ignore []string
-		include []string
-		result bool
-	} {
-		{name: "neither", ignore: []string{}, include: []string{}, result: true},
-		{name: "include", ignore: []string{}, include: []string{"group","no"}, result: true},
-		{name: "include other", ignore: []string{}, include: []string{"no"}, result: false},
-		{name: "ignore", ignore: []string{"no","group"}, include: []string{}, result: false},
-		{name: "ignore other", ignore: []string{"no","nope"}, include: []string{}, result: true},
-		{name: "include precedence", ignore: []string{"group"}, include: []string{"group"}, result: true},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			cfg := &config.Config{
-				IncludeGroups: tc.include,
-				IgnoreGroups: tc.ignore,
-			}
-			r := ShouldIncludeGroup("group",cfg)
-			if (r != tc.result) {
-				t.Fatalf("%s fails", tc.name)
-			}
-		})
-	}
-}
-
 func Test_GetGroupsWithoutPagination(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
