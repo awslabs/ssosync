@@ -166,6 +166,12 @@ NOTES:
 1. Depending on the number of users and groups you have, maybe you can get `AWS SSO SCIM API rate limits errors`, and more frequently happens if you execute the sync many times in a short time.
 2. Depending on the number of users and groups you have, `--debug` flag generate too much logs lines in your AWS Lambda function.  So test it in locally with the `--debug` flag enabled and disable it when you use a AWS Lambda function.
 
+### Filtering Groups
+There are three stages to filtering groups that interact as follows:
+1. `--group-match/-g` is used to filter the selection set of the Google Admin API query.  If not supplied, all groups in the Google IAM directory will be returned
+2. `--include-groups` (if provided) will ensure only the groups that match are synced to AWS.  This parameter is optional and should be a comma-separated list of group email addresses `--include-groups abc@foo.bar,xyz@foo.bar`
+3. `--ignore-groups` can be used to further filter the results of the group query by ignoring specific groups, using a string match of the group's email address.
+
 ## AWS Lambda Usage
 
 NOTE: Using Lambda may incur costs in your AWS account. Please make sure you have checked
