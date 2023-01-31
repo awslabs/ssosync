@@ -137,6 +137,7 @@ func (c *client) GetGroups(query string) ([]*admin.Group, error) {
 	g := make([]*admin.Group, 0)
 	var err error
 
+	// Add groups based on query string
 	if query == "*" {
                 err = c.service.Groups.List().Customer("my_customer").Pages(context.TODO(), func(groups *admin.Groups) error {
                         g = append(g, groups.Groups...)
@@ -155,3 +156,4 @@ func (c *client) GetGroups(query string) ([]*admin.Group, error) {
 	}
 	return g, err
 }
+

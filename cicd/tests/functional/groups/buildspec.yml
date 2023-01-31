@@ -24,17 +24,27 @@ phases:
       - aws secretsmanager  get-secret-value --secret-id=TestGoogleCredentials --query SecretString --output text | jq '.' > credentials.json
       - cat credentials.json
 
+      - aws --region "${Region}" --output json identitystore list-groups --identity-store-id "${IdentityStoreID}"
+
       # Empty query string, should sync all groups in the directory
       - ./ssosync -t "${SCIMAccessToken}" -e "${SCIMEndpointUrl}" -u "${GoogleAdminEmail}" -i "${IdentityStoreID}" -r "${Region}" -s "groups" -g "*"
+
+      - aws --region "${Region}" --output json identitystore list-groups --identity-store-id "${IdentityStoreID}"
 
       # no groupMatch paramer, should sync all groups in the directory
       - ./ssosync -t "${SCIMAccessToken}" -e "${SCIMEndpointUrl}" -u "${GoogleAdminEmail}" -i "${IdentityStoreID}" -r "${Region}" -s "groups"
 
+      - aws --region "${Region}" --output json identitystore list-groups --identity-store-id "${IdentityStoreID}"
+
       # Empty query string, should sync no groups in the directory
       - ./ssosync -t "${SCIMAccessToken}" -e "${SCIMEndpointUrl}" -u "${GoogleAdminEmail}" -i "${IdentityStoreID}" -r "${Region}" -s "groups" -g ""
+      
+      - aws --region "${Region}" --output json identitystore list-groups --identity-store-id "${IdentityStoreID}"
 
       # Single Prefix, should sync only sync those groups with the prefix
       - ./ssosync -t "${SCIMAccessToken}" -e "${SCIMEndpointUrl}" -u "${GoogleAdminEmail}" -i "${IdentityStoreID}" -r "${Region}" -s "groups" -g "name:PrefixA*"
+
+      - aws --region "${Region}" --output json identitystore list-groups --identity-store-id "${IdentityStoreID}"
 
       # Multi-prefix, should sync all groups matching either prefix
       - ./ssosync -t "${SCIMAccessToken}" -e "${SCIMEndpointUrl}" -u "${GoogleAdminEmail}" -i "${IdentityStoreID}" -r "${Region}" -s "groups" -g "name:PrefixA*,name:PrefixB*"
@@ -42,16 +52,24 @@ phases:
       # Group with External Users, should sync all groups matching either prefix, external users should be ignore not cause more than a warning
       - ./ssosync -t "${SCIMAccessToken}" -e "${SCIMEndpointUrl}" -u "${GoogleAdminEmail}" -i "${IdentityStoreID}" -r "${Region}" -s "groups" -g "name:ExternalUserTest*"
 
+      - aws --region "${Region}" --output json identitystore list-groups --identity-store-id "${IdentityStoreID}"
+
       # Group with Nested Groups, should sync only the group matching the prefix and flatten any nested group membership into the top level group
       - ./ssosync -t "${SCIMAccessToken}" -e "${SCIMEndpointUrl}" -u "${GoogleAdminEmail}" -i "${IdentityStoreID}" -r "${Region}" -s "groups" -g "name:NestedGroupsTest*"
+
+      - aws --region "${Region}" --output json identitystore list-groups --identity-store-id "${IdentityStoreID}"
 
       # no groupMatch paramer, should sync all groups in the directory, except those list in the ignore parameter
       - ./ssosync -t "${SCIMAccessToken}" -e "${SCIMEndpointUrl}" -u "${GoogleAdminEmail}" -i "${IdentityStoreID}" -r "${Region}" -s "groups" --ignore-groups "ignoregroup01@nothing2see.info,ignoregroup02@nothing2see.info"
 
+      - aws --region "${Region}" --output json identitystore list-groups --identity-store-id "${IdentityStoreID}"
+
       # Should sync the list of groups, except those listed in the ignore list
       - ./ssosync -t "${SCIMAccessToken}" -e "${SCIMEndpointUrl}" -u "${GoogleAdminEmail}" -i "${IdentityStoreID}" -r "${Region}" -s "groups" -g "" --include-groups "includegroup01@nothing2see.info, ignoregroup02@nothing2see.info" --ignore-groups "ignoregroup01@nothing2see.info,ignoregroup02@nothing2see.info"
+
+      - aws --region "${Region}" --output json identitystore list-groups --identity-store-id "${IdentityStoreID}"
 
       # Should sync all groups in the list of groups, and those that match the group prefix but not those listed in the ignore list
       - ./ssosync -t "${SCIMAccessToken}" -e "${SCIMEndpointUrl}" -u "${GoogleAdminEmail}" -i "${IdentityStoreID}" -r "${Region}" -s "groups" -g "name:PrefixA*" --include-groups "includegroup01@nothing2see.info, ignoregroup02@nothing2see.info" --ignore-groups "ignoregroup01@nothing2see.info,ignoregroup02@nothing2see.info,prefixagroup01@nothing2see.info"
 
-
+      - aws --region "${Region}" --output json identitystore list-groups --identity-store-id "${IdentityStoreID}"
