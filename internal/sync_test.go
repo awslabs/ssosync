@@ -398,10 +398,9 @@ func Test_GetGroupsWithoutPagination(t *testing.T) {
 	mockIdentityStoreClient.EXPECT().ListGroupsPages(gomock.Any(), gomock.Any()).MaxTimes(1).
 		Do(callbackWithSampleResp).Return(nil)
 
-	actualOutput, err := mockClient.GetGroups()
+	actualOutput := mockClient.getGoogleGroups()
 
 	assert.True(t, reflect.DeepEqual(expectedOutput, actualOutput))
-	assert.NoError(t, err)
 }
 
 func Test_GetGroupsWithPagination(t *testing.T) {
@@ -462,10 +461,9 @@ func Test_GetGroupsWithPagination(t *testing.T) {
 	mockIdentityStoreClient.EXPECT().ListGroupsPages(gomock.Any(), gomock.Any()).MaxTimes(1).
 		Do(callbackWithSampleResp).Return(nil)
 
-	actualOutput, err := mockClient.GetGroups()
+	actualOutput := mockClient.getGoogleGroups()
 
 	assert.True(t, reflect.DeepEqual(expectedOutput, actualOutput))
-	assert.NoError(t, err)
 }
 
 func Test_GetGroupsEmptyResponse(t *testing.T) {
@@ -493,10 +491,9 @@ func Test_GetGroupsEmptyResponse(t *testing.T) {
 	mockIdentityStoreClient.EXPECT().ListGroupsPages(gomock.Any(), gomock.Any()).MaxTimes(1).
 		Do(callbackWithSampleResp).Return(nil)
 
-	actualOutput, err := mockClient.GetGroups()
+	actualOutput := mockClient.getGoogleGroups()
 
 	assert.True(t, reflect.DeepEqual(expectedOutput, actualOutput))
-	assert.NoError(t, err)
 }
 
 func Test_GetGroupsErrorResponse(t *testing.T) {
@@ -519,10 +516,9 @@ func Test_GetGroupsErrorResponse(t *testing.T) {
 
 	mockIdentityStoreClient.EXPECT().ListGroupsPages(gomock.Any(), gomock.Any()).MaxTimes(1).Return(sampleResponseError)
 
-	actualOutput, err := mockClient.GetGroups()
+	actualOutput := mockClient.getGoogleGroups()
 
-	assert.True(t, reflect.DeepEqual(expectedOutput.Error(), err.Error()))
-	assert.Nil(t, actualOutput)
+	assert.True(t, reflect.DeepEqual(expectedOutput, actualOutput))
 }
 
 func Test_GetUsersWithoutPagination(t *testing.T) {
@@ -610,10 +606,9 @@ func Test_GetUsersWithoutPagination(t *testing.T) {
 	mockIdentityStoreClient.EXPECT().ListUsersPages(gomock.Any(), gomock.Any()).MaxTimes(1).
 		Do(callbackWithSampleResp).Return(nil)
 
-	actualOutput, err := mockClient.GetUsers()
+	actualOutput := mockClient.getGoogleUsers()
 
 	assert.True(t, reflect.DeepEqual(expectedOutput, actualOutput))
-	assert.NoError(t, err)
 }
 
 func Test_GetUsersWithPagination(t *testing.T) {
@@ -687,10 +682,9 @@ func Test_GetUsersWithPagination(t *testing.T) {
 	mockIdentityStoreClient.EXPECT().ListUsersPages(gomock.Any(), gomock.Any()).MaxTimes(1).
 		Do(callbackWithSampleResp).Return(nil)
 
-	actualOutput, err := mockClient.GetUsers()
+	actualOutput := mockClient.getGoogleUsers()
 
 	assert.True(t, reflect.DeepEqual(expectedOutput, actualOutput))
-	assert.NoError(t, err)
 }
 
 func Test_GetUsersEmptyResponse(t *testing.T) {
@@ -719,36 +713,9 @@ func Test_GetUsersEmptyResponse(t *testing.T) {
 	mockIdentityStoreClient.EXPECT().ListUsersPages(gomock.Any(), gomock.Any()).MaxTimes(1).
 		Do(callbackWithSampleResp).Return(nil)
 
-	actualOutput, err := mockClient.GetUsers()
+	actualOutput := mockClient.getGoogleUsers()
 
 	assert.True(t, reflect.DeepEqual(expectedOutput, actualOutput))
-	assert.NoError(t, err)
-}
-
-func Test_GetUsersErrorResponse(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockIdentityStoreClient := mocks.NewMockIdentityStoreAPI(ctrl)
-
-	mockClient := &syncGSuite{
-		aws:                 nil,
-		google:              nil,
-		cfg:                 &config.Config{IdentityStoreID: "test-identity-store-id"},
-		identityStoreClient: mockIdentityStoreClient,
-		users:               make(map[string]*aws.User),
-	}
-
-	sampleResponseError := errors.New("Sample error")
-
-	expectedOutput := errors.New("Sample error")
-
-	mockIdentityStoreClient.EXPECT().ListUsersPages(gomock.Any(), gomock.Any()).MaxTimes(1).Return(sampleResponseError)
-
-	actualOutput, err := mockClient.GetUsers()
-
-	assert.True(t, reflect.DeepEqual(expectedOutput.Error(), err.Error()))
-	assert.Nil(t, actualOutput)
 }
 
 func Test_ConvertSdkUserObjToNative(t *testing.T) {
@@ -873,83 +840,6 @@ func Test_CreateUserIDtoUserObjMap(t *testing.T) {
 	actualOutput := CreateUserIDtoUserObjMap(sampleInput)
 
 	assert.True(t, reflect.DeepEqual(expectedOutput, actualOutput))
-}
-
-func Test_GetGroupMembershipsLists(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockIdentityStoreClient := mocks.NewMockIdentityStoreAPI(ctrl)
-
-	mockClient := &syncGSuite{
-		aws:                 nil,
-		google:              nil,
-		cfg:                 &config.Config{IdentityStoreID: "test-identity-store-id"},
-		identityStoreClient: mockIdentityStoreClient,
-		users:               make(map[string]*aws.User),
-	}
-
-	sampleGroupsInput := []*aws.Group{
-		{ID: "a", DisplayName: "a"},
-		{ID: "b", DisplayName: "b"},
-		{ID: "c", DisplayName: "c"},
-	}
-
-	sampleUsersMapInput := make(map[string]*aws.User)
-	sampleUsersMapInput["1"] = &aws.User{ID: "1"}
-	sampleUsersMapInput["2"] = &aws.User{ID: "2"}
-	sampleUsersMapInput["3"] = &aws.User{ID: "3"}
-	sampleUsersMapInput["4"] = &aws.User{ID: "4"}
-
-	expectedOutput := make(map[string][]*aws.User)
-	expectedOutput["a"] = []*aws.User{{ID: "1"}, {ID: "2"}}
-	expectedOutput["b"] = []*aws.User{{ID: "2"}, {ID: "3"}, {ID: "4"}}
-	expectedOutput["c"] = []*aws.User{}
-
-	sampleResponseGroupA := &identitystore.ListGroupMembershipsOutput{
-		GroupMemberships: []*identitystore.GroupMembership{
-			{GroupId: aws_sdk.String("a"), MemberId: &identitystore.MemberId{UserId: aws_sdk.String("1")}},
-			{GroupId: aws_sdk.String("a"), MemberId: &identitystore.MemberId{UserId: aws_sdk.String("2")}},
-		},
-	}
-
-	sampleResponseGroupB := &identitystore.ListGroupMembershipsOutput{
-		GroupMemberships: []*identitystore.GroupMembership{
-			{GroupId: aws_sdk.String("b"), MemberId: &identitystore.MemberId{UserId: aws_sdk.String("2")}},
-			{GroupId: aws_sdk.String("b"), MemberId: &identitystore.MemberId{UserId: aws_sdk.String("3")}},
-			{GroupId: aws_sdk.String("b"), MemberId: &identitystore.MemberId{UserId: aws_sdk.String("4")}},
-		},
-	}
-
-	sampleResponseGroupC := &identitystore.ListGroupMembershipsOutput{
-		GroupMemberships: []*identitystore.GroupMembership{},
-	}
-
-	callbackWithSampleRespGroupA := func(inp *identitystore.ListGroupMembershipsInput, callback func(output *identitystore.ListGroupMembershipsOutput, lastPage bool) bool) {
-		ListGroupMembershipPagesCallbackFn(sampleResponseGroupA, false)
-	}
-
-	callbackWithSampleRespGroupB := func(inp *identitystore.ListGroupMembershipsInput, callback func(output *identitystore.ListGroupMembershipsOutput, lastPage bool) bool) {
-		ListGroupMembershipPagesCallbackFn(sampleResponseGroupB, false)
-	}
-
-	callbackWithSampleRespGroupC := func(inp *identitystore.ListGroupMembershipsInput, callback func(output *identitystore.ListGroupMembershipsOutput, lastPage bool) bool) {
-		ListGroupMembershipPagesCallbackFn(sampleResponseGroupC, false)
-	}
-
-	mockIdentityStoreClient.EXPECT().ListGroupMembershipsPages(gomock.Any(), gomock.Any()).MaxTimes(1).
-		Do(callbackWithSampleRespGroupA).Return(nil)
-
-	mockIdentityStoreClient.EXPECT().ListGroupMembershipsPages(gomock.Any(), gomock.Any()).MaxTimes(1).
-		Do(callbackWithSampleRespGroupB).Return(nil)
-
-	mockIdentityStoreClient.EXPECT().ListGroupMembershipsPages(gomock.Any(), gomock.Any()).MaxTimes(1).
-		Do(callbackWithSampleRespGroupC).Return(nil)
-
-	actualOutput, err := mockClient.GetGroupMembershipsLists(sampleGroupsInput, sampleUsersMapInput)
-
-	assert.True(t, reflect.DeepEqual(expectedOutput, actualOutput))
-	assert.Nil(t, err)
 }
 
 func Test_IsUserInGroup(t *testing.T) {

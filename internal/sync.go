@@ -508,7 +508,8 @@ func (s *syncGSuite) getGoogleGroups( ) []*admin.Group {
 			}
                 }
         }
-       
+        log.WithField("groupQueries", groupQueries).Debug("Group Queries")
+
 	// Retreive the groups based on the above set of queries
         googleGroups, err := s.google.GetGroups(groupQueries)
 	if err != nil {
@@ -520,14 +521,16 @@ func (s *syncGSuite) getGoogleGroups( ) []*admin.Group {
 	filteredGroups := make([]*admin.Group, 0)
 	for _, g := range googleGroups {
 	        if s.ignoreGroup(g.Email) {
-			log.WithField("id", g.Email).Debug("ignoring group")
+			log.WithField("email", g.Email).Debug("ignoring group")
                         continue
                 }
+		log.WithField("email", g.Email).Debug("appending group")
 		filteredGroups = append(filteredGroups, g)
 	}
 
 	return filteredGroups
 }
+
 
 // UserMatch, unless UserMatch is "*", which matches all users
 // The results are then filtered using IgnoreUsers if they 
@@ -597,15 +600,11 @@ func (s *syncGSuite) getGoogleDirectory() ([]*admin.Group, []*admin.User, map[st
 		uniqueUsers[u.PrimaryEmail] = u
 	}
 
+	log.Debug("Retrieve list of google users, as members of groups")
 	// Work through the groups supplied to determine their memberships
 	for _, g := range googleGroups {
 
-		log := log.WithFields(log.Fields{"group": g.Name})
-
-		log.Debug("get group membership from google")
-		groupMembers := s.getGoogleGroupMembers(g.Email)
-
-		log.Debug("get users")
+		groupMembers := s.getGoogleGroupMembers(g)
 
 		// Create object to store the groups membership
 		// index based on email address we don't end up with duplicate membership
@@ -613,29 +612,26 @@ func (s *syncGSuite) getGoogleDirectory() ([]*admin.Group, []*admin.User, map[st
 		uniqueMembers := make(map[string]*admin.User)
 
         	for _, m:= range groupMembers {
+		        log.WithField("email", m.Email).Debug("processing member")
+			// Ignore Owners they aren't relevant in Identity Store
+			if m.Role == "OWNER" {
+			        log.WithField("id", m.Email).Debug("ignoring owner roles")
+				continue
+			}
+
         		// Ignore any external members, since they don't have users
 			// that can be synced
-			if m.Type == "EXTERNAL" {
-				log.WithField("id", m.Email).Debug("ignoring external user")
+			if m.Type == "USER" && m.Status != "ACTIVE" {
+				log.WithField("id", m.Email).Warn("ignoring external user")
                                 continue
                         }
 
-                        // Ignore any memberships labelled of type CUSTOMER
-                        if m.Type == "CUSTOMER" {
-                                log.Debug("ignoring CUSTOMER member")
-                                continue
-                        
-		       }
 			// handle nested groups, by adding their membership to the end
 			// of googleMembers
 			if m.Type == "GROUP" {
-                                log.WithField("id", m.Email).Debug("Nested group adding membership to parent")
-				for _, subGroupMember := range s.getGoogleGroupMembers(m.Email) {
-					groupMembers = append (groupMembers,subGroupMember)
-				}
+				groupMembers = append (groupMembers, s.getGoogleSubGroupMembers(m)...)
                                 continue
                         }
-
         		// Remove any users that should be ignored
                 	if s.ignoreUser(m.Email) {
 				log.WithField("id", m.Email).Debug("ignoring user")
@@ -644,7 +640,7 @@ func (s *syncGSuite) getGoogleDirectory() ([]*admin.Group, []*admin.User, map[st
 
 			// Retrieve the user and add to list of users to sync
                 	uniqueUsers[m.Email] = s.getGoogleUser(m.Email)
-			uniqueMembers[m.Email] = s.getGoogleUser(m.Email)
+			uniqueMembers[m.Email] = uniqueUsers[m.Email]
 
         	}
 		// add the membership of the group
@@ -957,33 +953,55 @@ func (s *syncGSuite) ignoreGroup(email string) bool {
 
 func (s *syncGSuite) getGoogleUser(email string) *admin.User {
 	// retrieve a single user
-        log.WithField("id", email).Debug("get user")
+        log.WithField("email", email).Debug("getGoogleUser()")
         u, err := s.google.GetUsers("email=" + email)
 
         if err != nil {
 		log.WithField("error:", err).Error("get user failed")
         	return nil
         }
-	return u[0]
+	if len(u) == 1 {
+		return u[0]
+	} else {
+		log.Error("No User found")
+	}
+	return nil
 }
 
-func (s *syncGSuite) getGoogleGroupMembers(email string) []*admin.Member {
-	log.WithField("id", email).Debug("get Group Membership")
-
-        // retrieve the group based on its email address
-	g, err := s.google.GetGroups("email=" + email)
-        if err != nil {         
-                log.WithField("error:", err).Error("get group Members failed")
-                return nil
-        } 
-
+func (s *syncGSuite) getGoogleGroupMembers(g *admin.Group) []*admin.Member {
 	// retrieve the members of a group
-        groupMembers, err := s.google.GetGroupMembers(g[0])
+	log.WithField("Email", g.Email).Debug("getGoogleGroupMembers()")
+        groupMembers, err := s.google.GetGroupMembers(g)
         if err != nil {
 		log.WithField("error:", err).Error("get group Members failed")
         	return nil
         }
 	return groupMembers
+}
+
+
+func (s *syncGSuite) getGoogleSubGroupMembers(m *admin.Member) []*admin.Member {
+	log.WithField("Email", m.Email).Debug("getGoogleSubGroupMembers()")
+        // retrieve the members of a group
+	g, err := s.google.GetGroups("email="+ m.Email)
+        if err != nil {
+                log.WithField("error:", err).Error("failed to retrieve group")
+                return nil
+        }
+
+	if len(g) == 1 {
+        	log.WithField("Id", g).Debug("fetch members")
+
+        	groupMembers, err := s.google.GetGroupMembers(g[0])
+        	if err != nil {
+                	log.WithField("error:", err).Error("get group Members failed")
+                	return nil
+       		}
+        	return groupMembers
+	} else {
+		log.Error("No group found")
+	}
+        return nil
 }
 
 var awsGroups []*aws.Group
@@ -1105,42 +1123,6 @@ func CreateUserIDtoUserObjMap(awsUsers []*aws.User) map[string]*aws.User {
 }
 
 var ListGroupMembershipPagesCallbackFn func(page *identitystore.ListGroupMembershipsOutput, lastPage bool) bool
-
-func (s *syncGSuite) getAwsGroupMemberships(awsGroups []*aws.Group, awsUsersMap map[string]*aws.User) (map[string][]*aws.User, error) {
-	awsGroupsUsers := make(map[string][]*aws.User)
-	curGroup := &aws.Group{}
-
-	ListGroupMembershipPagesCallbackFn = func(page *identitystore.ListGroupMembershipsOutput, lastPage bool) bool {
-		for _, member := range page.GroupMemberships { // For every member in the group
-			userId := member.MemberId.UserId
-			user := awsUsersMap[*userId]
-
-			// Append new user onto existing list of users
-			awsGroupsUsers[curGroup.DisplayName] = append(awsGroupsUsers[curGroup.DisplayName], user)
-		}
-
-		return !lastPage
-	}
-
-	// For every group, get the members and assign in awsGroupsUsers map
-	for _, group := range awsGroups {
-		curGroup = group
-		awsGroupsUsers[curGroup.DisplayName] = make([]*aws.User, 0)
-
-		// Get User ID of every member in group
-		err := s.identityStoreClient.ListGroupMembershipsPages(
-			&identitystore.ListGroupMembershipsInput{
-				IdentityStoreId: &s.cfg.IdentityStoreID,
-				GroupId:         &group.ID,
-			}, ListGroupMembershipPagesCallbackFn)
-
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return awsGroupsUsers, nil
-}
 
 func (s *syncGSuite) IsUserInGroup(user *aws.User, group *aws.Group) (*bool, error) {
 	isUserInGroupOutput, err := s.identityStoreClient.IsMemberInGroups(

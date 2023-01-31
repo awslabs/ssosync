@@ -53,9 +53,9 @@ const (
 	// DefaultSyncMethod is the default sync method to use.
 	DefaultSyncMethod = "groups"
 	// DefaultUserMatch
-	DefaultUserMatch = ""
+	DefaultUserMatch = "*"
 	// DefaultGroupMatch
-	DefaultGroupMatch = ""
+	DefaultGroupMatch = "*"
 )
 
 // New returns a new Config
