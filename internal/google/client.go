@@ -17,6 +17,7 @@ package google
 
 import (
 	"context"
+        "strings"
 
 	"golang.org/x/oauth2/google"
 	admin "google.golang.org/api/admin/directory/v1"
@@ -42,11 +43,11 @@ func NewClient(ctx context.Context, adminEmail string, serviceAccountKey []byte)
 		admin.AdminDirectoryGroupMemberReadonlyScope,
 		admin.AdminDirectoryUserReadonlyScope)
 
-	config.Subject = adminEmail
-
 	if err != nil {
 		return nil, err
 	}
+
+	config.Subject = adminEmail
 
 	ts := config.TokenSource(ctx)
 
@@ -100,17 +101,20 @@ func (c *client) GetUsers(query string) ([]*admin.User, error) {
 	u := make([]*admin.User, 0)
 	var err error
 
-	if query != "" {
-		err = c.service.Users.List().Query(query).Customer("my_customer").Pages(c.ctx, func(users *admin.Users) error {
-			u = append(u, users.Users...)
-			return nil
-		})
-
-	} else {
-		err = c.service.Users.List().Customer("my_customer").Pages(c.ctx, func(users *admin.Users) error {
-			u = append(u, users.Users...)
-			return nil
-		})
+	if query == "*" {
+                err = c.service.Users.List().Customer("my_customer").Pages(c.ctx, func(users *admin.Users) error {
+                        u = append(u, users.Users...)
+                        return nil
+                })
+	} else if query != "" {
+                // In case we have multiple queries to process split on delimiter
+                queries := strings.Split(query, ",")
+                for _, subQuery := range queries {
+			err = c.service.Users.List().Query(subQuery).Customer("my_customer").Pages(c.ctx, func(users *admin.Users) error {
+				u = append(u, users.Users...)
+				return nil
+			})
+		}
 	}
 
 	return u, err
@@ -133,17 +137,23 @@ func (c *client) GetGroups(query string) ([]*admin.Group, error) {
 	g := make([]*admin.Group, 0)
 	var err error
 
-	if query != "" {
-		err = c.service.Groups.List().Customer("my_customer").Query(query).Pages(context.TODO(), func(groups *admin.Groups) error {
-			g = append(g, groups.Groups...)
-			return nil
-		})
-	} else {
-		err = c.service.Groups.List().Customer("my_customer").Pages(context.TODO(), func(groups *admin.Groups) error {
-			g = append(g, groups.Groups...)
-			return nil
-		})
+	// Add groups based on query string
+	if query == "*" {
+                err = c.service.Groups.List().Customer("my_customer").Pages(context.TODO(), func(groups *admin.Groups) error {
+                        g = append(g, groups.Groups...)
+                        return nil
+                })
+	} else if query != "" {
+                // In case we have multiple queries to process split on delimiter
+                queries := strings.Split(query, ",")
+		for _, subQuery := range queries {
+			err = c.service.Groups.List().Customer("my_customer").Query(subQuery).Pages(context.TODO(), func(groups *admin.Groups) error {
+				g = append(g, groups.Groups...)
+				return nil
+			})
+		}
 
 	}
 	return g, err
 }
+

@@ -14,7 +14,9 @@ SSO Sync will run on any platform that Go can build for. It is available in the 
 
 > :warning: `>= 1.0.0-rc.5` groups to do not get deleted in AWS SSO when deleted in the Google Directory, and groups are synced by their email address
 
-> 🤔 we hope to support other providers in the future
+> :warning: `>= 2.0.0` this makes use of the **Identity Store API** which means:
+* if deploying the lambda from the [AWS Serverless Application Repository](https://console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync) then it needs to be deployed into the [IAM Identity Center delegated administration](https://docs.aws.amazon.com/singlesignon/latest/userguide/delegated-admin.html) account. Technically you could deploy in the management account but we would recommend against this.
+* if you are running the project as a cli tool, then the environment will need to be using credentials of a user in the [IAM Identity Center delegated administration](https://docs.aws.amazon.com/singlesignon/latest/userguide/delegated-admin.html) account, with appropriate permissions.
 
 ## Why?
 
@@ -43,9 +45,18 @@ what it is going to do.
  * [SCIM Protocol RFC](https://tools.ietf.org/html/rfc7644)
  * [AWS SSO - Connect to Your External Identity Provider](https://docs.aws.amazon.com/singlesignon/latest/userguide/manage-your-identity-source-idp.html)
  * [AWS SSO - Automatic Provisioning](https://docs.aws.amazon.com/singlesignon/latest/userguide/provision-automatically.html)
+ * [AWS IAM Identity Center - Identity Store API](https://docs.aws.amazon.com/singlesignon/latest/IdentityStoreAPIReference/welcome.html)
 
 ## Installation
 
+The recommended installation is:
+* [Setup IAM Identity Center](https://docs.aws.amazon.com/singlesignon/latest/userguide/get-started-enable-identity-center.html), in the management account of your organization
+* Created a linked account `Identity` Account from which to manage IAM Identity Center
+* [Delegate administration](https://docs.aws.amazon.com/singlesignon/latest/userguide/delegated-admin.html) to the `Identity' account
+* Deploy the [SSOSync app](https://console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync) from the AWS Serverless Application Repository
+
+
+You can also:
 You can `go get github.com/awslabs/ssosync` or grab a Release binary from the release page. The binary
 can be used from your local computer, or you can deploy to AWS Lambda to run on a CloudWatch Event
 for regular synchronization.
@@ -93,6 +104,10 @@ SSOSYNC_SCIM_ACCESS_TOKEN=<YOUR_TOKEN>
 SSOSYNC_SCIM_ENDPOINT=<YOUR_ENDPOINT>
 ```
 
+Additionally, authenticate your AWS credentials. Follow this  [section](https://docs.aws.amazon.com/sdk-for-go/v1/developer-guide/configuring-sdk.html#:~:text=Creating%20the%20Credentials%20File) to create a Shared Credentials File in the home directory or export your Credentials with Environment Variables. Ensure that the default credentials are for the AWS account you intended to be synced.
+
+To obtain your `Identity store ID`, go to the AWS Identity Center console and select settings. Under the `Identity Source` section, copy the `Identity store ID`.
+
 ## Local Usage
 
 ```bash
@@ -119,7 +134,7 @@ Flags:
   -e, --endpoint string             AWS SSO SCIM API Endpoint
   -u, --google-admin string         Google Workspace admin user email
   -c, --google-credentials string   path to Google Workspace credentials file (default "credentials.json")
-  -g, --group-match string          Google Workspace Groups filter query parameter, example: 'name:Admin* email:aws-*', see: https://developers.google.com/admin-sdk/directory/v1/guides/search-groups
+  -g, --group-match string          Google Workspace Groups is a comma separated list of filter queries, examples: 'name:Admin* email:aws-*' or 'name:Admin*, name:Dev*', see: https://developers.google.com/admin-sdk/directory/v1/guides/search-groups, to sync ALL groups (and the user that are members of those groups) specify '*'
   -h, --help                        help for ssosync
       --ignore-groups strings       ignores these Google Workspace groups
       --ignore-users strings        ignores these Google Workspace users
@@ -127,8 +142,10 @@ Flags:
       --log-format string           log format (default "text")
       --log-level string            log level (default "info")
   -s, --sync-method string          Sync method to use (users_groups|groups) (default "groups")
-  -m, --user-match string           Google Workspace Users filter query parameter, example: 'name:John* email:admin*', see: https://developers.google.com/admin-sdk/directory/v1/guides/search-users
+  -m, --user-match string           Google Workspace Users is a comma separated list of filter queries, examples: 'name:John* email:admin*' or 'name:John*, name:Jane*', see: https://developers.google.com/admin-sdk/directory/v1/guides/search-users, to sync ALL users specify '*'
   -v, --version                     version for ssosync
+  -r, --region                      AWS region where identity store exists
+  -i, --identity-store-id           AWS Identity Store ID
 ```
 
 The function has `two behaviour` and these are controlled by the `--sync-method` flag, this behavior could be
@@ -141,13 +158,19 @@ Flags Notes:
 * `--include-groups` only works when `--sync-method` is `users_groups`
 * `--ignore-users` works for both `--sync-method` values.  Example: `--ignore-users user1@example.com,user2@example.com` or `SSOSYNC_IGNORE_USERS=user1@example.com,user2@example.com`
 * `--ignore-groups` works for both `--sync-method` values. Example: --ignore-groups group1@example.com,group1@example.com` or `SSOSYNC_IGNORE_GROUPS=group1@example.com,group1@example.com`
-* `--group-match` works for both `--sync-method` values and also in combination with `--ignore-groups` and `--ignore-users`.  This is the filter query passed to the [Google Workspace Directory API when search Groups](https://developers.google.com/admin-sdk/directory/v1/guides/search-groups), if the flag is not used, groups are not filtered.
-* `--user-match` works for both `--sync-method` values and also in combination with `--ignore-groups` and `--ignore-users`.  This is the filter query passed to the [Google Workspace Directory API when search Users](https://developers.google.com/admin-sdk/directory/v1/guides/search-users), if the flag is not used, users are not filtered.
+* `--group-match` works for both `--sync-method` values and also in combination with `--ignore-groups` and `--ignore-users`.  This is the filter query passed to the [Google Workspace Directory API when search Groups](https://developers.google.com/admin-sdk/directory/v1/guides/search-groups), if `*` is specified then all groups will be synced, if the parameter is not present then no gropus will be synced.
+* `--user-match` works for both `--sync-method` values and also in combination with `--ignore-groups` and `--ignore-users`.  This is the filter query passed to the [Google Workspace Directory API when search Users](https://developers.google.com/admin-sdk/directory/v1/guides/search-users), if `*` is specified then all users will be synced, if the parameter is not present then no groups will be synced, (unless implicitly included as members of a group match by the --group-match parametewr.
 
 NOTES:
 
 1. Depending on the number of users and groups you have, maybe you can get `AWS SSO SCIM API rate limits errors`, and more frequently happens if you execute the sync many times in a short time.
 2. Depending on the number of users and groups you have, `--debug` flag generate too much logs lines in your AWS Lambda function.  So test it in locally with the `--debug` flag enabled and disable it when you use a AWS Lambda function.
+
+### Filtering Groups
+There are three stages to filtering groups that interact as follows:
+1. `--group-match/-g` is used to filter the selection set of the Google Admin API query.  If not supplied, all groups in the Google IAM directory will be returned
+2. `--include-groups` (if provided) will ensure only the groups that match are synced to AWS.  This parameter is optional and should be a comma-separated list of group email addresses `--include-groups abc@foo.bar,xyz@foo.bar`
+3. `--ignore-groups` can be used to further filter the results of the group query by ignoring specific groups, using a string match of the group's email address.
 
 ## AWS Lambda Usage
 

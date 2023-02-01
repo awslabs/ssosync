@@ -1,0 +1,81 @@
+version: 0.2
+
+env:
+  variables:
+    GO111MODULE: "on"
+    git-credential-helper: yes            
+
+phases:
+  install: 
+    commands:
+      # Install go.lang
+      - wget -q https://storage.googleapis.com/golang/go${GoVersion}.linux-amd64.tar.gz
+      - rm -rf /go
+      - tar -C / -xzf go${GoVersion}.linux-amd64.tar.gz
+      - export PATH="/go/bin:$PATH" && export GOPATH="/go" && export PATH="$GOPATH/bin:$PATH"
+      - rm go${GoVersion}.linux-amd64.tar.gz
+      - go version
+
+      # Install golint
+      - go install golang.org/x/lint/golint@latest
+
+      # Install staticcheck
+      - go install honnef.co/go/tools/cmd/staticcheck@latest
+
+      # Install Testify to use common assertions and mocks in tests
+      - go get -u github.com/stretchr/testify
+
+      # Install goreleaser
+      - go install github.com/goreleaser/goreleaser@latest
+
+  pre_build: 
+    commands:
+      # Print all environment variables (handy for AWS CodeBuild logs)
+      - env
+
+      # Fetch all dependencies
+      # - go env -w GOPROXY=direct
+      - go get ./...
+
+      # Run staticcheck
+      - staticcheck ./...
+
+      # Ensure code passes all lint tests
+      #- golint -set_exit_status ./...
+
+      # Check the Go code for common problems with 'go vet'
+      - go vet ./...
+
+      # Run all tests included with our application
+      - go test ./...
+
+  build:
+    commands:
+      # Make clean
+      - rm -f main packaged.yaml
+
+      # Make go-build
+      - go build -o ${APP_NAME} main.go
+
+      # Does it exist?
+      - ls ${APP_NAME}
+
+      # Does it run? 
+      - ./${APP_NAME} --version
+
+  post_build:
+    commands:
+      # Tweak the .goreleaser.yml so it uses the vairables from .Env
+      - patch .goreleaser.yml cicd/build/build/goreleaser.patch
+
+      # Make main but only for the lambda (linux amd64)
+      - goreleaser build --snapshot --rm-dist --single-target
+
+
+      # Check we've packaged something useful
+      - ./dist/ssosync_linux_amd64_v1/ssosync --version
+
+artifacts:
+  files:
+    - ${APP_NAME}
+    - dist/**/*

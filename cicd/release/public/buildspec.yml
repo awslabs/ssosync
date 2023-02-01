@@ -1,0 +1,30 @@
+version: 0.2
+
+phases:
+  install:
+    commands:
+      # Print all environment variables (handy for AWS CodeBuild logs)
+      - env
+      - ls -la
+
+      # Update sam to latest version
+      - wget -q https://github.com/aws/aws-sam-cli/releases/latest/download/aws-sam-cli-linux-x86_64.zip
+      - unzip -q aws-sam-cli-linux-x86_64.zip -d sam-installation
+      - sudo ./sam-installation/install --update
+      - rm -rf ./sam-installation  aws-sam-cli-linux-x86_64.zip
+
+  pre_build:
+    commands:
+      # Copy in the package file
+      - cp ${CODEBUILD_SRC_DIR_Packaged}/packaged-release.yaml ./packaged.yaml
+
+      # Check we have the required file
+      - ls packaged.yaml
+
+      - export AppVersion="${GitTag#v}"
+      - echo ${AppVersion}
+
+  build:
+    commands:
+      # Package our application with AWS SAM
+      - sam publish --template packaged.yaml --semantic-version ${AppVersion}

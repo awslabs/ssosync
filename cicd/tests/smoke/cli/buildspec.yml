@@ -1,0 +1,35 @@
+version: 0.2
+
+env:
+  secrets-manager:
+    GoogleAdminEmail: TestGoogleAdminEmail
+    SCIMEndpointUrl: TestSCIMEndpointUrl
+    SCIMAccessToken: TestSCIMAccessToken
+    IdentityStoreID: TestIdentityStoreId
+    Region: TestRegion
+  variables:
+    ExpectedExitState: 0
+  
+phases:
+  pre_build:
+    commands:
+      # Print all environment variables (handy for AWS CodeBuild logs)
+      - env
+
+  build:
+    commands:
+      - ./ssosync --version
+      - aws secretsmanager  get-secret-value --secret-id=TestGoogleCredentials --query SecretString --output text | jq '.' > credentials.json
+      - cat credentials.json
+
+      - ./ssosync -t "${SCIMAccessToken}" -e "${SCIMEndpointUrl}" -u "${GoogleAdminEmail}" -i "${IdentityStoreID}" -r "${Region}" -s "groups" -g "name:AWS*"; ExitState=$?
+
+      - |
+        if expr "${ExitState}" : "${ExpectedExitState}" >/dev/null; then
+          echo "We got what we expected"
+          exit 0
+        else
+          echo "We didn't get what we expected"
+          exit 1
+        fi
+
