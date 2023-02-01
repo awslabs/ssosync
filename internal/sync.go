@@ -296,7 +296,7 @@ func (s *syncGSuite) SyncGroupsUsers() error {
 	googleGroups, googleUsers, googleGroupMembership := s.getGoogleDirectory()
 
 	log.Info("Retrieve content of AWS Identity Store")
-	awsGroups, awsUsers, awsGroupMembership := s.getIdentityStore()
+	awsGroups, awsUsers, _ := s.getIdentityStore()
 
 
 	// create list of changes by operations
@@ -408,6 +408,9 @@ func (s *syncGSuite) SyncGroupsUsers() error {
 			}
 		}
 	}
+
+	log.Info("Re-get content of AWS Identity Store.  Users may have been deleted.")
+	_, _, awsGroupMembership := s.getIdentityStore()
 
 	// list of users to to be removed in aws groups
 	deleteUsersFromGroup, _ := getGroupUsersOperations(googleGroupMembership, awsGroupMembership)
@@ -643,8 +646,9 @@ func (s *syncGSuite) getGoogleDirectory() ([]*admin.Group, []*admin.User, map[st
                 	}
 
 			// Retrieve the user and add to list of users to sync
-                	uniqueUsers[m.Email] = s.getGoogleUser(m.Email)
-			uniqueMembers[m.Email] = s.getGoogleUser(m.Email)
+			googleUser := s.getGoogleUser(m.Email)
+                	uniqueUsers[m.Email] = googleUser
+			uniqueMembers[m.Email] = googleUser
 
         	}
 		// add the membership of the group
@@ -703,8 +707,12 @@ func (s *syncGSuite) getIdentityStore() ([]*aws.Group, []*aws.User, map[string][
                         userId := member.MemberId.UserId
                         user := awsUsersMap[*userId]
 
-                        // Append new user onto existing list of users
-                        awsGroupMemberships[curGroup.DisplayName] = append(awsGroupMemberships[curGroup.DisplayName], user)
+                        // Identity center may return user Ids for users that were just recently deleted.
+                        // Don't add these to the membership list.
+                        if user != nil {
+                            // Append new user onto existing list of users
+                            awsGroupMemberships[curGroup.DisplayName] = append(awsGroupMemberships[curGroup.DisplayName], user)
+                        }
                 } 
                 
                 return !lastPage
