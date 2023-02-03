@@ -491,20 +491,23 @@ func (s *syncGSuite) SyncGroupsUsers() error {
 // have been specified.
 func (s *syncGSuite) getGoogleGroups( ) []*admin.Group {
         log.Debug("getGoogleGroups()")
-        log.WithField("groupMatch", s.cfg.GroupMatch).Info("get google groups (by query)")
-        log.WithField("includeGroups", s.cfg.IncludeGroups).Info("individual google groups (by email address)")
-        log.WithField("ignoreGroups", s.cfg.IgnoreGroups).Info("google groups to ingnore")
+	if len(s.cfg.GroupMatch) > 0 {
+		log.WithField("groupMatch", s.cfg.GroupMatch).Info("get google groups (by query)")
+	}
         
         groupQueries := s.cfg.GroupMatch
 
-        // if GroupMatch is wildcard or no includeGroups have been provided we can skip this
-        if groupQueries != "*" {
-                // Add a query string
-                for _, emailAddress := range s.cfg.IncludeGroups {
-		        if len(groupQueries) > 0 {
-				groupQueries += ", email=" + emailAddress
-			} else {
-				groupQueries += "email=" + emailAddress
+       	// if GroupMatch is wildcard or no includeGroups have been provided we can skip this
+	if len(s.cfg.IncludeGroups) > 0 {
+                log.WithField("includeGroups", s.cfg.IncludeGroups).Info("individual google groups (by email address)")
+        	if groupQueries != "*" {
+                	// Add a query string
+                	for _, emailAddress := range s.cfg.IncludeGroups {
+		        	if len(groupQueries) > 0 {
+					groupQueries += ", email=" + emailAddress
+				} else {
+					groupQueries += "email=" + emailAddress
+				}
 			}
                 }
         }
@@ -518,6 +521,9 @@ func (s *syncGSuite) getGoogleGroups( ) []*admin.Group {
         }
 
 	// Remove any groups that should be ignored
+	if len(s.cfg.IgnoreGroups) > 0 {
+                log.WithField("ignoreGroups", s.cfg.IgnoreGroups).Info("google groups to ignore")
+        }
 	filteredGroups := make([]*admin.Group, 0)
 	for _, g := range googleGroups {
 	        if s.ignoreGroup(g.Email) {
