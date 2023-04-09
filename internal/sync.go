@@ -298,9 +298,21 @@ func (s *syncGSuite) SyncGroupsUsers(query string) error {
 			log.WithField("group", g.Email).Debug("ignoring group")
 			continue
 		}
+
+		if !s.includeGroup(g.Email) {
+			log.WithField("group", g.Email).Debug("ignoring group")
+			continue
+		}
 		filteredGoogleGroups = append(filteredGoogleGroups, g)
 	}
 	googleGroups = filteredGoogleGroups
+
+	var filteredQuery []string
+	for _, g := range googleGroups {
+		filteredQuery = append(filteredQuery, g.Name)
+	}
+	log.WithField("filtered-query", strings.Join(filteredQuery, ",")).Info("get google groups")
+
 
 	log.Debug("preparing list of google users and then google groups and their members")
 	googleUsers, googleGroupsUsers, err := s.getGoogleGroupsAndUsers(googleGroups)
