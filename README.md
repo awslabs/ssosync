@@ -1,3 +1,7 @@
+# Fork of AWS SSO Sync
+Removes need for ASM Secrets
+
+
 # SSO Sync
 
 ![Github Action](https://github.com/awslabs/ssosync/workflows/main/badge.svg)
