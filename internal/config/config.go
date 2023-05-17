@@ -21,9 +21,11 @@ type Config struct {
 	SCIMEndpoint string `mapstructure:"scim_endpoint"`
 	// SCIMAccessToken ...
 	SCIMAccessToken string `mapstructure:"scim_access_token"`
+	// LoadAwsSecretManagerSecrets ...
+	LoadAwsSecretManagerSecrets bool `mapstructure:"load_asm_secrets"`
 	// IsLambda ...
 	IsLambda bool
-        // IsLambdaRunningInCodePipeline ...
+	// IsLambdaRunningInCodePipeline ...
 	IsLambdaRunningInCodePipeline bool
 	// Ignore users ...
 	IgnoreUsers []string `mapstructure:"ignore_users"`
@@ -50,15 +52,18 @@ const (
 	DefaultGoogleCredentials = "credentials.json"
 	// DefaultSyncMethod is the default sync method to use.
 	DefaultSyncMethod = "groups"
+	// DefaultLoadSecretManagerSecrets determines whether to try and load secrets from ASM
+	DefaultLoadSecretManagerSecrets = true
 )
 
 // New returns a new Config
 func New() *Config {
 	return &Config{
-		Debug:             DefaultDebug,
-		LogLevel:          DefaultLogLevel,
-		LogFormat:         DefaultLogFormat,
-		SyncMethod:        DefaultSyncMethod,
-		GoogleCredentials: DefaultGoogleCredentials,
+		Debug:                       DefaultDebug,
+		LogLevel:                    DefaultLogLevel,
+		LogFormat:                   DefaultLogFormat,
+		SyncMethod:                  DefaultSyncMethod,
+		GoogleCredentials:           DefaultGoogleCredentials,
+		LoadAwsSecretManagerSecrets: DefaultLoadSecretManagerSecrets,
 	}
 }
