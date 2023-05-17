@@ -19,7 +19,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"testing"
@@ -55,7 +54,7 @@ func (r *httpReqMatcher) Matches(req interface{}) bool {
 	}
 
 	if m.Body != nil {
-		got, _ := ioutil.ReadAll(m.Body)
+		got, _ := io.ReadAll(m.Body)
 		if string(got) != r.body {
 			return false
 		}

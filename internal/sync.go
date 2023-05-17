@@ -19,7 +19,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"os"
 
 	"github.com/awslabs/ssosync/internal/aws"
 	"github.com/awslabs/ssosync/internal/config"
@@ -700,7 +700,7 @@ func DoSync(ctx context.Context, cfg *config.Config) error {
 	creds := []byte(cfg.GoogleCredentials)
 
 	if !cfg.IsLambda {
-		b, err := ioutil.ReadFile(cfg.GoogleCredentials)
+		b, err := os.ReadFile(cfg.GoogleCredentials)
 		if err != nil {
 			return err
 		}
@@ -867,8 +867,8 @@ func ConvertSdkUserObjToNative(user *identitystore.User) *aws.User {
 
 	for _, email := range user.Emails {
 		if email.Value == nil || email.Type == nil || email.Primary == nil {
-              		// This must be a user created by AWS Control Tower
-                        // Need feature development to make how these users are treated
+			// This must be a user created by AWS Control Tower
+			// Need feature development to make how these users are treated
 			// configurable.
 			continue
 		}
