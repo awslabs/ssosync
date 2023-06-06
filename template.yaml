@@ -28,7 +28,8 @@ Metadata:
 
   AWS::ServerlessRepo::Application:
     Name: ssosync
-    Description: Helping you populate AWS SSO directly with your Google Apps users.
+    Description:
+      Helping you populate AWS SSO directly with your Google Apps users.
     Author: Sebastian Doell
     SpdxLicenseId: Apache-2.0
     # paths are relative to .aws-sam/build directory
@@ -37,19 +38,21 @@ Metadata:
     Labels: [serverless, sso, lambda, scim]
     HomePageUrl: https://github.com/awslabs/ssosync
     # Update the semantic version and run sam publish to publish a new version of your app
-    SemanticVersion: 1.0.0-rc.10
+    SemanticVersion: v2.0.2
     # best practice is to use git tags for each release and link to the version tag as your source code URL
-    SourceCodeUrl: https://github.com/awslabs/ssosync/tree/1.0.0-rc.10
+    SourceCodeUrl: https://github.com/awslabs/ssosync/tree/v2.0.2
 
 Parameters:
   ScheduleExpression:
     Type: String
-    Description: Schedule for trigger the execution of ssosync (see CloudWatch schedule expressions)
+    Description:
+      Schedule for trigger the execution of ssosync (see CloudWatch schedule
+      expressions)
     Default: rate(15 minutes)
   LogLevel:
     Type: String
     Description: Log level for Lambda function logging
-    Default: warn
+    Default: info
     AllowedValues:
       - panic
       - fatal
@@ -61,7 +64,7 @@ Parameters:
   LogFormat:
     Type: String
     Description: Log format for Lambda function logging
-    Default: json
+    Default: text
     AllowedValues:
       - json
       - text
@@ -117,16 +120,13 @@ Parameters:
       - groups
       - users_groups
 
-
-
-
 Resources:
-  SSOSyncFunction:
+  SSOSyncV2Function:
     Type: AWS::Serverless::Function
     Properties:
       Runtime: go1.x
       Handler: dist/ssosync_linux_amd64_v1/ssosync
-      Timeout: 300
+      Timeout: 900
       Environment:
         Variables:
           SSOSYNC_LOG_LEVEL: !Ref LogLevel
@@ -156,7 +156,7 @@ Resources:
                 - !Ref AWSSCIMAccessTokenSecret
                 - !Ref AWSRegionSecret
                 - !Ref AWSIdentityStoreIDSecret
-        - Version: '2012-10-17'
+        - Version: "2012-10-17"
           Statement:
             - Sid: IdentityStoreAccesPolicy
               Effect: Allow
@@ -184,35 +184,35 @@ Resources:
   AWSGoogleCredentialsSecret:
     Type: "AWS::SecretsManager::Secret"
     Properties:
-      Name: SSOSyncGoogleCredentials
+      Name: SSOSyncV2GoogleCredentials
       SecretString: !Ref GoogleCredentials
 
   AWSGoogleAdminEmail:
     Type: "AWS::SecretsManager::Secret"
     Properties:
-      Name: SSOSyncGoogleAdminEmail
+      Name: SSOSyncV2GoogleAdminEmail
       SecretString: !Ref GoogleAdminEmail
 
   AWSSCIMEndpointSecret: # This can be moved to custom provider
     Type: "AWS::SecretsManager::Secret"
     Properties:
-      Name: SSOSyncSCIMEndpointUrl
+      Name: SSOSyncV2SCIMEndpointUrl
       SecretString: !Ref SCIMEndpointUrl
 
   AWSSCIMAccessTokenSecret: # This can be moved to custom provider
     Type: "AWS::SecretsManager::Secret"
     Properties:
-      Name: SSOSyncSCIMAccessToken
+      Name: SSOSyncV2SCIMAccessToken
       SecretString: !Ref SCIMEndpointAccessToken
 
   AWSRegionSecret:
     Type: "AWS::SecretsManager::Secret"
     Properties:
-      Name: SSOSyncRegion
+      Name: SSOSyncV2Region
       SecretString: !Ref Region
 
   AWSIdentityStoreIDSecret:
     Type: "AWS::SecretsManager::Secret"
     Properties:
-      Name: SSOSyncIdentityStoreID
+      Name: SSOSyncV2IdentityStoreID
       SecretString: !Ref IdentityStoreID
