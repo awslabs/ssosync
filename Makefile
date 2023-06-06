@@ -1,9 +1,9 @@
 OUTPUT = main # Referenced as Handler in template.yaml
 RELEASER = goreleaser
 PACKAGED_TEMPLATE = packaged.yaml
-STACK_NAME := $(STACK_NAME)
-S3_BUCKET := $(S3_BUCKET)
-S3_PREFIX := $(S3_PREFIX)
+STACK_NAME := ssosyncv2
+S3_BUCKET := ssosync-source-code
+S3_PREFIX := ssosync
 TEMPLATE = template.yaml
 APP_NAME ?= ssosync
 
