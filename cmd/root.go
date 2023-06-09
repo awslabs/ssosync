@@ -39,6 +39,8 @@ var (
 	commit  = "none"
 	date    = "unknown"
 	builtBy = "unknown"
+
+	gitRepo = "unknown"
 )
 
 var cfg *config.Config
@@ -66,6 +68,7 @@ Complete documentation is available at https://github.com/awslabs/ssosync`,
 // running inside of AWS Lambda, we use the Lambda
 // execution path.
 func Execute() {
+	log.Info(fmt.Sprintf("Starting Version: %s, of Repo: %s", version, gitRepo))
 	if cfg.IsLambda {
 		log.Info("Executing as Lambda")
 		lambda.Start(Handler)
