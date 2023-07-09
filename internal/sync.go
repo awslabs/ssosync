@@ -561,6 +561,13 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(googleGroups []*admin.Group) ([]*ad
 				continue
 			}
 
+			_, ok := gUniqUsers[m.Email]
+			if ok {
+				log.WithField("id", m.Email).Debug("get user skipped, already cached")
+				membersUsers = append(membersUsers, gUniqUsers[m.Email])
+				continue
+			}
+
 			log.WithField("id", m.Email).Debug("get user")
 			q := fmt.Sprintf("email:%s", m.Email)
 			u, err := s.google.GetUsers(q) // TODO: implement GetUser(m.Email)
@@ -575,7 +582,7 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(googleGroups []*admin.Group) ([]*ad
 
 			membersUsers = append(membersUsers, u[0])
 
-			_, ok := gUniqUsers[m.Email]
+			_, ok = gUniqUsers[m.Email]
 			if !ok {
 				gUniqUsers[m.Email] = u[0]
 			}
