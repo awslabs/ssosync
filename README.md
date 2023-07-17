@@ -136,6 +136,7 @@ Flags:
   -c, --google-credentials string   path to Google Workspace credentials file (default "credentials.json")
   -g, --group-match string          Google Workspace Groups filter query parameter, example: 'name:Admin* email:aws-*', see: https://developers.google.com/admin-sdk/directory/v1/guides/search-groups
   -h, --help                        help for ssosync
+      --ignore-aws-groups strings   AWS Groups filter to ignore (manual creation), NOTE: only works when --sync-method 'users_groups', is a regexp on the Display Name, example: '^tf .*'
       --ignore-groups strings       ignores these Google Workspace groups
       --ignore-users strings        ignores these Google Workspace users
       --include-groups strings      include only these Google Workspace groups, NOTE: only works when --sync-method 'users_groups'
@@ -155,6 +156,7 @@ The function has `two behaviour` and these are controlled by the `--sync-method`
 
 Flags Notes:
 
+* `--ignore-aws-groups` only works when `--sync-method` is `users_groups`. Example: `--ignore-aws-groups '^tf .*'` or `SSOSYNC_IGNORE_AWS_GROUPS='^tf .*'`. This filter is applied to existing AWS groups in order to exclude them from the list of synced/delete groups, if the flag is not used, groups are not filtered.
 * `--include-groups` only works when `--sync-method` is `users_groups`
 * `--ignore-users` works for both `--sync-method` values.  Example: `--ignore-users user1@example.com,user2@example.com` or `SSOSYNC_IGNORE_USERS=user1@example.com,user2@example.com`
 * `--ignore-groups` works for both `--sync-method` values. Example: --ignore-groups group1@example.com,group1@example.com` or `SSOSYNC_IGNORE_GROUPS=group1@example.com,group1@example.com`

@@ -22,6 +22,7 @@ Metadata:
           - LogLevel
           - LogFormat
           - ScheduleExpression
+          - IgnoreAWSGroups
           - IgnoreUsers
           - IgnoreGroups
           - IncludeGroups
@@ -97,6 +98,10 @@ Parameters:
     Type: String
     Description: |
       Google Workspace group filter query parameter, example: 'name:Admin* email:aws-*', see: https://developers.google.com/admin-sdk/directory/v1/guides/search-groups
+  IgnoreAWSGroups:
+    Type: String
+    Description: |
+      Ignore these AWS groups
   IgnoreGroups:
     Type: String
     Description: |
@@ -140,6 +145,7 @@ Resources:
           SSOSYNC_USER_MATCH: !Ref GoogleUserMatch
           SSOSYNC_GROUP_MATCH: !Ref GoogleGroupMatch
           SSOSYNC_SYNC_METHOD: !Ref SyncMethod
+          SSOSYNC_IGNORE_AWS_GROUPS: !Ref IgnoreAWSGroups
           SSOSYNC_IGNORE_GROUPS: !Ref IgnoreGroups
           SSOSYNC_IGNORE_USERS: !Ref IgnoreUsers
           SSOSYNC_INCLUDE_GROUPS: !Ref IncludeGroups

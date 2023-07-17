@@ -162,6 +162,7 @@ func initConfig() {
 		"scim_endpoint",
 		"log_level",
 		"log_format",
+		"ignore_aws_groups",
 		"ignore_users",
 		"ignore_groups",
 		"include_groups",
@@ -241,6 +242,7 @@ func addFlags(cmd *cobra.Command, cfg *config.Config) {
 	rootCmd.Flags().StringVarP(&cfg.SCIMEndpoint, "endpoint", "e", "", "AWS SSO SCIM API Endpoint")
 	rootCmd.Flags().StringVarP(&cfg.GoogleCredentials, "google-credentials", "c", config.DefaultGoogleCredentials, "path to Google Workspace credentials file")
 	rootCmd.Flags().StringVarP(&cfg.GoogleAdmin, "google-admin", "u", "", "Google Workspace admin user email")
+	rootCmd.Flags().StringSliceVar(&cfg.IgnoreAWSGroups, "ignore-aws-groups", []string{}, "AWS Groups filter to ignore (manual creation), NOTE: only works when --sync-method 'users_groups', is a regexp on the Display Name, example: '^tf .*'")
 	rootCmd.Flags().StringSliceVar(&cfg.IgnoreUsers, "ignore-users", []string{}, "ignores these Google Workspace users")
 	rootCmd.Flags().StringSliceVar(&cfg.IgnoreGroups, "ignore-groups", []string{}, "ignores these Google Workspace groups")
 	rootCmd.Flags().StringSliceVar(&cfg.IncludeGroups, "include-groups", []string{}, "include only these Google Workspace groups, NOTE: only works when --sync-method 'users_groups'")

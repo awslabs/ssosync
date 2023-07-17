@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"regexp"
 
 	"github.com/awslabs/ssosync/internal/aws"
 	"github.com/awslabs/ssosync/internal/config"
@@ -309,7 +310,7 @@ func (s *syncGSuite) SyncGroupsUsers(query string) error {
 	}
 
 	log.Info("get existing aws groups")
-	awsGroups, err := s.GetGroups()
+	awsGroups, err := s.GetGroups(s.cfg.IgnoreAWSGroups)
 	if err != nil {
 		log.Error("error getting aws groups")
 		return err
@@ -806,7 +807,7 @@ func (s *syncGSuite) includeGroup(name string) bool {
 
 var awsGroups []*aws.Group
 
-func (s *syncGSuite) GetGroups() ([]*aws.Group, error) {
+func (s *syncGSuite) GetGroups(ignore_aws_groups []string) ([]*aws.Group, error) {
 	awsGroups = make([]*aws.Group, 0)
 
 	err := s.identityStoreClient.ListGroupsPages(
@@ -817,6 +818,16 @@ func (s *syncGSuite) GetGroups() ([]*aws.Group, error) {
 	if err != nil {
 		return nil, err
 	}
+	 
+	awsGroups := filter(awsGroups, func(group *aws.Group) bool{
+		var matched bool = false
+		for _, entry := range ignore_aws_groups {
+			match, _ := regexp.MatchString(entry, group.DisplayName)
+			log.Debug("Process ignore_aws_groups ", entry)
+			if match { matched = true}
+		}
+		return !matched
+	})
 
 	return awsGroups, nil
 }
@@ -834,6 +845,18 @@ func ListGroupsPagesCallbackFn(page *identitystore.ListGroupsOutput, lastPage bo
 	}
 
 	return !lastPage
+}
+
+type filterFunc func(*aws.Group) bool
+
+func filter(groups []*aws.Group, f filterFunc) []*aws.Group {
+	var filtered []*aws.Group
+	for _, group := range groups {
+		if f(group) {
+			filtered = append(filtered, group)
+		}
+	}
+	return filtered
 }
 
 var awsUsers []*aws.User
