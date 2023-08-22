@@ -340,8 +340,6 @@ Resources:
         EnvironmentVariables:
           - Name: ARTIFACT_S3_BUCKET
             Value: !Sub ${ArtifactBucket}
-          - Name: GoVersion
-            Value: "1.20.1"
           - Name: GitRepo
             Value: "https://github.com/awslabs/ssosync"
           - Name: GitBranch
@@ -377,8 +375,6 @@ Resources:
         EnvironmentVariables:
           - Name: ARTIFACT_S3_BUCKET
             Value: !Sub ${ArtifactBucket}
-          - Name: GoVersion
-            Value: "1.20.1"
           - Name: OUTPUT
             Value: main
           - Name: APP_NAME

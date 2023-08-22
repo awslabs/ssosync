@@ -9,12 +9,7 @@ phases:
   install: 
     commands:
       # Install go.lang
-      - wget -q https://storage.googleapis.com/golang/go${GoVersion}.linux-amd64.tar.gz
-      - rm -rf /go
-      - tar -C / -xzf go${GoVersion}.linux-amd64.tar.gz
-      - export PATH="/go/bin:$PATH" && export GOPATH="/go" && export PATH="$GOPATH/bin:$PATH"
-      - rm go${GoVersion}.linux-amd64.tar.gz
-      - go version
+      - GoVersion=${GOLANG_20_VERSION}
 
       # Install golint
       - go install golang.org/x/lint/golint@latest
