@@ -89,6 +89,8 @@ Resources:
 
   ArtifactBucketKey:
     Type: AWS::KMS::Key
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Delete
     Properties: 
       Description: Key for this CodePipeline
       Enabled: true
