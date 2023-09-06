@@ -335,13 +335,11 @@ Resources:
         BuildSpec: "cicd/build/gitvars/buildspec.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
-        Image: aws/codebuild/standard:5.0
+        Image: aws/codebuild/standard:7.0
         Type: LINUX_CONTAINER
         EnvironmentVariables:
           - Name: ARTIFACT_S3_BUCKET
             Value: !Sub ${ArtifactBucket}
-          - Name: GoVersion
-            Value: "1.18.2"
           - Name: GitRepo
             Value: "https://github.com/awslabs/ssosync"
           - Name: GitBranch
@@ -372,13 +370,11 @@ Resources:
         BuildSpec: "cicd/build/build/buildspec.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
-        Image: aws/codebuild/standard:5.0
+        Image: aws/codebuild/standard:7.0
         Type: LINUX_CONTAINER
         EnvironmentVariables:
           - Name: ARTIFACT_S3_BUCKET
             Value: !Sub ${ArtifactBucket}
-          - Name: GoVersion
-            Value: "1.18.2"
           - Name: OUTPUT
             Value: main
           - Name: APP_NAME
@@ -409,7 +405,7 @@ Resources:
         BuildSpec: "cicd/build/package/buildspec.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
-        Image: aws/codebuild/standard:5.0
+        Image: aws/codebuild/standard:7.0
         Type: LINUX_CONTAINER
         EnvironmentVariables:
           - Name: ARTIFACT_S3_BUCKET
@@ -444,7 +440,7 @@ Resources:
         BuildSpec: "cicd/staging/build/buildspec.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
-        Image: aws/codebuild/standard:5.0
+        Image: aws/codebuild/standard:7.0
         Type: LINUX_CONTAINER
         EnvironmentVariables:
           - Name: ARTIFACT_S3_BUCKET
@@ -477,7 +473,7 @@ Resources:
         BuildSpec: "tests/smoke/cli/buildspec.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
-        Image: aws/codebuild/standard:5.0
+        Image: aws/codebuild/standard:7.0
         Type: LINUX_CONTAINER
       Artifacts:
         Name: SSOSync
@@ -505,7 +501,7 @@ Resources:
         BuildSpec: "tests/smoke/lambda/buildspec.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
-        Image: aws/codebuild/standard:5.0
+        Image: aws/codebuild/standard:7.0
         Type: LINUX_CONTAINER
       Artifacts:
         Name: SSOSync

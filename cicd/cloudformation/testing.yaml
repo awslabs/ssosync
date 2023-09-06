@@ -182,7 +182,7 @@ Resources:
                 Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND
                 StackName: SmokeTest
                 RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
-                TemplateConfiguration: !Sub 'Tests::deploy/params.json'
+                TemplateConfiguration: !If [DeployManagement, 'Tests::deploy/management.json', !If [DeployDelegated, 'Tests::deploy/delegated.json', 'Tests::deploy/nondelegated.json']] 
                 TemplatePath: !Sub 'Tests::deploy/stack.yml'
               InputArtifacts:
                 - Name: Tests
@@ -466,6 +466,7 @@ Resources:
                 - "identitystore:IsMemberInGroups"
                 - "identitystore:GetGroupMembershipId"
                 - "identitystore:DeleteGroupMembership"
+                - "identitystore:DeleteGroup"
               Effect: Allow
               Resource: '*'
             - Action:
