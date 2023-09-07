@@ -27,6 +27,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/identitystore"
 	"github.com/awslabs/ssosync/internal/aws"
 	"github.com/awslabs/ssosync/internal/config"
+	mock_google "github.com/awslabs/ssosync/internal/google/mock"
 	"github.com/awslabs/ssosync/internal/mocks"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
@@ -1041,4 +1042,84 @@ func Test_RemoveUserFromGroup(t *testing.T) {
 	err := mockClient.RemoveUserFromGroup(&sampleUserInput, &sampleGroupInput)
 
 	assert.Nil(t, err)
+}
+
+func Test_GetGoogleGroupsAndUsers(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockIdentityStoreClient := mocks.NewMockIdentityStoreAPI(ctrl)
+
+	mockGoogle := mock_google.NewMockClient(ctrl)
+
+	mockClient := &syncGSuite{
+		aws:                 nil,
+		google:              mockGoogle,
+		cfg:                 &config.Config{IdentityStoreID: "test-identity-store-id"},
+		identityStoreClient: mockIdentityStoreClient,
+		users:               make(map[string]*aws.User),
+	}
+
+	sampleAdminGroups := []*admin.Group{
+		{
+			Name:  "testGroup1",
+			Email: "testGroup1@example.com",
+		},
+		{
+			Name:  "testGroup2",
+			Email: "testGroup2@example.com",
+		},
+	}
+
+	sampleUsers1 := []*admin.User{
+		{
+			PrimaryEmail: "testUser1@example.com",
+		},
+	}
+
+	sampleUsers2 := []*admin.User{
+		{
+			PrimaryEmail: "testUser2@example.com",
+		},
+	}
+
+	sampleGroup1Members := []*admin.Member{
+		{
+			Email: "testUser1@example.com",
+		},
+	}
+
+	sampleGroup2Members := []*admin.Member{
+		{
+			Email: "testUser2@example.com",
+		},
+		{
+			Email: "testUser1@example.com",
+		},
+	}
+
+	want := map[string][]*admin.User{
+		"testGroup1": {
+			sampleUsers1[0],
+		},
+		"testGroup2": {
+			sampleUsers1[0],
+			sampleUsers2[0],
+		},
+	}
+
+	mockGoogle.EXPECT().GetGroupMembers(sampleAdminGroups[0]).Return(sampleGroup1Members, nil)
+	mockGoogle.EXPECT().GetGroupMembers(sampleAdminGroups[1]).Return(sampleGroup2Members, nil)
+
+	mockGoogle.EXPECT().GetUsers("email:testUser1@example.com").Return(sampleUsers1, nil).Times(2)
+	gomock.InOrder(
+		mockGoogle.EXPECT().GetUsers("email:testUser2@example.com").Return(nil, errors.New("test")),
+		mockGoogle.EXPECT().GetUsers("email:testUser2@example.com").Return(nil, errors.New("test")),
+		mockGoogle.EXPECT().GetUsers("email:testUser2@example.com").Return(sampleUsers2, nil),
+	)
+
+	_, got, err := mockClient.getGoogleGroupsAndUsers(sampleAdminGroups)
+
+	assert.Nil(t, err)
+	assert.Equal(t, want, got)
 }
