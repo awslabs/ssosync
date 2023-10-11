@@ -16,6 +16,10 @@ test:
 go-build:
 	go build -o $(APP_NAME) main.go
 
+build-SSOSyncFunction:
+	GOOS=linux GOARCH=arm64 go build -o bootstrap main.go
+	cp ./bootstrap $(ARTIFACTS_DIR)/.
+
 .PHONY: clean
 clean:
 	rm -f $(OUTPUT) $(PACKAGED_TEMPLATE)
