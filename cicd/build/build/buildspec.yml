@@ -3,7 +3,7 @@ version: 0.2
 env:
   variables:
     GO111MODULE: "on"
-    git-credential-helper: yes            
+    git-credential-helper: "yes"            
 
 phases:
   install: 
@@ -21,7 +21,7 @@ phases:
       - go install github.com/stretchr/testify
 
       # Install goreleaser
-      - go install github.com/goreleaser/goreleaser@latest
+      - go get -u golang.org/x/lint/golint
 
   pre_build: 
     commands:
