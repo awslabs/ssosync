@@ -4,12 +4,11 @@ env:
   variables:
     GO111MODULE: "on"
     git-credential-helper: "yes"            
-    TARGET_GOENV_VERSION: "1.20.3"
 
 phases:
   install: 
     runtime-versions:
-      golang: latest
+      golang: 1.20.3
     on-failure: ABORT
 
     commands:
