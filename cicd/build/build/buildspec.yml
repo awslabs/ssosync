@@ -18,7 +18,7 @@ phases:
       - go install honnef.co/go/tools/cmd/staticcheck@latest
 
       # Install Testify to use common assertions and mocks in tests
-      - go get -u github.com/stretchr/testify
+      - go install github.com/stretchr/testify
 
       # Install goreleaser
       - go install github.com/goreleaser/goreleaser@latest
@@ -68,7 +68,7 @@ phases:
 
 
       # Check we've packaged something useful
-      - ./dist/ssosync_linux_amd64_v1/ssosync --version
+      - ./dist/ssosync_linux_arm64/ssosync --version
 
 artifacts:
   files:
