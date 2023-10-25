@@ -48,6 +48,7 @@ phases:
       # Copy in the stack and params templates
       - mkdir deploy
       - cp cicd/staging/build/stack.yml ./deploy/
+      - cp cicd/staging/build/params.json ./deploy/
 
       # Update params with the values for this run for the management
       - |
