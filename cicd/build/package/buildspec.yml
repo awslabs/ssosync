@@ -19,6 +19,7 @@ phases:
  
       # Check that the executable works
       - ./dist/ssosync_linux_amd64_v1/ssosync --version 
+      - mv dist/ssosync_linux_arm64/ssosync bootstrap
 
   build:
     commands:

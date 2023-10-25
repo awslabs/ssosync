@@ -1,5 +1,5 @@
 --- template.yaml	2023-10-25 09:44:33
-+++ release.yaml	2023-10-25 11:45:45
++++ release.yaml	2023-10-25 16:02:21
 @@ -27,7 +27,7 @@
            - IncludeGroups
  
@@ -18,7 +18,7 @@
        Include only these Google Workspace groups. (Only applicable for SyncMethod user_groups)
      Default: '*'
    SyncMethod:
-@@ -121,10 +121,10 @@
+@@ -121,16 +121,16 @@
      AllowedValues:
        - groups
        - users_groups
@@ -32,6 +32,13 @@
  Resources:
    SSOSyncFunction:
      Type: AWS::Serverless::Function
+     Properties:
+       Runtime: provided.al2
+-      Handler: dist/ssosync_linux_arm64/ssosync
++      Handler: bootstrap
+       Architectures:
+         - arm64
+       Timeout: 300
 @@ -163,8 +163,6 @@
                  - !Ref AWSSCIMAccessTokenSecret
                  - !Ref AWSRegionSecret
