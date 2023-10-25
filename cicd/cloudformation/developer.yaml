@@ -335,8 +335,8 @@ Resources:
         BuildSpec: "cicd/build/gitvars/buildspec.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
-        Image: aws/codebuild/amazonlinux2-aarch64-standard:3.0
-        Type: ARM_CONTAINER
+        Image: aws/codebuild/standard:7.0
+        Type: LINUX_CONTAINER
         EnvironmentVariables:
           - Name: ARTIFACT_S3_BUCKET
             Value: !Sub ${ArtifactBucket}
@@ -370,8 +370,8 @@ Resources:
         BuildSpec: "cicd/build/build/buildspec.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
-        Image: aws/codebuild/amazonlinux2-aarch64-standard:3.0
-        Type: ARM_CONTAINER
+        Image: aws/codebuild/standard:7.0
+        Type: LINUX_CONTAINER
         EnvironmentVariables:
           - Name: ARTIFACT_S3_BUCKET
             Value: !Sub ${ArtifactBucket}
@@ -405,8 +405,8 @@ Resources:
         BuildSpec: "cicd/build/package/buildspec.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
-        Image: aws/codebuild/amazonlinux2-aarch64-standard:3.0
-        Type: ARM_CONTAINER
+        Image: aws/codebuild/standard:7.0
+        Type: LINUX_CONTAINER
         EnvironmentVariables:
           - Name: ARTIFACT_S3_BUCKET
             Value: !Sub ${ArtifactBucket}
@@ -440,8 +440,8 @@ Resources:
         BuildSpec: "cicd/staging/build/buildspec.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
-        Image: aws/codebuild/amazonlinux2-aarch64-standard:3.0
-        Type: ARM_CONTAINER
+        Image: aws/codebuild/standard:7.0
+        Type: LINUX_CONTAINER
         EnvironmentVariables:
           - Name: ARTIFACT_S3_BUCKET
             Value: !Sub ${ArtifactBucket}
@@ -473,8 +473,8 @@ Resources:
         BuildSpec: "tests/smoke/cli/buildspec.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
-        Image: aws/codebuild/amazonlinux2-aarch64-standard:3.0
-        Type: ARM_CONTAINER
+        Image: aws/codebuild/standard:7.0
+        Type: LINUX_CONTAINER
       Artifacts:
         Name: SSOSync
         Type: CODEPIPELINE
@@ -501,8 +501,8 @@ Resources:
         BuildSpec: "tests/smoke/lambda/buildspec.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
-        Image: aws/codebuild/amazonlinux2-aarch64-standard:3.0
-        Type: ARM_CONTAINER
+        Image: aws/codebuild/standard:7.0
+        Type: LINUX_CONTAINER
       Artifacts:
         Name: SSOSync
         Type: CODEPIPELINE

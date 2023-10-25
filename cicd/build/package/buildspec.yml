@@ -15,10 +15,10 @@ phases:
       - ls README.md
       - ls SAR.md
       - ls dist/ssosync_linux_arm64/ssosync
-      - mv dist/ssosync_linux_arm64/ssosync bootstrap
+      - ls dist/ssosync_linux_amd64_v1/ssosync 
  
       # Check that the executable works
-      - ./bootstrap --version 
+      - ./dist/ssosync_linux_amd64_v1/ssosync --version 
 
   build:
     commands:

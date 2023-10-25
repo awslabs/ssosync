@@ -130,7 +130,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       Runtime: provided.al2
-      Handler: bootstrap
+      Handler: dist/ssosync_linux_arm64/ssosync
       Architectures:
         - arm64
       Timeout: 300
