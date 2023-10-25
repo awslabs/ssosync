@@ -1,5 +1,5 @@
---- template.yaml	2022-11-29 16:56:21.000000000 +0000
-+++ staging.yaml	2022-11-29 17:10:47.000000000 +0000
+--- template.yaml	2023-10-25 09:44:33
++++ staging.yaml	2023-10-25 11:46:12
 @@ -27,7 +27,7 @@
            - IncludeGroups
  
@@ -9,35 +9,35 @@
      Description: Helping you populate AWS SSO directly with your Google Apps users.
      Author: Sebastian Doell
      SpdxLicenseId: Apache-2.0
-@@ -107,7 +107,7 @@
-       Ignore these Google Workspace users
+@@ -111,7 +111,7 @@
+     Default: 'none'
    IncludeGroups:
      Type: String
 -    Description: |
 +    Description: | 
        Include only these Google Workspace groups. (Only applicable for SyncMethod user_groups)
+     Default: '*'
    SyncMethod:
-     Type: String
-@@ -116,14 +116,15 @@
+@@ -121,14 +121,15 @@
      AllowedValues:
        - groups
        - users_groups
--
--
--
 +      
 +      
 +      
  
+-
+-
+-
  Resources:
    SSOSyncFunction:
      Type: AWS::Serverless::Function
      Properties:
 +      FunctionName: SSOSyncFunction
-       Runtime: go1.x
-       Handler: dist/ssosync_linux_amd64_v1/ssosync
-       Timeout: 300
-@@ -156,8 +157,6 @@
+       Runtime: provided.al2
+       Handler: dist/ssosync_linux_arm64/ssosync
+       Architectures:
+@@ -163,8 +164,6 @@
                  - !Ref AWSSCIMAccessTokenSecret
                  - !Ref AWSRegionSecret
                  - !Ref AWSIdentityStoreIDSecret
@@ -46,8 +46,8 @@
              - Sid: IdentityStoreAccesPolicy
                Effect: Allow
                Action:
-@@ -172,13 +171,13 @@
-                 - "identitystore:DeleteGroupMembership"
+@@ -180,16 +179,14 @@
+                 - "identitystore:DeleteGroup"
                Resource:
                  - "*"
 -      Events:
@@ -57,17 +57,20 @@
 -          Properties:
 -            Enabled: true
 -            Schedule: !Ref ScheduleExpression
-+
+-    Metadata:
+-      BuildMethod: makefile
+ 
 +            - Sid: CodePipelinePolicy
 +              Effect: Allow
 +              Action:
 +                - codepipeline:PutJobSuccessResult
 +                - codepipeline:PutJobFailureResult
 +              Resource: "*"
- 
++
    AWSGoogleCredentialsSecret:
      Type: "AWS::SecretsManager::Secret"
-@@ -215,3 +214,10 @@
+     Properties:
+@@ -225,3 +222,10 @@
      Properties:
        Name: SSOSyncIdentityStoreID
        SecretString: !Ref IdentityStoreID
