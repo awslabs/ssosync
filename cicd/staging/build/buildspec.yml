@@ -40,7 +40,7 @@ phases:
   post_build:
     commands:
       # Copy in the executable
-      - cp ${CODEBUILD_SRC_DIR_Built}/dist/ssosync_linux_amd64_v1/ssosync ./
+      - cp ${CODEBUILD_SRC_DIR_Built}/dist/ssosync_linux_arm64/ssosync ./
 
       # Copy in the tests
       - cp -r cicd/tests ./
@@ -48,9 +48,16 @@ phases:
       # Copy in the stack and params templates
       - mkdir deploy
       - cp cicd/staging/build/stack.yml ./deploy/
-      - cp cicd/staging/build/params.json ./deploy/
 
-      # Update params with the values for this run for the management
+      # Update params with the values for this run for a developer account
+      - |
+        jq -n \
+        --argjson Parameters "{\"AppArn\": \"$AppArn\", \"AppVersion\": \"$AppVersion\", \"GroupMatch\": \"name:Man*\"}" \
+        --argjson StackPolicy "{\"Statement\":[{\"Effect\": \"Allow\", \"NotAction\": \"Update:Delete\", \"Principal\": \"*\", \"Resource\": \"*\"}]}" \
+        '$ARGS.named' > ./deploy/developer.json
+      - cat ./deploy/developer.json
+
+      # Update params with the values for this run for the management account
       - |
         jq -n \
         --argjson Parameters "{\"AppArn\": \"$AppArn\", \"AppVersion\": \"$AppVersion\", \"GroupMatch\": \"name:Man*\"}" \
