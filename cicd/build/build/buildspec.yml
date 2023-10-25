@@ -63,8 +63,8 @@ phases:
       # Tweak the .goreleaser.yml so it uses the vairables from .Env
       - patch .goreleaser.yml cicd/build/build/goreleaser.patch
 
-      # Make main but only for the lambda (linux amd64)
-      - goreleaser build --snapshot --rm-dist --single-target
+      # Make main 
+      - goreleaser build --snapshot --clean
 
 
       # Check we've packaged something useful
@@ -74,3 +74,4 @@ artifacts:
   files:
     - ${APP_NAME}
     - dist/**/*
+

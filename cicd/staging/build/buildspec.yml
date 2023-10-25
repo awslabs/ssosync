@@ -49,7 +49,15 @@ phases:
       - mkdir deploy
       - cp cicd/staging/build/stack.yml ./deploy/
 
-      # Update params with the values for this run for the management
+      # Update params with the values for this run for a developer account
+      - |
+        jq -n \
+        --argjson Parameters "{\"AppArn\": \"$AppArn\", \"AppVersion\": \"$AppVersion\", \"GroupMatch\": \"name:AWS*\"}" \
+        --argjson StackPolicy "{\"Statement\":[{\"Effect\": \"Allow\", \"NotAction\": \"Update:Delete\", \"Principal\": \"*\", \"Resource\": \"*\"}]}" \
+        '$ARGS.named' > ./deploy/developer.json
+      - cat ./deploy/developer.json
+
+      # Update params with the values for this run for the management account
       - |
         jq -n \
         --argjson Parameters "{\"AppArn\": \"$AppArn\", \"AppVersion\": \"$AppVersion\", \"GroupMatch\": \"name:Man*\"}" \

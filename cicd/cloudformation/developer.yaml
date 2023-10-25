@@ -260,7 +260,7 @@ Resources:
                 Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND
                 StackName: SmokeTest
                 RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
-                TemplateConfiguration: !Sub 'Tests::deploy/params.json'
+                TemplateConfiguration: !Sub 'Tests::deploy/developer.json'
                 TemplatePath: !Sub 'Tests::deploy/stack.yml'
               InputArtifacts:
                 - Name: Tests
