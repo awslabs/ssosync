@@ -3,7 +3,7 @@ version: 0.2
 env:
   variables:
     GO111MODULE: "on"
-    git-credential-helper: "yes"            
+    git-credential-helper: yes            
     TARGET_GOENV_VERSION: "1.20.3"
 
 phases:
@@ -20,16 +20,16 @@ phases:
       - go version
 
       # Install golint
-      - go get golang.org/x/lint/golint@latest
+      - go install golang.org/x/lint/golint@latest
 
       # Install staticcheck
-      - go get honnef.co/go/tools/cmd/staticcheck@latest
+      - go install honnef.co/go/tools/cmd/staticcheck@latest
 
       # Install Testify to use common assertions and mocks in tests
-      - go get github.com/stretchr/testify
+      - go get -u github.com/stretchr/testify
 
       # Install goreleaser
-      - go get github.com/goreleaser/goreleaser@latest
+      - go install github.com/goreleaser/goreleaser@latest
 
   pre_build: 
     commands:
