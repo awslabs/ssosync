@@ -142,19 +142,13 @@ Parameters:
     AllowedValues:
       - groups
       - users_groups
-  TimeOut:
-    Type: Number
-    Description: Timeout for the Lambda function
-    Default: 300
-    MinValue: 1
-    MaxValue: 900
 
 Resources:
   SSOSyncFunction:
     Type: AWS::Serverless::Function
     Properties:
       Runtime: provided.al2
-      Handler: dist/ssosync_linux_arm64/ssosync
+      Handler: bootstrap
       Architectures:
         - arm64
       Timeout: !Ref TimeOut
@@ -175,7 +169,8 @@ Resources:
           SSOSYNC_IGNORE_USERS: !Ref IgnoreUsers
           SSOSYNC_INCLUDE_GROUPS: !Ref IncludeGroups
       Policies:
-        - Statement:
+        - Version: '2012-10-17'
+          Statement:
             - Sid: SSMGetParameterPolicy
               Effect: Allow
               Action:
@@ -187,8 +182,6 @@ Resources:
                 - !Ref AWSSCIMAccessTokenSecret
                 - !Ref AWSRegionSecret
                 - !Ref AWSIdentityStoreIDSecret
-        - Version: '2012-10-17'
-          Statement:
             - Sid: IdentityStoreAccesPolicy
               Effect: Allow
               Action:
@@ -217,8 +210,6 @@ Resources:
           Properties:
             Enabled: true
             Schedule: !Ref ScheduleExpression
-    Metadata:
-      BuildMethod: makefile
 
   AWSGoogleCredentialsSecret:
     Type: "AWS::SecretsManager::Secret"

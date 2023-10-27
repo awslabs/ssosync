@@ -1,14 +1,5 @@
---- template.yaml	2023-10-27 14:15:25
-+++ release.yaml	2023-10-27 14:41:17
-@@ -11,7 +11,7 @@
-           - SCIMEndpointAccessToken
-           - IdentityStoreId
-       - Label:
--          default: Google Workspace Credentials 
-+          default: Google Workspace Credentials
-         Parameters:
-           - GoogleAdminEmail
-           - GoogleCredentials
+--- template.yaml	2023-10-27 16:02:11
++++ release.yaml	2023-10-27 16:06:09
 @@ -36,7 +36,7 @@
            - ScheduleExpression
  
@@ -18,65 +9,3 @@
      Description: Helping you populate AWS SSO directly with your Google Apps users.
      Author: Sebastian Doell
      SpdxLicenseId: Apache-2.0
-@@ -113,13 +113,11 @@
-     Description: |
-       Google Workspace user filter query parameter, example: 'name:John* email:admin*', see: https://developers.google.com/admin-sdk/directory/v1/guides/search-users
-     Default: '*'
--    AllowedPattern: "(*)|(name|Name|NAME)(:([a-zA-Z0-9]{1,64})(\*))|(name|Name|NAME)(=([a-zA-Z0-9 ]{1,64}))|(email|Email|EMAIL)(:([a-zA-Z0-9.-_]{1,64})(\*))|(email|Email|EMAIL)(=([a-zA-Z0-9.-_]{1,64})@([a-zA-Z0-9.-]{5,260}))"
-   GoogleGroupMatch:
-     Type: String
-     Description: |
-       Google Workspace group filter query parameter, example: 'name:Admin* email:aws-*', see: https://developers.google.com/admin-sdk/directory/v1/guides/search-groups
-     Default: 'name:AWS*'
--    AllowedPattern: "((name|Name|NAME)(:([a-zA-Z0-9]{1,64})\*)|(name|Name|NAME)(=([a-zA-Z0-9 ]{1,64})))|((email|Email|EMAIL)(:([a-zA-Z0-9.-_]{1,64})\*)|(email|Email|EMAIL)(=([a-zA-Z0-9.-_]{1,64})@([a-zA-Z0-9.-]{5,260})))"
-   IgnoreGroups:
-     Type: String
-     Description: |
-@@ -132,7 +130,7 @@
-     Default: 'none'
-   IncludeGroups:
-     Type: String
--    Description: |
-+    Description: | 
-       Include only these Google Workspace groups. (Only applicable for SyncMethod user_groups)
-     Default: '*'
-   SyncMethod:
-@@ -142,16 +140,16 @@
-     AllowedValues:
-       - groups
-       - users_groups
-+      
-+      
-+      
- 
--
--
--
- Resources:
-   SSOSyncFunction:
-     Type: AWS::Serverless::Function
-     Properties:
-       Runtime: provided.al2
--      Handler: dist/ssosync_linux_arm64/ssosync
-+      Handler: bootstrap
-       Architectures:
-         - arm64
-       Timeout: !Ref TimeOut
-@@ -184,8 +182,6 @@
-                 - !Ref AWSSCIMAccessTokenSecret
-                 - !Ref AWSRegionSecret
-                 - !Ref AWSIdentityStoreIDSecret
--        - Version: '2012-10-17'
--          Statement:
-             - Sid: IdentityStoreAccesPolicy
-               Effect: Allow
-               Action:
-@@ -214,8 +210,6 @@
-           Properties:
-             Enabled: true
-             Schedule: !Ref ScheduleExpression
--    Metadata:
--      BuildMethod: makefile
- 
-   AWSGoogleCredentialsSecret:
-     Type: "AWS::SecretsManager::Secret"

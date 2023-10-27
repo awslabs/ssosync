@@ -1,14 +1,5 @@
---- template.yaml	2023-10-27 14:15:25
-+++ staging.yaml	2023-10-27 14:15:30
-@@ -11,7 +11,7 @@
-           - SCIMEndpointAccessToken
-           - IdentityStoreId
-       - Label:
--          default: Google Workspace Credentials 
-+          default: Google Workspace Credentials
-         Parameters:
-           - GoogleAdminEmail
-           - GoogleCredentials
+--- template.yaml	2023-10-27 16:02:11
++++ staging.yaml	2023-10-27 16:04:04
 @@ -36,7 +36,7 @@
            - ScheduleExpression
  
@@ -18,75 +9,18 @@
      Description: Helping you populate AWS SSO directly with your Google Apps users.
      Author: Sebastian Doell
      SpdxLicenseId: Apache-2.0
-@@ -132,7 +132,7 @@
-     Default: 'none'
-   IncludeGroups:
-     Type: String
--    Description: |
-+    Description: | 
-       Include only these Google Workspace groups. (Only applicable for SyncMethod user_groups)
-     Default: '*'
-   SyncMethod:
-@@ -142,16 +142,17 @@
-     AllowedValues:
-       - groups
-       - users_groups
-+      
-+      
-+      
- 
--
--
--
- Resources:
+@@ -147,6 +147,7 @@
    SSOSyncFunction:
      Type: AWS::Serverless::Function
      Properties:
 +      FunctionName: SSOSyncFunction
        Runtime: provided.al2
--      Handler: dist/ssosync_linux_arm64/ssosync
-+      Handler: bootstrap
+       Handler: bootstrap
        Architectures:
-         - arm64
-       Timeout: !Ref TimeOut
-@@ -184,8 +185,6 @@
-                 - !Ref AWSSCIMAccessTokenSecret
-                 - !Ref AWSRegionSecret
-                 - !Ref AWSIdentityStoreIDSecret
--        - Version: '2012-10-17'
--          Statement:
-             - Sid: IdentityStoreAccesPolicy
-               Effect: Allow
-               Action:
-@@ -207,15 +206,6 @@
-                 - codepipeline:PutJobSuccessResult
-                 - codepipeline:PutJobFailureResult
-               Resource: "*"
--      Events:
--        SyncScheduledEvent:
--          Type: Schedule
--          Name: AWSSyncSchedule
--          Properties:
--            Enabled: true
--            Schedule: !Ref ScheduleExpression
--    Metadata:
--      BuildMethod: makefile
- 
-   AWSGoogleCredentialsSecret:
-     Type: "AWS::SecretsManager::Secret"
-@@ -245,10 +235,17 @@
-     Type: "AWS::SecretsManager::Secret"
-     Properties:
-       Name: SSOSyncRegion
--      SecretString: !Select [1, !Split [".", !Ref SCIMEndpointUrl]]
-+      SecretString: !Ref Region
- 
-   AWSIdentityStoreIDSecret:
-     Type: "AWS::SecretsManager::Secret"
+@@ -246,3 +247,10 @@
      Properties:
        Name: SSOSyncIdentityStoreID
--      SecretString: !Ref IdentityStoreID
-+      SecretString: !Select [1, !Split [".", !Ref SCIMEndpointUrl]]
+       SecretString: !Ref IdentityStoreID
 +
 +Outputs:
 +  FunctionArn:
