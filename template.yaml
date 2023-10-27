@@ -5,26 +5,35 @@ Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
       - Label:
-          default: "General"
+          default: AWS IAM Identity Center
         Parameters:
-          - GoogleCredentials
-          - GoogleAdminEmail
           - SCIMEndpointUrl
           - SCIMEndpointAccessToken
-          - Region
-          - IdentityStoreID
+          - IdentityStoreId
       - Label:
-          default: "Advanced Configuration"
+          default: Google Workspace Credentials 
+        Parameters:
+          - GoogleAdminEmail
+          - GoogleCredentials
+      - Label:
+          default: Sync Configuration
         Parameters:
           - SyncMethod
           - GoogleUserMatch
           - GoogleGroupMatch
-          - LogLevel
-          - LogFormat
-          - ScheduleExpression
           - IgnoreUsers
           - IgnoreGroups
+      - Label:
+          default: "Configuration options for users_groups Mode only"
+        Parameters:
           - IncludeGroups
+      - Label:
+          default: "Lambda Configuration"
+        Parameters:
+          - LogLevel
+          - LogFormat
+          - TimeOut
+          - ScheduleExpression
 
   AWS::ServerlessRepo::Application:
     Name: ssosync
@@ -65,6 +74,13 @@ Parameters:
     AllowedValues:
       - json
       - text
+  TimeOut:
+    Type: Number
+    Description: Timeout for the Lambda function
+    Default: 300
+    MinValue: 1
+    MaxValue: 900
+
   GoogleCredentials:
     Type: String
     Description: Credentials to log into Google (content of credentials.json)
@@ -77,6 +93,7 @@ Parameters:
     Type: String
     Description: AWS SSO SCIM Endpoint Url
     NoEcho: true
+    AllowedPattern: "https://scim.(us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-([0-9]{1}).amazonaws.com/(.*)-([a-z0-9]{4})-([a-z0-9]{4})-([a-z0-9]{12})/scim/v2/"
   SCIMEndpointAccessToken:
     Type: String
     Description: AWS SSO SCIM AccessToken
@@ -89,16 +106,20 @@ Parameters:
     Type: String
     Description: Identifier of Identity Store in AWS SSO
     NoEcho: true
+    AllowedPattern: "d-[1-z0-9]{10}"
+
   GoogleUserMatch:
     Type: String
     Description: |
       Google Workspace user filter query parameter, example: 'name:John* email:admin*', see: https://developers.google.com/admin-sdk/directory/v1/guides/search-users
     Default: '*'
+    AllowedPattern: "(*)|(name|Name|NAME)(:([a-zA-Z0-9]{1,64})(\*))|(name|Name|NAME)(=([a-zA-Z0-9 ]{1,64}))|(email|Email|EMAIL)(:([a-zA-Z0-9.-_]{1,64})(\*))|(email|Email|EMAIL)(=([a-zA-Z0-9.-_]{1,64})@([a-zA-Z0-9.-]{5,260}))"
   GoogleGroupMatch:
     Type: String
     Description: |
       Google Workspace group filter query parameter, example: 'name:Admin* email:aws-*', see: https://developers.google.com/admin-sdk/directory/v1/guides/search-groups
     Default: 'name:AWS*'
+    AllowedPattern: "((name|Name|NAME)(:([a-zA-Z0-9]{1,64})\*)|(name|Name|NAME)(=([a-zA-Z0-9 ]{1,64})))|((email|Email|EMAIL)(:([a-zA-Z0-9.-_]{1,64})\*)|(email|Email|EMAIL)(=([a-zA-Z0-9.-_]{1,64})@([a-zA-Z0-9.-]{5,260})))"
   IgnoreGroups:
     Type: String
     Description: |
@@ -133,7 +154,7 @@ Resources:
       Handler: dist/ssosync_linux_arm64/ssosync
       Architectures:
         - arm64
-      Timeout: 300
+      Timeout: !Ref TimeOut
       Environment:
         Variables:
           SSOSYNC_LOG_LEVEL: !Ref LogLevel
@@ -180,6 +201,12 @@ Resources:
                 - "identitystore:DeleteGroup"
               Resource:
                 - "*"
+            - Sid: CodePipelinePolicy
+              Effect: Allow
+              Action:
+                - codepipeline:PutJobSuccessResult
+                - codepipeline:PutJobFailureResult
+              Resource: "*"
       Events:
         SyncScheduledEvent:
           Type: Schedule
@@ -218,7 +245,7 @@ Resources:
     Type: "AWS::SecretsManager::Secret"
     Properties:
       Name: SSOSyncRegion
-      SecretString: !Ref Region
+      SecretString: !Select [1, !Split [".", !Ref SCIMEndpointUrl]]
 
   AWSIdentityStoreIDSecret:
     Type: "AWS::SecretsManager::Secret"

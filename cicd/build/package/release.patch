@@ -1,7 +1,16 @@
---- template.yaml	2023-10-25 09:44:33
-+++ release.yaml	2023-10-25 16:02:21
-@@ -27,7 +27,7 @@
-           - IncludeGroups
+--- template.yaml	2023-10-27 14:15:25
++++ release.yaml	2023-10-27 14:41:17
+@@ -11,7 +11,7 @@
+           - SCIMEndpointAccessToken
+           - IdentityStoreId
+       - Label:
+-          default: Google Workspace Credentials 
++          default: Google Workspace Credentials
+         Parameters:
+           - GoogleAdminEmail
+           - GoogleCredentials
+@@ -36,7 +36,7 @@
+           - ScheduleExpression
  
    AWS::ServerlessRepo::Application:
 -    Name: ssosync
@@ -9,7 +18,21 @@
      Description: Helping you populate AWS SSO directly with your Google Apps users.
      Author: Sebastian Doell
      SpdxLicenseId: Apache-2.0
-@@ -111,7 +111,7 @@
+@@ -113,13 +113,11 @@
+     Description: |
+       Google Workspace user filter query parameter, example: 'name:John* email:admin*', see: https://developers.google.com/admin-sdk/directory/v1/guides/search-users
+     Default: '*'
+-    AllowedPattern: "(*)|(name|Name|NAME)(:([a-zA-Z0-9]{1,64})(\*))|(name|Name|NAME)(=([a-zA-Z0-9 ]{1,64}))|(email|Email|EMAIL)(:([a-zA-Z0-9.-_]{1,64})(\*))|(email|Email|EMAIL)(=([a-zA-Z0-9.-_]{1,64})@([a-zA-Z0-9.-]{5,260}))"
+   GoogleGroupMatch:
+     Type: String
+     Description: |
+       Google Workspace group filter query parameter, example: 'name:Admin* email:aws-*', see: https://developers.google.com/admin-sdk/directory/v1/guides/search-groups
+     Default: 'name:AWS*'
+-    AllowedPattern: "((name|Name|NAME)(:([a-zA-Z0-9]{1,64})\*)|(name|Name|NAME)(=([a-zA-Z0-9 ]{1,64})))|((email|Email|EMAIL)(:([a-zA-Z0-9.-_]{1,64})\*)|(email|Email|EMAIL)(=([a-zA-Z0-9.-_]{1,64})@([a-zA-Z0-9.-]{5,260})))"
+   IgnoreGroups:
+     Type: String
+     Description: |
+@@ -132,7 +130,7 @@
      Default: 'none'
    IncludeGroups:
      Type: String
@@ -18,7 +41,7 @@
        Include only these Google Workspace groups. (Only applicable for SyncMethod user_groups)
      Default: '*'
    SyncMethod:
-@@ -121,16 +121,16 @@
+@@ -142,16 +140,16 @@
      AllowedValues:
        - groups
        - users_groups
@@ -38,8 +61,8 @@
 +      Handler: bootstrap
        Architectures:
          - arm64
-       Timeout: 300
-@@ -163,8 +163,6 @@
+       Timeout: !Ref TimeOut
+@@ -184,8 +182,6 @@
                  - !Ref AWSSCIMAccessTokenSecret
                  - !Ref AWSRegionSecret
                  - !Ref AWSIdentityStoreIDSecret
@@ -48,7 +71,7 @@
              - Sid: IdentityStoreAccesPolicy
                Effect: Allow
                Action:
-@@ -187,8 +185,6 @@
+@@ -214,8 +210,6 @@
            Properties:
              Enabled: true
              Schedule: !Ref ScheduleExpression

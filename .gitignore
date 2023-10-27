@@ -35,3 +35,6 @@ ssosync
 .DS_Store
 *.swp
 */.DS_Store
+cicd/.DS_Store
+release.yaml
+staging.yaml
