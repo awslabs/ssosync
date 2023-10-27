@@ -142,9 +142,12 @@ Parameters:
     AllowedValues:
       - groups
       - users_groups
-
-
-
+  TimeOut:
+    Type: Number
+    Description: Timeout for the Lambda function
+    Default: 300
+    MinValue: 1
+    MaxValue: 900
 
 Resources:
   SSOSyncFunction:
