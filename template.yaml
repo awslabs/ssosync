@@ -25,6 +25,7 @@ Metadata:
           - IgnoreUsers
           - IgnoreGroups
           - IncludeGroups
+          - Timeout
 
   AWS::ServerlessRepo::Application:
     Name: ssosync
@@ -121,7 +122,12 @@ Parameters:
     AllowedValues:
       - groups
       - users_groups
-
+  Timeout:
+    Type: Number
+    Description: Timeout for the Lambda function
+    Default: 300
+    MinValue: 0
+    MaxValue: 900
 
 
 
@@ -133,7 +139,7 @@ Resources:
       Handler: dist/ssosync_linux_arm64/ssosync
       Architectures:
         - arm64
-      Timeout: 300
+      Timeout: !Ref Timeout
       Environment:
         Variables:
           SSOSYNC_LOG_LEVEL: !Ref LogLevel
