@@ -94,22 +94,27 @@ Parameters:
     Type: String
     Description: |
       Google Workspace user filter query parameter, example: 'name:John* email:admin*', see: https://developers.google.com/admin-sdk/directory/v1/guides/search-users
+    Default: '*'
   GoogleGroupMatch:
     Type: String
     Description: |
       Google Workspace group filter query parameter, example: 'name:Admin* email:aws-*', see: https://developers.google.com/admin-sdk/directory/v1/guides/search-groups
+    Default: 'name:AWS*'
   IgnoreGroups:
     Type: String
     Description: |
       Ignore these Google Workspace groups
+    Default: 'none'
   IgnoreUsers:
     Type: String
     Description: |
       Ignore these Google Workspace users
+    Default: 'none'
   IncludeGroups:
     Type: String
     Description: |
       Include only these Google Workspace groups. (Only applicable for SyncMethod user_groups)
+    Default: '*'
   SyncMethod:
     Type: String
     Description: Sync method to use
@@ -130,8 +135,10 @@ Resources:
   SSOSyncFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Runtime: go1.x
-      Handler: dist/ssosync_linux_amd64_v1/ssosync
+      Runtime: provided.al2
+      Handler: dist/ssosync_linux_arm64/ssosync
+      Architectures:
+        - arm64
       Timeout: !Ref Timeout
       Environment:
         Variables:
@@ -176,6 +183,7 @@ Resources:
                 - "identitystore:IsMemberInGroups"
                 - "identitystore:GetGroupMembershipId"
                 - "identitystore:DeleteGroupMembership"
+                - "identitystore:DeleteGroup"
               Resource:
                 - "*"
       Events:
@@ -185,6 +193,8 @@ Resources:
           Properties:
             Enabled: true
             Schedule: !Ref ScheduleExpression
+    Metadata:
+      BuildMethod: makefile
 
   AWSGoogleCredentialsSecret:
     Type: "AWS::SecretsManager::Secret"

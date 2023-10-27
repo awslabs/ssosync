@@ -136,7 +136,7 @@ func Handler(ctx context.Context, event events.CodePipelineEvent) (string, error
 func init() {
 	// init config
 	cfg = config.New()
-	cfg.IsLambda = len(os.Getenv("_LAMBDA_SERVER_PORT")) > 0
+	cfg.IsLambda = len(os.Getenv("AWS_LAMBDA_FUNCTION_NAME")) > 0
 
 	// initialize cobra
 	cobra.OnInitialize(initConfig)

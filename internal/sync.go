@@ -17,6 +17,7 @@ package internal
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io/ioutil"
 
@@ -403,6 +404,11 @@ func (s *syncGSuite) SyncGroupsUsers(query string) error {
 		log.Info("creating user")
 		_, err := s.aws.CreateUser(awsUser)
 		if err != nil {
+			errHttp := new(aws.ErrHttpNotOK)
+			if errors.As(err, &errHttp) && errHttp.StatusCode == 409 {
+				log.WithField("user", awsUser.Username).Warn("user already exists")
+				continue
+			}
 			log.Error("error creating user")
 			return err
 		}
@@ -558,8 +564,13 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(googleGroups []*admin.Group) ([]*ad
 			log.WithField("id", m.Email).Debug("get user")
 			q := fmt.Sprintf("email:%s", m.Email)
 			u, err := s.google.GetUsers(q) // TODO: implement GetUser(m.Email)
+
 			if err != nil {
 				return nil, nil, err
+			}
+			if len(u) == 0 {
+				log.WithField("id", m.Email).Warn("missing user")
+				continue
 			}
 
 			membersUsers = append(membersUsers, u[0])
@@ -855,6 +866,12 @@ func ConvertSdkUserObjToNative(user *identitystore.User) *aws.User {
 	userEmails := make([]aws.UserEmail, 0)
 
 	for _, email := range user.Emails {
+		if email.Value == nil || email.Type == nil || email.Primary == nil {
+              		// This must be a user created by AWS Control Tower
+                        // Need feature development to make how these users are treated
+			// configurable.
+			continue
+		}
 		userEmails = append(userEmails, aws.UserEmail{
 			Value:   *email.Value,
 			Type:    *email.Type,

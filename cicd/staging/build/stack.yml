@@ -15,6 +15,10 @@ Parameters:
     Description: The version of this build in SAR
     Default: 'v1.0.0-rc.10'
     Type: String
+  GroupMatch:
+    Description: The search string to match Groups in Google Workspace
+    Default: 'name:AWS*'
+    Type: String
 
 Resources:
   SARApp:
@@ -32,7 +36,7 @@ Resources:
         IdentityStoreID: '{{resolve:secretsmanager:TestIdentityStoreId}}'
         SyncMethod: groups
         GoogleUserMatch: 'name:*'
-        GoogleGroupMatch: 'name:AWS*'
+        GoogleGroupMatch: !Ref GroupMatch
         LogLevel: warn
         LogFormat: json
         IgnoreUsers: None

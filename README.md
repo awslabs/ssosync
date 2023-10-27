@@ -171,8 +171,10 @@ NOTES:
 NOTE: Using Lambda may incur costs in your AWS account. Please make sure you have checked
 the pricing for AWS Lambda and CloudWatch before continuing.
 
+Additionally, before choosing to deploy with Lambda, please ensure that the [AWS Lambda SLAs](https://aws.amazon.com/lambda/sla/) are sufficient for your use cases.
+
 Running ssosync once means that any changes to your Google directory will not appear in
-AWS SSO. To sync. regularly, you can run ssosync via AWS Lambda.
+AWS SSO. To sync regularly, you can run ssosync via AWS Lambda.
 
 :warning: You find it in the [AWS Serverless Application Repository](https://eu-west-1.console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync).
 
@@ -182,7 +184,7 @@ You can use the AWS Serverless Application Model (SAM) to deploy this to your ac
 
 > Please, install the [AWS SAM CLI](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-install.html) and [GoReleaser](https://goreleaser.com/install/).
 
-Specify an Amazon S3 Bucket for the upload with `export S3_BUCKET=<YOUR_BUCKET>`.
+Specify an Amazon S3 Bucket for the upload with `export S3_BUCKET=<YOUR_BUCKET>` and an S3 prefix with `export S3_PREFIX=<YOUR_PREFIX>`.
 
 Execute `make package` in the console. Which will package and upload the function to the bucket. You can then use the `packaged.yaml` to configure and deploy the stack in [AWS CloudFormation Console](https://console.aws.amazon.com/cloudformation).
 

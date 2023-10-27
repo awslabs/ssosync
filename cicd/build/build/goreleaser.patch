@@ -1,8 +1,21 @@
---- .goreleaser.yml	2022-06-15 08:38:24.000000000 +0100
-+++ .goreleaser-codebuild.yml	2022-06-21 12:33:43.000000000 +0100
-@@ -22,7 +22,7 @@
-     - goos: windows
-       goarch: 386
+--- .goreleaser.yml.default	2023-10-25 11:30:58
++++ .goreleaser.yml	2023-10-25 11:32:18
+@@ -9,20 +9,11 @@
+     - CGO_ENABLED=0
+   goos:
+     - linux
+-    - darwin
+-    - windows
+   goarch:
+-    - 386
+     - amd64
+-    - arm
+     - arm64
+-  ignore:
+-    - goos: darwin
+-      goarch: 386
+-    - goos: windows
+-      goarch: 386
    ldflags:
 -     - -s -w -X github.com/awslabs/ssosync/cmd.version={{.Version}} -X github.com/awslabs/ssosync/cmd.commit={{.Commit}} -X github.com/awslabs/ssosync/cmd.date={{.Date}} -X github.com/awslabs/ssosync/cmd.builtBy=goreleaser
 +     - -s -w -X github.com/awslabs/ssosync/cmd.version={{.Env.GitTag}} -X github.com/awslabs/ssosync/cmd.commit={{.Env.GitCommit}} -X github.com/awslabs/ssosync/cmd.date={{.Date}} -X github.com/awslabs/ssosync/cmd.builtBy=goreleaser -X github.com/awslabs/ssosync/cmd.goversion={{.Env.GoVersion}}
