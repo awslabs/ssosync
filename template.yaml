@@ -5,10 +5,11 @@ Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
       - Label:
-          default: AWS IAM Identity Center
+          default: AWS IAM Identity Center (Successor to AWS Single Sign-On)
         Parameters:
           - SCIMEndpointUrl
           - SCIMEndpointAccessToken
+          - Region
           - IdentityStoreID
       - Label:
           default: Google Workspace Credentials 
@@ -91,18 +92,22 @@ Parameters:
     NoEcho: true
   SCIMEndpointUrl:
     Type: String
-    Description: AWS SSO SCIM Endpoint Url
+    Description: AWS IAM Identity Center - SCIM Endpoint Url
     NoEcho: true
     AllowedPattern: "https://scim.(us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-([0-9]{1}).amazonaws.com/(.*)-([a-z0-9]{4})-([a-z0-9]{4})-([a-z0-9]{12})/scim/v2/"
   SCIMEndpointAccessToken:
     Type: String
-    Description: AWS SSO SCIM AccessToken
+    Description: AWS IAM Identity Center - SCIM AccessToken
     NoEcho: true
+  Region:
+    Type: String
+    Description: AWS Region where AWS IAM Identity Center is enabled
+    AllowedPattern: '(us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-\d'
   IdentityStoreID:
     Type: String
-    Description: Identifier of Identity Store in AWS SSO
+    Description: Identifier of Identity Store in AWS IAM Identity Center
     NoEcho: true
-    AllowedPattern: "d-[1-z0-9]{10}"
+    AllowedPattern: 'd-[1-z0-9]{10}'
 
   GoogleUserMatch:
     Type: String
@@ -235,7 +240,7 @@ Resources:
     Type: "AWS::SecretsManager::Secret"
     Properties:
       Name: SSOSyncRegion
-      SecretString: !Select [1, !Split [".", !Ref SCIMEndpointUrl]]
+      SecretString: !Ref Region
 
   AWSIdentityStoreIDSecret:
     Type: "AWS::SecretsManager::Secret"
