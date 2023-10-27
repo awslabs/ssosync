@@ -32,7 +32,6 @@ Resources:
         GoogleCredentials: '{{resolve:secretsmanager:TestGoogleCredentials}}'
         SCIMEndpointUrl: '{{resolve:secretsmanager:TestSCIMEndpointUrl}}'
         SCIMEndpointAccessToken: '{{resolve:secretsmanager:TestSCIMAccessToken}}'
-        Region: '{{resolve:secretsmanager:TestRegion}}'
         IdentityStoreID: '{{resolve:secretsmanager:TestIdentityStoreId}}'
         SyncMethod: groups
         GoogleUserMatch: 'name:*'
