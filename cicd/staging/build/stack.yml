@@ -34,7 +34,7 @@ Resources:
         SCIMEndpointAccessToken: '{{resolve:secretsmanager:TestSCIMAccessToken}}'
         IdentityStoreID: '{{resolve:secretsmanager:TestIdentityStoreId}}'
         SyncMethod: groups
-        GoogleUserMatch: 'name:*'
+        GoogleUserMatch: '*'
         GoogleGroupMatch: !Ref GroupMatch
         LogLevel: warn
         LogFormat: json
