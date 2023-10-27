@@ -9,7 +9,7 @@ Metadata:
         Parameters:
           - SCIMEndpointUrl
           - SCIMEndpointAccessToken
-          - IdentityStoreId
+          - IdentityStoreID
       - Label:
           default: Google Workspace Credentials 
         Parameters:
@@ -98,10 +98,6 @@ Parameters:
     Type: String
     Description: AWS SSO SCIM AccessToken
     NoEcho: true
-  Region:
-    Type: String
-    Description: AWS Region where AWS SSO is enabled
-    NoEcho: true
   IdentityStoreID:
     Type: String
     Description: Identifier of Identity Store in AWS SSO
@@ -113,13 +109,13 @@ Parameters:
     Description: |
       Google Workspace user filter query parameter, example: 'name:John* email:admin*', see: https://developers.google.com/admin-sdk/directory/v1/guides/search-users
     Default: '*'
-    AllowedPattern: "(*)|(name|Name|NAME)(:([a-zA-Z0-9]{1,64})(\*))|(name|Name|NAME)(=([a-zA-Z0-9 ]{1,64}))|(email|Email|EMAIL)(:([a-zA-Z0-9.-_]{1,64})(\*))|(email|Email|EMAIL)(=([a-zA-Z0-9.-_]{1,64})@([a-zA-Z0-9.-]{5,260}))"
+    AllowedPattern: '(*)|(name|Name|NAME)(:([a-zA-Z0-9]{1,64})(\*))|(name|Name|NAME)(=([a-zA-Z0-9 ]{1,64}))|(email|Email|EMAIL)(:([a-zA-Z0-9.-_]{1,64})(\*))|(email|Email|EMAIL)(=([a-zA-Z0-9.-_]{1,64})@([a-zA-Z0-9.-]{5,260}))'
   GoogleGroupMatch:
     Type: String
     Description: |
       Google Workspace group filter query parameter, example: 'name:Admin* email:aws-*', see: https://developers.google.com/admin-sdk/directory/v1/guides/search-groups
     Default: 'name:AWS*'
-    AllowedPattern: "((name|Name|NAME)(:([a-zA-Z0-9]{1,64})\*)|(name|Name|NAME)(=([a-zA-Z0-9 ]{1,64})))|((email|Email|EMAIL)(:([a-zA-Z0-9.-_]{1,64})\*)|(email|Email|EMAIL)(=([a-zA-Z0-9.-_]{1,64})@([a-zA-Z0-9.-]{5,260})))"
+    AllowedPattern: '(name|Name|NAME)(:([a-zA-Z0-9]{1,64})\*)|(name|Name|NAME)(=([a-zA-Z0-9 ]{1,64}))|(email|Email|EMAIL)(:([a-zA-Z0-9.-_]{1,64})\*)|(email|Email|EMAIL)(=([a-zA-Z0-9.-_]{1,64})@([a-zA-Z0-9.-]{5,260}))'
   IgnoreGroups:
     Type: String
     Description: |

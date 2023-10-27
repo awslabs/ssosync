@@ -1,5 +1,5 @@
---- template.yaml	2023-10-27 16:02:11
-+++ staging.yaml	2023-10-27 16:04:04
+--- template.yaml	2023-10-27 16:34:16
++++ staging.yaml	2023-10-27 16:33:15
 @@ -36,7 +36,7 @@
            - ScheduleExpression
  
@@ -9,7 +9,7 @@
      Description: Helping you populate AWS SSO directly with your Google Apps users.
      Author: Sebastian Doell
      SpdxLicenseId: Apache-2.0
-@@ -147,6 +147,7 @@
+@@ -143,6 +143,7 @@
    SSOSyncFunction:
      Type: AWS::Serverless::Function
      Properties:
@@ -17,7 +17,7 @@
        Runtime: provided.al2
        Handler: bootstrap
        Architectures:
-@@ -246,3 +247,10 @@
+@@ -242,3 +243,10 @@
      Properties:
        Name: SSOSyncIdentityStoreID
        SecretString: !Ref IdentityStoreID
