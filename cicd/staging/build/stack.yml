@@ -28,6 +28,7 @@ Resources:
         ApplicationId: !Ref AppArn
         SemanticVersion: !Ref AppVersion
       Parameters:
+        FunctionName: SSOSyncFunction
         GoogleAdminEmail: '{{resolve:secretsmanager:TestGoogleAdminEmail}}'
         GoogleCredentials: '{{resolve:secretsmanager:TestGoogleCredentials}}'
         SCIMEndpointUrl: '{{resolve:secretsmanager:TestSCIMEndpointUrl}}'
@@ -35,26 +36,6 @@ Resources:
         Region: '{{resolve:secretsmanager:TestRegion}}'
         IdentityStoreID: '{{resolve:secretsmanager:TestIdentityStoreId}}'
         SyncMethod: groups
-        GoogleUserMatch: '*'
         GoogleGroupMatch: !Ref GroupMatch
         LogLevel: warn
         LogFormat: json
-        IgnoreUsers: None
-        IgnoreGroups: None
-        IncludeGroups: None
-        ScheduleExpression: 'rate(1 day)'
-
-  FunctionArnParam:
-    Type: AWS::SSM::Parameter
-    Properties:
-      Name: "/SSOSync/Staging/FunctionArn"
-      Type: String
-      Value: !GetAtt SARApp.Outputs.FunctionArn
-      Description: The Arn of the lambda function ssosync
- 
-Outputs:
-  FunctionArn:
-    Description: "The Arn of the deployed lambda function"
-    Value: !GetAtt SARApp.Outputs.FunctionArn
-    Export:
-      Name: FunctionArn
