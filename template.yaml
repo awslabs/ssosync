@@ -119,6 +119,7 @@ Parameters:
     Type: String
     Description: |
       Google Workspace user filter query parameter, example: 'name:John* email:admin*', see: https://developers.google.com/admin-sdk/directory/v1/guides/search-users
+    Default: ""
     AllowedPattern: '(?!.*\s)|(name|Name|NAME)(:([a-zA-Z0-9]{1,64})(\*))|(name|Name|NAME)(=([a-zA-Z0-9 ]{1,64}))|(email|Email|EMAIL)(:([a-zA-Z0-9.-_]{1,64})(\*))|(email|Email|EMAIL)(=([a-zA-Z0-9.-_]{1,64})@([a-zA-Z0-9.-]{5,260}))'
   GoogleGroupMatch:
     Type: String
@@ -130,16 +131,19 @@ Parameters:
     Type: String
     Description: |
       Ignore these Google Workspace groups, leave empty if not required
+    Default: ""
     AllowedPattern: '(?!.*\s)|([0-9a-zA-Z-= _]*)(,[0-9a-zA-Z-=@. _]*)*'
   IgnoreUsers:
     Type: String
     Description: |
       Ignore these Google Workspace users, leave empty if not required
+    Default: ""
     AllowedPattern: '(?!.*\s)|([0-9a-zA-Z-= _]*)(,[0-9a-zA-Z-=@. _]*)*'
   IncludeGroups:
     Type: String
     Description: |
       Include only these Google Workspace groups, leave empty if not required. (Only applicable for SyncMethod user_groups)
+    Default: ""
     AllowedPattern: '(?!.*\s)|([0-9a-zA-Z-= _]*)(,[0-9a-zA-Z-=@. _]*)*'
   SyncMethod:
     Type: String
