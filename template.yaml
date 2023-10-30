@@ -156,11 +156,11 @@ Parameters:
 Conditions:
   SetFunctionName: !Not [!Equals [!Ref "FunctionName", ""]]
   OnSchedule: !Not [!Equals [!Ref "ScheduleExpression", ""]]
-  SetGoogleUserMatch: !Not [!Equals [!Ref "GoogleUserMatch", ""]]
-  SetGoogleGroupMatch: !Not [!Equals [!Ref "GoogleGroupMatch", ""]]
+  SetGoogleUserMatch: !Or [!Not [!Equals [!Ref "GoogleUserMatch", ""]], !Equals [!Ref "SyncMethod", users_groups]]
+  SetGoogleGroupMatch: !Or [!Not [!Equals [!Ref "GoogleGroupMatch", ""]], !Equals [!Ref "SyncMethod", users_groups]]
   SetIgnoreGroups: !Not [!Equals [!Ref "IgnoreGroups", ""]]
   SetIgnoreUsers: !Not [!Equals [!Ref "IgnoreUsers", ""]]
-  SetIncludeGroups: !Or [!Equals [!Ref "SyncMethod", groups], !Equals [!Ref "IncludeGroups", ""]]
+  SetIncludeGroups: !Or [!Not [!Equals [!Ref "IncludeGroups", ""]], !Equals [!Ref "SyncMethod", groups]]
 
 Resources:
   SSOSyncFunction:
