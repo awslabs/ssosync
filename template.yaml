@@ -150,19 +150,19 @@ Parameters:
       - users_groups
 
 Conditions:
-  NoFunctionName: !Not [!Equals [!Ref "FunctionName", ""]]
+  SetFunctionName: !Not [!Equals [!Ref "FunctionName", ""]]
   OnSchedule: !Not [!Equals [!Ref "ScheduleExpression", ""]]
-  NoGoogleUserMatch: !Not [!Equals [!Ref "GoogleUserMatch", ""]]
-  NoGoogleGroupMatch: !Not [!Equals [!Ref "GoogleGroupMatch", ""]]
-  NoIgnoreGroups: !Not [!Equals [!Ref "IgnoreGroups", ""]]
-  NoIgnoreUsers: !Not [!Equals [!Ref "IgnoreUsers", ""]]
-  NoIncludeGroups: !Or [!Equals [!Ref "SyncMethod", groups], !Equals [!Ref "IncludeGroups", ""]]
+  SetGoogleUserMatch: !Not [!Equals [!Ref "GoogleUserMatch", ""]]
+  SetGoogleGroupMatch: !Not [!Equals [!Ref "GoogleGroupMatch", ""]]
+  SetIgnoreGroups: !Not [!Equals [!Ref "IgnoreGroups", ""]]
+  SetIgnoreUsers: !Not [!Equals [!Ref "IgnoreUsers", ""]]
+  SetIncludeGroups: !Or [!Equals [!Ref "SyncMethod", groups], !Equals [!Ref "IncludeGroups", ""]]
 
 Resources:
   SSOSyncFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !If [NoFunctionName, AWS::NoValue, !Ref FunctionName]
+      FunctionName: !If [SetFunctionName, !Ref FunctionName, AWS::NoValue]
       Runtime: provided.al2
       Handler: bootstrap
       Architectures:
@@ -178,12 +178,12 @@ Resources:
           SSOSYNC_SCIM_ACCESS_TOKEN: !Ref AWSSCIMAccessTokenSecret
           SSOSYNC_REGION: !Ref AWSRegionSecret
           SSOSYNC_IDENTITY_STORE_ID: !Ref AWSIdentityStoreIDSecret
-          SSOSYNC_USER_MATCH: !If [NoGoogleUserMatch, AWS::NoValue, !Ref GoogleUserMatch]
-          SSOSYNC_GROUP_MATCH: !If [NoGoogleGroupMatch, AWS::NoValue, !Ref GoogleGroupMatch]
+          SSOSYNC_USER_MATCH: !If [SetGoogleUserMatch, !Ref GoogleUserMatch, AWS::NoValue]
+          SSOSYNC_GROUP_MATCH: !If [SetGoogleGroupMatch, !Ref GoogleGroupMatch, AWS::NoValue]
           SSOSYNC_SYNC_METHOD: !Ref SyncMethod
-          SSOSYNC_IGNORE_GROUPS: !If [NoIgnoreGroups, AWS::NoValue, !Ref IgnoreGroups]
-          SSOSYNC_IGNORE_USERS: !If [NoIgnoreUsers, AWS::NoValue, !Ref IgnoreUsers]
-          SSOSYNC_INCLUDE_GROUPS: !If [NoIncludeGroups, AWS::NoValue, !Ref IncludeGroups]
+          SSOSYNC_IGNORE_GROUPS: !If [SetIgnoreGroups, !Ref IgnoreGroups, AWS::NoValue]
+          SSOSYNC_IGNORE_USERS: !If [SetIgnoreUsers, !Ref IgnoreUsers, AWS::NoValue]
+          SSOSYNC_INCLUDE_GROUPS: !If [SetIncludeGroups, !Ref IncludeGroups, AWS::NoValue]
       Policies:
         - Version: '2012-10-17'
           Statement:

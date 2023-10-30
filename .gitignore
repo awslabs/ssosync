@@ -38,3 +38,5 @@ ssosync
 cicd/.DS_Store
 release.yaml
 staging.yaml
+*.orig
+*.rej
