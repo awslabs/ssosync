@@ -56,8 +56,7 @@ Parameters:
     Type: String
     Description: Schedule for trigger the execution of ssosync (see CloudWatch schedule expressions)
     Default: rate(15 minutes)
-    AllowedPattern: '^rate\((?:1\s(?:hour|minute|day)|(?:[2-9]|[1-9][0-9]+)\s(?:hours|minutes|days))\)|cron\(\s*(?:\*|(?<minutes>0|[1-5]{0,1}[0-9]?)(?:(?:,(?P>minutes))*|(?:-(?P>minutes)){0,1}(?:\/[[:digit:]]){0,1}))\s\s*(?:\*|(?<hours>0|[1]{0,1}[0-9]?|2[0-3])(?:(?:,(?P>hours))*|(?:-(?P>hours)){0,1}(?:\/[[:digit:]]){0,1}))\s\s*(?:(?<qDays>\?)|\*(?<days>[1-2]{0,1}[1-9]?|31|10|20|30)(?:(?:,(?P>days))*|(?:-(?P>days)){0,1}(?:\/[[:digit:]]){0,1}|L|W))\s\s*(?:\*|(?<month>[1-9]|1[0-2])(?:(?:,(?P>month))*|(?:-(?P>month)){0,1}(?:\/[[:digit:]]){0,1})|(?<alphamonth>JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)(?:(?:,(?P>alphamonth))*|(?:-(?P>alphamonth)){0,1}(?:\/[[:digit:]]){0,1}))\s\s*(?(<qDays>)(?:\*|(?<week>[1-7])(?:(?:,(?P>week))*|(?:-(?P>week)){0,1}(?:\/[[:digit:]]){0,1}|L|#[1-5])|(?<alphaweek>MON|TUE|WED|THU|FRI|SAT|SUN)(?:(?:,(?P>alphaweek))*|(?:-(?P>alphaweek)){0,1}(?:\/[[:digit:]]){0,1}))|\?)\s\s*(?:\*|(?<year>19[7-9][0-9]|2[0-1][0-9][0-9])(?:(?:,(?P>year))*|(?:-(?P>year)){0,1}(?:\/[[:digit:]]){0,1}))\s*\)$
-h'
+    AllowedPattern: '(?!.*\s)|rate\(\d{1,3} (minutes|hours|days)\)|(cron\((([0-9]|[1-5][0-9]|60)|\d\/([0-9]|[1-5][0-9]|60)|\*) (([0-9]|[1][0-9]|[2][0-3])|(\d\/([0-9]|[1][0-9]|[2][0-3]))|(([0-9]|[1][0-9]|[2][0-3])-([0-9]|[1][0-9]|[2][0-3]))|\*) (([1-9]|[1-2][0-9]|[3][0-1])|\d\/([1-9]|[1-2][0-9]|[3][0-1])|[1-5]W|L|\*|\?) (([1-9]|[1][1-2])|(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)|((JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV)-(FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC))|(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV)(,(FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)){0,11}|\d\/([0-9]|[1][0-2])|\?|\*) ((MON|TUE|WED|THU|FRI|SAT|SUN)|(MON|TUE|WED|THU|FRI|SAT)-(TUE|WED|THU|FRI|SAT|SUN)|(MON|TUE|WED|THU|FRI|SAT)(,(TUE|WED|THU|FRI|SAT|SUN)){0,6}|[1-7]L|[1-7]#[1-5]|\?|\*) ((19[7-9][0-9]|2[0-1]\d\d)|(19[7-9][0-9]|2[0-1]\d\d)-(19[7-9][0-9]|2[0-1]\d\d)|(19[7-9][0-9]|2[0-1]\d\d)(,(19[7-9][0-9]|2[0-1]\d\d))*|\*)\))'
   LogLevel:
     Type: String
     Description: Log level for Lambda function logging
@@ -115,29 +114,28 @@ h'
     Type: String
     Description: |
       Google Workspace user filter query parameter, example: 'name:John* email:admin*', see: https://developers.google.com/admin-sdk/directory/v1/guides/search-users
-    Default: '*'
-    AllowedPattern: '(^\*)|(name|Name|NAME)(:([a-zA-Z0-9]{1,64})(\*))|(name|Name|NAME)(=([a-zA-Z0-9 ]{1,64}))|(email|Email|EMAIL)(:([a-zA-Z0-9.-_]{1,64})(\*))|(email|Email|EMAIL)(=([a-zA-Z0-9.-_]{1,64})@([a-zA-Z0-9.-]{5,260}))'
+    AllowedPattern: '(?!.*\s)|(name|Name|NAME)(:([a-zA-Z0-9]{1,64})(\*))|(name|Name|NAME)(=([a-zA-Z0-9 ]{1,64}))|(email|Email|EMAIL)(:([a-zA-Z0-9.-_]{1,64})(\*))|(email|Email|EMAIL)(=([a-zA-Z0-9.-_]{1,64})@([a-zA-Z0-9.-]{5,260}))'
   GoogleGroupMatch:
     Type: String
     Description: |
       Google Workspace group filter query parameter, example: 'name:Admin* email:aws-*', see: https://developers.google.com/admin-sdk/directory/v1/guides/search-groups
     Default: 'name:AWS*'
-    AllowedPattern: '(name|Name|NAME)(:([a-zA-Z0-9]{1,64})\*)|(name|Name|NAME)(=([a-zA-Z0-9 ]{1,64}))|(email|Email|EMAIL)(:([a-zA-Z0-9.-_]{1,64})\*)|(email|Email|EMAIL)(=([a-zA-Z0-9.-_]{1,64})@([a-zA-Z0-9.-]{5,260}))'
+    AllowedPattern: '(?!.*\s)|(name|Name|NAME)(:([a-zA-Z0-9]{1,64})\*)|(name|Name|NAME)(=([a-zA-Z0-9 ]{1,64}))|(email|Email|EMAIL)(:([a-zA-Z0-9.-_]{1,64})\*)|(email|Email|EMAIL)(=([a-zA-Z0-9.-_]{1,64})@([a-zA-Z0-9.-]{5,260}))'
   IgnoreGroups:
     Type: String
     Description: |
-      Ignore these Google Workspace groups
-    Default: 'none'
+      Ignore these Google Workspace groups, leave empty if not required
+    AllowedPattern: '(?!.*\s)|([0-9a-zA-Z-= _]*)(,[0-9a-zA-Z-=@. _]*)*'
   IgnoreUsers:
     Type: String
     Description: |
-      Ignore these Google Workspace users
-    Default: 'none'
+      Ignore these Google Workspace users, leave empty if not required
+    AllowedPattern: '(?!.*\s)|([0-9a-zA-Z-= _]*)(,[0-9a-zA-Z-=@. _]*)*'
   IncludeGroups:
     Type: String
     Description: |
-      Include only these Google Workspace groups. (Only applicable for SyncMethod user_groups)
-    Default: '*'
+      Include only these Google Workspace groups, leave empty if not required. (Only applicable for SyncMethod user_groups)
+    AllowedPattern: '(?!.*\s)|([0-9a-zA-Z-= _]*)(,[0-9a-zA-Z-=@. _]*)*'
   SyncMethod:
     Type: String
     Description: Sync method to use
@@ -145,6 +143,14 @@ h'
     AllowedValues:
       - groups
       - users_groups
+
+Conditions:
+  OnSchedule: !Not [!Equals [!Ref "ScheduleExpression", ""]]
+  NoGoogleUserMatch: !Not [!Equals [!Ref "GoogleUserMatch", ""]]
+  NoGoogleGroupMatch: !Not [!Equals [!Ref "GoogleGroupMatch", ""]]
+  NoIgnoreGroups: !Not [!Equals [!Ref "IgnoreGroups", ""]]
+  NoIgnoreUsers: !Not [!Equals [!Ref "IgnoreUsers", ""]]
+  NoIncludeGroups: !Or [!Equals [!Ref "SyncMethod", groups], !Equals [!Ref "IncludeGroups", ""]]
 
 Resources:
   SSOSyncFunction:
@@ -165,12 +171,12 @@ Resources:
           SSOSYNC_SCIM_ACCESS_TOKEN: !Ref AWSSCIMAccessTokenSecret
           SSOSYNC_REGION: !Ref AWSRegionSecret
           SSOSYNC_IDENTITY_STORE_ID: !Ref AWSIdentityStoreIDSecret
-          SSOSYNC_USER_MATCH: !Ref GoogleUserMatch
-          SSOSYNC_GROUP_MATCH: !Ref GoogleGroupMatch
+          SSOSYNC_USER_MATCH: !If [NoGoogleUserMatch, AWS::NoValue, !Ref GoogleUserMatch]
+          SSOSYNC_GROUP_MATCH: !If [NoGoogleGroupMatch, AWS::NoValue, !Ref GoogleGroupMatch]
           SSOSYNC_SYNC_METHOD: !Ref SyncMethod
-          SSOSYNC_IGNORE_GROUPS: !Ref IgnoreGroups
-          SSOSYNC_IGNORE_USERS: !Ref IgnoreUsers
-          SSOSYNC_INCLUDE_GROUPS: !Ref IncludeGroups
+          SSOSYNC_IGNORE_GROUPS: !If [NoIgnoreGroups, AWS::NoValue, !Ref IgnoreGroups]
+          SSOSYNC_IGNORE_USERS: !If [NoIgnoreUsers, AWS::NoValue, !Ref IgnoreUsers]
+          SSOSYNC_INCLUDE_GROUPS: !If [NoIncludeGroups, AWS::NoValue, !Ref IncludeGroups]
       Policies:
         - Version: '2012-10-17'
           Statement:
@@ -211,8 +217,8 @@ Resources:
           Type: Schedule
           Name: AWSSyncSchedule
           Properties:
-            Enabled: true
-            Schedule: !Ref ScheduleExpression
+            Enabled: !If [OnSchedule, false, true]
+            Schedule: !If [OnSchedule, !Ref ScheduleExpression, "rate(15 minutes)"]
 
   AWSGoogleCredentialsSecret:
     Type: "AWS::SecretsManager::Secret"
