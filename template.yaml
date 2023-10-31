@@ -50,7 +50,7 @@ Metadata:
     # Update the semantic version and run sam publish to publish a new version of your app
     SemanticVersion: 1.0.0-rc.10
     # best practice is to use git tags for each release and link to the version tag as your source code URL
-    SourceCodeUrl: https://github.com/awslabs/ssosync/tree/1.0.0-rc.10
+    SourceCodeUrl: https://github.com/awslabs/ssosync/
 
 Parameters:
   FunctionName:
@@ -81,6 +81,11 @@ Parameters:
     AllowedValues:
       - json
       - text
+  LogRetention:
+    Type: String
+    Description: Number of days to retain Logs for, leave empty to retain them indefinitely
+    Default: ""
+    AllowedPattern: '(?!.*\s)|/d'
   TimeOut:
     Type: Number
     Description: Timeout for the Lambda function
@@ -88,66 +93,96 @@ Parameters:
     MinValue: 1
     MaxValue: 900
 
+
   GoogleCredentials:
     Type: String
-    Description: Credentials to log into Google (content of credentials.json)
+    Description: |
+      Credentials to log into Google (content of credentials.json)
+    ConstraintDescription: |
+      You should save this information when following this setup https://developers.google.com/admin-sdk/directory/v1/guides/delegation
     NoEcho: true
   GoogleAdminEmail:
     Type: String
-    Description: Google Admin email
+    Description: |
+      Google Admin email
+    ConstraintDescription: |
+      This is a use with admin authority on your Google Directory, you will have used this when following this setup https://developers.google.com/admin-sdk/directory/v1/guides/delegation
     NoEcho: true
   SCIMEndpointUrl:
     Type: String
-    Description: AWS IAM Identity Center - SCIM Endpoint Url
-    NoEcho: true
+    Description: |
+      AWS IAM Identity Center - SCIM Endpoint Url
     AllowedPattern: "https://scim.(us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-([0-9]{1}).amazonaws.com/(.*)-([a-z0-9]{4})-([a-z0-9]{4})-([a-z0-9]{12})/scim/v2/"
+    ConstraintDescription: |
+      You should save this information when following this setup https://docs.aws.amazon.com/singlesignon/latest/userguide/provision-automatically.html
+    NoEcho: true
   SCIMEndpointAccessToken:
     Type: String
-    Description: AWS IAM Identity Center - SCIM AccessToken
+    Description: |
+      AWS IAM Identity Center - SCIM AccessToken
+    ConstraintDescription: |
+      You should save this information when following this setup https://docs.aws.amazon.com/singlesignon/latest/userguide/provision-automatically.html
     NoEcho: true
   Region:
     Type: String
-    Description: AWS Region where AWS IAM Identity Center is enabled
+    Description: |
+      AWS Region where AWS IAM Identity Center is enabled
+    ConstraintDescription: |
+      You can find this value on the settings page of the IAM Identity Center console page
     AllowedPattern: '(us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-\d'
   IdentityStoreID:
     Type: String
-    Description: Identifier of Identity Store in AWS IAM Identity Center
+    Description: |
+      Identifier of Identity Store in AWS IAM Identity Center
+    ConstraintDescription: |
+      You can find this value on the settings page of the IAM Identity Center console page
     NoEcho: true
     AllowedPattern: 'd-[1-z0-9]{10}'
 
   GoogleUserMatch:
     Type: String
     Description: |
-      Google Workspace user filter query parameter, example: 'name:John* email:admin*', see: https://developers.google.com/admin-sdk/directory/v1/guides/search-users
+      Google Workspace user filter query parameter, example: 'name:John* email:admin*', leave empty if you do not wish to pass this parameter 
+    ConstraintDescription: |
+      The parameter needs to be compliant with the Google admin-sdk api, https://developers.google.com/admin-sdk/directory/v1/guides/search-users
     Default: ""
     AllowedPattern: '(?!.*\s)|(name|Name|NAME)(:([a-zA-Z0-9]{1,64})(\*))|(name|Name|NAME)(=([a-zA-Z0-9 ]{1,64}))|(email|Email|EMAIL)(:([a-zA-Z0-9.-_]{1,64})(\*))|(email|Email|EMAIL)(=([a-zA-Z0-9.-_]{1,64})@([a-zA-Z0-9.-]{5,260}))'
   GoogleGroupMatch:
     Type: String
     Description: |
-      Google Workspace group filter query parameter, example: 'name:Admin* email:aws-*', see: https://developers.google.com/admin-sdk/directory/v1/guides/search-groups
+      Google Workspace group filter query parameter, example: 'name:Admin* email:aws-*', leave empty if you do not wish to pass this parameter
+    ConstraintDescription: |
+      The parameter needs to be compliant with the Google admin-sdk api, see: https://developers.google.com/admin-sdk/directory/v1/guides/search-groups
     Default: 'name:AWS*'
     AllowedPattern: '(?!.*\s)|(name|Name|NAME)(:([a-zA-Z0-9]{1,64})\*)|(name|Name|NAME)(=([a-zA-Z0-9 ]{1,64}))|(email|Email|EMAIL)(:([a-zA-Z0-9.-_]{1,64})\*)|(email|Email|EMAIL)(=([a-zA-Z0-9.-_]{1,64})@([a-zA-Z0-9.-]{5,260}))'
   IgnoreGroups:
     Type: String
     Description: |
-      Ignore these Google Workspace groups, leave empty if not required
+      Do NOT sync these Google Workspace groups into IAM Identity Center, leave empty if not required
+    ConstraintDescription: |
+      This should be a comma separated list of group names
     Default: ""
-    AllowedPattern: '(?!.*\s)|([0-9a-zA-Z-= _]*)(,[0-9a-zA-Z-=@. _]*)*'
+    AllowedPattern: '(?!.*\s)|(["0-9a-zA-Z-=@. _]*)(,["0-9a-zA-Z-=@. _]*)*'
   IgnoreUsers:
     Type: String
     Description: |
       Ignore these Google Workspace users, leave empty if not required
+    ConstraintDescription: |
+      This should be a comma separated list of group names
     Default: ""
     AllowedPattern: '(?!.*\s)|([0-9a-zA-Z-= _]*)(,[0-9a-zA-Z-=@. _]*)*'
   IncludeGroups:
     Type: String
     Description: |
       Include only these Google Workspace groups, leave empty if not required. (Only applicable for SyncMethod user_groups)
+    ConstraintDescription: |
+      This should be a comma separated list of group names
     Default: ""
     AllowedPattern: '(?!.*\s)|([0-9a-zA-Z-= _]*)(,[0-9a-zA-Z-=@. _]*)*'
   SyncMethod:
     Type: String
-    Description: Sync method to use
+    Description: |
+      Which sync method do you want to use with ssosync?
     Default: groups
     AllowedValues:
       - groups
@@ -161,7 +196,8 @@ Conditions:
   SetIgnoreGroups: !Not [!Equals [!Ref "IgnoreGroups", ""]]
   SetIgnoreUsers: !Not [!Equals [!Ref "IgnoreUsers", ""]]
   SetIncludeGroups: !Or [!Not [!Equals [!Ref "IncludeGroups", ""]], !Equals [!Ref "SyncMethod", groups]]
-
+  NotIndefinite: !Not [!Equals [!Ref "LogRetention", ""]]
+    
 Resources:
   SSOSyncFunction:
     Type: AWS::Serverless::Function
@@ -230,6 +266,15 @@ Resources:
           Properties:
             Enabled: !If [OnSchedule, false, true]
             Schedule: !If [OnSchedule, !Ref ScheduleExpression, "rate(15 minutes)"]
+
+  # Explicit log group that refers to the Lambda function
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Condition: NotIndefinite
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${SSOSyncFunction}"
+      # Explicit retention time
+      RetentionInDays: !Ref LogRetention
 
   AWSGoogleCredentialsSecret:
     Type: "AWS::SecretsManager::Secret"
