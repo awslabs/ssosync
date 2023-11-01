@@ -102,22 +102,20 @@ Parameters:
   GoogleCredentials:
     Type: String
     Description: Credentials to log into Google (content of credentials.json)
-    AllowedPattern: '({(\s)*(".*")(\s)*:(\s)*(".*")(\s)*})|(arn:aws:secretsmanager:us-east-2:[0-9]{8,12}:secret:[a-zA-Z0-9/_+=.@-]{1,512})'
+    AllowedPattern: '(\{(\s)*(".*")(\s)*:(\s)*(".*")(\s)*\})|(arn:aws:secretsmanager:us-east-2:[0-9]{8,12}:secret:[a-zA-Z0-9/_+=.@-]{1,512})'
     NoEcho: true
   GoogleAdminEmail:
     Type: String
     Description: Google Admin email
     AllowedPattern: '(([a-zA-Z0-9.+=_-]{0,61})@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*)|(arn:aws:secretsmanager:us-east-2:[0-9]{8,12}:secret:[a-zA-Z0-9/_+=.@-]{1,512})'
-    NoEcho: true
   SCIMEndpointUrl:
     Type: String
     Description: AWS IAM Identity Center - SCIM Endpoint Url
-    NoEcho: true
     AllowedPattern: '(https://scim.(us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-([0-9]{1}).amazonaws.com/(.*)-([a-z0-9]{4})-([a-z0-9]{4})-([a-z0-9]{12})/scim/v2/)|(arn:aws:secretsmanager:us-east-2:[0-9]{8,12}:secret:[a-zA-Z0-9/_+=.@-]{1,512})'
   SCIMEndpointAccessToken:
     Type: String
     Description: AWS IAM Identity Center - SCIM AccessToken
-    AllowedPattern: '([0-9a-zA-Z/=+-\]{584})|(arn:aws:secretsmanager:us-east-2:[0-9]{8,12}:secret:[a-zA-Z0-9/_+=.@-]{1,512})'
+    AllowedPattern: '([0-9a-zA-Z/=+-\\]{500,600})|(arn:aws:secretsmanager:us-east-2:[0-9]{8,12}:secret:[a-zA-Z0-9/_+=.@-]{1,512})'
     NoEcho: true
   Region:
     Type: String
@@ -126,7 +124,6 @@ Parameters:
   IdentityStoreID:
     Type: String
     Description: Identifier of Identity Store in AWS IAM Identity Center
-    NoEcho: true
     AllowedPattern: 'd-[1-z0-9]{10}|(arn:aws:secretsmanager:us-east-2:[0-9]{8,12}:secret:[a-zA-Z0-9/_+=.@-]{1,512})'
 
   GoogleUserMatch:
