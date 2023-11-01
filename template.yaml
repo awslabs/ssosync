@@ -102,12 +102,12 @@ Parameters:
   GoogleCredentials:
     Type: String
     Description: Credentials to log into Google (content of credentials.json)
-    AllowedPattern: '(^{.*}$)|(arn:aws:secretsmanager:us-east-2:[0-9]{8,12}:secret:[a-zA-Z0-9/_+=.@-]{1,512})'
+    AllowedPattern: '({(\s)*(".*")(\s)*:(\s)*(".*")(\s)*})|(arn:aws:secretsmanager:us-east-2:[0-9]{8,12}:secret:[a-zA-Z0-9/_+=.@-]{1,512})'
     NoEcho: true
   GoogleAdminEmail:
     Type: String
     Description: Google Admin email
-    AllowedPattern: '([a-zA-Z0-9.+=_-]{0,61})@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*)|(arn:aws:secretsmanager:us-east-2:[0-9]{8,12}:secret:[a-zA-Z0-9/_+=.@-]{1,512})'
+    AllowedPattern: '(([a-zA-Z0-9.+=_-]{0,61})@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*)|(arn:aws:secretsmanager:us-east-2:[0-9]{8,12}:secret:[a-zA-Z0-9/_+=.@-]{1,512})'
     NoEcho: true
   SCIMEndpointUrl:
     Type: String
