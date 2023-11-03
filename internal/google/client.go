@@ -17,9 +17,11 @@ package google
 
 import (
 	"context"
-
+	"fmt"
+	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	admin "google.golang.org/api/admin/directory/v1"
+	"google.golang.org/api/impersonate"
 	"google.golang.org/api/option"
 )
 
@@ -37,7 +39,28 @@ type client struct {
 }
 
 // NewClient creates a new client for Google's Admin API
-func NewClient(ctx context.Context, adminEmail string, serviceAccountKey []byte) (Client, error) {
+func NewClient(ctx context.Context, adminEmail, saEmail string, serviceAccountKey []byte) (Client, error) {
+	if saEmail == "" {
+		return newClientForServiceAccountKey(ctx, adminEmail, serviceAccountKey)
+	}
+
+	return newClientForWorkloadIdentityFederation(ctx, adminEmail, saEmail, serviceAccountKey)
+}
+
+func newClientForServiceAccountKey(ctx context.Context, adminEmail string, serviceAccountKey []byte) (Client, error) {
+	if serviceAccountKey == nil {
+		cred, err := google.FindDefaultCredentials(ctx, admin.AdminDirectoryGroupReadonlyScope,
+			admin.AdminDirectoryGroupMemberReadonlyScope,
+			admin.AdminDirectoryUserReadonlyScope)
+		if err != nil {
+			return nil, err
+		}
+		serviceAccountKey = cred.JSON
+		if serviceAccountKey == nil {
+			return nil, fmt.Errorf("default credentials not appropriate for JSON configuration")
+		}
+	}
+
 	config, err := google.JWTConfigFromJSON(serviceAccountKey, admin.AdminDirectoryGroupReadonlyScope,
 		admin.AdminDirectoryGroupMemberReadonlyScope,
 		admin.AdminDirectoryUserReadonlyScope)
@@ -51,6 +74,36 @@ func NewClient(ctx context.Context, adminEmail string, serviceAccountKey []byte)
 	ts := config.TokenSource(ctx)
 
 	srv, err := admin.NewService(ctx, option.WithTokenSource(ts))
+	if err != nil {
+		return nil, err
+	}
+
+	return &client{
+		ctx:     ctx,
+		service: srv,
+	}, nil
+}
+
+func newClientForWorkloadIdentityFederation(ctx context.Context, adminEmail, saEmail string, serviceAccountKey []byte) (Client, error) {
+	var err error
+	var ts oauth2.TokenSource
+	var config = impersonate.CredentialsConfig{
+		Subject:         adminEmail,
+		Scopes:          []string{admin.AdminDirectoryGroupReadonlyScope, admin.AdminDirectoryGroupMemberReadonlyScope, admin.AdminDirectoryUserReadonlyScope},
+		TargetPrincipal: saEmail,
+	}
+
+	if serviceAccountKey == nil {
+		ts, err = impersonate.CredentialsTokenSource(ctx, config)
+	} else {
+		ts, err = impersonate.CredentialsTokenSource(ctx, config, option.WithCredentialsJSON(serviceAccountKey))
+	}
+
+	if err != nil {
+		return nil, err
+	}
+	srv, err := admin.NewService(ctx, option.WithTokenSource(ts))
+
 	if err != nil {
 		return nil, err
 	}

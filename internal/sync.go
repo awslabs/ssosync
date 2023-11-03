@@ -19,7 +19,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"os"
 
 	"github.com/awslabs/ssosync/internal/aws"
 	"github.com/awslabs/ssosync/internal/config"
@@ -697,16 +697,6 @@ func getGroupUsersOperations(gGroupsUsers map[string][]*admin.User, awsGroupsUse
 func DoSync(ctx context.Context, cfg *config.Config) error {
 	log.Info("Syncing AWS users and groups from Google Workspace SAML Application")
 
-	creds := []byte(cfg.GoogleCredentials)
-
-	if !cfg.IsLambda {
-		b, err := ioutil.ReadFile(cfg.GoogleCredentials)
-		if err != nil {
-			return err
-		}
-		creds = b
-	}
-
 	// create a http client with retry and backoff capabilities
 	retryClient := retryablehttp.NewClient()
 
@@ -719,7 +709,19 @@ func DoSync(ctx context.Context, cfg *config.Config) error {
 
 	httpClient := retryClient.StandardClient()
 
-	googleClient, err := google.NewClient(ctx, cfg.GoogleAdmin, creds)
+	var creds []byte = nil
+	if cfg.GoogleCredentials != "" {
+		if cfg.IsLambda {
+			creds = []byte(cfg.GoogleCredentials)
+		} else {
+			b, err := os.ReadFile(cfg.GoogleCredentials)
+			if err != nil {
+				return err
+			}
+			creds = b
+		}
+	}
+	googleClient, err := google.NewClient(ctx, cfg.GoogleAdmin, cfg.GoogleSAEmail, creds)
 	if err != nil {
 		return err
 	}

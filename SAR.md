@@ -23,6 +23,7 @@ There are general configuration parameters to the application stack.
 
 * `GoogleCredentials` contains the content of the `credentials.json` file
 * `GoogleAdminEmail` contains the email address of an admin
+* `GoogleSAEmail` contains the email address of a Google service account used to impersonate the admin user
 
 The secrets are stored in the [AWS Secrets Manager](https://aws.amazon.com/secrets-manager/).
 

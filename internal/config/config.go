@@ -5,14 +5,21 @@ package config
 type Config struct {
 	// Verbose toggles the verbosity
 	Debug bool
-	// LogLevel is the level with with to log for this config
+	// LogLevel is the level that is used for logging
 	LogLevel string `mapstructure:"log_level"`
 	// LogFormat is the format that is used for logging
 	LogFormat string `mapstructure:"log_format"`
 	// GoogleCredentials ...
 	GoogleCredentials string `mapstructure:"google_credentials"`
 	// GoogleAdmin ...
-	GoogleAdmin string `mapstructure:"google_admin"`
+	GoogleAdmin   string `mapstructure:"google_admin"`
+	// GoogleSAEmail is the email of a service account enabled for domain-wide delegation
+	// If nonempty, it is assumed that Workload Identity Federation is to be used. In that case, the
+	// specified service account needs to be configured for domain-wide delegation and the service account
+	// used for Workload Identity Federation must include "Service Account Token Creator" for the specified
+	// service account. Moreover, GoogleCredentials must be associated with a json file configured for Workload
+	// Identity Federation.
+	GoogleSAEmail string `mapstructure:"google_sa_email"`
 	// UserMatch ...
 	UserMatch string `mapstructure:"user_match"`
 	// GroupFilter ...
@@ -31,7 +38,7 @@ type Config struct {
 	IgnoreGroups []string `mapstructure:"ignore_groups"`
 	// Include groups ...
 	IncludeGroups []string `mapstructure:"include_groups"`
-	// SyncMethod allow to defined the sync method used to get the user and groups from Google Workspace
+	// SyncMethod allow to define the sync method used to get the user and groups from Google Workspace
 	SyncMethod string `mapstructure:"sync_method"`
 	// Region is the region that the identity store exists on
 	Region string `mapstructure:"region"`

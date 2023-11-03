@@ -24,6 +24,11 @@ func (s *Secrets) GoogleAdminEmail() (string, error) {
 	return s.getSecret("SSOSyncGoogleAdminEmail")
 }
 
+// GoogleSAEmail ...
+func (s *Secrets) GoogleSAEmail() (string, error) {
+	return s.getSecret("SSOSyncGoogleSAEmail")
+}
+
 // SCIMAccessToken ...
 func (s *Secrets) SCIMAccessToken() (string, error) {
 	return s.getSecret("SSOSyncSCIMAccessToken")

@@ -72,11 +72,32 @@ as locally running the ssosync tool.
 
 ### Google
 
-First, you have to setup your API. In the project you want to use go to the [Console](https://console.developers.google.com/apis) and select *API & Services* > *Enable APIs and Services*. Search for *Admin SDK* and *Enable* the API.
+First, you have to setup your API. In the project you want to use go to the [Console](https://console.developers.google.com/apis) and select
+*API & Services* > *Enable APIs and Services*. Search for *Admin SDK* and *Enable* the API.
 
-You have to perform this [tutorial](https://developers.google.com/admin-sdk/directory/v1/guides/delegation) to create a service account that you use to sync your users. Save the `JSON file` you create during the process and rename it to `credentials.json`.
+You have to perform this [tutorial](https://developers.google.com/admin-sdk/directory/v1/guides/delegation) to create a
+service account that you use to sync your users. This is the service account that is used to impersonate a user
+(via `--google-admin`). You have two possibilities to use this service account. Create a service account key credential,
+as describe in the tutorial above. Or use
+[Workload Identity Federation](https://cloud.google.com/iam/docs/workload-identity-federation).
 
-> you can also use the `--google-credentials` parameter to explicitly specify the file with the service credentials. Please, keep this file safe, or store it in the AWS Secrets Manager
+#### Service account key credential
+
+Save the `JSON file` you create during the process described in the tutorial above and rename it to `credentials.json`.
+Please, keep this file safe, or store it in the AWS Secrets Manager.
+
+#### Workload Identity Federation
+
+Set up Workload Identity Federation for AWS as described
+[here](https://cloud.google.com/iam/docs/workload-identity-federation-with-other-clouds) and save the `JSON file`, and
+rename it to `credentials.json`. Provide the email address of service account used to impersonate a user using
+`--google-service-account-email`.
+Note that the `JSON file` created using this approach **does not** contain any sensitive data.
+
+> You can also use the `--google-credentials` parameter to explicitly specify the file containing the credentials.
+> Setting this parameter to an empty string will use
+> [Application Default Credentials](https://cloud.google.com/docs/authentication/application-default-credentials).
+
 
 In the domain-wide delegation for the Admin API, you have to specify the following scopes for the user.
 
@@ -88,6 +109,9 @@ Back in the Console go to the Dashboard for the API & Services and select "Enabl
 In the Search box type `Admin` and select the `Admin SDK` option. Click the `Enable` button.
 
 You will have to specify the email address of an admin via `--google-admin` to assume this users role in the Directory.
+
+> When running this tool as AWS Lambda, the parameter `--google-credentials` is expected to contain the content of the
+> `JSON file`.
 
 ### AWS
 

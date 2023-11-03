@@ -20,14 +20,14 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/aws/aws-lambda-go/events"
+	"github.com/aws/aws-lambda-go/lambda"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/codepipeline"
+	"github.com/aws/aws-sdk-go/service/secretsmanager"
 	"github.com/awslabs/ssosync/internal"
 	"github.com/awslabs/ssosync/internal/config"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-lambda-go/events"
-        "github.com/aws/aws-sdk-go/service/codepipeline"
-	"github.com/aws/aws-lambda-go/lambda"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/secretsmanager"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -157,6 +157,7 @@ func initConfig() {
 
 	appEnvVars := []string{
 		"google_admin",
+		"google_sa_email",
 		"google_credentials",
 		"scim_access_token",
 		"scim_endpoint",
@@ -201,6 +202,12 @@ func configLambda() {
 	}
 	cfg.GoogleAdmin = unwrap
 
+	unwrap, err = secrets.GoogleSAEmail()
+	if err != nil {
+		log.Fatalf(errors.Wrap(err, "cannot read config").Error())
+	}
+	cfg.GoogleSAEmail = unwrap
+
 	unwrap, err = secrets.GoogleCredentials()
 	if err != nil {
 		log.Fatalf(errors.Wrap(err, "cannot read config").Error())
@@ -241,6 +248,7 @@ func addFlags(cmd *cobra.Command, cfg *config.Config) {
 	rootCmd.Flags().StringVarP(&cfg.SCIMEndpoint, "endpoint", "e", "", "AWS SSO SCIM API Endpoint")
 	rootCmd.Flags().StringVarP(&cfg.GoogleCredentials, "google-credentials", "c", config.DefaultGoogleCredentials, "path to Google Workspace credentials file")
 	rootCmd.Flags().StringVarP(&cfg.GoogleAdmin, "google-admin", "u", "", "Google Workspace admin user email")
+	rootCmd.Flags().StringVarP(&cfg.GoogleSAEmail, "google-service-account-email", "W", "", "Google Workload Identity Federation SA email. If set, google-credentials must be associated with a Workload Identity Federation json file")
 	rootCmd.Flags().StringSliceVar(&cfg.IgnoreUsers, "ignore-users", []string{}, "ignores these Google Workspace users")
 	rootCmd.Flags().StringSliceVar(&cfg.IgnoreGroups, "ignore-groups", []string{}, "ignores these Google Workspace groups")
 	rootCmd.Flags().StringSliceVar(&cfg.IncludeGroups, "include-groups", []string{}, "include only these Google Workspace groups, NOTE: only works when --sync-method 'users_groups'")
