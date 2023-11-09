@@ -24,12 +24,20 @@ phases:
   build:
     commands:
       # Create staging & release variants of the template.yaml
-      - sam package --no-progressbar --template-file template.yaml --s3-bucket ${S3Bucket} --output-template-file packaged.yaml
+      - cp template.yaml staging.yaml
+      - patch staging.yaml cicd/build/package/staging.patch
+      - sam package --no-progressbar --template-file staging.yaml --s3-bucket ${S3Bucket} --output-template-file packaged-staging.yaml
+
+      - cp template.yaml release.yaml
+      - patch release.yaml cicd/build/package/release.patch
+      - sam package --no-progressbar --template-file release.yaml --s3-bucket ${S3Bucket} --output-template-file packaged-release.yaml
 
   post_build:
     commands:
-      - ls packaged.yaml
+      - ls packaged-staging.yaml
+      - ls packaged-release.yaml
 
 artifacts:
   files:
-    - packaged.yaml
+    - packaged-staging.yaml
+    - packaged-release.yaml
