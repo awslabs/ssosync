@@ -15,13 +15,13 @@ phases:
       - go install golang.org/x/lint/golint@latest
 
       # Install staticcheck
-      - go install honnef.co/go/tools/cmd/staticcheck@latest
+      - go install honnef.co/go/tools/cmd/staticcheck@0.4.6
 
       # Install Testify to use common assertions and mocks in tests
       - go get -u github.com/stretchr/testify
 
       # Install goreleaser
-      - go install github.com/goreleaser/goreleaser@latest
+      - go install github.com/goreleaser/goreleaser@1.21.2
 
   pre_build: 
     commands:
