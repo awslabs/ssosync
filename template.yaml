@@ -258,49 +258,49 @@ Conditions:
         - ""
   CreateFunction: !Or
     - !Equals
-        - !Ref "DeployPattern"
+        - !Ref DeployPattern
         - "App for cross-account"
     - !Equals
-        - !Ref "DeployPattern"
+        - !Ref DeployPattern
         - "App + secrets"
     - !Equals
-        - !Ref "DeployPattern"
+        - !Ref DeployPattern
         - "App only"
   CreateSecrets: !Or
     - !Equals
-        - !Ref "DeployPattern"
+        - !Ref DeployPattern
         - "App + secrets"
     - !Equals
-        - !Ref "DeployPattern"
+        - !Ref DeployPattern
         - "Secrets only"
     - !Equals
-        - !Ref "DeployPattern"
+        - !Ref DeployPattern
         - "Secrets for cross-account"
   CreateKey: !Equals
-    - !Ref "DeployPattern"
+    - !Ref DeployPattern
     - "Secrets for cross-account"
   RemoteSecrets: !Equals
-    - !Ref "DeployPattern"
+    - !Ref DeployPattern
     - "App for cross-account"
   LocalSecrets: !Or
     - !Equals
-        - !Ref "DeployPattern"
+        - !Ref DeployPattern
         - "App + secrets"
     - !Equals
-        - !Ref "DeployPattern"
+        - !Ref DeployPattern
         - "App only"
   OutputFunction: !Or
     - !Equals
-        - !Ref "DeployPattern"
+        - !Ref DeployPattern
         - "App + secrets"
     - !Equals
-        - !Ref "DeployPattern"
+        - !Ref DeployPattern
         - "App only"
     - !Equals
-        - !Ref "DeployPattern"
+        - !Ref DeployPattern
         - "App for cross-account"
   OutputSecrets: !Equals
-    - !Ref "DeployPattern"
+    - !Ref "DeployPattern
     - "Secrets only"
 
 Rules:
@@ -318,32 +318,32 @@ Rules:
     Assertions:
       - Assert: !Not
           - !Equals
-              - GoogleCredentials
+              - !Ref GoogleCredentials
               - ""
         AssertDescription: 'The contents of the Credentials.json is required for this deployment type.'
       - Assert: !Not
           - !Equals
-              - GoogleAdminEmail
+              - !Ref GoogleAdminEmail
               - ""
         AssertDescription: 'The email address of a directory admin is required for this deployment type.'
       - Assert: !Not
           - !Equals
-              - SCIMEndpointUrl
+              - !Ref SCIMEndpointUrl
               - ""
         AssertDescription: 'The SCIM url from IAM Identity Center is required for this deployment type.'
       - Assert: !Not
           - !Equals
-              - SCIMEndpointAccessToken
+              - !Ref SCIMEndpointAccessToken
               - ""
         AssertDescription: 'The SCIM Access Token is required for this deployment type.'
       - Assert: !Not
           - !Equals
-              - Region
+              - !Ref Region
               - ""
         AssertDescription: 'The Region in which IAM Identity Center is deployed is required for this deployment type.'
       - Assert: !Not
           - !Equals
-              - IdentityStoreID
+              - !Ref IdentityStoreID
               - ""
         AssertDescription: 'The Identity Store Id for IAM Identity Center is required for this deployment type.'
 
@@ -357,7 +357,7 @@ Rules:
           - "Secrets only"
     Assertions:
       - Assert: !Equals
-          - CrossStackConfig
+          - !Ref CrossStackConfig
           - ""
         AssertDescription: 'Do not provide a Cross Stack Configuration for this deployment type.'
 
