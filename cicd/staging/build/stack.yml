@@ -29,6 +29,8 @@ Resources:
         SemanticVersion: !Ref AppVersion
       Parameters:
         FunctionName: SSOSyncFunction
+        DeploymentPattern: 'App + secrets'
+        CrossStackConfig: ''
         GoogleAdminEmail: '{{resolve:secretsmanager:TestGoogleAdminEmail}}'
         GoogleCredentials: '{{resolve:secretsmanager:TestGoogleCredentials}}'
         SCIMEndpointUrl: '{{resolve:secretsmanager:TestSCIMEndpointUrl}}'

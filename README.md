@@ -18,6 +18,8 @@ SSO Sync will run on any platform that Go can build for. It is available in the 
 * if deploying the lambda from the [AWS Serverless Application Repository](https://console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync) then it needs to be deployed into the [IAM Identity Center delegated administration](https://docs.aws.amazon.com/singlesignon/latest/userguide/delegated-admin.html) account. Technically you could deploy in the management account but we would recommend against this.
 * if you are running the project as a cli tool, then the environment will need to be using credentials of a user in the [IAM Identity Center delegated administration](https://docs.aws.amazon.com/singlesignon/latest/userguide/delegated-admin.html) account, with appropriate permissions.
 
+> :warning: `>= 2.1.0` make use of named IAM resources, so if deploying via CICD or IaC template will require **CAPABILITY_NAMED_IAM** to be specified.
+
 ## Why?
 
 As per the [AWS SSO](https://aws.amazon.com/single-sign-on/) Homepage:
@@ -177,6 +179,13 @@ Running ssosync once means that any changes to your Google directory will not ap
 AWS SSO. To sync regularly, you can run ssosync via AWS Lambda.
 
 :warning: You find it in the [AWS Serverless Application Repository](https://eu-west-1.console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync).
+
+:warning: v2.1 onwards now supports multiple deployment patterns, defaults are consistent with previous versions.
+**App + secrets** This is the default mode and fully backwards compatible with previous versions
+**App only** This mode does not create the secrets but expects you to deployed a separate stack using the **Secrets only** mode within the same account
+**App for cross-account** This mode is used where you have deployed the secrets in a separate account, the arns of the KMS key and secrets need to be passed into the CrossStackConfig field, It is easiest to have created the secrets in the other account using the ** Secrest for cross-account** mode, as the output can simply copied and pasted into the above field.
+**Secrets only** This mode creates a set of secrets but does not deploy the app itself, it requires the app is deployed in that same account using the **App only** mode. This allows for decoupling of the secrets and the app.
+**Secrets for cross-account** This mode creates a set of secrets and KMS key but does not deploy the app itself, this is for use with an app stack, deployed using the **App for cross-account** mode. This allows for a single set of secrets to be shared with multipl app instance for testing, and improve secrets security.
 
 ## SAM
 
