@@ -300,7 +300,7 @@ Conditions:
         - !Ref DeployPattern
         - "App for cross-account"
   OutputSecrets: !Equals
-    - !Ref "DeployPattern
+    - !Ref DeployPattern
     - "Secrets only"
 
 Rules:
