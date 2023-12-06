@@ -257,7 +257,7 @@ Resources:
                 Provider: CloudFormation
               Configuration:
                 ActionMode: CREATE_UPDATE
-                Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND
+                Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND,CAPABILITY_NAMED_IAM
                 StackName: SmokeTest
                 RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
                 TemplateConfiguration: !Sub 'Tests::deploy/developer.json'

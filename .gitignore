@@ -40,3 +40,4 @@ release.yaml
 staging.yaml
 *.orig
 *.rej
+cicd/.DS_Store

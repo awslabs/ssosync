@@ -8,20 +8,28 @@ env:
 phases:
   install: 
     commands:
+      # Add goreleaser repo
+      - echo 'deb [trusted=yes] https://repo.goreleaser.com/apt/ /' | sudo tee /etc/apt/sources.list.d/goreleaser.list
+      
+      # Update the repos
+      - apt -qq --yes update
+      - apt -qq --yes upgrade
+      
       # Install go.lang
       - GoVersion=${GOLANG_20_VERSION}
 
-      # Install golint
+      # Install golint - now deprecated
       - go install golang.org/x/lint/golint@latest
 
-      # Install staticcheck
-      - go install honnef.co/go/tools/cmd/staticcheck@latest
+      # Install staticcheck - use static install from tarball
+      - wget -qO- https://github.com/dominikh/go-tools/releases/download/2023.1.6/staticcheck_linux_386.tar.gz | tar -xvz -C ./
 
       # Install Testify to use common assertions and mocks in tests
-      - go get -u github.com/stretchr/testify
+      - go get github.com/stretchr/testify
 
-      # Install goreleaser
-      - go install github.com/goreleaser/goreleaser@latest
+      # Install goreleaser - go install method broken due to dependancies using apt static binary approach
+      #      - go install github.com/goreleaser/goreleaser@latest
+      - apt -qq --yes install goreleaser
 
   pre_build: 
     commands:
@@ -33,7 +41,7 @@ phases:
       - go get ./...
 
       # Run staticcheck
-      - staticcheck ./...
+      - staticcheck/staticcheck ./...
 
       # Ensure code passes all lint tests
       #- golint -set_exit_status ./...
@@ -74,4 +82,3 @@ artifacts:
   files:
     - ${APP_NAME}
     - dist/**/*
-
