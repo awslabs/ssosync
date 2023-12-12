@@ -213,6 +213,8 @@ Resources:
                 FullRepositoryId: awslabs/ssosync
                 BranchName: master
                 DetectChanges: true
+        - Name: Build-App
+          Actions:
             - Name: Git-Metadata
               Namespace: Git
               InputArtifacts:
@@ -224,12 +226,10 @@ Resources:
                 Provider: CodeBuild
               OutputArtifacts:
                 - Name: GitVars
-              RunOrder: 2
+              RunOrder: 1
               Configuration:
                 ProjectName: !Ref GitMetadata
                 PrimarySource: Source
-        - Name: Build-App
-          Actions:
             - Name: GoLang-Build
               InputArtifacts:
                 - Name: Source
@@ -240,7 +240,7 @@ Resources:
                 Provider: CodeBuild
               OutputArtifacts:
                 - Name: Built
-              RunOrder: 1
+              RunOrder: 2
               Configuration: 
                 ProjectName: !Ref CodeBuildApp
                 PrimarySource: Source
@@ -251,7 +251,7 @@ Resources:
                 Owner: AWS
                 Version: 1
                 Provider: CodeBuild
-              RunOrder: 2
+              RunOrder: 3
               Configuration:
                 ProjectName: !Ref CodeBuildPackage
                 PrimarySource: Source
@@ -267,7 +267,7 @@ Resources:
                 Owner: AWS
                 Version: 1
                 Provider: CodeBuild
-              RunOrder: 3
+              RunOrder: 4
               Configuration:
                 ProjectName: !Ref CodeBuildStaging
                 PrimarySource: Source
