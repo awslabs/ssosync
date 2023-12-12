@@ -163,14 +163,14 @@ Flags Notes:
 * `--group-match` works for both `--sync-method` values and also in combination with `--ignore-groups` and `--ignore-users`.  This is the filter query passed to the [Google Workspace Directory API when search Groups](https://developers.google.com/admin-sdk/directory/v1/guides/search-groups), if the flag is not used, groups are not filtered.
 * `--user-match` works for both `--sync-method` values and also in combination with `--ignore-groups` and `--ignore-users`.  This is the filter query passed to the [Google Workspace Directory API when search Users](https://developers.google.com/admin-sdk/directory/v1/guides/search-users), if the flag is not used, users are not filtered.
 
-NOTES:
-
+[!NOTE]
 1. Depending on the number of users and groups you have, maybe you can get `AWS SSO SCIM API rate limits errors`, and more frequently happens if you execute the sync many times in a short time.
 2. Depending on the number of users and groups you have, `--debug` flag generate too much logs lines in your AWS Lambda function.  So test it in locally with the `--debug` flag enabled and disable it when you use a AWS Lambda function.
 
 ## AWS Lambda Usage
 
-NOTE: Using Lambda may incur costs in your AWS account. Please make sure you have checked
+[!TIP]
+Using Lambda may incur costs in your AWS account. Please make sure you have checked
 the pricing for AWS Lambda and CloudWatch before continuing.
 
 Additionally, before choosing to deploy with Lambda, please ensure that the [AWS Lambda SLAs](https://aws.amazon.com/lambda/sla/) are sufficient for your use cases.
@@ -178,13 +178,32 @@ Additionally, before choosing to deploy with Lambda, please ensure that the [AWS
 Running ssosync once means that any changes to your Google directory will not appear in
 AWS SSO. To sync regularly, you can run ssosync via AWS Lambda.
 
-:warning: You find it in the [AWS Serverless Application Repository](https://eu-west-1.console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync).
+[!WARNING]
+You find it in the [AWS Serverless Application Repository](https://eu-west-1.console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync).
 
-:warning: v2.1 onwards now supports multiple deployment patterns, defaults are consistent with previous versions.
-**App + secrets** This is the default mode and fully backwards compatible with previous versions
-**App only** This mode does not create the secrets but expects you to deployed a separate stack using the **Secrets only** mode within the same account
+[!WARNING]
+### v2.1 Changes
+* user and group selection fields in the Cloudformation template can now be left empty where not required and will not be added as environment variables to the Lambda function, this provides consistency with CLI use of ssosync.
+* Stronger validation of parameters in the Cloudformation template, to improve likelhood of success for new users.
+* Now supports multiple deployment patterns, defaults are consistent with previous versions.
+
+**App + secrets** 
+This is the default mode and fully backwards compatible with previous versions
+
+**App only** 
+This mode does not create the secrets but expects you to deployed a separate stack using the **Secrets only** mode within the same account
+[!TIP]
+If you want to use your own existing secrets then provide them as a comma separated list in the ##CrossStackConfigI## field in the following order: <GoogleCredentials ARN>,<GoogleAdminEmail ARN>,<SCIMEndpoint ARN>,<SCIMAccessToken AN>,<Region ARN>,<IdentityStoreID ARN>
+
 **App for cross-account** This mode is used where you have deployed the secrets in a separate account, the arns of the KMS key and secrets need to be passed into the CrossStackConfig field, It is easiest to have created the secrets in the other account using the ** Secrest for cross-account** mode, as the output can simply copied and pasted into the above field.
+
+[!TIP]
+If you want to use your own existing secrets then provide them as a comma separated list in the ##CrossStackConfigI## field in the following order: <GoogleCredentials ARN>,<GoogleAdminEmail ARN>,<SCIMEndpoint ARN>,<SCIMAccessToken AN>,<Region ARN>,<IdentityStoreID ARN>,<KMS Key ARN>
+[!IMPORTANT]
+Be sure to allow access to the key and secrets in their respective policies to the role ##SSOSyncAppRole## in the app account.
+
 **Secrets only** This mode creates a set of secrets but does not deploy the app itself, it requires the app is deployed in that same account using the **App only** mode. This allows for decoupling of the secrets and the app.
+
 **Secrets for cross-account** This mode creates a set of secrets and KMS key but does not deploy the app itself, this is for use with an app stack, deployed using the **App for cross-account** mode. This allows for a single set of secrets to be shared with multipl app instance for testing, and improve secrets security.
 
 ## SAM
