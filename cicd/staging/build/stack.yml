@@ -41,12 +41,36 @@ Resources:
         SemanticVersion: !Ref AppVersion
       Parameters:
         FunctionName: SSOSyncFunction
-        GoogleAdminEmail: !Sub '{{resolve:secretsmanager:${GoogleAdminEmailArn}}}'
-        GoogleCredentials: '{{resolve:secretsmanager:${GoogleCredentials}}}'
-        SCIMEndpointUrl: '{{resolve:secretsmanager:$SCIMEndpointUrlArn}}}'
-        SCIMEndpointAccessToken: '{{resolve:secretsmanager:${SCIMAccessTokenArn}}}'
-        Region: '{{resolve:secretsmanager:${RegioArn}n}}'
-        IdentityStoreID: '{{resolve:secretsmanager:${IdentityStoreIdArn}}}'
+        GoogleAdminEmail: !Join
+          - ''
+          - - '{{resolve:secretsmanager:'
+            - !Ref GoogleAdminEmailArn
+            - '}}'
+        GoogleCredentials: !Join
+          - ''
+          - - '{{resolve:secretsmanager:'
+            - !Ref GoogleCredentialsArn
+            - '}}'
+        SCIMEndpointUrl: !Join
+          - ''
+          - - '{{resolve:secretsmanager:'
+            - !Ref SCIMEndpointUrlArn
+            - '}}'
+        SCIMEndpointAccessToken: !Join
+          - ''
+          - - '{{resolve:secretsmanager:'
+            - !Ref SCIMAccessTokenArn
+            - '}}'
+        Region: !Join
+          - ''
+          - - '{{resolve:secretsmanager:'
+            - !Ref RegionArn
+            - '}}'
+        IdentityStoreID: !Join
+          - ''
+          - - '{{resolve:secretsmanager:'
+            - !Ref IdentityStoreIdArn
+            - '}}'
         SyncMethod: groups
         GoogleGroupMatch: !Ref GroupMatch
         LogLevel: warn
