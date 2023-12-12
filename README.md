@@ -10,15 +10,22 @@
 
 SSO Sync will run on any platform that Go can build for. It is available in the [AWS Serverless Application Repository](https://console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync)
 
-> :warning: there are breaking changes for versions `>= 0.02`
+> [!WARNING]
+> There are breaking changes for versions `>= 0.02`
 
-> :warning: `>= 1.0.0-rc.5` groups to do not get deleted in AWS SSO when deleted in the Google Directory, and groups are synced by their email address
+> [!WARNING]
+> `>= 1.0.0-rc.5` groups to do not get deleted in AWS SSO when deleted in the Google Directory, and groups are synced by their email address
 
-> :warning: `>= 2.0.0` this makes use of the **Identity Store API** which means:
+> [!WARNING}
+> `>= 2.0.0` this makes use of the **Identity Store API** which means:
 * if deploying the lambda from the [AWS Serverless Application Repository](https://console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync) then it needs to be deployed into the [IAM Identity Center delegated administration](https://docs.aws.amazon.com/singlesignon/latest/userguide/delegated-admin.html) account. Technically you could deploy in the management account but we would recommend against this.
 * if you are running the project as a cli tool, then the environment will need to be using credentials of a user in the [IAM Identity Center delegated administration](https://docs.aws.amazon.com/singlesignon/latest/userguide/delegated-admin.html) account, with appropriate permissions.
 
-> :warning: `>= 2.1.0` make use of named IAM resources, so if deploying via CICD or IaC template will require **CAPABILITY_NAMED_IAM** to be specified.
+> [!WARNING]
+> `>= 2.1.0` make use of named IAM resources, so if deploying via CICD or IaC template will require **CAPABILITY_NAMED_IAM** to be specified.
+
+> [!IMPORTANT]
+> `>= 2.1.0` switched to using `provided.al2` powered by ARM64 instances.
 
 ## Why?
 
@@ -181,7 +188,7 @@ AWS SSO. To sync regularly, you can run ssosync via AWS Lambda.
 > [!WARNING]
 > You find it in the [AWS Serverless Application Repository](https://eu-west-1.console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync).
 
-> [!WARNING]
+> [!TIP]
 > ### v2.1 Changes
 > * user and group selection fields in the Cloudformation template can now be left empty where not required and will not be added as environment variables to the Lambda function, this provides consistency with CLI use of ssosync.
 > * Stronger validation of parameters in the Cloudformation template, to improve likelhood of success for new users.
@@ -192,12 +199,12 @@ This is the default mode and fully backwards compatible with previous versions
 
 **App only** 
 This mode does not create the secrets but expects you to deployed a separate stack using the **Secrets only** mode within the same account
-[!TIP]
+[!CAUTION]
 If you want to use your own existing secrets then provide them as a comma separated list in the ##CrossStackConfigI## field in the following order: <GoogleCredentials ARN>,<GoogleAdminEmail ARN>,<SCIMEndpoint ARN>,<SCIMAccessToken AN>,<Region ARN>,<IdentityStoreID ARN>
 
 **App for cross-account** This mode is used where you have deployed the secrets in a separate account, the arns of the KMS key and secrets need to be passed into the CrossStackConfig field, It is easiest to have created the secrets in the other account using the ** Secrest for cross-account** mode, as the output can simply copied and pasted into the above field.
 
-> [!TIP]
+> [!CAUTION]
 > If you want to use your own existing secrets then provide them as a comma separated list in the ##CrossStackConfigI## field in the following order: <GoogleCredentials ARN>,<GoogleAdminEmail ARN>,<SCIMEndpoint ARN>,<SCIMAccessToken AN>,<Region ARN>,<IdentityStoreID ARN>,<KMS Key ARN>
 
 > [!IMPORTANT]
