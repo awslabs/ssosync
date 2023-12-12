@@ -132,7 +132,7 @@ Parameters:
     Description: |
       Credentials to log into Google (content of credentials.json)
     Default: ""
-    AllowedPattern: '(?!.*\s)|(\d{12})|(\{(\s)*(".*")(\s)*:(\s)*(".*")(\s)*\})'
+    AllowedPattern: '(?!.*\s)|(\{(\s)*(".*")(\s)*:(\s)*(".*")(\s)*\})'
     NoEcho: true
 
   GoogleAdminEmail:
@@ -140,7 +140,7 @@ Parameters:
     Description: |
       Google Admin email
     Default: ""
-    AllowedPattern: '(?!.*\s)|(\d{12})|(([a-zA-Z0-9.+=_-]{0,61})@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*)'
+    AllowedPattern: '(?!.*\s)|(([a-zA-Z0-9.+=_-]{0,61})@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*)'
     NoEcho: true
 
   SCIMEndpointUrl:
@@ -148,14 +148,14 @@ Parameters:
     Description: |
       AWS IAM Identity Center - SCIM Endpoint Url
     Default: ""
-    AllowedPattern: '(?!.*\s)|(\d{12})|(https://scim.(us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-([0-9]{1}).amazonaws.com/(.*)-([a-z0-9]{4})-([a-z0-9]{4})-([a-z0-9]{12})/scim/v2/)'
+    AllowedPattern: '(?!.*\s)|(https://scim.(us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-([0-9]{1}).amazonaws.com/(.*)-([a-z0-9]{4})-([a-z0-9]{4})-([a-z0-9]{12})/scim/v2/)'
 
   SCIMEndpointAccessToken:
     Type: String
     Description: |
       AWS IAM Identity Center - SCIM AccessToken
     Default: ""
-    AllowedPattern: '(?!.*\s)|(\d{12})|([0-9a-zA-Z/=+-\\]{500,600})'
+    AllowedPattern: '(?!.*\s)|([0-9a-zA-Z/=+-\\]{500,600})'
     NoEcho: true
 
   Region:
@@ -163,14 +163,14 @@ Parameters:
     Description: |
       AWS Region where AWS IAM Identity Center is enabled
     Default: ""
-    AllowedPattern: '(?!.*\s)|(\d{12})|(us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-\d'
+    AllowedPattern: '(?!.*\s)|(us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-\d'
 
   IdentityStoreID:
     Type: String
     Description: |
       Identifier of Identity Store in AWS IAM Identity Center
     Default: ""
-    AllowedPattern: '(?!.*\s)|(\d{12})|d-[1-z0-9]{10}'
+    AllowedPattern: '(?!.*\s)|d-[1-z0-9]{10}'
 
   GoogleUserMatch:
     Type: String

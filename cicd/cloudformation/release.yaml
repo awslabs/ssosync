@@ -37,6 +37,10 @@ Parameters:
     Description:  Resource ARN for the CodeStar Connection to use
     Type: String
     AllowedPattern: '[A-Za-z0-9:/-]+'
+  SecretsConfig:
+    Description:  Output from the secrets.yaml stack
+    Type: String
+    AllowedPattern: '(arn:aws:secretsmanager:((us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-\d):[0-9]{8,12}:secret:[a-zA-Z0-9/_+=.@-]{1,512})(,(arn:aws:secretsmanager:((us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-\d):[0-9]{8,12}:secret:[a-zA-Z0-9/_+=.@-]{1,512})){3}((,arn:aws:secretsmanager:((us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-\d):[0-9]{8,12}:secret:[a-zA-Z0-9/_+=.@-]{1,512})|(,"")){4}(,arn:aws:kms:((us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-\d):[0-9]{12}:key/[a-zA-Z0-9/_+=.@-]{1,512})'
 
 Metadata:
   AWS::CloudFormation::Interface:
@@ -60,22 +64,28 @@ Metadata:
           default: Connection id for the CodeStar Connection to use
         Parameters:
           - CodeStarConnection
+      - Label:
+          default: Secrets ARNs
+        Parameters:
+          - SecretsConfig
             
     ParameterLabels:
       CodeStarConnection:
         default: "arn:aws:codestar-connections:<AWS::Region>:<AWS::AccountId>:connection/abcd1234-ab12-ab12--ab12-abcdef123456"
       ManagementAccount:
-        default: "123456789012"
+        default: "What is the account id of the Test Orgs, Management account?"
+      DelegatedAccount:
+        default: "What is the account id of the Test Orgs, Delegated admin account?"
+      NonDelegatedAccount:
+        default: "What is the account id of the Test Orgs, Non-delegated admin account?"
       ManagementBucket:
         default: "my-bucket"
-      DelegatedAccount:
-        default: "123456789012"
       DelegatedBucket:
         default: "my-bucket"
-      NonDelegatedAccount:
-        default: "123456789012"
       NonDelegatedBucket:
         default: "my-bucket"
+      SecretsConfig:
+        default: "TestConfig from the output of secrets.yaml"
 
 Resources:
 
@@ -476,6 +486,24 @@ Resources:
             Value: !Sub "${ManagementAccount},${DelegatedAccount},${NonDelegatedAccount}"
           - Name: AppArn
             Value: !Sub "arn:aws:serverlessrepo:${AWS::Region}:${AWS::AccountId}:applications/SSOSync-Staging"
+          - Name: SecretSCIMEndpoint
+            Value: !Select [0, !Split [',', !Ref SecretsConfig]]
+          - Name: SecretSCIMAccessToken
+            Value: !Select [1, !Split [',', !Ref SecretsConfig]]
+          - Name: SecretRegion
+            Value: !Select [2, !Split [',', !Ref SecretsConfig]]
+          - Name: SecretIdentityStoreID
+            Value: !Select [3, !Split [',', !Ref SecretsConfig]]
+          - Name: SecretGoogleCredentials
+            Value: !Select [4, !Split [',', !Ref SecretsConfig]]
+          - Name: SecretGoogleAdminEmail
+            Value: !Select [5, !Split [',', !Ref SecretsConfig]]
+          - Name: SecretWIFClientLibraryConfig
+            Value: !Select [6, !Split [',', !Ref SecretsConfig]]
+          - Name: SecretWIFServiceAccountEmail
+            Value: !Select [7, !Split [',', !Ref SecretsConfig]]
+          - Name: KeyForSecrets
+            Value: !Select [8, !Split [',', !Ref SecretsConfig]]
       Artifacts:
         Name: SSOSync-Build
         Type: CODEPIPELINE
