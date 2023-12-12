@@ -19,7 +19,7 @@ phases:
   build:
     commands:
       - ./ssosync --version
-      - aws secretsmanager  get-secret-value --secret-id=SecretGoogleCredential --query SecretString --output text | jq '.' > credentials.json
+      - aws secretsmanager  get-secret-value --secret-id=SecretGoogleCredentials --query SecretString --output text | jq '.' > credentials.json
       - cat credentials.json
 
       - ./ssosync -t "${SCIMAccessToken}" -e "${SCIMEndpointUrl}" -u "${GoogleAdminEmail}" -i "${IdentityStoreID}" -r "${Region}" -s "groups" -g "name:AWS*"; ExitState=$?
