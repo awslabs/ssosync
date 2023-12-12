@@ -10,6 +10,9 @@
 
 SSO Sync will run on any platform that Go can build for. It is available in the [AWS Serverless Application Repository](https://console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync)
 
+> [!CAUTION]
+> When using ssosync with an instance or IAM Identity Center integrated with AWS Control Tower. AWS Control Tower creates a number of groups and users (directly via the Identity Store API), when an external identity provider is configured these uersa and groups are can not be used to log in. However it is important to remember that because ssosync implemements a uni-directional sync it will make the IAM Identity Store match the subset of your Google Workspaces directory you specify, including removing these groups and users created by AWS Control Tower. There is a PFR [#88 - ssosync deletes Control Tower groups](https://github.com/awslabs/ssosync/issues/88) to implement an option to ignore these users and groups, hopefully this will be implemented in version 3.x.
+
 > [!WARNING]
 > There are breaking changes for versions `>= 0.02`
 
