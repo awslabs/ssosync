@@ -198,7 +198,7 @@ Resources:
       Stages:
         - Name: Source
           Actions:
-            - Name: GitHub
+            - Name: GitHub-Repo
               Namespace: GitHub
               ActionTypeId:
                 Category: Source
@@ -213,9 +213,7 @@ Resources:
                 FullRepositoryId: awslabs/ssosync
                 BranchName: master
                 DetectChanges: true
-        - Name: Build-App
-          Actions:
-            - Name: Git
+            - Name: Git-Metadata
               Namespace: Git
               InputArtifacts:
                 - Name: Source
@@ -226,11 +224,13 @@ Resources:
                 Provider: CodeBuild
               OutputArtifacts:
                 - Name: GitVars
-              RunOrder: 1
+              RunOrder: 2
               Configuration:
                 ProjectName: !Ref GitMetadata
                 PrimarySource: Source
-            - Name: Build
+        - Name: Build-App
+          Actions:
+            - Name: GoLang-Build
               InputArtifacts:
                 - Name: Source
               ActionTypeId: 
@@ -240,18 +240,18 @@ Resources:
                 Provider: CodeBuild
               OutputArtifacts:
                 - Name: Built
-              RunOrder: 2
+              RunOrder: 1
               Configuration: 
                 ProjectName: !Ref CodeBuildApp
                 PrimarySource: Source
                 EnvironmentVariables: '[{"name":"GitTag","value":"#{Git.Tag}","type":"PLAINTEXT"},{"name":"GitCommit","value":"#{Git.CommitId}","type":"PLAINTEXT"}]'
-            - Name: Package
+            - Name: SAM-Package
               ActionTypeId:
                 Category: Build
                 Owner: AWS
                 Version: 1
                 Provider: CodeBuild
-              RunOrder: 3
+              RunOrder: 2
               Configuration:
                 ProjectName: !Ref CodeBuildPackage
                 PrimarySource: Source
@@ -260,14 +260,14 @@ Resources:
               InputArtifacts:
                 - Name: Built
                 - Name: Source
-            - Name: Staging
+            - Name: SAR-Staging
               Namespace: RC
               ActionTypeId:
                 Category: Build
                 Owner: AWS
                 Version: 1
                 Provider: CodeBuild
-              RunOrder: 4
+              RunOrder: 3
               Configuration:
                 ProjectName: !Ref CodeBuildStaging
                 PrimarySource: Source
@@ -280,7 +280,7 @@ Resources:
                 - Name: Built
         - Name: Test-Account_Execution
           Actions:
-            - Name: Management
+            - Name: in_Management_account
               ActionTypeId:
                 Category: Build
                 Owner: AWS
@@ -293,7 +293,7 @@ Resources:
               InputArtifacts:
                 - Name: Source
                 - Name: Tests
-            - Name: Delegated
+            - Name: in_Delegated_admin_account
               ActionTypeId:
                 Category: Build
                 Owner: AWS
@@ -306,7 +306,7 @@ Resources:
               InputArtifacts:
                 - Name: Source
                 - Name: Tests
-            - Name: NonDelegated
+            - Name: in_a_Non-Delegated_account
               ActionTypeId:
                 Category: Build
                 Owner: AWS
@@ -319,9 +319,9 @@ Resources:
               InputArtifacts:
                 - Name: Source
                 - Name: Tests
-        - Name: Release
+        - Name: Release-Publicly
           Actions:
-            - Name: ForRelease
+            - Name: Does_this_commit_have_a_release_tag
               ActionTypeId:
                 Category: Build
                 Owner: AWS
@@ -334,7 +334,7 @@ Resources:
                 EnvironmentVariables: '[{"name":"GitIsRelease","value":"#{Git.IsRelease}","type":"PLAINTEXT"}]'
               InputArtifacts:
                 - Name: Source
-            - Name: Release
+            - Name: SAR-Release
               ActionTypeId:
                 Category: Build
                 Owner: AWS
