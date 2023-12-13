@@ -24,7 +24,7 @@ phases:
 
       # Copy in the stack and params templates
       - mkdir deploy
-      - cp cicd/deploy_patterns/singlestack/stack.yml ./deploy/
+      - cp cicd/deploy_patterns/singlestack/stack.yml ./deploy/singlestack.yml
 
       # Update params with the values for this run for a developer account
       - |
