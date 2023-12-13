@@ -270,14 +270,16 @@ Resources:
               InputArtifacts:
                 - Name: Built
                 - Name: Source
-            - Name: SAR-Staging
+        - Name: Test-Account_Execution
+          Actions:
+            - Name: Staging
               Namespace: RC
               ActionTypeId:
                 Category: Build
                 Owner: AWS
                 Version: 1
                 Provider: CodeBuild
-              RunOrder: 4
+              RunOrder: 1
               Configuration:
                 ProjectName: !Ref CodeBuildStaging
                 PrimarySource: Source
@@ -288,15 +290,13 @@ Resources:
                 - Name: Source
                 - Name: Packaged
                 - Name: Built
-        - Name: Test-Account_Execution
-          Actions:
             - Name: in_Management_account
               ActionTypeId:
                 Category: Build
                 Owner: AWS
                 Version: 1
                 Provider: CodeBuild
-              RunOrder: 1
+              RunOrder: 2
               Configuration:
                 ProjectName: !Ref CodeBuildTestingManagement
                 PrimarySource: Source
@@ -309,7 +309,7 @@ Resources:
                 Owner: AWS
                 Version: 1
                 Provider: CodeBuild
-              RunOrder: 2
+              RunOrder: 3
               Configuration:
                 ProjectName: !Ref CodeBuildTestingDelegated
                 PrimarySource: Source
@@ -322,7 +322,7 @@ Resources:
                 Owner: AWS
                 Version: 1
                 Provider: CodeBuild
-              RunOrder: 3
+              RunOrder: 4
               Configuration:
                 ProjectName: !Ref CodeBuildTestingNonDelegated
                 PrimarySource: Source
