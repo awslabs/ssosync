@@ -330,6 +330,24 @@ Resources:
               InputArtifacts:
                 - Name: Source
                 - Name: Tests
+        - Name: Test-Deploy_Patterns
+          Actions:
+            - Name: SingleStack
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              RunOrder: 1
+              Configuration:
+                ProjectName: !Ref CodeBuildTestingSingleStack
+                PrimarySource: Source
+                EnvironmentVariables: '[{"name":"GitTag","value":"#{Git.Tag}","type":"PLAINTEXT"},{"name":"GitVersionHash","value":"#{Git.CommitHash}","type":"PLAINTEXT"}]'
+              InputArtifacts:
+                - Name: Source
+              OutputArtifacts:
+                - Name: SingleStack
+
         - Name: Release-Publicly
           Actions:
             - Name: Does_this_commit_have_a_release_tag
@@ -599,6 +617,57 @@ Resources:
           - Name: pipeline
             Value: "SSOSync-Test-Account_Execution"
       Artifacts:      
+        Name: SSOSync-Build
+        Type: CODEPIPELINE
+      LogsConfig:
+        CloudWatchLogs:
+          GroupName: !Ref CodePipelineLogGroup
+          StreamName: !Ref CodeBuildTestingLogs
+          Status: ENABLED
+
+  CodeBuildTestingSingleStack:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: "SSOSync-Testing-SingleStack"
+      Description: "Deploy and execute a single stack deployment of ssosync into the Delegated account"
+      ServiceRole: !Ref CodeBuildPublishRole
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: "cicd/deploy_patterns/singlestack/buildspec.yml"
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:7.0
+        Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: ARTIFACT_S3_BUCKET
+            Value: !Sub ${ArtifactBucket}
+          - Name: AppArn
+            Value: !Sub "arn:aws:serverlessrepo:${AWS::Region}:${AWS::AccountId}:applications/SSOSync-Staging"
+          - Name: SecretSCIMEndpoint
+            Value: !Select [0, !Split [',', !Ref SecretsConfig]]
+          - Name: SecretSCIMAccessToken
+            Value: !Select [1, !Split [',', !Ref SecretsConfig]]
+          - Name: SecretRegion
+            Value: !Select [2, !Split [',', !Ref SecretsConfig]]
+          - Name: SecretIdentityStoreID
+            Value: !Select [3, !Split [',', !Ref SecretsConfig]]
+          - Name: SecretGoogleCredentials
+            Value: !Select [4, !Split [',', !Ref SecretsConfig]]
+          - Name: SecretGoogleAdminEmail
+            Value: !Select [5, !Split [',', !Ref SecretsConfig]]
+          - Name: SecretWIFClientLibraryConfig
+            Value: !Select [6, !Split [',', !Ref SecretsConfig]]
+          - Name: SecretWIFServiceAccountEmail
+            Value: !Select [7, !Split [',', !Ref SecretsConfig]]
+          - Name: KeyForSecrets
+            Value: !Select [8, !Split [',', !Ref SecretsConfig]]
+          - Name: TARGETS3BUCKET
+            Value: !Sub ${DelegatedBucket}
+          - Name: StagingRole
+            Value: !Sub "arn:aws:iam::${DelegatedAccount}:role/SSOSync-ProdAccount-${AWS::Region}"
+          - Name: pipeline
+            Value: "SSOSync-Test-Account_Execution"
+      Artifacts:
         Name: SSOSync-Build
         Type: CODEPIPELINE
       LogsConfig:
