@@ -1,0 +1,14 @@
+{
+	"Parameters": {
+		"AppArn": "APPARN",
+		"AppVersion": "APPVERSION"
+	},
+	"StackPolicy": {
+		"Statement": [{
+			"Effect": "Allow",
+			"NotAction": "Update:Delete",
+			"Principal": "*",
+			"Resource": "*"
+		}]
+	}
+}
