@@ -276,7 +276,7 @@ Resources:
               RunOrder: '1'
               Configuration:
                 S3Bucket: !Ref StagingBucket
-                S3ObjectKey: tests.zip
+                S3ObjectKey: crossaccount_secrets.zip
                 PollForSourceChanges: false
         - Name: Deploy
           Actions:
@@ -324,7 +324,7 @@ Resources:
               RunOrder: '1'
               Configuration:
                 S3Bucket: !Ref StagingBucket
-                S3ObjectKey: tests.zip
+                S3ObjectKey: crossaccount_secrets.zip
                 PollForSourceChanges: false
         - Name: CleanUp
           Actions:
@@ -369,7 +369,7 @@ Resources:
               RunOrder: '1'
               Configuration:
                 S3Bucket: !Ref StagingBucket
-                S3ObjectKey: tests.zip
+                S3ObjectKey: crossaccount_app.zip
                 PollForSourceChanges: false
         - Name: Deploy
           Actions:
@@ -447,7 +447,7 @@ Resources:
               RunOrder: '1'
               Configuration:
                 S3Bucket: !Ref StagingBucket
-                S3ObjectKey: tests.zip
+                S3ObjectKey: singlestack.zip
                 PollForSourceChanges: false
         - Name: Deploy
           Actions:
@@ -525,7 +525,7 @@ Resources:
               RunOrder: '1'
               Configuration:
                 S3Bucket: !Ref StagingBucket
-                S3ObjectKey: tests.zip
+                S3ObjectKey: splitstack.zip
                 PollForSourceChanges: false
         - Name: Deploy
           Actions:
