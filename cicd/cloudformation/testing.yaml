@@ -144,7 +144,7 @@ Resources:
   CodePipeline:
     Type: AWS::CodePipeline::Pipeline
     Properties:
-      Name: SSOSync-Test
+      Name: SSOSync-Test-Account_Execution
       RoleArn: !Sub ${CodePipelineRole.Arn}
       ArtifactStore:
         Type: S3

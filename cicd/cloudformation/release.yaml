@@ -537,6 +537,8 @@ Resources:
             Value: !Sub ${ManagementBucket}
           - Name: StagingRole
             Value: !Sub "arn:aws:iam::${ManagementAccount}:role/SSOSync-ProdAccount-${AWS::Region}"
+          - Name: pipeline
+            Value: "SSOSync-Test-Account_Execution"
       Artifacts:
         Name: SSOSync-Build
         Type: CODEPIPELINE
@@ -564,6 +566,8 @@ Resources:
             Value: !Sub ${DelegatedBucket}
           - Name: StagingRole
             Value: !Sub "arn:aws:iam::${DelegatedAccount}:role/SSOSync-ProdAccount-${AWS::Region}"
+          - Name: pipeline
+            Value: "SSOSync-Test-Account_Execution"
       Artifacts:
         Name: SSOSync-Build
         Type: CODEPIPELINE
@@ -591,6 +595,8 @@ Resources:
             Value: !Sub ${NonDelegatedBucket}
           - Name: StagingRole
             Value: !Sub "arn:aws:iam::${NonDelegatedAccount}:role/SSOSync-ProdAccount-${AWS::Region}"
+          - Name: pipeline
+            Value: "SSOSync-Test-Account_Execution"
       Artifacts:      
         Name: SSOSync-Build
         Type: CODEPIPELINE
