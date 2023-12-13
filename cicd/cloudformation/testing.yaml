@@ -258,7 +258,7 @@ Resources:
       ServiceRole: !Ref CodeBuildTestRole
       Source:
         Type: CODEPIPELINE
-        BuildSpec: "tests/smoke/cli/buildspec.yml"
+        BuildSpec: "tests/deploy_patterns/cli/buildspec.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
         Image: aws/codebuild/standard:5.0
@@ -289,7 +289,7 @@ Resources:
       ServiceRole: !Ref CodeBuildTestRole
       Source:
         Type: CODEPIPELINE
-        BuildSpec: "tests/smoke/lambda/buildspec.yml"
+        BuildSpec: "tests/deploy_patterns/lambda/buildspec.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
         Image: aws/codebuild/standard:5.0
