@@ -255,8 +255,7 @@ Resources:
                 ProjectName: !Ref CodeBuildApp
                 PrimarySource: Source
                 EnvironmentVariables: '[{"name":"GitTag","value":"#{Git.Tag}","type":"PLAINTEXT"},{"name":"GitCommit","value":"#{Git.CommitId}","type":"PLAINTEXT"}]'
-            - Name: SAM-Package
-              Namespace: RC
+            - Name: SAM-Package-SAR-Stage
               ActionTypeId:
                 Category: Build
                 Owner: AWS
