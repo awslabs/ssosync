@@ -630,7 +630,7 @@ Resources:
     Properties:
       Name: "SSOSync-Testing-SingleStack"
       Description: "Deploy and execute a single stack deployment of ssosync into the Delegated account"
-      ServiceRole: !Ref CodeBuildPublishRole
+      ServiceRole: !Ref CodeBuildTestRole
       Source:
         Type: CODEPIPELINE
         BuildSpec: "cicd/deploy_patterns/singlestack/buildspec.yml"
@@ -666,7 +666,7 @@ Resources:
           - Name: StagingRole
             Value: !Sub "arn:aws:iam::${DelegatedAccount}:role/SSOSync-ProdAccount-${AWS::Region}"
           - Name: pipeline
-            Value: "SSOSync-Test-Account_Execution"
+            Value: "SSOSync-SingleStack"
       Artifacts:
         Name: SSOSync-Build
         Type: CODEPIPELINE
@@ -784,6 +784,7 @@ Resources:
               - !Sub ${CodeBuildTestingManagement.Arn}
               - !Sub ${CodeBuildTestingDelegated.Arn}
               - !Sub ${CodeBuildTestingNonDelegated.Arn}
+              - !Sub ${CodeBuildTestingSingleStack.Arn}
               - !Sub ${CodeBuildApproveRelease.Arn}
               - !Sub ${CodeBuildRelease.Arn}
               Effect: Allow
