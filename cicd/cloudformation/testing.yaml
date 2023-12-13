@@ -141,7 +141,7 @@ Resources:
             StringEquals:
               aws:SourceAccount: !Ref AWS::AccountId
 
-  CodePipeline:
+  CodePipelineTestAccountExecution:
     Type: AWS::CodePipeline::Pipeline
     Properties:
       Name: SSOSync-Test-Account_Execution
@@ -249,6 +249,100 @@ Resources:
                 - Name: Tests
               RunOrder: 1
 
+  CodePipelineDeployCrossAccountSecrets:
+    Type: AWS::CodePipeline::Pipeline
+    Condition: DeployManagement
+    Properties:
+      Name: SSOSync-Deploy_CrossAccount_Secrets
+      RoleArn: !Sub ${CodePipelineRole.Arn}
+      ArtifactStore:
+        Type: S3
+        Location: !Ref ArtifactBucket
+        EncryptionKey:
+          Type: KMS
+          Id: !GetAtt ArtifactBucketKey.Arn
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: Tests
+              Namespace: Test
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Version: 1
+                Provider: S3
+              OutputArtifacts:
+                - Name: Tests
+              RunOrder: '1'
+              Configuration:
+                S3Bucket: !Ref StagingBucket
+                S3ObjectKey: tests.zip
+                PollForSourceChanges: false
+        - Name: Deploy
+          Actions:
+            - Name: Deploy
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Version: '1'
+                Provider: CloudFormation
+              Configuration:
+                ActionMode: CREATE_UPDATE
+                Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND,CAPABILITY_NAMED_IAM
+                StackName: SmokeTest
+                RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
+                TemplateConfiguration: 'Tests::deploy/cross_account_secrets.json'
+                TemplatePath: !Sub 'Tests::deploy/cross_account_secrets..yml'
+              InputArtifacts:
+                - Name: Tests
+              RunOrder: 1
+
+  CodePipelineCleanUpCrossAccountSecrets:
+    Type: AWS::CodePipeline::Pipeline
+    Condition: DeployManagement
+    Properties:
+      Name: SSOSync-CleanUp_CrossAccount_Secrets
+      RoleArn: !Sub ${CodePipelineRole.Arn}
+      ArtifactStore:
+        Type: S3
+        Location: !Ref ArtifactBucket
+        EncryptionKey:
+          Type: KMS
+          Id: !GetAtt ArtifactBucketKey.Arn
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: Tests
+              Namespace: Test
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Version: 1
+                Provider: S3
+              OutputArtifacts:
+                - Name: Tests
+              RunOrder: '1'
+              Configuration:
+                S3Bucket: !Ref StagingBucket
+                S3ObjectKey: tests.zip
+                PollForSourceChanges: false
+        - Name: CleanUp
+          Actions:
+            - Name: RemoveStack
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Version: 1
+                Provider: CloudFormation
+              Configuration:
+                ActionMode: DELETE_ONLY
+                StackName: SmokeTest
+                RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
+              InputArtifacts:
+                - Name: Tests
+              RunOrder: 1
+
+
 
   CodeBuildSmokeCLI:
     Type: AWS::CodeBuild::Project
@@ -258,7 +352,7 @@ Resources:
       ServiceRole: !Ref CodeBuildTestRole
       Source:
         Type: CODEPIPELINE
-        BuildSpec: "tests/deploy_patterns/cli/buildspec.yml"
+        BuildSpec: "tests/account_execution/cli/buildspec.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
         Image: aws/codebuild/standard:5.0
@@ -289,7 +383,7 @@ Resources:
       ServiceRole: !Ref CodeBuildTestRole
       Source:
         Type: CODEPIPELINE
-        BuildSpec: "tests/deploy_patterns/lambda/buildspec.yml"
+        BuildSpec: "tests/account_execution/lambda/buildspec.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
         Image: aws/codebuild/standard:5.0
