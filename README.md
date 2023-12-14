@@ -19,10 +19,10 @@ SSO Sync will run on any platform that Go can build for. It is available in the 
 > [!WARNING]
 > `>= 1.0.0-rc.5` groups to do not get deleted in AWS SSO when deleted in the Google Directory, and groups are synced by their email address
 
-> [!WARNING}
+> [!WARNING]
 > `>= 2.0.0` this makes use of the **Identity Store API** which means:
-* if deploying the lambda from the [AWS Serverless Application Repository](https://console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync) then it needs to be deployed into the [IAM Identity Center delegated administration](https://docs.aws.amazon.com/singlesignon/latest/userguide/delegated-admin.html) account. Technically you could deploy in the management account but we would recommend against this.
-* if you are running the project as a cli tool, then the environment will need to be using credentials of a user in the [IAM Identity Center delegated administration](https://docs.aws.amazon.com/singlesignon/latest/userguide/delegated-admin.html) account, with appropriate permissions.
+> * if deploying the lambda from the [AWS Serverless Application Repository](https://console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync) then it needs to be deployed into the [IAM Identity Center delegated administration](https://docs.aws.amazon.com/singlesignon/latest/userguide/delegated-admin.html) account. Technically you could deploy in the management account but we would recommend against this.
+> * if you are running the project as a cli tool, then the environment will need to be using credentials of a user in the [IAM Identity Center delegated administration](https://docs.aws.amazon.com/singlesignon/latest/userguide/delegated-admin.html) account, with appropriate permissions.
 
 > [!WARNING]
 > `>= 2.1.0` make use of named IAM resources, so if deploying via CICD or IaC template will require **CAPABILITY_NAMED_IAM** to be specified.
@@ -197,21 +197,21 @@ AWS SSO. To sync regularly, you can run ssosync via AWS Lambda.
 > * Stronger validation of parameters in the Cloudformation template, to improve likelhood of success for new users.
 > * Now supports multiple deployment patterns, defaults are consistent with previous versions.
 
-**App + secrets** 
-This is the default mode and fully backwards compatible with previous versions
+**App + secrets** This is the default mode and fully backwards compatible with previous versions
 
-**App only** 
-This mode does not create the secrets but expects you to deployed a separate stack using the **Secrets only** mode within the same account
-[!CAUTION]
-If you want to use your own existing secrets then provide them as a comma separated list in the ##CrossStackConfigI## field in the following order: <GoogleCredentials ARN>,<GoogleAdminEmail ARN>,<SCIMEndpoint ARN>,<SCIMAccessToken AN>,<Region ARN>,<IdentityStoreID ARN>
-
-**App for cross-account** This mode is used where you have deployed the secrets in a separate account, the arns of the KMS key and secrets need to be passed into the CrossStackConfig field, It is easiest to have created the secrets in the other account using the ** Secrest for cross-account** mode, as the output can simply copied and pasted into the above field.
+**App only** This mode does not create the secrets but expects you to deployed a separate stack using the **Secrets only** mode within the same account
+> [!CAUTION]
+> If you want to use your own existing secrets then provide them as a comma separated list in the ##CrossStackConfigI## field in the following order:
+> __GoogleCredentials ARN__,__GoogleAdminEmail ARN__,__SCIMEndpoint ARN__,__SCIMAccessToken ARN__,__Region ARN__,__IdentityStoreID ARN__
+> 
+**App for cross-account** This mode is used where you have deployed the secrets in a separate account, the arns of the KMS key and secrets need to be passed into the __CrossStackConfig__ field, It is easiest to have created the secrets in the other account using the ** Secrest for cross-account** mode, as the output can simply copied and pasted into the above field.
 
 > [!CAUTION]
-> If you want to use your own existing secrets then provide them as a comma separated list in the ##CrossStackConfigI## field in the following order: <GoogleCredentials ARN>,<GoogleAdminEmail ARN>,<SCIMEndpoint ARN>,<SCIMAccessToken AN>,<Region ARN>,<IdentityStoreID ARN>,<KMS Key ARN>
+> If you want to use your own existing secrets then provide them as a comma separated list in the __CrossStackConfig__ field in the following order:
+> __GoogleCredentials ARN__,__GoogleAdminEmail ARN__,__SCIMEndpoint ARN__,__SCIMAccessToken ARN__,__Region ARN__,__IdentityStoreID ARN__,__KMS Key ARN__
 
 > [!IMPORTANT]
-> Be sure to allow access to the key and secrets in their respective policies to the role ##SSOSyncAppRole## in the app account.
+> Be sure to allow access to the key and secrets in their respective policies to the role __SSOSyncAppRole__ in the app account.
 
 **Secrets only** This mode creates a set of secrets but does not deploy the app itself, it requires the app is deployed in that same account using the **App only** mode. This allows for decoupling of the secrets and the app.
 
