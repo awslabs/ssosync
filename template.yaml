@@ -533,7 +533,7 @@ Resources:
     Type: AWS::Serverless::Function
     Condition: CreateFunction
     Properties:
-      FunctionName: !If [SetFunctionName, !Ref FunctionName, AWS::NoValue]
+      FunctionName: !If [SetFunctionName, !Ref FunctionName, !Ref AWS::NoValue]
       Role: !If [RemoteSecrets, !GetAtt SSOSyncRoleRemote.Arn, !GetAtt SSOSyncRoleLocal.Arn]
       Runtime: provided.al2
       Handler: bootstrap
@@ -550,12 +550,12 @@ Resources:
           SSOSYNC_SCIM_ACCESS_TOKEN: !If [CreateSecrets, !Ref SecretSCIMAccessToken, !Select [3, !Split [',', !Ref CrossStackConfig]]]
           SSOSYNC_REGION: !If [CreateSecrets, !Ref SecretRegion, !Select [4, !Split [',', !Ref CrossStackConfig]]]
           SSOSYNC_IDENTITY_STORE_ID: !If [CreateSecrets, !Ref SecretIdentityStoreID, !Select [5, !Split [',', !Ref CrossStackConfig]]]
-          SSOSYNC_USER_MATCH: !If [SetGoogleUserMatch, !Ref GoogleUserMatch, AWS::NoValue]
-          SSOSYNC_GROUP_MATCH: !If [SetGoogleGroupMatch, !Ref GoogleGroupMatch, AWS::NoValue]
+          SSOSYNC_USER_MATCH: !If [SetGoogleUserMatch, !Ref GoogleUserMatch, !Ref AWS::NoValue]
+          SSOSYNC_GROUP_MATCH: !If [SetGoogleGroupMatch, !Ref GoogleGroupMatch, !Ref AWS::NoValue]
           SSOSYNC_SYNC_METHOD: !Ref SyncMethod
-          SSOSYNC_IGNORE_GROUPS: !If [SetIgnoreGroups, !Ref IgnoreGroups, AWS::NoValue]
-          SSOSYNC_IGNORE_USERS: !If [SetIgnoreUsers, !Ref IgnoreUsers, AWS::NoValue]
-          SSOSYNC_INCLUDE_GROUPS: !If [SetIncludeGroups, !Ref IncludeGroups, AWS::NoValue]
+          SSOSYNC_IGNORE_GROUPS: !If [SetIgnoreGroups, !Ref IgnoreGroups, !Ref AWS::NoValue]
+          SSOSYNC_IGNORE_USERS: !If [SetIgnoreUsers, !Ref IgnoreUsers, !Ref AWS::NoValue]
+          SSOSYNC_INCLUDE_GROUPS: !If [SetIncludeGroups, !Ref IncludeGroups, !Ref AWS::NoValue]
       Events:
         SyncScheduledEvent:
           Type: Schedule
