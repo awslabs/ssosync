@@ -79,11 +79,11 @@ Metadata:
       NonDelegatedAccount:
         default: "What is the account id of the Test Orgs, Non-delegated admin account?"
       ManagementBucket:
-        default: "my-bucket"
+        default: "Artifact Bucket within the Management account"
       DelegatedBucket:
-        default: "my-bucket"
+        default: "Artifact Bucket within the Delegated Admin account"
       NonDelegatedBucket:
-        default: "my-bucket"
+        default: "Artifact Bucket within the Non-delegated Admin account"
       SecretsConfig:
         default: "TestConfig from the output of secrets.yaml"
 

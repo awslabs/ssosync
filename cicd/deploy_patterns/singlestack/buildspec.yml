@@ -24,7 +24,8 @@ phases:
 
       # Copy in the stack and params templates
       - mkdir deploy
-      - cp cicd/deploy_patterns/singlestack/stack.yml ./deploy/singlestack.yml
+      - cp cicd/deploy_patterns/singlestack/namedfunction.yml ./deploy/namedfunction.yml
+      - cp cicd/deploy_patterns/singlestack/unnamedfunction.yml ./deploy/unnamedfunction.yml
 
       # Update params with the values for this run for a developer account
       - |
@@ -45,7 +46,7 @@ phases:
       - export $(printf "AWS_ACCESS_KEY_ID=%s AWS_SECRET_ACCESS_KEY=%s AWS_SESSION_TOKEN=%s" $(aws sts assume-role --role-arn "${StagingRole}" --role-session-name "CodePipelineRole" --query "Credentials.[AccessKeyId,SecretAccessKey,SessionToken]" --output text))
 
       # upload the zipfile to the S3 Bucket
-      - aws s3 cp ./singlestack.zip s3://${TARGETS3BUCKET}/ 
+      - aws s3 cp ./singlestack.zip s3://${TARGETS3BUCKET}/
 
       # Start the test pipeline in the staging account
       - export ExecutionId=$(aws codepipeline start-pipeline-execution --name $pipeline --output text)
