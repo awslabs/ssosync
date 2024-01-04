@@ -76,13 +76,10 @@ Resources:
         LogFormat: json
 
 Outputs:
-  FunctionArn:
-    Condition: OutputFunction
+  SSOSyncArn:
     Description: "The Arn of the deployed lambda function"
-    Value: 
-    Fn::GetAtt:
-      - SARApp
-      - Outputs.FunctionArn
-    Export:
-      Name: FunctionARN
+    Value:
+      Fn::GetAtt:
+        - SARApp
+        - Outputs.FunctionArn
 

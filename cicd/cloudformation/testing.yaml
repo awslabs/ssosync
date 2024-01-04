@@ -21,7 +21,7 @@ Parameters:
       - Delegated
       - NonDelegated
   DelegatedAccount:
-    Description: The test account type
+    Description: The account id of the account setup as delegated admin
     Default: "622987834645"
     Type: String
   DelegatedBucket:
@@ -42,6 +42,7 @@ Metadata:
           - TestAccount
       - Label:
           default: Delegated Account
+          description: Only required for when deploying in the management account
         Parameters:
           - DelegatedAccount
           - DelegatedBucket
@@ -483,6 +484,19 @@ Resources:
                 - Name: ExecuteSingleStack
               InputArtifacts:
                 - Name: Tests
+            - Name: RemoveStack
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Version: 1
+                Provider: CloudFormation
+              Configuration:
+                ActionMode: DELETE_ONLY
+                StackName: TestSingleStack
+                RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
+              InputArtifacts:
+                - Name: Tests
+              RunOrder: 3
         - Name: UnNamedFunction
           Actions:
             - Name: Deploy
@@ -501,8 +515,6 @@ Resources:
               InputArtifacts:
                 - Name: Tests
               RunOrder: 1
-        - Name: CleanUp
-          Actions:
             - Name: RemoveStack
               ActionTypeId:
                 Category: Deploy
@@ -515,7 +527,7 @@ Resources:
                 RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
               InputArtifacts:
                 - Name: Tests
-              RunOrder: 1
+              RunOrder: 2
 
   CodePipelineSplitStack:
     Type: AWS::CodePipeline::Pipeline
