@@ -563,7 +563,8 @@ Resources:
           Properties:
             Enabled: !If [OnSchedule, false, true]
             Schedule: !If [OnSchedule, !Ref ScheduleExpression, "rate(15 minutes)"]
-
+    Metadata:
+      BuildMethod: makefile
 
   KeyAlias:
     Type: AWS::KMS::Alias
