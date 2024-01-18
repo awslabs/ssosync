@@ -1,0 +1,11 @@
+--- template.yaml	2023-10-30 14:21:20
++++ staging.yaml	2023-10-30 14:21:59
+@@ -38,7 +38,7 @@
+           - ScheduleExpression
+ 
+   AWS::ServerlessRepo::Application:
+-    Name: ssosync
++    Name: SSOSync-Staging
+     Description: Helping you populate AWS SSO directly with your Google Apps users.
+     Author: Sebastian Doell
+     SpdxLicenseId: Apache-2.0
