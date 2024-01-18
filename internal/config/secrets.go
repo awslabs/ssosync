@@ -43,12 +43,12 @@ func (s *Secrets) GoogleCredentials() (string, error) {
 
 // Region ...
 func (s *Secrets) Region() (string, error) {
-	return s.getSecret("SSOSyncRegion")
+	return s.getSecret("SSOSyncRegion", false)
 }
 
 // Identity Store ID ...
 func (s *Secrets) IdentityStoreID() (string, error) {
-	return s.getSecret("SSOSyncIdentityStoreID")
+	return s.getSecret("SSOSyncIdentityStoreID", false)
 }
 
 func (s *Secrets) getSecret(secretKey string, optional bool) (string, error) {
