@@ -49,6 +49,10 @@ func (s *Secrets) IdentityStoreID() (string, error) {
 	return s.getSecret("SSOSyncIdentityStoreID")
 }
 
+func (s *Secrets) GetSecret(secretKey string) (string, error) {
+	return s.getSecret(secretKey)
+}
+
 func (s *Secrets) getSecret(secretKey string) (string, error) {
 	r, err := s.svc.GetSecretValue(&secretsmanager.GetSecretValueInput{
 		SecretId:     aws.String(secretKey),
