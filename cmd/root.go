@@ -191,7 +191,7 @@ func initConfig() {
 	viper.SetDefault("region_secret_id", "SSOSyncRegion")
 	viper.SetDefault("identity_store_id_secret_id", "SSOSyncIdentityStoreID")
 
-	if err := viper.Unmarshal(&cfg); err != nil {
+	if err := viper.Unmarshal(cfg); err != nil {
 		log.Fatalf(errors.Wrap(err, "cannot unmarshal config").Error())
 	}
 
