@@ -232,7 +232,7 @@ func configLambda() {
 	}
 	cfg.SCIMEndpoint = unwrap
 
-	unwrap, err = secrets.Region()
+	unwrap, err = secrets.GetSecret(cfg.RegionSecretId)
 	if err != nil {
 		log.Fatalf(errors.Wrap(err, "cannot read config").Error())
 	}
