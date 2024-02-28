@@ -224,6 +224,7 @@ Resources:
               Configuration:
                 ProjectName: !Ref CodeBuildPackage
                 PrimarySource: Source
+                EnvironmentVariables: '[{"name":"GitTag","value":"#{Git.Tag}","type":"PLAINTEXT"},{"name":"GitVersionHash","value":"#{Git.CommitHash}","type":"PLAINTEXT"}]'
               OutputArtifacts:
                 - Name: Packaged
               InputArtifacts:
