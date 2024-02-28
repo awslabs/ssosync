@@ -664,6 +664,19 @@ Resources:
               Resource:
               - !Sub ${ArtifactBucket.Arn}/*
               - !Sub ${AppBucket.Arn}/*
+            - Action: 'serverlessrepo:*'
+              Effect: Allow
+              Resource:
+              - !Sub arn:aws:serverlessrepo:${AWS::Region}:${AWS::AccountId}:applications/*
+            - Action:
+              - 'ssm:GetParameters'
+              - 'ssm:PutParameter'
+              - 'ssm:DeleteParameter'
+              - 'ssm:DeleteParameters'
+              - 'ssm:DescribeParameters'
+              Effect: Allow
+              Resource:
+              - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/SSOSync/*
 
   CodeBuildPublishRole:
     Type: AWS::IAM::Role
