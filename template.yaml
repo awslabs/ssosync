@@ -191,21 +191,21 @@ Parameters:
     Description: |
       [optional] Ignore these Google Workspace groups, leave empty if not required
     Default: ""
-    AllowedPattern: '(?!.*\s)|([0-9a-zA-Z\-= _]*)(,[0-9a-zA-Z\-=@. _]*)*'
+    AllowedPattern: '(?!.*\s)|((([a-zA-Z0-9.\-_]{1,64})@([a-zA-Z0-9.\-]{5,260}))(,(([a-zA-Z0-9.\-_]{1,64})@([a-zA-Z0-9.\-]{5,260})))*)'
 
   IgnoreUsers:
     Type: String
     Description: |
       [optional] Ignore these Google Workspace users, leave empty if not required
     Default: ""
-    AllowedPattern: '(?!.*\s)|([0-9a-zA-Z\-= _]*)(,[0-9a-zA-Z\-=@. _]*)*'
+    AllowedPattern: '(?!.*\s)|((([a-zA-Z0-9.\-_]{1,64})@([a-zA-Z0-9.\-]{5,260}))(,(([a-zA-Z0-9.\-_]{1,64})@([a-zA-Z0-9.\-]{5,260})))*)'
 
   IncludeGroups:
     Type: String
     Description: |
       [optional] Include only these Google Workspace groups, leave empty if not required. (Only applicable for SyncMethod user_groups)
     Default: ""
-    AllowedPattern: '(?!.*\s)|([0-9a-zA-Z\-= _]*)(,[0-9a-zA-Z\-=@. _]*)*'
+    AllowedPattern: '(?!.*\s)|((([a-zA-Z0-9.\-_]{1,64})@([a-zA-Z0-9.\-]{5,260}))(,(([a-zA-Z0-9.\-_]{1,64})@([a-zA-Z0-9.\-]{5,260})))*)'
 
   SyncMethod:
     Type: String
