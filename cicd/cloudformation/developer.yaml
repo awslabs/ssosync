@@ -29,6 +29,11 @@ Parameters:
     Type: String
     NoEcho: True
 
+  SecretsConfig:
+    Description:  Output from the secrets.yaml stack
+    Type: String
+    AllowedPattern: '(arn:aws:secretsmanager:((us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-\d):[0-9]{8,12}:secret:[a-zA-Z0-9/_+=.@-]{1,512})(,(arn:aws:secretsmanager:((us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-\d):[0-9]{8,12}:secret:[a-zA-Z0-9/_+=.@-]{1,512})){3}((,arn:aws:secretsmanager:((us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-\d):[0-9]{8,12}:secret:[a-zA-Z0-9/_+=.@-]{1,512})|(,"")){4}(,arn:aws:kms:((us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-\d):[0-9]{12}:key/[a-zA-Z0-9/_+=.@-]{1,512})'
+
 
 Metadata:
   AWS::CloudFormation::Interface:
@@ -53,6 +58,8 @@ Metadata:
         default: "Branch Name"
       GitHubOAuthToken:
         default: "GitHub OAuth Token"
+      SecretsConfig:
+        default: "TestConfig from the output of secrets.yaml"
 
 Resources:
   CodePipelineLogGroup:
@@ -184,7 +191,7 @@ Resources:
                 OAuthToken: !Ref GitHubOAuthToken
         - Name: App
           Actions:
-            - Name: Git
+            - Name: Git-Metadata
               Namespace: Git
               InputArtifacts:
                 - Name: Source
@@ -199,7 +206,7 @@ Resources:
               Configuration:
                 ProjectName: !Ref GitMetadata
                 PrimarySource: Source
-            - Name: Build
+            - Name: GoLang-Build
               InputArtifacts:
                 - Name: Source
               ActionTypeId:
@@ -214,7 +221,7 @@ Resources:
                 ProjectName: !Ref CodeBuildApp
                 PrimarySource: Source
                 EnvironmentVariables: '[{"name":"GitTag","value":"#{Git.Tag}","type":"PLAINTEXT"},{"name":"GitCommit","value":"#{Git.CommitId}","type":"PLAINTEXT"}]'
-            - Name: Package
+            - Name: SAM-Package-SAR-Stage
               ActionTypeId:
                 Category: Build
                 Owner: AWS
@@ -230,9 +237,9 @@ Resources:
               InputArtifacts:
                 - Name: Built
                 - Name: Source
-        - Name: Prep
+        - Name: Deploy
           Actions:
-            - Name: Publish
+            - Name: Staging
               Namespace: RC
               ActionTypeId:
                 Category: Build
@@ -259,9 +266,9 @@ Resources:
               Configuration:
                 ActionMode: CREATE_UPDATE
                 Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND,CAPABILITY_NAMED_IAM
-                StackName: SmokeTest
+                StackName: TestAccountExecution
                 RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
-                TemplateConfiguration: !Sub 'Tests::deploy/developer.json'
+                TemplateConfiguration: 'Tests::deploy/developer.json'
                 TemplatePath: !Sub 'Tests::deploy/stack.yml'
               InputArtifacts:
                 - Name: Tests
@@ -438,7 +445,7 @@ Resources:
       ServiceRole: !Ref CodeBuildPublishRole
       Source:
         Type: CODEPIPELINE
-        BuildSpec: "cicd/staging/build/buildspec.yml"
+        BuildSpec: "cicd/account_execution/staging/buildspec.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
         Image: aws/codebuild/standard:7.0
@@ -448,6 +455,24 @@ Resources:
             Value: !Sub ${ArtifactBucket}
           - Name: AppArn
             Value: !Sub "arn:aws:serverlessrepo:${AWS::Region}:${AWS::AccountId}:applications/SSOSync-Staging"
+          - Name: SecretSCIMEndpoint
+            Value: !Select [0, !Split [',', !Ref SecretsConfig]]
+          - Name: SecretSCIMAccessToken
+            Value: !Select [1, !Split [',', !Ref SecretsConfig]]
+          - Name: SecretRegion
+            Value: !Select [2, !Split [',', !Ref SecretsConfig]]
+          - Name: SecretIdentityStoreID
+            Value: !Select [3, !Split [',', !Ref SecretsConfig]]
+          - Name: SecretGoogleCredentials
+            Value: !Select [4, !Split [',', !Ref SecretsConfig]]
+          - Name: SecretGoogleAdminEmail
+            Value: !Select [5, !Split [',', !Ref SecretsConfig]]
+          - Name: SecretWIFClientLibraryConfig
+            Value: !Select [6, !Split [',', !Ref SecretsConfig]]
+          - Name: SecretWIFServiceAccountEmail
+            Value: !Select [7, !Split [',', !Ref SecretsConfig]]
+          - Name: KeyForSecrets
+            Value: !Select [8, !Split [',', !Ref SecretsConfig]]
       Artifacts:
         Name: SSOSync
         Type: CODEPIPELINE
@@ -471,7 +496,7 @@ Resources:
       ServiceRole: !Ref CodeBuildTestRole
       Source:
         Type: CODEPIPELINE
-        BuildSpec: "tests/smoke/cli/buildspec.yml"
+        BuildSpec: "tests/account_execution/cli/buildspec.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
         Image: aws/codebuild/standard:7.0
@@ -499,7 +524,7 @@ Resources:
       ServiceRole: !Ref CodeBuildTestRole
       Source:
         Type: CODEPIPELINE
-        BuildSpec: "tests/smoke/lambda/buildspec.yml"
+        BuildSpec: "tests/account_execution/lambda/buildspec.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
         Image: aws/codebuild/standard:7.0
