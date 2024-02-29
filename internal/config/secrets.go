@@ -2,7 +2,7 @@ package config
 
 import (
 	"encoding/base64"
-
+        "os"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/secretsmanager"
 )
