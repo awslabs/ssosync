@@ -697,7 +697,7 @@ Resources:
     Type: "AWS::SecretsManager::Secret"
     Condition: CreateSecrets
     Properties:
-      Name: FubarRegion
+      Name: SSOSyncRegion
       SecretString: !Ref Region
       KmsKeyId: !If [CreateKey, !Ref KeyAlias, alias/aws/secretsmanager]
 
