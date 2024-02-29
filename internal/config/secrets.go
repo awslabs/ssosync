@@ -21,32 +21,32 @@ func NewSecrets(svc *secretsmanager.SecretsManager) *Secrets {
 
 // GoogleAdminEmail ...
 func (s *Secrets) GoogleAdminEmail() (string, error) {
-	return s.getSecret("SSOSyncGoogleAdminEmail")
+	return s.getSecret(os.Getenv("GOOGLE_ADMIN"))
 }
 
 // SCIMAccessToken ...
 func (s *Secrets) SCIMAccessToken() (string, error) {
-	return s.getSecret("SSOSyncSCIMAccessToken")
+	return s.getSecret(os.Getenv("SCIM_ACCESS_TOKEN"))
 }
 
 // SCIMEndpointUrl ...
 func (s *Secrets) SCIMEndpointUrl() (string, error) {
-	return s.getSecret("SSOSyncSCIMEndpointUrl")
+	return s.getSecret(os.Getenv("SCIM_ENDPOINT"))
 }
 
 // GoogleCredentials ...
 func (s *Secrets) GoogleCredentials() (string, error) {
-	return s.getSecret("SSOSyncGoogleCredentials")
+	return s.getSecret(os.Getenv("GOOGLE_CREDENTIALS"))
 }
 
 // Region ...
 func (s *Secrets) Region() (string, error) {
-	return s.getSecret("SSOSyncRegion")
+	return s.getSecret(os.Getenv("REGION"))
 }
 
 // Identity Store ID ...
 func (s *Secrets) IdentityStoreID() (string, error) {
-	return s.getSecret("SSOSyncIdentityStoreID")
+	return s.getSecret(os.Getenv("IDENTITY_STORE_ID"))
 }
 
 func (s *Secrets) getSecret(secretKey string) (string, error) {
