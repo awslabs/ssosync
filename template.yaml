@@ -54,7 +54,7 @@ Metadata:
     # Update the semantic version and run sam publish to publish a new version of your app
     SemanticVersion: 1.0.0-rc.10
     # best practice is to use git tags for each release and link to the version tag as your source code URL
-    SourceCodeUrl: https://github.com/awslabs/ssosync/tree/1.0.0-rc.10
+    SourceCodeUrl: https://github.com/awslabs/ssosync
 
 Parameters:
   DeployPattern:
