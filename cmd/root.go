@@ -20,14 +20,14 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/aws/aws-lambda-go/events"
+	"github.com/aws/aws-lambda-go/lambda"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
+        "github.com/aws/aws-sdk-go/service/codepipeline"
+	"github.com/aws/aws-sdk-go/service/secretsmanager"
 	"github.com/awslabs/ssosync/internal"
 	"github.com/awslabs/ssosync/internal/config"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-lambda-go/events"
-        "github.com/aws/aws-sdk-go/service/codepipeline"
-	"github.com/aws/aws-lambda-go/lambda"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/secretsmanager"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -66,14 +66,14 @@ Complete documentation is available at https://github.com/awslabs/ssosync`,
 // running inside of AWS Lambda, we use the Lambda
 // execution path.
 func Execute() {
-        if cfg.IsLambda {
-                log.Info("Executing as Lambda")
-        	lambda.Start(Handler) 
-	}
+    if cfg.IsLambda {
+        log.Info("Executing as Lambda")
+      	lambda.Start(Handler) 
+    }
 
-	if err := rootCmd.Execute(); err != nil {
-		log.Fatal(err)
-	}
+    if err := rootCmd.Execute(); err != nil {
+	log.Fatal(err)
+    }
 }
 
 func Handler(ctx context.Context, event events.CodePipelineEvent) (string, error) {
@@ -182,12 +182,13 @@ func initConfig() {
 		log.Fatalf(errors.Wrap(err, "cannot unmarshal config").Error())
 	}
 
-	// config logger
-	logConfig(cfg)
-
 	if cfg.IsLambda {
 		configLambda()
 	}
+
+	// config logger
+	logConfig(cfg)
+
 }
 
 func configLambda() {
@@ -195,41 +196,56 @@ func configLambda() {
 	svc := secretsmanager.New(s)
 	secrets := config.NewSecrets(svc)
 
-	unwrap, err := secrets.GoogleAdminEmail()
+	unwrap, err := secrets.GoogleAdminEmail(os.Getenv("GOOGLE_ADMIN"))
 	if err != nil {
 		log.Fatalf(errors.Wrap(err, "cannot read config").Error())
 	}
 	cfg.GoogleAdmin = unwrap
 
-	unwrap, err = secrets.GoogleCredentials()
+	unwrap, err = secrets.GoogleCredentials(os.Getenv("GOOGLE_CREDENTIALS"))
 	if err != nil {
 		log.Fatalf(errors.Wrap(err, "cannot read config").Error())
 	}
 	cfg.GoogleCredentials = unwrap
 
-	unwrap, err = secrets.SCIMAccessToken()
+	unwrap, err = secrets.SCIMAccessToken(os.Getenv("SCIM_ACCESS_TOKEN"))
 	if err != nil {
 		log.Fatalf(errors.Wrap(err, "cannot read config").Error())
 	}
 	cfg.SCIMAccessToken = unwrap
 
-	unwrap, err = secrets.SCIMEndpointUrl()
+	unwrap, err = secrets.SCIMEndpointUrl(os.Getenv("SCIM_ENDPOINT"))
 	if err != nil {
 		log.Fatalf(errors.Wrap(err, "cannot read config").Error())
 	}
 	cfg.SCIMEndpoint = unwrap
 
-	unwrap, err = secrets.Region()
+	unwrap, err = secrets.Region(os.Getenv("REGION"))
 	if err != nil {
 		log.Fatalf(errors.Wrap(err, "cannot read config").Error())
 	}
 	cfg.Region = unwrap
 
-	unwrap, err = secrets.IdentityStoreID()
+	unwrap, err = secrets.IdentityStoreID(os.Getenv("IDENTITY_STORE_ID"))
 	if err != nil {
 		log.Fatalf(errors.Wrap(err, "cannot read config").Error())
 	}
 	cfg.IdentityStoreID = unwrap
+
+	unwrap = os.Getenv("LOG_LEVEL")
+        if len([]rune(unwrap)) != 0 {
+	   cfg.LogLevel = unwrap
+        }
+
+        unwrap = os.Getenv("LOG_FORMAT")
+        if len([]rune(unwrap)) != 0 {
+           cfg.LogFormat = unwrap
+        }
+
+	unwrap = os.Getenv("SYNC_METHOD")
+        if len([]rune(unwrap)) != 0 {
+           cfg.SyncMethod = unwrap
+        }
 }
 
 func addFlags(cmd *cobra.Command, cfg *config.Config) {

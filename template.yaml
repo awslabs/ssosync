@@ -54,7 +54,7 @@ Metadata:
     # Update the semantic version and run sam publish to publish a new version of your app
     SemanticVersion: 1.0.0-rc.10
     # best practice is to use git tags for each release and link to the version tag as your source code URL
-    SourceCodeUrl: https://github.com/awslabs/ssosync/tree/1.0.0-rc.10
+    SourceCodeUrl: https://github.com/awslabs/ssosync
 
 Parameters:
   DeployPattern:
@@ -191,21 +191,21 @@ Parameters:
     Description: |
       [optional] Ignore these Google Workspace groups, leave empty if not required
     Default: ""
-    AllowedPattern: '(?!.*\s)|([0-9a-zA-Z\-= _]*)(,[0-9a-zA-Z\-=@. _]*)*'
+    AllowedPattern: '(?!.*\s)|((([a-zA-Z0-9.\-_]{1,64})@([a-zA-Z0-9.\-]{5,260}))(,(([a-zA-Z0-9.\-_]{1,64})@([a-zA-Z0-9.\-]{5,260})))*)'
 
   IgnoreUsers:
     Type: String
     Description: |
       [optional] Ignore these Google Workspace users, leave empty if not required
     Default: ""
-    AllowedPattern: '(?!.*\s)|([0-9a-zA-Z\-= _]*)(,[0-9a-zA-Z\-=@. _]*)*'
+    AllowedPattern: '(?!.*\s)|((([a-zA-Z0-9.\-_]{1,64})@([a-zA-Z0-9.\-]{5,260}))(,(([a-zA-Z0-9.\-_]{1,64})@([a-zA-Z0-9.\-]{5,260})))*)'
 
   IncludeGroups:
     Type: String
     Description: |
       [optional] Include only these Google Workspace groups, leave empty if not required. (Only applicable for SyncMethod user_groups)
     Default: ""
-    AllowedPattern: '(?!.*\s)|([0-9a-zA-Z\-= _]*)(,[0-9a-zA-Z\-=@. _]*)*'
+    AllowedPattern: '(?!.*\s)|((([a-zA-Z0-9.\-_]{1,64})@([a-zA-Z0-9.\-]{5,260}))(,(([a-zA-Z0-9.\-_]{1,64})@([a-zA-Z0-9.\-]{5,260})))*)'
 
   SyncMethod:
     Type: String
@@ -542,20 +542,20 @@ Resources:
       Timeout: !Ref TimeOut
       Environment:
         Variables:
-          SSOSYNC_LOG_LEVEL: !Ref LogLevel
-          SSOSYNC_LOG_FORMAT: !Ref LogFormat
-          SSOSYNC_GOOGLE_CREDENTIALS: !If [CreateSecrets, !Ref SecretGoogleCredentials, !Select [0, !Split [',', !Ref CrossStackConfig]]]
-          SSOSYNC_GOOGLE_ADMIN: !If [CreateSecrets, !Ref SecretGoogleAdminEmail, !Select [1, !Split [',', !Ref CrossStackConfig]]]
-          SSOSYNC_SCIM_ENDPOINT: !If [CreateSecrets, !Ref SecretSCIMEndpoint, !Select [2, !Split [',', !Ref CrossStackConfig]]]
-          SSOSYNC_SCIM_ACCESS_TOKEN: !If [CreateSecrets, !Ref SecretSCIMAccessToken, !Select [3, !Split [',', !Ref CrossStackConfig]]]
-          SSOSYNC_REGION: !If [CreateSecrets, !Ref SecretRegion, !Select [4, !Split [',', !Ref CrossStackConfig]]]
-          SSOSYNC_IDENTITY_STORE_ID: !If [CreateSecrets, !Ref SecretIdentityStoreID, !Select [5, !Split [',', !Ref CrossStackConfig]]]
-          SSOSYNC_USER_MATCH: !If [SetGoogleUserMatch, !Ref GoogleUserMatch, !Ref AWS::NoValue]
-          SSOSYNC_GROUP_MATCH: !If [SetGoogleGroupMatch, !Ref GoogleGroupMatch, !Ref AWS::NoValue]
-          SSOSYNC_SYNC_METHOD: !Ref SyncMethod
-          SSOSYNC_IGNORE_GROUPS: !If [SetIgnoreGroups, !Ref IgnoreGroups, !Ref AWS::NoValue]
-          SSOSYNC_IGNORE_USERS: !If [SetIgnoreUsers, !Ref IgnoreUsers, !Ref AWS::NoValue]
-          SSOSYNC_INCLUDE_GROUPS: !If [SetIncludeGroups, !Ref IncludeGroups, !Ref AWS::NoValue]
+          LOG_LEVEL: !Ref LogLevel
+          LOG_FORMAT: !Ref LogFormat
+          GOOGLE_CREDENTIALS: !If [CreateSecrets, !Ref SecretGoogleCredentials, !Select [0, !Split [',', !Ref CrossStackConfig]]]
+          GOOGLE_ADMIN: !If [CreateSecrets, !Ref SecretGoogleAdminEmail, !Select [1, !Split [',', !Ref CrossStackConfig]]]
+          SCIM_ENDPOINT: !If [CreateSecrets, !Ref SecretSCIMEndpoint, !Select [2, !Split [',', !Ref CrossStackConfig]]]
+          SCIM_ACCESS_TOKEN: !If [CreateSecrets, !Ref SecretSCIMAccessToken, !Select [3, !Split [',', !Ref CrossStackConfig]]]
+          REGION: !If [CreateSecrets, !Ref SecretRegion, !Select [4, !Split [',', !Ref CrossStackConfig]]]
+          IDENTITY_STORE_ID: !If [CreateSecrets, !Ref SecretIdentityStoreID, !Select [5, !Split [',', !Ref CrossStackConfig]]]
+          USER_MATCH: !If [SetGoogleUserMatch, !Ref GoogleUserMatch, !Ref AWS::NoValue]
+          GROUP_MATCH: !If [SetGoogleGroupMatch, !Ref GoogleGroupMatch, !Ref AWS::NoValue]
+          SYNC_METHOD: !Ref SyncMethod
+          IGNORE_GROUPS: !If [SetIgnoreGroups, !Ref IgnoreGroups, !Ref AWS::NoValue]
+          IGNORE_USERS: !If [SetIgnoreUsers, !Ref IgnoreUsers, !Ref AWS::NoValue]
+          INCLUDE_GROUPS: !If [SetIncludeGroups, !Ref IncludeGroups, !Ref AWS::NoValue]
       Events:
         SyncScheduledEvent:
           Type: Schedule
