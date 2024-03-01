@@ -195,41 +195,56 @@ func configLambda() {
 	svc := secretsmanager.New(s)
 	secrets := config.NewSecrets(svc)
 
-	unwrap, err := secrets.GoogleAdminEmail(cfg.GoogleAdmin)
+	unwrap, err := secrets.GoogleAdminEmail(os.Getenv("GOOGLE_ADMIN"))
 	if err != nil {
 		log.Fatalf(errors.Wrap(err, "cannot read config").Error())
 	}
 	cfg.GoogleAdmin = unwrap
 
-	unwrap, err = secrets.GoogleCredentials(cfg.GoogleCredentials)
+	unwrap, err = secrets.GoogleCredentials(os.Getenv("GOOGLE_CREDENTIALS"))
 	if err != nil {
 		log.Fatalf(errors.Wrap(err, "cannot read config").Error())
 	}
 	cfg.GoogleCredentials = unwrap
 
-	unwrap, err = secrets.SCIMAccessToken(cfg.SCIMAccessToken)
+	unwrap, err = secrets.SCIMAccessToken(os.Getenv("SCIM_ACCESS_TOKEN"))
 	if err != nil {
 		log.Fatalf(errors.Wrap(err, "cannot read config").Error())
 	}
 	cfg.SCIMAccessToken = unwrap
 
-	unwrap, err = secrets.SCIMEndpointUrl(cfg.SCIMEndpoint)
+	unwrap, err = secrets.SCIMEndpointUrl(os.Getenv("SCIM_ENDPOINT"))
 	if err != nil {
 		log.Fatalf(errors.Wrap(err, "cannot read config").Error())
 	}
 	cfg.SCIMEndpoint = unwrap
 
-	unwrap, err = secrets.Region(cfg.Region)
+	unwrap, err = secrets.Region(os.Getenv("REGION"))
 	if err != nil {
 		log.Fatalf(errors.Wrap(err, "cannot read config").Error())
 	}
 	cfg.Region = unwrap
 
-	unwrap, err = secrets.IdentityStoreID(cfg.IdentityStoreID)
+	unwrap, err = secrets.IdentityStoreID(os.Getenv("IDENTITY_STORE_ID"))
 	if err != nil {
 		log.Fatalf(errors.Wrap(err, "cannot read config").Error())
 	}
 	cfg.IdentityStoreID = unwrap
+
+	unwrap = os.Getenv("LOG_LEVEL")
+        if len([]rune(unwrap)) != 0 {
+	   cfg.LogLevel = unwrap
+        }
+
+        unwrap = os.Getenv("LOG_FORMAT")
+        if len([]rune(unwrap)) != 0 {
+           cfg.LogFormat = unwrap
+        }
+
+	unwrap = os.Getenv("SYNC_METHOD")
+        if len([]rune(unwrap)) != 0 {
+           cfg.SyncMethod = unwrap
+        }
 }
 
 func addFlags(cmd *cobra.Command, cfg *config.Config) {
