@@ -182,12 +182,13 @@ func initConfig() {
 		log.Fatalf(errors.Wrap(err, "cannot unmarshal config").Error())
 	}
 
-	// config logger
-	logConfig(cfg)
-
 	if cfg.IsLambda {
 		configLambda()
 	}
+
+	// config logger
+	logConfig(cfg)
+
 }
 
 func configLambda() {
