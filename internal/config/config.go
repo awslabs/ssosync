@@ -59,5 +59,6 @@ func New() *Config {
 		LogLevel:          DefaultLogLevel,
 		LogFormat:         DefaultLogFormat,
 		SyncMethod:        DefaultSyncMethod,
+		GoogleCredentials: DefaultGoogleCredentials,
 	}
 }
