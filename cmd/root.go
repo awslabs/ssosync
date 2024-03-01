@@ -157,7 +157,7 @@ func initConfig() {
 
 	appEnvVars := []string{
 		"google_admin",
-		"google_credentials",
+		"GOOGLE_CREDENTIALS",
 		"scim_access_token",
 		"scim_endpoint",
 		"log_level",
