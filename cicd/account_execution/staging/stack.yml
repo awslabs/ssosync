@@ -73,5 +73,5 @@ Resources:
             - '}}'
         SyncMethod: groups
         GoogleGroupMatch: !Ref GroupMatch
-        LogLevel: warn
+        LogLevel: info
         LogFormat: json
