@@ -721,6 +721,7 @@ func DoSync(ctx context.Context, cfg *config.Config) error {
 
 	googleClient, err := google.NewClient(ctx, cfg.GoogleAdmin, creds)
 	if err != nil {
+	        log.WithField("error", err).Warn("Problem establising a connection to Google directory")
 		return err
 	}
 
@@ -731,6 +732,7 @@ func DoSync(ctx context.Context, cfg *config.Config) error {
 			Token:    cfg.SCIMAccessToken,
 		})
 	if err != nil {
+	        log.WithField("error", err).Warn("Problem establising a SCIM connection to AWS IAM Identity Center")
 		return err
 	}
 
@@ -741,11 +743,22 @@ func DoSync(ctx context.Context, cfg *config.Config) error {
 	})
 
 	if err != nil {
+	        log.WithField("error", err).Warn("Problem establising a session for Identity Store")
 		return err
 	}
 
 	// Initialize AWS Identity Store Public API Client with session
 	identityStoreClient := identitystore.New(sess)
+
+	err := identityStoreClient.ListGroupsPages(
+                &identitystore.ListGroupsInput{IdentityStoreId: &s.cfg.IdentityStoreID},
+                ListGroupsPagesCallbackFn,
+        )
+
+        if err != nil {
+	        log.WithField("error", err).Warn("Problem performing test query against Identity Store")
+                return nil, err
+        }
 
 	// Initialize sync client with
 	// 1. SCIM API client
