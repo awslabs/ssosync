@@ -750,14 +750,15 @@ func DoSync(ctx context.Context, cfg *config.Config) error {
 	// Initialize AWS Identity Store Public API Client with session
 	identityStoreClient := identitystore.New(sess)
 
-	err := identityStoreClient.ListGroupsPages(
-                &identitystore.ListGroupsInput{IdentityStoreId: &s.cfg.IdentityStoreID},
-                ListGroupsPagesCallbackFn,
-        )
+	response, err := identityStoreClient.ListGroups(
+                &identitystore.ListGroupsInput{IdentityStoreId: &cfg.IdentityStoreID})
 
-        if err != nil {
+	if err != nil {
 	        log.WithField("error", err).Warn("Problem performing test query against Identity Store")
-                return nil, err
+		return err
+	} else {
+	        log.WithField("Groups", response).Info("Test call for groups successful")
+                
         }
 
 	// Initialize sync client with
