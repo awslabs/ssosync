@@ -187,7 +187,7 @@ Resources:
                 S3Bucket: !Ref StagingBucket
                 S3ObjectKey: tests.zip
                 PollForSourceChanges: false
-        - Name: Deploy
+        - Name: TestsLambda
           Actions:
             - Name: Deploy
               ActionTypeId:
@@ -200,20 +200,18 @@ Resources:
                 Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND,CAPABILITY_NAMED_IAM
                 StackName: TestAccountExecution
                 RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
-                TemplateConfiguration: !If [DeployManagement, 'Tests::deploy/management.json', !If [DeployDelegated, 'Tests::deploy/delegated.json', 'Tests::deploy/nondelegated.json']] 
+                TemplateConfiguration: 'Tests::deploy/lambda.json'
                 TemplatePath: !Sub 'Tests::deploy/stack.yml'
               InputArtifacts:
                 - Name: Tests
               RunOrder: 1
-        - Name: SmokeTests
-          Actions:
             - Name: Lambda
               ActionTypeId:
                 Category: Test
                 Owner: AWS
                 Version: 1
                 Provider: CodeBuild
-              RunOrder: 1
+              RunOrder: 2
               Configuration:
                 ProjectName: !Ref CodeBuildSmokeLambda
                 PrimarySource: Tests
@@ -221,6 +219,24 @@ Resources:
                 - Name: AccountExecutionLambda
               InputArtifacts:
                 - Name: Tests
+        - Name: TestsCLI
+          Actions:
+            - Name: Deploy
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Version: '1'
+                Provider: CloudFormation
+              Configuration:
+                ActionMode: CREATE_UPDATE
+                Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND,CAPABILITY_NAMED_IAM
+                StackName: TestAccountExecution
+                RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
+                TemplateConfiguration: 'Tests::deploy/cli.json'
+                TemplatePath: !Sub 'Tests::deploy/stack.yml'
+              InputArtifacts:
+                - Name: Tests
+              RunOrder: 1
             - Name: CLI
               ActionTypeId:
                 Category: Test
@@ -235,22 +251,40 @@ Resources:
                 - Name: SmokeCLI
               InputArtifacts:
                 - Name: Tests
-            - !If
-               - DeployDelegated
-               - Name: CodePipeline
-                 ActionTypeId:
-                   Category: Invoke
-                   Owner: AWS
-                   Version: 1
-                   Provider: Lambda
-                 RunOrder: 3
-                 Configuration:
-                   FunctionName: SSOSyncFunction
-                 OutputArtifacts:
-                   - Name: AccountExecutionCodePipeline
-                 InputArtifacts:
-                   - Name: Tests
-               - !Ref AWS::NoValue
+        - !If
+            - DeployDelegated
+            - Name: TestsCodePipeline
+              Actions:
+                - Name: Deploy
+                  ActionTypeId:
+                    Category: Deploy
+                    Owner: AWS
+                    Version: '1'
+                    Provider: CloudFormation
+                  Configuration:
+                    ActionMode: CREATE_UPDATE
+                    Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND,CAPABILITY_NAMED_IAM
+                    StackName: TestAccountExecution
+                    RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
+                    TemplateConfiguration: 'Tests::deploy/codepipeline.json'
+                    TemplatePath: !Sub 'Tests::deploy/stack.yml'
+                  InputArtifacts:
+                    - Name: Tests
+                  RunOrder: 1
+                - Name: CodePipeline
+                  ActionTypeId:
+                    Category: Invoke
+                    Owner: AWS
+                    Version: 1
+                    Provider: Lambda
+                  RunOrder: 2
+                  Configuration:
+                    FunctionName: SSOSyncFunction
+                  OutputArtifacts:
+                    - Name: AccountExecutionCodePipeline
+                  InputArtifacts:
+                    - Name: Tests
+            - !Ref AWS::NoValue
         - Name: CleanUp
           Actions:
             - Name: RemoveStack
@@ -314,7 +348,7 @@ Resources:
                 OutputFileName: crossaccountapp.json
               InputArtifacts:
                 - Name: Tests
-              OutputArtifact:
+              OutputArtifacts:
                 - Name: Secrets
               RunOrder: 1
             - Name: DeployAppInDelegated
