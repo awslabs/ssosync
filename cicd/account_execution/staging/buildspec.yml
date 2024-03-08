@@ -31,7 +31,7 @@ phases:
         --argjson Parameters "{\"AppArn\": \"$AppArn\", \"AppVersion\": \"$AppVersion\", \"GoogleAdminEmailArn\": \"$SecretGoogleAdminEmail\", \"GoogleCredentialsArn\": \"$SecretGoogleCredentials\", \"SCIMEndpointUrlArn\": \"$SecretSCIMEndpoint\", \"SCIMAccessTokenArn\": \"$SecretSCIMAccessToken\", \"RegionArn\": \"$SecretRegion\", \"IdentityStoreIdArn\": \"$SecretIdentityStoreID\", \"GroupMatch\": \"name:Man*\"}" \
         --argjson StackPolicy "{\"Statement\":[{\"Effect\": \"Allow\", \"NotAction\": \"Update:Delete\", \"Principal\": \"*\", \"Resource\": \"*\"}]}" \
         '$ARGS.named' > ./deploy/cli.json
-      - cat ./deploy/management.json
+      - cat ./deploy/cli.json
 
       # Update params with the values for this run for the delegated account
       - |
@@ -39,7 +39,7 @@ phases:
         --argjson Parameters "{\"AppArn\": \"$AppArn\", \"AppVersion\": \"$AppVersion\",  \"GoogleAdminEmailArn\": \"$SecretGoogleAdminEmail\", \"GoogleCredentialsArn\": \"$SecretGoogleCredentials\", \"SCIMEndpointUrlArn\": \"$SecretSCIMEndpoint\", \"SCIMAccessTokenArn\": \"$SecretSCIMAccessToken\", \"RegionArn\": \"$SecretRegion\", \"IdentityStoreIdArn\": \"$SecretIdentityStoreID\", \"GroupMatch\": \"name:Del*\"}" \
         --argjson StackPolicy "{\"Statement\":[{\"Effect\": \"Allow\", \"NotAction\": \"Update:Delete\", \"Principal\": \"*\", \"Resource\": \"*\"}]}" \
         '$ARGS.named' > ./deploy/lambda.json
-      - cat ./deploy/delegated.json
+      - cat ./deploy/lambda.json
 
       # Update params with the values for this run for non-delegated account
       - |
@@ -47,7 +47,7 @@ phases:
         --argjson Parameters "{\"AppArn\": \"$AppArn\", \"AppVersion\": \"$AppVersion\", \"GoogleAdminEmailArn\": \"$SecretGoogleAdminEmail\", \"GoogleCredentialsArn\": \"$SecretGoogleCredentials\", \"SCIMEndpointUrlArn\": \"$SecretSCIMEndpoint\", \"SCIMAccessTokenArn\": \"$SecretSCIMAccessToken\", \"RegionArn\": \"$SecretRegion\", \"IdentityStoreIdArn\": \"$SecretIdentityStoreID\", \"GroupMatch\": \"name:Non*\"}" \
         --argjson StackPolicy "{\"Statement\":[{\"Effect\": \"Allow\", \"NotAction\": \"Update:Delete\", \"Principal\": \"*\", \"Resource\": \"*\"}]}" \
         '$ARGS.named' > ./deploy/codepipeline.json
-      - cat ./deploy/nondelegated.json
+      - cat ./deploy/codepipeline.json
 
 
 artifacts:
