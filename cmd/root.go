@@ -19,6 +19,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
@@ -192,7 +193,7 @@ func initConfig() {
 }
 
 func configLambda() {
-	s := session.Must(session.NewSession())
+        s := session.Must(session.NewSession())
 	svc := secretsmanager.New(s)
 	secrets := config.NewSecrets(svc)
 
@@ -232,9 +233,9 @@ func configLambda() {
 	}
 	cfg.IdentityStoreID = unwrap
 
-	unwrap = os.Getenv("LOG_LEVEL")
+        unwrap = os.Getenv("LOG_LEVEL")
         if len([]rune(unwrap)) != 0 {
-	   cfg.LogLevel = unwrap
+           cfg.LogLevel = unwrap
         }
 
         unwrap = os.Getenv("LOG_FORMAT")
@@ -246,6 +247,32 @@ func configLambda() {
         if len([]rune(unwrap)) != 0 {
            cfg.SyncMethod = unwrap
         }
+
+	unwrap = os.Getenv("USER_MATCH")
+        if len([]rune(unwrap)) != 0 {
+	   cfg.UserMatch = unwrap
+        }
+
+	unwrap = os.Getenv("GROUP_MATCH")
+        if len([]rune(unwrap)) != 0 {
+           cfg.GroupMatch = unwrap
+        }
+
+        unwrap = os.Getenv("IGNORE_GROUPS")
+        if len([]rune(unwrap)) != 0 {
+           cfg.IgnoreGroups = strings.Split(unwrap, ",")
+        }
+
+        unwrap = os.Getenv("IGNORE_USERS")
+        if len([]rune(unwrap)) != 0 {
+           cfg.IgnoreUsers = strings.Split(unwrap, ",")
+        }
+
+        unwrap = os.Getenv("INCLUDE_GROUPS")
+        if len([]rune(unwrap)) != 0 {
+           cfg.IncludeGroups = strings.Split(unwrap, ",")
+        }
+
 }
 
 func addFlags(cmd *cobra.Command, cfg *config.Config) {
