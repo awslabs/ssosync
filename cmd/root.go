@@ -192,9 +192,19 @@ func initConfig() {
 }
 
 func configLambda() {
-	s := session.Must(session.NewSession())
+        s := session.Must(session.NewSession())
 	svc := secretsmanager.New(s)
 	secrets := config.NewSecrets(svc)
+
+        unwrap = os.Getenv("LOG_LEVEL")
+        if len([]rune(unwrap)) != 0 {
+           cfg.LogLevel = unwrap
+        }
+
+        unwrap = os.Getenv("LOG_FORMAT")
+        if len([]rune(unwrap)) != 0 {
+           cfg.LogFormat = unwrap
+        }
 
 	unwrap, err := secrets.GoogleAdminEmail(os.Getenv("GOOGLE_ADMIN"))
 	if err != nil {
@@ -232,20 +242,36 @@ func configLambda() {
 	}
 	cfg.IdentityStoreID = unwrap
 
-	unwrap = os.Getenv("LOG_LEVEL")
+	unwrap = os.Getenv("USER_MATCH")
         if len([]rune(unwrap)) != 0 {
-	   cfg.LogLevel = unwrap
+	   cfg.user-match = unwrap
         }
 
-        unwrap = os.Getenv("LOG_FORMAT")
+        unwrap = os.Getenv("GROUP_MATCH")
         if len([]rune(unwrap)) != 0 {
-           cfg.LogFormat = unwrap
+           cfg.group-match = unwrap
         }
 
 	unwrap = os.Getenv("SYNC_METHOD")
         if len([]rune(unwrap)) != 0 {
            cfg.SyncMethod = unwrap
         }
+
+        unwrap = os.Getenv("IGNORE_GROUPS")
+        if len([]rune(unwrap)) != 0 {
+           cfg.ignore-groups = unwrap
+        }
+
+        unwrap = os.Getenv("IGNORE_USERS")
+        if len([]rune(unwrap)) != 0 {
+           cfg.ignore-users = unwrap
+        }
+
+        unwrap = os.Getenv("INCLUDE_GROUPS")
+        if len([]rune(unwrap)) != 0 {
+           cfg.include-groups = unwrap
+        }
+
 }
 
 func addFlags(cmd *cobra.Command, cfg *config.Config) {
