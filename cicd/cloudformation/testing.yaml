@@ -348,7 +348,7 @@ Resources:
                 OutputFileName: crossaccountapp.json
               InputArtifacts:
                 - Name: Tests
-              OutputArtifact:
+              OutputArtifacts:
                 - Name: Secrets
               RunOrder: 1
             - Name: DeployAppInDelegated
