@@ -220,7 +220,7 @@ Conditions:
     - !Equals
         - !Ref FunctionName
         - ""
-  SetGoogleUserMatch: !AND
+  SetGoogleUserMatch: !And
     - !Not
         - !Equals
             - !Ref GoogleUserMatch
@@ -228,7 +228,7 @@ Conditions:
     - !Equals
         - !Ref SyncMethod
         - "groups"
-  SetGoogleGroupMatch: !AND 
+  SetGoogleGroupMatch: !And 
     - !Not
         - !Equals
             - !Ref GoogleGroupMatch
