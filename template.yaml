@@ -244,14 +244,14 @@ Conditions:
     - !Equals
         - !Ref IgnoreUsers
         - ""
-  SetIncludeGroups: !Or
+  SetIncludeGroups: !And
     - !Not
         - !Equals
             - !Ref IncludeGroups
             - ""
     - !Equals
         - !Ref SyncMethod
-        - "groups"
+        - "users_groups"
   OnSchedule: !Not
     - !Equals
         - !Ref ScheduleExpression
