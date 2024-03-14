@@ -220,22 +220,22 @@ Conditions:
     - !Equals
         - !Ref FunctionName
         - ""
-  SetGoogleUserMatch: !Or
+  SetGoogleUserMatch: !AND
     - !Not
         - !Equals
             - !Ref GoogleUserMatch
             - ""
     - !Equals
         - !Ref SyncMethod
-        - "users_groups"
-  SetGoogleGroupMatch: !Or 
+        - "groups"
+  SetGoogleGroupMatch: !AND 
     - !Not
         - !Equals
             - !Ref GoogleGroupMatch
             - ""
     - !Equals
         - !Ref SyncMethod
-        - "users_groups"
+        - "groups"
   SetIgnoreGroups: !Not 
     - !Equals
         - !Ref IgnoreGroups
