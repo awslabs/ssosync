@@ -11,7 +11,7 @@
 SSO Sync will run on any platform that Go can build for. It is available in the [AWS Serverless Application Repository](https://console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync)
 
 > [!CAUTION]
-> When using ssosync with an instance or IAM Identity Center integrated with AWS Control Tower. AWS Control Tower creates a number of groups and users (directly via the Identity Store API), when an external identity provider is configured these users and groups are can not be used to log in. However it is important to remember that because ssosync implemements a uni-directional sync it will make the IAM Identity Store match the subset of your Google Workspaces directory you specify, including removing these groups and users created by AWS Control Tower. There is a PFR [#88 - ssosync deletes Control Tower groups](https://github.com/awslabs/ssosync/issues/88) to implement an option to ignore these users and groups, hopefully this will be implemented in version 3.x.
+> When using ssosync with an instance of IAM Identity Center integrated with AWS Control Tower. AWS Control Tower creates a number of groups and users (directly via the Identity Store API), when an external identity provider is configured these users and groups are can not be used to log in. However it is important to remember that because ssosync implemements a uni-directional sync it will make the IAM Identity Store match the subset of your Google Workspaces directory you specify, including removing these groups and users created by AWS Control Tower. There is a PFR [#88 - ssosync deletes Control Tower groups](https://github.com/awslabs/ssosync/issues/88) to implement an option to ignore these users and groups, hopefully this will be implemented in version 3.x.
 
 > [!WARNING]
 > There are breaking changes for versions `>= 0.02`
@@ -30,6 +30,8 @@ SSO Sync will run on any platform that Go can build for. It is available in the 
 > [!IMPORTANT]
 > `>= 2.1.0` switched to using `provided.al2` powered by ARM64 instances.
 
+> [!Info]
+> As of `v2.2.0` multiple query patterns are supported for both Group and User matching, simply separate each query with a `,`
 ## Why?
 
 As per the [AWS SSO](https://aws.amazon.com/single-sign-on/) Homepage:
@@ -146,7 +148,7 @@ Flags:
   -e, --endpoint string             AWS SSO SCIM API Endpoint
   -u, --google-admin string         Google Workspace admin user email
   -c, --google-credentials string   path to Google Workspace credentials file (default "credentials.json")
-  -g, --group-match string          Google Workspace Groups filter query parameter, example: 'name:Admin* email:aws-*', see: https://developers.google.com/admin-sdk/directory/v1/guides/search-groups
+  -g, --group-match string          Google Workspace Groups filter query parameter, example: 'name:Admin*r,email:aws-*', see: https://developers.google.com/admin-sdk/directory/v1/guides/search-groups
   -h, --help                        help for ssosync
       --ignore-groups strings       ignores these Google Workspace groups
       --ignore-users strings        ignores these Google Workspace users
@@ -154,7 +156,7 @@ Flags:
       --log-format string           log format (default "text")
       --log-level string            log level (default "info")
   -s, --sync-method string          Sync method to use (users_groups|groups) (default "groups")
-  -m, --user-match string           Google Workspace Users filter query parameter, example: 'name:John* email:admin*', see: https://developers.google.com/admin-sdk/directory/v1/guides/search-users
+  -m, --user-match string           Google Workspace Users filter query parameter, example: 'name:John*,email:admin*', see: https://developers.google.com/admin-sdk/directory/v1/guides/search-users
   -v, --version                     version for ssosync
   -r, --region                      AWS region where identity store exists
   -i, --identity-store-id           AWS Identity Store ID
