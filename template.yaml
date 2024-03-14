@@ -177,14 +177,14 @@ Parameters:
     Description: |
       [optional] Google Workspace user filter query parameter, example: 'name:John* email:admin*', see: https://developers.google.com/admin-sdk/directory/v1/guides/search-users, if left empty all users will be selected.
     Default: ""
-    AllowedPattern: '(?!.*\s)|((((name|Name|NAME)((:[a-zA-Z0-9]{1,64}\*)|(=[a-zA-Z0-9 ]{1,64})))|((email|Email|EMAIL)((:[a-zA-Z0-9.\-_]{1,64}\*)|(=([a-zA-Z0-9.\-_]{1,64})@([a-zA-Z0-9.\-]{5,260})))))(,(((name|Name|NAME)((:[a-zA-Z0-9]{1,64}\*)|(=[a-zA-Z0-9 ]{1,64})))|((email|Email|EMAIL)((:[a-zA-Z0-9.\-_]{1,64}\*)|(=([a-zA-Z0-9.\-_]{1,64})@([a-zA-Z0-9.\-]{5,260}))))))*)'
+    AllowedPattern: '(?!.*\s)|((((name|Name|NAME)((:[a-zA-Z0-9\- ]{1,64}\*)|(=[a-zA-Z0-9\- ]{1,64})))|((email|Email|EMAIL)((:[a-zA-Z0-9.\-_]{1,64}\*)|(=([a-zA-Z0-9.\-_]{1,64})@([a-zA-Z0-9.\-]{5,260})))))(,(((name|Name|NAME)((:[a-zA-Z0-9\- ]{1,64}\*)|(=[a-zA-Z0-9\- ]{1,64})))|((email|Email|EMAIL)((:[a-zA-Z0-9.\-_]{1,64}\*)|(=([a-zA-Z0-9.\-_]{1,64})@([a-zA-Z0-9.\-]{5,260}))))))*)'
 
   GoogleGroupMatch:
     Type: String
     Description: |
       [optional] Google Workspace group filter query parameter, example: 'name:Admin* email:aws-*', see: https://developers.google.com/admin-sdk/directory/v1/guides/search-groups, if left empty all groups and their members will be selected.
     Default: ""
-    AllowedPattern: '(?!.*\s)|((((name|Name|NAME)((:[a-zA-Z0-9]{1,64}\*)|(=[a-zA-Z0-9 ]{1,64})))|((email|Email|EMAIL)((:[a-zA-Z0-9.\-_]{1,64}\*)|(=([a-zA-Z0-9.\-_]{1,64})@([a-zA-Z0-9.\-]{5,260})))))(,(((name|Name|NAME)((:[a-zA-Z0-9]{1,64}\*)|(=[a-zA-Z0-9 ]{1,64})))|((email|Email|EMAIL)((:[a-zA-Z0-9.\-_]{1,64}\*)|(=([a-zA-Z0-9.\-_]{1,64})@([a-zA-Z0-9.\-]{5,260}))))))*)'
+    AllowedPattern: '(?!.*\s)|((((name|Name|NAME)((:[a-zA-Z0-9\- ]{1,64}\*)|(=[a-zA-Z0-9\- ]{1,64})))|((email|Email|EMAIL)((:[a-zA-Z0-9.\-_]{1,64}\*)|(=([a-zA-Z0-9.\-_]{1,64})@([a-zA-Z0-9.\-]{5,260})))))(,(((name|Name|NAME)((:[a-zA-Z0-9\- ]{1,64}\*)|(=[a-zA-Z0-9\- ]{1,64})))|((email|Email|EMAIL)((:[a-zA-Z0-9.\-_]{1,64}\*)|(=([a-zA-Z0-9.\-_]{1,64})@([a-zA-Z0-9.\-]{5,260}))))))*)'
 
   IgnoreGroups:
     Type: String
