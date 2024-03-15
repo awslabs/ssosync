@@ -101,8 +101,13 @@ func (c *client) GetUsers(query string) ([]*admin.User, error) {
 	u := make([]*admin.User, 0)
 	var err error
 
-	// If we have an empty query, default to fetching all users
-	if query  == "" {
+	// If we have an empty query, return nothing.
+	if query == "" {
+		return u, err
+	}
+
+	// If we have wildcard then fetch all users
+	if query  == "*" {
                 err = c.service.Users.List().Customer("my_customer").Pages(c.ctx, func(users *admin.Users) error {
                         u = append(u, users.Users...)
                         return nil
@@ -142,8 +147,13 @@ func (c *client) GetGroups(query string) ([]*admin.Group, error) {
 	g := make([]*admin.Group, 0)
 	var err error
 
-        // If we have an empty query, default to fetching all users
+        // If we have an empty query, then we are not looking for groups
         if query  == "" {
+                return g, err
+        }
+
+        // If we have wildcard then fetch all groups
+        if query  == "*" {
 		err = c.service.Groups.List().Customer("my_customer").Pages(context.TODO(), func(groups *admin.Groups) error {
                         g = append(g, groups.Groups...)
                         return nil
