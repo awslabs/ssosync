@@ -199,78 +199,86 @@ func configLambda() {
 
 	unwrap, err := secrets.GoogleAdminEmail(os.Getenv("GOOGLE_ADMIN"))
 	if err != nil {
-		log.Fatalf(errors.Wrap(err, "cannot read config").Error())
+		log.Fatalf(errors.Wrap(err, "cannot read config: GOOGLE_ADMIN").Error())
 	}
 	cfg.GoogleAdmin = unwrap
 
 	unwrap, err = secrets.GoogleCredentials(os.Getenv("GOOGLE_CREDENTIALS"))
 	if err != nil {
-		log.Fatalf(errors.Wrap(err, "cannot read config").Error())
+		log.Fatalf(errors.Wrap(err, "cannot read config: GOOGLE_CREDENTIALS").Error())
 	}
 	cfg.GoogleCredentials = unwrap
 
 	unwrap, err = secrets.SCIMAccessToken(os.Getenv("SCIM_ACCESS_TOKEN"))
 	if err != nil {
-		log.Fatalf(errors.Wrap(err, "cannot read config").Error())
+		log.Fatalf(errors.Wrap(err, "cannot read config: SCIM_ACCESS_TOKEN").Error())
 	}
 	cfg.SCIMAccessToken = unwrap
 
 	unwrap, err = secrets.SCIMEndpointUrl(os.Getenv("SCIM_ENDPOINT"))
 	if err != nil {
-		log.Fatalf(errors.Wrap(err, "cannot read config").Error())
+		log.Fatalf(errors.Wrap(err, "cannot read config: SCIM_ENDPOINT").Error())
 	}
 	cfg.SCIMEndpoint = unwrap
 
 	unwrap, err = secrets.Region(os.Getenv("REGION"))
 	if err != nil {
-		log.Fatalf(errors.Wrap(err, "cannot read config").Error())
+		log.Fatalf(errors.Wrap(err, "cannot read config: REGION").Error())
 	}
 	cfg.Region = unwrap
 
 	unwrap, err = secrets.IdentityStoreID(os.Getenv("IDENTITY_STORE_ID"))
 	if err != nil {
-		log.Fatalf(errors.Wrap(err, "cannot read config").Error())
+		log.Fatalf(errors.Wrap(err, "cannot read config: IDENTITY_STORE_ID").Error())
 	}
 	cfg.IdentityStoreID = unwrap
 
         unwrap = os.Getenv("LOG_LEVEL")
         if len([]rune(unwrap)) != 0 {
            cfg.LogLevel = unwrap
+	   log.WithField("LogLevel", unwrap).Debug("from EnvVar")
         }
 
         unwrap = os.Getenv("LOG_FORMAT")
         if len([]rune(unwrap)) != 0 {
            cfg.LogFormat = unwrap
+	   log.WithField("LogFormay", unwrap).Debug("from EnvVar")
         }
 
 	unwrap = os.Getenv("SYNC_METHOD")
         if len([]rune(unwrap)) != 0 {
            cfg.SyncMethod = unwrap
+	   log.WithField("SyncMethod", unwrap).Debug("from EnvVar")
         }
 
 	unwrap = os.Getenv("USER_MATCH")
         if len([]rune(unwrap)) != 0 {
 	   cfg.UserMatch = unwrap
+	   log.WithField("UserMatch", unwrap).Debug("from EnvVar")
         }
 
 	unwrap = os.Getenv("GROUP_MATCH")
         if len([]rune(unwrap)) != 0 {
            cfg.GroupMatch = unwrap
+	   log.WithField("GroupMatch", unwrap).Debug("from EnvVar")
         }
 
         unwrap = os.Getenv("IGNORE_GROUPS")
         if len([]rune(unwrap)) != 0 {
            cfg.IgnoreGroups = strings.Split(unwrap, ",")
+	   log.WithField("IgnoreGroups", unwrap).Debug("from EnvVar")
         }
 
         unwrap = os.Getenv("IGNORE_USERS")
         if len([]rune(unwrap)) != 0 {
            cfg.IgnoreUsers = strings.Split(unwrap, ",")
+	   log.WithField("IgnoreUsers", unwrap).Debug("from EnvVar")
         }
 
         unwrap = os.Getenv("INCLUDE_GROUPS")
         if len([]rune(unwrap)) != 0 {
            cfg.IncludeGroups = strings.Split(unwrap, ",")
+	   log.WithField("IncludeGroups", unwrap).Debug("from EnvVar")
         }
 
 }

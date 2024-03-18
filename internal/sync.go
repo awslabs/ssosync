@@ -288,7 +288,7 @@ func (s *syncGSuite) SyncGroups(query string) error {
 func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) error {
 
 	log.WithField("queryGroup", queryGroups).Info("get google groups")
-	log.WithField("queryUsers", queryGroups).Info("get google users")
+	log.WithField("queryUsers", queryUsers).Info("get google users")
 
 	log.Debug("preparing list of google users, groups and their members")
 	googleGroups, googleUsers, googleGroupsUsers, err := s.getGoogleGroupsAndUsers(queryGroups, queryUsers)
