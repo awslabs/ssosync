@@ -18,7 +18,6 @@ package internal
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io/ioutil"
 
 	"github.com/awslabs/ssosync/internal/aws"
@@ -521,15 +520,14 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers string) ([]*admin.Group, []*admin.User, map[string][]*admin.User, error) {
 	gUsers := make([]*admin.User, 0)
 	gGroupsUsers := make(map[string][]*admin.User)
-
+        gUserDetailCache := make(map[string]*admin.User)
 	gUniqUsers := make(map[string]*admin.User)
 
-        log.Debug("get users from google, regardless of group membership")
+        log.Debug("get users from google, based on UserMatch,  regardless of group membership")
         googleUsers, err := s.google.GetUsers(queryUsers)
         if err != nil {
                 return nil, nil, nil, err
         }
-
 
         log.Debug("process users from google, filtering as required")
 	for _, u := range googleUsers {
@@ -563,6 +561,16 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
         }
         gGroups = filteredGoogleGroups
 
+	// For large directories this will reduce execution time and avoid throttling limits
+	log.Debug("Fetching ALL users from google, to use as cache, when processing the group memberships")
+	        googleUsers, err = s.google.GetUsers("*")
+        if err != nil {
+                return nil, nil, nil, err
+        }
+
+        for _, u := range googleUsers {
+        	gUserDetailCache[u.PrimaryEmail] = u
+        }
 
         log.Debug("for each group retrieve the group members")
 	for _, g := range gGroups {
@@ -610,23 +618,19 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
                                 continue
                         }
 
-			log.WithField("id", m.Email).Debug("get user")
-			q := fmt.Sprintf("email:%s", m.Email)
-			u, err := s.google.GetUsers(q) // TODO: implement GetUser(m.Email)
-
-			if err != nil {
-				return nil, nil, nil, err
-			}
-			if len(u) == 0 {
+			// Find the group member in the cache of UserDetails
+			_, found := gUserDetailCache[m.Email]
+			if found {
+				membersUsers = append(membersUsers, gUserDetailCache[m.Email])
+			} else {
 				log.WithField("id", m.Email).Warn("missing user")
 				continue
 			}
 
-			membersUsers = append(membersUsers, u[0])
-
+			// If we've not seen the user email address before add it to the list of unique users
 			_, ok := gUniqUsers[m.Email]
 			if !ok {
-				gUniqUsers[m.Email] = u[0]
+				gUniqUsers[m.Email] = gUserDetailCache[m.Email]
 			}
 		}
 		gGroupsUsers[g.Name] = membersUsers
