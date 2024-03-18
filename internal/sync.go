@@ -38,7 +38,7 @@ import (
 type SyncGSuite interface {
 	SyncUsers(string) error
 	SyncGroups(string) error
-	SyncGroupsUsers(string) error
+	SyncGroupsUsers(string, string) error
 }
 
 // SyncGSuite is an object type that will synchronize real users and groups
@@ -285,25 +285,13 @@ func (s *syncGSuite) SyncGroups(query string) error {
 //  4) add groups in aws and add its members, these were added in google
 //  5) validate equals aws an google groups members
 //  6) delete groups in aws, these were deleted in google
-func (s *syncGSuite) SyncGroupsUsers(query string) error {
+func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) error {
 
-	log.WithField("query", query).Info("get google groups")
-	googleGroups, err := s.google.GetGroups(query)
-	if err != nil {
-		return err
-	}
-	filteredGoogleGroups := []*admin.Group{}
-	for _, g := range googleGroups {
-		if s.ignoreGroup(g.Email) {
-			log.WithField("group", g.Email).Debug("ignoring group")
-			continue
-		}
-		filteredGoogleGroups = append(filteredGoogleGroups, g)
-	}
-	googleGroups = filteredGoogleGroups
+	log.WithField("queryGroup", queryGroups).Info("get google groups")
+	log.WithField("queryUsers", queryGroups).Info("get google users")
 
-	log.Debug("preparing list of google users and then google groups and their members")
-	googleUsers, googleGroupsUsers, err := s.getGoogleGroupsAndUsers(googleGroups)
+	log.Debug("preparing list of google users, groups and their members")
+	googleGroups, googleUsers, googleGroupsUsers, err := s.getGoogleGroupsAndUsers(queryGroups, queryUsers)
 	if err != nil {
 		return err
 	}
@@ -530,13 +518,54 @@ func (s *syncGSuite) SyncGroupsUsers(query string) error {
 
 // getGoogleGroupsAndUsers return a list of google users members of googleGroups
 // and a map of google groups and its users' list
-func (s *syncGSuite) getGoogleGroupsAndUsers(googleGroups []*admin.Group) ([]*admin.User, map[string][]*admin.User, error) {
+func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers string) ([]*admin.Group, []*admin.User, map[string][]*admin.User, error) {
 	gUsers := make([]*admin.User, 0)
 	gGroupsUsers := make(map[string][]*admin.User)
 
 	gUniqUsers := make(map[string]*admin.User)
 
-	for _, g := range googleGroups {
+        log.Debug("get users from google, regardless of group membership")
+        googleUsers, err := s.google.GetUsers(queryUsers)
+        if err != nil {
+                return nil, nil, nil, err
+        }
+
+
+        log.Debug("process users from google, filtering as required")
+	for _, u := range googleUsers {
+		log.WithField("email", u.PrimaryEmail).Debug("processing member")
+
+                // Remove any users that should be ignored
+		if s.ignoreUser(u.PrimaryEmail) {
+                	log.WithField("id", u.PrimaryEmail).Debug("ignoring user")
+			continue
+		}
+                _, ok := gUniqUsers[u.PrimaryEmail]
+                if !ok {
+                	log.WithField("id", u.PrimaryEmail).Debug("adding user")
+                	gUniqUsers[u.PrimaryEmail] = u
+                }
+
+        }
+
+	log.Debug("get groups from google")
+        gGroups, err := s.google.GetGroups(queryGroups)
+        if err != nil {
+                return nil, nil, nil, err
+        }
+        filteredGoogleGroups := []*admin.Group{}
+        for _, g := range gGroups {
+                if s.ignoreGroup(g.Email) {
+                        log.WithField("group", g.Email).Debug("ignoring group")
+                        continue
+                }
+                filteredGoogleGroups = append(filteredGoogleGroups, g)
+        }
+        gGroups = filteredGoogleGroups
+
+
+        log.Debug("for each group retrieve the group members")
+	for _, g := range gGroups {
 
 		log := log.WithFields(log.Fields{"group": g.Name})
 
@@ -548,25 +577,45 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(googleGroups []*admin.Group) ([]*ad
 		log.Debug("get group members from google")
 		groupMembers, err := s.google.GetGroupMembers(g)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 
 		log.Debug("get users")
 		membersUsers := make([]*admin.User, 0)
 
 		for _, m := range groupMembers {
+                        log.WithField("email", m.Email).Debug("processing member")
+                        // Ignore Owners they aren't relevant in Identity Store
+                        if m.Role == "OWNER" {
+                                log.WithField("id", m.Email).Debug("ignoring owner roles")
+                                continue
+                        }
 
-			if s.ignoreUser(m.Email) {
-				log.WithField("id", m.Email).Debug("ignoring user")
-				continue
-			}
+                        // Ignore any external members, since they don't have users
+                        // that can be synced
+                        if m.Type == "USER" && m.Status != "ACTIVE" {
+                                log.WithField("id", m.Email).Warn("ignoring external user")
+                                continue
+                        }
+
+                        // handle nested groups, by adding their membership to the end
+                        // of googleMembers
+                        if m.Type == "GROUP" {
+                                groupMembers = append (groupMembers, s.getGoogleSubGroupMembers(m)...)
+                                continue
+                        }
+                        // Remove any users that should be ignored
+                        if s.ignoreUser(m.Email) {
+                                log.WithField("id", m.Email).Debug("ignoring user")
+                                continue
+                        }
 
 			log.WithField("id", m.Email).Debug("get user")
 			q := fmt.Sprintf("email:%s", m.Email)
 			u, err := s.google.GetUsers(q) // TODO: implement GetUser(m.Email)
 
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, nil, err
 			}
 			if len(u) == 0 {
 				log.WithField("id", m.Email).Warn("missing user")
@@ -587,7 +636,7 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(googleGroups []*admin.Group) ([]*ad
 		gUsers = append(gUsers, user)
 	}
 
-	return gUsers, gGroupsUsers, nil
+	return gGroups, gUsers, gGroupsUsers, nil
 }
 
 // getGroupOperations returns the groups of AWS that must be added, deleted and are equals
@@ -769,7 +818,7 @@ func DoSync(ctx context.Context, cfg *config.Config) error {
 
 	log.WithField("sync_method", cfg.SyncMethod).Info("syncing")
 	if cfg.SyncMethod == config.DefaultSyncMethod {
-		err = c.SyncGroupsUsers(cfg.GroupMatch)
+		err = c.SyncGroupsUsers(cfg.GroupMatch, cfg.UserMatch)
 		if err != nil {
 			return err
 		}
@@ -1012,4 +1061,28 @@ func (s *syncGSuite) RemoveUserFromGroup(userId *string, groupId *string) error 
 	}
 
 	return nil
+}
+
+func (s *syncGSuite) getGoogleSubGroupMembers(m *admin.Member) []*admin.Member {
+        log.WithField("Email", m.Email).Debug("getGoogleSubGroupMembers()")
+        // retrieve the members of a group
+        g, err := s.google.GetGroups("email="+ m.Email)
+        if err != nil {
+                log.WithField("error:", err).Error("failed to retrieve group")
+                return nil
+        }
+
+        if len(g) == 1 {
+                log.WithField("Id", g).Debug("fetch members")
+
+                groupMembers, err := s.google.GetGroupMembers(g[0])
+                if err != nil {
+                        log.WithField("error:", err).Error("get group Members failed")
+                        return nil
+                }
+                return groupMembers
+        } else {
+                log.Error("No group found")
+        }
+        return nil
 }
