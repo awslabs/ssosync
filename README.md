@@ -11,7 +11,7 @@
 SSO Sync will run on any platform that Go can build for. It is available in the [AWS Serverless Application Repository](https://console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync)
 
 > [!CAUTION]
-> When using ssosync with an instance of IAM Identity Center integrated with AWS Control Tower. AWS Control Tower creates a number of groups and users (directly via the Identity Store API), when an external identity provider is configured these users and groups are can not be used to log in. However it is important to remember that because ssosync implemements a uni-directional sync it will make the IAM Identity Store match the subset of your Google Workspaces directory you specify, including removing these groups and users created by AWS Control Tower. There is a PFR [#88 - ssosync deletes Control Tower groups](https://github.com/awslabs/ssosync/issues/88) to implement an option to ignore these users and groups, hopefully this will be implemented in version 3.x.
+> When using ssosync with an instance of IAM Identity Center integrated with AWS Control Tower. AWS Control Tower creates a number of groups and users (directly via the Identity Store API), when an external identity provider is configured these users and groups are can not be used to log in. However it is important to remember that because ssosync implemements a uni-directional sync it will make the IAM Identity Store match the subset of your Google Workspaces directory you specify, including removing these groups and users created by AWS Control Tower. There is a PFR [#179 Configurable handling of 'manually created' Users/Groups in IAM Identity Center](https://github.com/awslabs/ssosync/issues/179) to implement an option to ignore these users and groups, hopefully this will be implemented in version 3.x. However, this has a dependancy on PFR [#166 Ensure all groups/user creates in IAM Identity Store are via SCIM api and populate externalId field](https://github.com/awslabs/ssosync/issues/166), to be able to reliably and consistently disinguish between **SCIM Provisioned** users from **Manually Created** users
 
 > [!WARNING]
 > There are breaking changes for versions `>= 0.02`
@@ -30,11 +30,11 @@ SSO Sync will run on any platform that Go can build for. It is available in the 
 > [!IMPORTANT]
 > `>= 2.1.0` switched to using `provided.al2` powered by ARM64 instances.
 
-> [!Info]
+> [!IMPORTANT]
 > As of `v2.2.0` multiple query patterns are supported for both Group and User matching, simply separate each query with a `,`. For full sync of groups and/or users specify '*' in the relevant match field. 
 > User match and group match can now be used in combination with the sync method of groups.
 > Nested groups will now be flattened into the top level groups.
-> external users are ignored.
+> group owners and external users are ignored.
 > User details are now cached to reduce the number of api calls and improve execution times on large directories.
 
 ## Why?
