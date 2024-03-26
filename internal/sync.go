@@ -521,10 +521,31 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 	gUsers := make([]*admin.User, 0)
 	gGroupsUsers := make(map[string][]*admin.User)
         gUserDetailCache := make(map[string]*admin.User)
+        gGroupDetailCache := make(map[string]*admin.Group)
 	gUniqUsers := make(map[string]*admin.User)
 
+        // For large directories this will reduce execution time and avoid throttling limits
+        log.Debug("Fetching ALL users from google, to use as cache")
+	googleUsers, err := s.google.GetUsers("*")
+        if err != nil {
+                return nil, nil, nil, err
+        }
+        for _, u := range googleUsers {
+                gUserDetailCache[u.PrimaryEmail] = u
+        }
+
+        log.Debug("Fetching ALL groups from google, to use as cache")
+	googleGroups, err := s.google.GetGroups("*")
+        if err != nil {
+                return nil, nil, nil, err
+        }
+        for _, g := range googleGroups {
+                gGroupDetailCache[g.Email] = g
+        }
+
+	// Fetch Users
         log.Debug("get users from google, based on UserMatch,  regardless of group membership")
-        googleUsers, err := s.google.GetUsers(queryUsers)
+        googleUsers, err = s.google.GetUsers(queryUsers)
         if err != nil {
                 return nil, nil, nil, err
         }
@@ -561,17 +582,6 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
         }
         gGroups = filteredGoogleGroups
 
-	// For large directories this will reduce execution time and avoid throttling limits
-	log.Debug("Fetching ALL users from google, to use as cache, when processing the group memberships")
-	        googleUsers, err = s.google.GetUsers("*")
-        if err != nil {
-                return nil, nil, nil, err
-        }
-
-        for _, u := range googleUsers {
-        	gUserDetailCache[u.PrimaryEmail] = u
-        }
-
         log.Debug("for each group retrieve the group members")
 	for _, g := range gGroups {
 
@@ -583,7 +593,7 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 		}
 
 		log.Debug("get group members from google")
-		membersUsers := s.getGoogleUsersInGroup(g.Email, gUserDetailCache)
+		membersUsers := s.getGoogleUsersInGroup(g, gUserDetailCache, gGroupDetailCache)
 
 		// If we've not seen the user email address before add it to the list of unique users
                 for _, m := range membersUsers {
@@ -1026,21 +1036,11 @@ func (s *syncGSuite) RemoveUserFromGroup(userId *string, groupId *string) error 
 	return nil
 }
 
-func (s *syncGSuite) getGoogleUsersInGroup(groupEmail string, userDetailCache map[string]*admin.User) []*admin.User {
-	log.WithField("Email:", groupEmail).Debug("getGoogleGroupMembers()")
-
-	// retrieve the details of the group
-        g, err := s.google.GetGroups("email="+ groupEmail)
-        if err != nil {
-                log.WithField("error:", err).Error("failed to retrieve group")
-                return nil
-        } 
-	if len(g) != 1 {
-                log.WithField("groups", g).Debug("expected 1 group")
-        }
+func (s *syncGSuite) getGoogleUsersInGroup(group *admin.Group, userCache map[string]*admin.User, groupCache map[string]*admin.Group) []*admin.User {
+	log.WithField("Email:", group.Email).Debug("getGoogleGroupMembers()")
 
 	 // retrieve the members of the group
-	groupMembers, err := s.google.GetGroupMembers(g[0])
+	groupMembers, err := s.google.GetGroupMembers(group)
 	if err != nil {
 		return nil
 	}
@@ -1066,7 +1066,12 @@ func (s *syncGSuite) getGoogleUsersInGroup(groupEmail string, userDetailCache ma
                 // of googleMembers
                 if m.Type == "GROUP" {
 		    	log.WithField("Email:", m.Email).Debug("calling getGoogleGroupMembers() for nested group")
-                        membersUsers = append (membersUsers, s.getGoogleUsersInGroup(m.Email, userDetailCache)...)
+			_, found := groupCache[m.Email]
+			if found {
+                        	membersUsers = append (membersUsers, s.getGoogleUsersInGroup(groupCache[m.Email], userCache, groupCache)...)
+			} else {
+                        	log.WithField("id", m.Email).Warn("missing nested group")
+			}
                         continue
                 }
                 // Remove any users that should be ignored
@@ -1076,9 +1081,9 @@ func (s *syncGSuite) getGoogleUsersInGroup(groupEmail string, userDetailCache ma
                 }
 
                 // Find the group member in the cache of UserDetails
-                _, found := userDetailCache[m.Email]
+                _, found := userCache[m.Email]
                 if found {
-                        membersUsers = append(membersUsers, userDetailCache[m.Email])
+                        membersUsers = append(membersUsers, userCache[m.Email])
                 } else {
                         log.WithField("id", m.Email).Warn("missing user")
                         continue
