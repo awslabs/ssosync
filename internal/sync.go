@@ -1049,10 +1049,10 @@ func (s *syncGSuite) getGoogleUsersInGroup(group *admin.Group, userCache map[str
 	// process the members of the group
         for _, m := range groupMembers {
         	log.WithField("email", m.Email).Debug("processing member")
-                // Ignore Owners they aren't relevant in Identity Store
+                // Ignore Owners aren't relevant in Identity Store
+		// so are treated as group members.
                 if m.Role == "OWNER" {
-                	log.WithField("id", m.Email).Debug("ignoring owner roles")
-                        continue
+                	log.WithField("id", m.Email).Debug("owner role")
                 }
 
                 // Ignore any external members, since they don't have users

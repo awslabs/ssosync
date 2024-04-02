@@ -34,7 +34,8 @@ SSO Sync will run on any platform that Go can build for. It is available in the 
 > As of `v2.2.0` multiple query patterns are supported for both Group and User matching, simply separate each query with a `,`. For full sync of groups and/or users specify '*' in the relevant match field. 
 > User match and group match can now be used in combination with the sync method of groups.
 > Nested groups will now be flattened into the top level groups.
-> group owners and external users are ignored.
+> External users are ignored.
+> Group owners are treated as regular group members.
 > User details are now cached to reduce the number of api calls and improve execution times on large directories.
 
 ## Why?
