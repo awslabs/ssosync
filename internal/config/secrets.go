@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/base64"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/secretsmanager"
 )
@@ -19,12 +20,20 @@ func NewSecrets(svc *secretsmanager.SecretsManager) *Secrets {
 }
 
 // GoogleAdminEmail ...
-func (s *Secrets) GoogleAdminEmail(secretArn string) (string, error) {
-     if len([]rune(secretArn)) == 0 {
-        return s.getSecret("SSOSyncGoogleAdminEmail")
-     } 
-     return s.getSecret(secretArn)
-}
+// func (s *Secrets) GoogleAdminEmail(secretArn string) (string, error) {
+//      if len([]rune(secretArn)) == 0 {
+//         return s.getSecret("SSOSyncGoogleAdminEmail")
+//      } 
+//      return s.getSecret(secretArn)
+// }
+
+// GoogleCustomerId ...
+func (s *Secrets) GoogleCustomerId(secretArn string) (string, error) {
+	if len([]rune(secretArn)) == 0 {
+	   return s.getSecret("SSOSyncGoogleCustomerId")
+	} 
+	return s.getSecret(secretArn)
+   }
 
 // SCIMAccessToken ...
 func (s *Secrets) SCIMAccessToken(secretArn string) (string, error) {
