@@ -18,6 +18,7 @@ package google
 import (
 	"context"
 	"strings"
+	"errors"
 
 	"golang.org/x/oauth2/google"
 	admin "google.golang.org/api/admin/directory/v1"
@@ -67,7 +68,7 @@ func (c *client) GetDeletedUsers() ([]*admin.User, error) {
 	u := make([]*admin.User, 0)
 	err := c.service.Users.List().Customer("my_customer").ShowDeleted("true").Pages(c.ctx, func(users *admin.Users) error {
 		u = append(u, users.Users...)
-		return nil, err
+		return nil
 	})
 
 	return u, err
@@ -78,7 +79,7 @@ func (c *client) GetGroupMembers(g *admin.Group) ([]*admin.Member, error) {
 	m := make([]*admin.Member, 0)
 	err := c.service.Members.List(g.Id).Pages(context.TODO(), func(members *admin.Members) error {
 		m = append(m, members.Members...)
-		return nil, err
+		return nil
 	})
 
 	return m, err
@@ -110,21 +111,27 @@ func (c *client) GetUsers(query string) ([]*admin.User, error) {
 	if query  == "*" {
                 err = c.service.Users.List().Customer("my_customer").Pages(c.ctx, func(users *admin.Users) error {
                         u = append(u, users.Users...)
-                        return nil, err
+                        return nil
                 })
 		return u, err
-        }
+        } else {
 
-	// The Google api doesn't support multi-part queries, but we do so we need to split into an array of query strings
-	queries := strings.Split(query, ",")
+	        // The Google api doesn't support multi-part queries, but we do so we need to split into an array of query strings
+		queries := strings.Split(query, ",")
 
-	// Then call the api one query at a time, appending to our list
-	for _, subQuery := range queries {
-		err = c.service.Users.List().Query(subQuery).Customer("my_customer").Pages(c.ctx, func(users *admin.Users) error {
-			u = append(u, users.Users...)
-			return nil, err
-		})
+		// Then call the api one query at a time, appending to our list
+		for _, subQuery := range queries {
+			err = c.service.Users.List().Query(subQuery).Customer("my_customer").Pages(c.ctx, func(users *admin.Users) error {
+				u = append(u, users.Users...)
+				return nil
+			})
+		}
 	}
+
+	// Check we've got some users otherwise something is wrong.
+        if len(u) == 0 {
+                err = errors.New("No users returned")
+        } 
 	return u, err
 
 
@@ -156,20 +163,26 @@ func (c *client) GetGroups(query string) ([]*admin.Group, error) {
         if query  == "*" {
 		err = c.service.Groups.List().Customer("my_customer").Pages(context.TODO(), func(groups *admin.Groups) error {
                         g = append(g, groups.Groups...)
-                        return nil, err
+                        return nil
                 })
 		return g, err
+        } else {
+
+        	// The Google api doesn't support multi-part queries, but we do so we need to split into an array of query strings
+        	queries := strings.Split(query, ",")
+
+        	// Then call the api one query at a time, appending to our list
+        	for _, subQuery := range queries {
+			err = c.service.Groups.List().Customer("my_customer").Query(subQuery).Pages(context.TODO(), func(groups *admin.Groups) error {
+				g = append(g, groups.Groups...)
+				return nil
+			})
+		}
 	}
 
-        // The Google api doesn't support multi-part queries, but we do so we need to split into an array of query strings
-        queries := strings.Split(query, ",")
-
-        // Then call the api one query at a time, appending to our list
-        for _, subQuery := range queries {
-		err = c.service.Groups.List().Customer("my_customer").Query(subQuery).Pages(context.TODO(), func(groups *admin.Groups) error {
-			g = append(g, groups.Groups...)
-			return nil, err
-		})
+	// Check we've got some users otherwise something is wrong.
+	if len(g) == 0 {
+		err = errors.New("No groups returned")
 	}
 	return g, err
 }
