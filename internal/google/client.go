@@ -18,6 +18,7 @@ package google
 import (
 	"context"
 	"strings"
+	"errors"
 
 	"golang.org/x/oauth2/google"
 	admin "google.golang.org/api/admin/directory/v1"
@@ -129,7 +130,7 @@ func (c *client) GetUsers(query string) ([]*admin.User, error) {
 
 	// Check we've got some users otherwise something is wrong.
         if len(u) == 0 {
-                err = "Google API returned No users?"
+                return u, errors.New("Google API returned No users?")
         } 
 	return u, err
 
@@ -181,7 +182,7 @@ func (c *client) GetGroups(query string) ([]*admin.Group, error) {
 
 	// Check we've got some users otherwise something is wrong.
 	if len(g) == 0 {
-		err = "Google API return No groups?"
+		return g, errors.New("Google API return No groups?")
 	}
 	return g, err
 }
