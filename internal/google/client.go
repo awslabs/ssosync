@@ -67,7 +67,7 @@ func (c *client) GetDeletedUsers() ([]*admin.User, error) {
 	u := make([]*admin.User, 0)
 	err := c.service.Users.List().Customer("my_customer").ShowDeleted("true").Pages(c.ctx, func(users *admin.Users) error {
 		u = append(u, users.Users...)
-		return nil
+		return nil, err
 	})
 
 	return u, err
@@ -78,7 +78,7 @@ func (c *client) GetGroupMembers(g *admin.Group) ([]*admin.Member, error) {
 	m := make([]*admin.Member, 0)
 	err := c.service.Members.List(g.Id).Pages(context.TODO(), func(members *admin.Members) error {
 		m = append(m, members.Members...)
-		return nil
+		return nil, err
 	})
 
 	return m, err
@@ -110,7 +110,7 @@ func (c *client) GetUsers(query string) ([]*admin.User, error) {
 	if query  == "*" {
                 err = c.service.Users.List().Customer("my_customer").Pages(c.ctx, func(users *admin.Users) error {
                         u = append(u, users.Users...)
-                        return nil
+                        return nil, err
                 })
 		return u, err
         }
@@ -122,7 +122,7 @@ func (c *client) GetUsers(query string) ([]*admin.User, error) {
 	for _, subQuery := range queries {
 		err = c.service.Users.List().Query(subQuery).Customer("my_customer").Pages(c.ctx, func(users *admin.Users) error {
 			u = append(u, users.Users...)
-			return nil
+			return nil, err
 		})
 	}
 	return u, err
@@ -156,7 +156,7 @@ func (c *client) GetGroups(query string) ([]*admin.Group, error) {
         if query  == "*" {
 		err = c.service.Groups.List().Customer("my_customer").Pages(context.TODO(), func(groups *admin.Groups) error {
                         g = append(g, groups.Groups...)
-                        return nil
+                        return nil, err
                 })
 		return g, err
 	}
@@ -168,7 +168,7 @@ func (c *client) GetGroups(query string) ([]*admin.Group, error) {
         for _, subQuery := range queries {
 		err = c.service.Groups.List().Customer("my_customer").Query(subQuery).Pages(context.TODO(), func(groups *admin.Groups) error {
 			g = append(g, groups.Groups...)
-			return nil
+			return nil, err
 		})
 	}
 	return g, err
