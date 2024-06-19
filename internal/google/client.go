@@ -130,7 +130,7 @@ func (c *client) GetUsers(query string) ([]*admin.User, error) {
 
 	// Check we've got some users otherwise something is wrong.
         if len(u) == 0 {
-                err = errors.New("No users returned")
+                err = "Google API returned No users?"
         } 
 	return u, err
 
@@ -182,7 +182,7 @@ func (c *client) GetGroups(query string) ([]*admin.Group, error) {
 
 	// Check we've got some users otherwise something is wrong.
 	if len(g) == 0 {
-		err = errors.New("No groups returned")
+		err = "Google API return No groups?"
 	}
 	return g, err
 }
