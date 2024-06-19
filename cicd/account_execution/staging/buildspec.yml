@@ -11,9 +11,7 @@ phases:
       - cp ${CODEBUILD_SRC_DIR_Built}/dist/ssosync_linux_amd64_v1/ssosync ./
 
       # Copy in the tests
-      - ls -la cicd/
       - cp -r cicd/tests ./
-      - ls -laR ./tests
 
       # Copy in the stack and params templates
       - mkdir deploy
