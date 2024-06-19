@@ -18,7 +18,6 @@ package google
 import (
 	"context"
 	"strings"
-	"errors"
 
 	"golang.org/x/oauth2/google"
 	admin "google.golang.org/api/admin/directory/v1"
