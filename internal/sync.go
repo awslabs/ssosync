@@ -596,13 +596,24 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 		membersUsers := s.getGoogleUsersInGroup(g, gUserDetailCache, gGroupDetailCache)
 
 		// If we've not seen the user email address before add it to the list of unique users
+		// also, we need to deduplicate the list of members.
                 for _, m := range membersUsers {
 			_, ok := gUniqUsers[m.PrimaryEmail]
 			if !ok {
 				gUniqUsers[m.PrimaryEmail] = gUserDetailCache[m.PrimaryEmail]
 			}
+
+			_, ok := gUniqMembers[m.PrimaryEmail]
+                        if !ok {
+                                gUniqMembers[m.PrimaryEmail] = gUserDetailCache[m.PrimaryEmail]
+                        }
 		}
-		gGroupsUsers[g.Name] = membersUsers
+
+	        gMembers := make([]*admin.User)
+	        for _, member := range gUniqMembers {
+                        gMembers = append(gMembers, member)
+                }
+		gGroupsUsers[g.Name] = gMembers
 	}
 
 	for _, user := range gUniqUsers {
