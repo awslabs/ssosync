@@ -352,7 +352,7 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 			&identitystore.DeleteUserInput{IdentityStoreId: &s.cfg.IdentityStoreID, UserId: &awsUserFull.ID},
 		)
 		if err != nil {
-			log.Error("error deleting user")
+			log.WithField("user", awsUser).Error("error deleting user")
 			return err
 		}
 	}
@@ -377,7 +377,7 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 			awsUser.Username,
 			awsUser.Active))
 		if err != nil {
-			log.Error("error updating user")
+		 	log.WithField("user", awsUser).Error("error updating user")
 			return err
 		}
 	}
@@ -396,7 +396,7 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 				log.WithField("user", awsUser.Username).Warn("user already exists")
 				continue
 			}
-			log.Error("error creating user")
+			log.WithField("user", awsUser).Error("error creating user")
 			return err
 		}
 	}
