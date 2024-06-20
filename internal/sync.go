@@ -294,6 +294,8 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 	if err != nil {
 		return err
 	}
+	log.WithField("googleGroups", gioogleGroups).Debug("Groups to sync")
+	log.WithField("googleUsers", googleUsers).Debug("Users to sync")
 
 	log.Info("get existing aws groups")
 	awsGroups, err := s.GetGroups()
