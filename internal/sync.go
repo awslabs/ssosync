@@ -640,9 +640,11 @@ func getGroupOperations(awsGroups []*aws.Group, googleGroups []*admin.Group) (ad
 
 	// AWS Groups found and not found in google
 	for _, gGroup := range googleGroups {
-		if _, found := awsMap[gGroup.Name]; found {
+		if _, found := awsMap[gGroup.Name]; found {	
+		 	log.WithField("gGroup", gGroup).Debug("equals")
 			equals = append(equals, awsMap[gGroup.Name])
 		} else {
+		 	log.WithField("gGroup", gGroup).Debug("add")
 			add = append(add, aws.NewGroup(gGroup.Name))
 		}
 	}
@@ -650,6 +652,7 @@ func getGroupOperations(awsGroups []*aws.Group, googleGroups []*admin.Group) (ad
 	// Google Groups founds and not in aws
 	for _, awsGroup := range awsGroups {
 		if _, found := googleMap[awsGroup.DisplayName]; !found {
+		 	log.WithField("awsGroup", awsGroup).Debug("delete")
 			delete = append(delete, aws.NewGroup(awsGroup.DisplayName))
 		}
 	}
@@ -677,15 +680,16 @@ func getUserOperations(awsUsers []*aws.User, googleUsers []*admin.User) (add []*
 			if awsUser.Active == gUser.Suspended ||
 				awsUser.Name.GivenName != gUser.Name.GivenName ||
 				awsUser.Name.FamilyName != gUser.Name.FamilyName {
-				log.WithField("user", gUser).Debug("update")
+				log.WithField("gUser", gUser).Debug("update")
+				log.WithField("awsUser", awsUser).Debug("update")
 				update = append(update, aws.NewUser(gUser.Name.GivenName, gUser.Name.FamilyName, gUser.PrimaryEmail, !gUser.Suspended))
 
 			} else {
-			        log.WithField("user", awsUser).Debug("equals")
+			        log.WithField("awsUser", awsUser).Debug("equals")
 				equals = append(equals, awsUser)
 			}
 		} else {
-		        log.WithField("user", gUser).Debug("add")
+		        log.WithField("gUser", gUser).Debug("add")
 			add = append(add, aws.NewUser(gUser.Name.GivenName, gUser.Name.FamilyName, gUser.PrimaryEmail, !gUser.Suspended))
 		}
 	}
@@ -693,6 +697,7 @@ func getUserOperations(awsUsers []*aws.User, googleUsers []*admin.User) (add []*
 	// Google Users founds and not in aws
 	for _, awsUser := range awsUsers {
 		if _, found := googleMap[awsUser.Username]; !found {
+			log.WithField("awsUser", awsUser).Debug("delete")
 			delete = append(delete, aws.NewUser(awsUser.Name.GivenName, awsUser.Name.FamilyName, awsUser.Username, awsUser.Active))
 		}
 	}
