@@ -33,6 +33,15 @@ func NewUser(firstName string, lastName string, email string, active bool) *User
 		Type: "work",
 	})
 
+	// This handles the rare occation where these field are populated with a zero width space
+	// IAM Identity Center will reject.
+	if firstName == "​" {
+	        firstName = " "
+        }
+	if lastName == "​" {
+	        lastName = ""
+        }
+
 	return &User{
 		Schemas:  []string{"urn:ietf:params:scim:schemas:core:2.0:User"},
 		Username: email,
