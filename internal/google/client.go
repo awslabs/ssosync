@@ -134,8 +134,8 @@ func (c *client) GetUsers(query string) ([]*admin.User, error) {
 	// Identity Store will accept and a 'space' for an empty name but not a 'zero width space'
 	// So we need to replace any 'zero width space' strings with a single 'space' to allow comparison and sync
 	for _, user := range u {
-		strings.Replace(user.Name.GivenName, string('\u200B'), " ", -1)
-        	strings.Replace(user.Name.FamilyName, string('\u200B'), " ", -1)
+		user.Name.GivenName = strings.Replace(user.Name.GivenName, string('\u200B'), " ", -1)
+        	user.Name.FamilyName = strings.Replace(user.Name.FamilyName, string('\u200B'), " ", -1)
 	}
 
 	// Check we've got some users otherwise something is wrong.
