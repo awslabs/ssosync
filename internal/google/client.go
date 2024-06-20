@@ -128,6 +128,20 @@ func (c *client) GetUsers(query string) ([]*admin.User, error) {
 		}
 	}
 
+	// some people prefer to go by a mononym
+	// Google directory will accept a 'zero width space' for an empty name but will not accept a 'space'
+	// but
+	// Identity Store will accept and a 'space' for an empty name but not a 'zero width space'
+	// So we need to replace any 'zero width space' strings with a single 'space' to allow comparison and sync
+	for _, user := range u {
+		if user.Name.GivenName == string('<200b>') {
+               		user.Name.GivenName = " "
+        	}
+        	if user.Name.FamilyName == string('<200b>') {
+                	user.Name.FamilyName = " "
+        	}
+	}
+
 	// Check we've got some users otherwise something is wrong.
         if len(u) == 0 {
                 return u, errors.New("google api returned 0 users?")
