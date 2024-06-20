@@ -677,11 +677,15 @@ func getUserOperations(awsUsers []*aws.User, googleUsers []*admin.User) (add []*
 			if awsUser.Active == gUser.Suspended ||
 				awsUser.Name.GivenName != gUser.Name.GivenName ||
 				awsUser.Name.FamilyName != gUser.Name.FamilyName {
+				log.WithField("user", gUser).Debug("update")
 				update = append(update, aws.NewUser(gUser.Name.GivenName, gUser.Name.FamilyName, gUser.PrimaryEmail, !gUser.Suspended))
+
 			} else {
+			        log.WithField("user", awsUser).Debug("equals")
 				equals = append(equals, awsUser)
 			}
 		} else {
+		        log.WithField("user", gUser).Debug("add")
 			add = append(add, aws.NewUser(gUser.Name.GivenName, gUser.Name.FamilyName, gUser.PrimaryEmail, !gUser.Suspended))
 		}
 	}
