@@ -465,7 +465,9 @@ Resources:
             Value: !Select [3, !Split [',', !Ref SecretsConfig]]
           - Name: SecretGoogleCredentials
             Value: !Select [4, !Split [',', !Ref SecretsConfig]]
-          - Name: SecretGoogleAdminEmail
+          #- Name: SecretGoogleAdminEmail
+          #  Value: !Select [5, !Split [',', !Ref SecretsConfig]]
+          - Name: SecretGoogleCustomerId
             Value: !Select [5, !Split [',', !Ref SecretsConfig]]
           - Name: SecretWIFClientLibraryConfig
             Value: !Select [6, !Split [',', !Ref SecretsConfig]]

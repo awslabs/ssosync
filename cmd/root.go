@@ -25,7 +25,7 @@ import (
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
-        "github.com/aws/aws-sdk-go/service/codepipeline"
+	"github.com/aws/aws-sdk-go/service/codepipeline"
 	"github.com/aws/aws-sdk-go/service/secretsmanager"
 	"github.com/awslabs/ssosync/internal"
 	"github.com/awslabs/ssosync/internal/config"
@@ -157,7 +157,8 @@ func initConfig() {
 	viper.AutomaticEnv()
 
 	appEnvVars := []string{
-		"google_admin",
+		//"google_admin",
+		"customer_id",
 		"google_credentials",
 		"scim_access_token",
 		"scim_endpoint",
@@ -197,11 +198,17 @@ func configLambda() {
 	svc := secretsmanager.New(s)
 	secrets := config.NewSecrets(svc)
 
-	unwrap, err := secrets.GoogleAdminEmail(os.Getenv("GOOGLE_ADMIN"))
+	// unwrap, err := secrets.GoogleAdminEmail(os.Getenv("GOOGLE_ADMIN"))
+	// if err != nil {
+	// 	log.Fatalf(errors.Wrap(err, "cannot read config: GOOGLE_ADMIN").Error())
+	// }
+	// cfg.GoogleAdmin = unwrap
+
+	unwrap, err := secrets.GoogleCustomerId(os.Getenv("CUSTOMER_ID"))
 	if err != nil {
-		log.Fatalf(errors.Wrap(err, "cannot read config: GOOGLE_ADMIN").Error())
+		log.Fatalf(errors.Wrap(err, "cannot read config: CUSTOMER_ID").Error())
 	}
-	cfg.GoogleAdmin = unwrap
+	cfg.CustomerId = unwrap
 
 	unwrap, err = secrets.GoogleCredentials(os.Getenv("GOOGLE_CREDENTIALS"))
 	if err != nil {
@@ -291,7 +298,8 @@ func addFlags(cmd *cobra.Command, cfg *config.Config) {
 	rootCmd.Flags().StringVarP(&cfg.SCIMAccessToken, "access-token", "t", "", "AWS SSO SCIM API Access Token")
 	rootCmd.Flags().StringVarP(&cfg.SCIMEndpoint, "endpoint", "e", "", "AWS SSO SCIM API Endpoint")
 	rootCmd.Flags().StringVarP(&cfg.GoogleCredentials, "google-credentials", "c", config.DefaultGoogleCredentials, "path to Google Workspace credentials file")
-	rootCmd.Flags().StringVarP(&cfg.GoogleAdmin, "google-admin", "u", "", "Google Workspace admin user email")
+	//rootCmd.Flags().StringVarP(&cfg.GoogleAdmin, "google-admin", "u", "", "Google Workspace admin user email")
+	rootCmd.Flags().StringVarP(&cfg.CustomerId, "customer-id", "u", "", "Google Workspace customer id")
 	rootCmd.Flags().StringSliceVar(&cfg.IgnoreUsers, "ignore-users", []string{}, "ignores these Google Workspace users")
 	rootCmd.Flags().StringSliceVar(&cfg.IgnoreGroups, "ignore-groups", []string{}, "ignores these Google Workspace groups")
 	rootCmd.Flags().StringSliceVar(&cfg.IncludeGroups, "include-groups", []string{}, "include only these Google Workspace groups, NOTE: only works when --sync-method 'users_groups'")

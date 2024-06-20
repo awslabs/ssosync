@@ -15,7 +15,9 @@ Parameters:
     Description: The version of this build in SAR
     Default: 'v1.0.0-rc.10'
     Type: String
-  GoogleAdminEmailArn:
+  # GoogleAdminEmailArn:
+  #   Type: String
+  GoogleCustomerIdArn:
     Type: String
   GoogleCredentialsArn:
     Type: String
@@ -41,10 +43,10 @@ Resources:
         SemanticVersion: !Ref AppVersion
       Parameters:
         FunctionName: SSOSyncFunction
-        GoogleAdminEmail: !Join
+        GoogleCustomerId: !Join
           - ''
           - - '{{resolve:secretsmanager:'
-            - !Ref GoogleAdminEmailArn
+            - !Ref GoogleCustomerIdArn
             - '}}'
         GoogleCredentials: !Join
           - ''

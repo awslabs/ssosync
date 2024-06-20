@@ -18,7 +18,8 @@ Metadata:
       - Label:
           default: Google Workspace Credentials 
         Parameters:
-          - GoogleAdminEmail
+          #- GoogleAdminEmail
+          - GoogleCustomerId
           - GoogleCredentials
       - Label:
           default: Sync Configuration
@@ -135,13 +136,20 @@ Parameters:
     AllowedPattern: '(?!.*\s)|(\{(\s)*(".*")(\s)*:(\s)*(".*")(\s)*\})'
     NoEcho: true
 
-  GoogleAdminEmail:
+  GoogleCustomerId:
     Type: String
     Description: |
-      Google Admin email
+      Google customer id
     Default: ""
-    AllowedPattern: '(?!.*\s)|(([a-zA-Z0-9.+=_-]{0,61})@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*)'
-    NoEcho: true
+    AllowedPattern: '(?!.*\s)|C([A-Za-z0-9]{8})'
+
+  # GoogleAdminEmail:
+  #   Type: String
+  #   Description: |
+  #     Google Admin email
+  #   Default: ""
+  #   AllowedPattern: '(?!.*\s)|(([a-zA-Z0-9.+=_-]{0,61})@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*)'
+  #   NoEcho: true
 
   SCIMEndpointUrl:
     Type: String
@@ -321,11 +329,16 @@ Rules:
               - !Ref GoogleCredentials
               - ""
         AssertDescription: 'The contents of the Credentials.json is required for this deployment type.'
+      # - Assert: !Not
+      #     - !Equals
+      #         - !Ref GoogleAdminEmail
+      #         - ""
+      #   AssertDescription: 'The email address of a directory admin is required for this deployment type.'
       - Assert: !Not
           - !Equals
-              - !Ref GoogleAdminEmail
+              - !Ref GoogleCustomerId
               - ""
-        AssertDescription: 'The email address of a directory admin is required for this deployment type.'
+        AssertDescription: 'The google workspace customer id is required for this deployment type.'
       - Assert: !Not
           - !Equals
               - !Ref SCIMEndpointUrl
@@ -385,10 +398,14 @@ Rules:
           - !Ref GoogleCredentials
           - ""
         AssertDescription: 'A value for GoogleCredentials is not required for this deployment type.'
+      # - Assert: !Equals
+      #     - !Ref GoogleAdminEmail
+      #     - ""
+      #   AssertDescription: 'A value for GoogleAdminEmail is not required for this deployment type.'
       - Assert: !Equals
-          - !Ref GoogleAdminEmail
+          - !Ref GoogleCustomerId
           - ""
-        AssertDescription: 'A value for GoogleAdminEmail is not required for this deployment type.'
+        AssertDescription: 'A value for GoogleCustomerId is not required for this deployment type.'
       - Assert: !Equals
           - !Ref SCIMEndpointUrl
           - ""
@@ -441,7 +458,8 @@ Resources:
                   - "secretsmanager:Get*"
                 Resource:
                   - !If [CreateSecrets, !Ref SecretGoogleCredentials, !Select [0, !Split [',', !Ref CrossStackConfig]]]
-                  - !If [CreateSecrets, !Ref SecretGoogleAdminEmail, !Select [1, !Split [',', !Ref CrossStackConfig]]]
+                  # - !If [CreateSecrets, !Ref SecretGoogleAdminEmail, !Select [1, !Split [',', !Ref CrossStackConfig]]]
+                  - !If [CreateSecrets, !Ref SecretGoogleCustomerId, !Select [1, !Split [',', !Ref CrossStackConfig]]]
                   - !If [CreateSecrets, !Ref SecretSCIMEndpoint, !Select [2, !Split [',', !Ref CrossStackConfig]]]
                   - !If [CreateSecrets, !Ref SecretSCIMAccessToken, !Select [3, !Split [',', !Ref CrossStackConfig]]]
                   - !If [CreateSecrets, !Ref SecretRegion, !Select [4, !Split [',', !Ref CrossStackConfig]]]
@@ -496,7 +514,7 @@ Resources:
                   - "secretsmanager:Get*"
                 Resource:
                   - !Select [0, !Split [',', !Ref CrossStackConfig]] # GoogleCredentials
-                  - !Select [1, !Split [',', !Ref CrossStackConfig]] # GoogleAdminEmail
+                  - !Select [1, !Split [',', !Ref CrossStackConfig]] # GoogleCustomerId
                   - !Select [2, !Split [',', !Ref CrossStackConfig]] # SCIMEndpointUrl
                   - !Select [3, !Split [',', !Ref CrossStackConfig]] # SCIMEndpointAccessToken
                   - !Select [4, !Split [',', !Ref CrossStackConfig]] # Region
@@ -545,7 +563,8 @@ Resources:
           LOG_LEVEL: !Ref LogLevel
           LOG_FORMAT: !Ref LogFormat
           GOOGLE_CREDENTIALS: !If [CreateSecrets, !Ref SecretGoogleCredentials, !Select [0, !Split [',', !Ref CrossStackConfig]]]
-          GOOGLE_ADMIN: !If [CreateSecrets, !Ref SecretGoogleAdminEmail, !Select [1, !Split [',', !Ref CrossStackConfig]]]
+          # GOOGLE_ADMIN: !If [CreateSecrets, !Ref SecretGoogleAdminEmail, !Select [1, !Split [',', !Ref CrossStackConfig]]]
+          CUSTOMER_ID: !If [CreateSecrets, !Ref SecretGoogleCustomerId, !Select [1, !Split [',', !Ref CrossStackConfig]]]
           SCIM_ENDPOINT: !If [CreateSecrets, !Ref SecretSCIMEndpoint, !Select [2, !Split [',', !Ref CrossStackConfig]]]
           SCIM_ACCESS_TOKEN: !If [CreateSecrets, !Ref SecretSCIMAccessToken, !Select [3, !Split [',', !Ref CrossStackConfig]]]
           REGION: !If [CreateSecrets, !Ref SecretRegion, !Select [4, !Split [',', !Ref CrossStackConfig]]]
@@ -624,19 +643,43 @@ Resources:
             - secretsmanager:GetSecretValue
           Resource: '*'
 
-  SecretGoogleAdminEmail:
+  # SecretGoogleAdminEmail:
+  #   Type: "AWS::SecretsManager::Secret"
+  #   Condition: CreateSecrets
+  #   Properties:
+  #     Name: SSOSyncGoogleAdminEmail
+  #     SecretString: !Ref GoogleAdminEmail
+  #     KmsKeyId: !If [CreateKey, !Ref KeyAlias, alias/aws/secretsmanager]
+
+  SecretGoogleCustomerId:
     Type: "AWS::SecretsManager::Secret"
     Condition: CreateSecrets
     Properties:
-      Name: SSOSyncGoogleAdminEmail
-      SecretString: !Ref GoogleAdminEmail
+      Name: SSOSyncGoogleCustomerId
+      SecretString: !Ref GoogleCustomerId
       KmsKeyId: !If [CreateKey, !Ref KeyAlias, alias/aws/secretsmanager]
 
-  SecretGoogleAdminEmailPolicy:
+
+  # SecretGoogleAdminEmailPolicy:
+  #   Type: AWS::SecretsManager::ResourcePolicy
+  #   Condition: CreateKey
+  #   Properties:
+  #     SecretId: !Ref SecretGoogleAdminEmail
+  #     ResourcePolicy:
+  #       Version: 2012-10-17
+  #       Statement:
+  #       - Effect: Allow
+  #         Principal:
+  #           AWS: !Sub arn:aws:iam::${CrossStackConfig}:root
+  #         Action:
+  #           - secretsmanager:GetSecretValue
+  #         Resource: '*'
+
+  SecretGoogleCustomerIdPolicy:
     Type: AWS::SecretsManager::ResourcePolicy
     Condition: CreateKey
     Properties:
-      SecretId: !Ref SecretGoogleAdminEmail
+      SecretId: !Ref SecretGoogleCustomerId
       ResourcePolicy:
         Version: 2012-10-17
         Statement:
@@ -750,13 +793,13 @@ Outputs:
   AppConfigLocal:
     Condition: OutputSecrets
     Description: "The Comma Separated list of secrets ARNs to copy and paste into the CrossStackConfig field of the App only stack."
-    Value: !Sub ${SecretGoogleCredentials},${SecretGoogleAdminEmail},${SecretSCIMEndpoint},${SecretSCIMAccessToken},${SecretRegion},${SecretIdentityStoreID}
+    Value: !Sub ${SecretGoogleCredentials},${SecretGoogleCustomerId},${SecretSCIMEndpoint},${SecretSCIMAccessToken},${SecretRegion},${SecretIdentityStoreID}
     Export:
       Name: AppConfig
 
   AppConfigRemote:
     Condition: CreateKey
     Description: "The Comma Separated list of Secrets and KMS Key ARNs to copy and paste into the CrossStackConfig field of the app for cross-account stack."
-    Value: !Sub ${SecretGoogleCredentials},${SecretGoogleAdminEmail},${SecretSCIMEndpoint},${SecretSCIMAccessToken},${SecretRegion},${SecretIdentityStoreID},arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/${KeyForSecrets}
+    Value: !Sub ${SecretGoogleCredentials},${SecretGoogleCustomerId},${SecretSCIMEndpoint},${SecretSCIMAccessToken},${SecretRegion},${SecretIdentityStoreID},arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/${KeyForSecrets}
     Export:
       Name: AppConfig
