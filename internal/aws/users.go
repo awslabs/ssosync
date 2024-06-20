@@ -35,11 +35,11 @@ func NewUser(firstName string, lastName string, email string, active bool) *User
 
 	// This handles the rare occation where these field are populated with a zero width space
 	// IAM Identity Center will reject.
-	if firstName == '​' {
+	if firstName == string('​') {
 	        firstName = " "
         }
-	if lastName == '​' {
-	        lastName = ""
+	if lastName == string('​') {
+	        lastName = " "
         }
 
 	return &User{
