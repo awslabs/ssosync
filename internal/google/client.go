@@ -134,13 +134,7 @@ func (c *client) GetUsers(query string) ([]*admin.User, error) {
 	// So we need to replace any 'zero width space' strings with a single 'space' to allow comparison and sync
 	for _, user := range u {
 		user.Name.GivenName = strings.Replace(user.Name.GivenName, string('\u200B'), " ", -1)
-		//if len(user.Name.GivenName) == 0 {
-		//	user.Name.GivenName = " "
-		//}
         	user.Name.FamilyName = strings.Replace(user.Name.FamilyName, string('\u200B'), " ", -1)
-		//if len(user.Name.FamilyName) == 0 {
-		//	user.Name.FamilyName = " "
-		//}
 	}
 
 	// Check we've got some users otherwise something is wrong.
