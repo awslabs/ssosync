@@ -354,6 +354,84 @@ func TestClient_FindGroupByDisplayName(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestClient_DeleteGroup(t *testing.T) {
+        ctrl := gomock.NewController(t)
+        defer ctrl.Finish()
+
+        x := mock.NewMockIHttpClient(ctrl)
+
+        c, err := NewClient(x, &Config{
+                Endpoint: "https://scim.example.com/",
+                Token:    "bearerToken",
+        })
+        assert.NoError(t, err)
+
+        g := &Group{
+                ID: "groupId",
+        }
+
+        calledURL, _ := url.Parse("https://scim.example.com/Groups/groupId")
+
+        req := httpReqMatcher{
+                httpReq: &http.Request{
+                        URL:    calledURL,
+                        Method: http.MethodDelete,
+                },
+        }
+
+        x.EXPECT().Do(&req).MaxTimes(1).Return(&http.Response{
+                Status:     "OK",
+                StatusCode: 200,
+                Body:       nopCloser{bytes.NewBufferString("")},
+        }, nil)
+
+        err = c.DeleteGroup(g)
+        assert.NoError(t, err)
+
+        // Test no group specified
+        err = c.DeleteGroup(nil)
+        assert.Error(t, err)
+}
+
+func TestClient_DeleteUser(t *testing.T) {
+        ctrl := gomock.NewController(t)
+        defer ctrl.Finish()
+
+        x := mock.NewMockIHttpClient(ctrl)
+
+        c, err := NewClient(x, &Config{
+                Endpoint: "https://scim.example.com/",
+                Token:    "bearerToken",
+        })
+        assert.NoError(t, err)
+
+        u := &User{
+                ID: "userId",
+        }
+
+        calledURL, _ := url.Parse("https://scim.example.com/Users/userId")
+
+        req := httpReqMatcher{
+                httpReq: &http.Request{
+                        URL:    calledURL,
+                        Method: http.MethodDelete,
+                },
+        }
+
+        x.EXPECT().Do(&req).MaxTimes(1).Return(&http.Response{
+                Status:     "OK",
+                StatusCode: 200,
+                Body:       nopCloser{bytes.NewBufferString("")},
+        }, nil)
+
+        err = c.DeleteUser(u)
+        assert.NoError(t, err)
+
+        // Test no group specified
+        err = c.DeleteUser(nil)
+        assert.Error(t, err)
+}
+
 func TestClient_CreateUser(t *testing.T) {
 	nu := NewUser("Lee", "Packham", "test@example.com", true)
 	nuResult := *nu
@@ -442,4 +520,141 @@ func TestClient_UpdateUser(t *testing.T) {
 	if r != nil {
 		assert.Equal(t, *r, nuResult)
 	}
+}
+
+func TestClient_CreateGroup(t *testing.T) {
+        ng := NewGroup("test_group@example.com")
+        ngResult := *ng
+        ngResult.ID = "groupId"
+
+        ctrl := gomock.NewController(t)
+        defer ctrl.Finish()
+
+        x := mock.NewMockIHttpClient(ctrl)
+
+        c, err := NewClient(x, &Config{
+                Endpoint: "https://scim.example.com/",
+                Token:    "bearerToken",
+        })
+        assert.NoError(t, err)
+
+        calledURL, _ := url.Parse("https://scim.example.com/Groups")
+
+        requestJSON, _ := json.Marshal(ng)
+
+        req := httpReqMatcher{
+                httpReq: &http.Request{
+                        URL:    calledURL,
+                        Method: http.MethodPost,
+                },
+                body: string(requestJSON),
+        }
+
+        response, _ := json.Marshal(ngResult)
+
+        x.EXPECT().Do(&req).MaxTimes(1).Return(&http.Response{
+                Status:     "OK",
+                StatusCode: 200,
+                Body:       nopCloser{bytes.NewBuffer(response)},
+        }, nil)
+
+        r, err := c.CreateGroup(ng)
+        assert.NotNil(t, r)
+        assert.NoError(t, err)
+
+        if r != nil {
+                assert.Equal(t, *r, ngResult)
+        }
+}
+
+func TestClient_AddUserToGroup(t *testing.T) {
+        ctrl := gomock.NewController(t)
+        defer ctrl.Finish()
+
+        x := mock.NewMockIHttpClient(ctrl)
+
+        c, err := NewClient(x, &Config{
+                Endpoint: "https://scim.example.com/",
+                Token:    "bearerToken",
+        })
+        assert.NoError(t, err)
+
+        g := &Group{
+                ID: "groupId",
+        }
+
+        u := &User{
+                ID: "userId",
+        }
+
+        calledURL, _ := url.Parse("https://scim.example.com/Groups/groupId")
+
+        req := httpReqMatcher{
+                httpReq: &http.Request{
+                        URL:    calledURL,
+                        Method: http.MethodPatch,
+                },
+                body: "{\"schemas\":[\"urn:ietf:params:scim:api:messages:2.0:PatchOp\"],\"Operations\":[{\"op\":\"add\",\"path\":\"members\",\"value\":[{\"value\":\"userId\"}]}]}",
+        }
+
+        x.EXPECT().Do(&req).MaxTimes(1).Return(&http.Response{
+                Status:     "OK",
+                StatusCode: 200,
+                Body:       nopCloser{bytes.NewBufferString("")},
+        }, nil)
+
+        err = c.AddUserToGroup(u, g)
+        assert.NoError(t, err)
+
+        err = c.RemoveUserFromGroup(nil, g)
+        assert.Error(t, err)
+
+        err = c.RemoveUserFromGroup(u, nil)
+        assert.Error(t, err)
+}
+
+func TestClient_RemoveUserFromGroup(t *testing.T) {
+        ctrl := gomock.NewController(t)
+        defer ctrl.Finish()
+
+        x := mock.NewMockIHttpClient(ctrl)
+
+        c, err := NewClient(x, &Config{
+                Endpoint: "https://scim.example.com/",
+                Token:    "bearerToken",
+        })
+        assert.NoError(t, err)
+
+        g := &Group{
+                ID: "groupId",
+        }
+
+        u := &User{
+                ID: "userId",
+        }
+
+        calledURL, _ := url.Parse("https://scim.example.com/Groups/groupId")
+
+        req := httpReqMatcher{
+                httpReq: &http.Request{
+                        URL:    calledURL,
+                        Method: http.MethodPatch,
+                },
+                body: "{\"schemas\":[\"urn:ietf:params:scim:api:messages:2.0:PatchOp\"],\"Operations\":[{\"op\":\"remove\",\"path\":\"members\",\"value\":[{\"value\":\"userId\"}]}]}",
+        }
+
+        x.EXPECT().Do(&req).MaxTimes(1).Return(&http.Response{
+                Status:     "OK",
+                StatusCode: 200,
+                Body:       nopCloser{bytes.NewBufferString("")},
+        }, nil)
+
+        err = c.RemoveUserFromGroup(u, g)
+        assert.NoError(t, err)
+
+        err = c.RemoveUserFromGroup(nil, g)
+        assert.Error(t, err)
+
+        err = c.RemoveUserFromGroup(u, nil)
+        assert.Error(t, err)
 }
