@@ -294,6 +294,8 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 	if err != nil {
 		return err
 	}
+	log.WithField("googleGroups", googleGroups).Debug("Groups to sync")
+	log.WithField("googleUsers", googleUsers).Debug("Users to sync")
 
 	log.Info("get existing aws groups")
 	awsGroups, err := s.GetGroups()
@@ -352,7 +354,7 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 			&identitystore.DeleteUserInput{IdentityStoreId: &s.cfg.IdentityStoreID, UserId: &awsUserFull.ID},
 		)
 		if err != nil {
-			log.Error("error deleting user")
+			log.WithField("user", awsUser).Error("error deleting user")
 			return err
 		}
 	}
@@ -377,7 +379,7 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 			awsUser.Username,
 			awsUser.Active))
 		if err != nil {
-			log.Error("error updating user")
+		 	log.WithField("user", awsUser).Error("error updating user")
 			return err
 		}
 	}
@@ -396,7 +398,7 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 				log.WithField("user", awsUser.Username).Warn("user already exists")
 				continue
 			}
-			log.Error("error creating user")
+			log.WithField("user", awsUser).Error("error creating user")
 			return err
 		}
 	}
@@ -531,6 +533,7 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
                 return nil, nil, nil, err
         }
         for _, u := range googleUsers {
+		log.WithField("email", u).Debug("processing member of gUserDetailCache")
                 gUserDetailCache[u.PrimaryEmail] = u
         }
 
@@ -552,7 +555,7 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 
         log.Debug("process users from google, filtering as required")
 	for _, u := range googleUsers {
-		log.WithField("email", u.PrimaryEmail).Debug("processing member")
+		log.WithField("email", u).Debug("processing userMatch")
 
                 // Remove any users that should be ignored
 		if s.ignoreUser(u.PrimaryEmail) {
@@ -627,6 +630,7 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 // getGroupOperations returns the groups of AWS that must be added, deleted and are equals
 func getGroupOperations(awsGroups []*aws.Group, googleGroups []*admin.Group) (add []*aws.Group, delete []*aws.Group, equals []*aws.Group) {
 
+ 	log.Debug("getGroupOperations()")
 	awsMap := make(map[string]*aws.Group)
 	googleMap := make(map[string]struct{})
 
@@ -640,9 +644,11 @@ func getGroupOperations(awsGroups []*aws.Group, googleGroups []*admin.Group) (ad
 
 	// AWS Groups found and not found in google
 	for _, gGroup := range googleGroups {
-		if _, found := awsMap[gGroup.Name]; found {
+		if _, found := awsMap[gGroup.Name]; found {	
+		 	log.WithField("gGroup", gGroup).Debug("equals")
 			equals = append(equals, awsMap[gGroup.Name])
 		} else {
+		 	log.WithField("gGroup", gGroup).Debug("add")
 			add = append(add, aws.NewGroup(gGroup.Name))
 		}
 	}
@@ -650,6 +656,7 @@ func getGroupOperations(awsGroups []*aws.Group, googleGroups []*admin.Group) (ad
 	// Google Groups founds and not in aws
 	for _, awsGroup := range awsGroups {
 		if _, found := googleMap[awsGroup.DisplayName]; !found {
+		 	log.WithField("awsGroup", awsGroup).Debug("delete")
 			delete = append(delete, aws.NewGroup(awsGroup.DisplayName))
 		}
 	}
@@ -660,6 +667,7 @@ func getGroupOperations(awsGroups []*aws.Group, googleGroups []*admin.Group) (ad
 // getUserOperations returns the users of AWS that must be added, deleted, updated and are equals
 func getUserOperations(awsUsers []*aws.User, googleUsers []*admin.User) (add []*aws.User, delete []*aws.User, update []*aws.User, equals []*aws.User) {
 
+	log.Debug("getUserOperations()")
 	awsMap := make(map[string]*aws.User)
 	googleMap := make(map[string]struct{})
 
@@ -677,11 +685,16 @@ func getUserOperations(awsUsers []*aws.User, googleUsers []*admin.User) (add []*
 			if awsUser.Active == gUser.Suspended ||
 				awsUser.Name.GivenName != gUser.Name.GivenName ||
 				awsUser.Name.FamilyName != gUser.Name.FamilyName {
+				log.WithField("gUser", gUser).Debug("update")
+				log.WithField("awsUser", awsUser).Debug("update")
 				update = append(update, aws.NewUser(gUser.Name.GivenName, gUser.Name.FamilyName, gUser.PrimaryEmail, !gUser.Suspended))
+
 			} else {
+			        log.WithField("awsUser", awsUser).Debug("equals")
 				equals = append(equals, awsUser)
 			}
 		} else {
+		        log.WithField("gUser", gUser).Debug("add")
 			add = append(add, aws.NewUser(gUser.Name.GivenName, gUser.Name.FamilyName, gUser.PrimaryEmail, !gUser.Suspended))
 		}
 	}
@@ -689,6 +702,7 @@ func getUserOperations(awsUsers []*aws.User, googleUsers []*admin.User) (add []*
 	// Google Users founds and not in aws
 	for _, awsUser := range awsUsers {
 		if _, found := googleMap[awsUser.Username]; !found {
+			log.WithField("awsUser", awsUser).Debug("delete")
 			delete = append(delete, aws.NewUser(awsUser.Name.GivenName, awsUser.Name.FamilyName, awsUser.Username, awsUser.Active))
 		}
 	}
@@ -699,6 +713,7 @@ func getUserOperations(awsUsers []*aws.User, googleUsers []*admin.User) (add []*
 // groupUsersOperations returns the groups and its users of AWS that must be delete from these groups and what are equals
 func getGroupUsersOperations(gGroupsUsers map[string][]*admin.User, awsGroupsUsers map[string][]*aws.User) (delete map[string][]*aws.User, equals map[string][]*aws.User) {
 
+ 	log.Debug("getGroupUsersOperations()")
 	mbG := make(map[string]map[string]struct{})
 
 	// get user in google groups that are in aws groups and
