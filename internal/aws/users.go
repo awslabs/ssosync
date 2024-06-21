@@ -65,14 +65,6 @@ func UpdateUser(id string, firstName string, lastName string, email string, acti
 		Type: "work",
 	})
 
-	// Work around for mononym
-	if lastName == "" {
-		lastName = " "
-	}
-	if firstName == "" {
-	 	firstName = " "
-	}
-
 	return &User{
 		Schemas:  []string{"urn:ietf:params:scim:schemas:core:2.0:User"},
 		ID:       id,

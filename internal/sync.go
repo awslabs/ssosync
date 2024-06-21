@@ -533,6 +533,7 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
                 return nil, nil, nil, err
         }
         for _, u := range googleUsers {
+		log.WithField("email", u).Debug("processing member of gUserDetailCache")
                 gUserDetailCache[u.PrimaryEmail] = u
         }
 
@@ -554,7 +555,7 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 
         log.Debug("process users from google, filtering as required")
 	for _, u := range googleUsers {
-		log.WithField("email", u.PrimaryEmail).Debug("processing member")
+		log.WithField("email", u).Debug("processing userMatch")
 
                 // Remove any users that should be ignored
 		if s.ignoreUser(u.PrimaryEmail) {
