@@ -1009,36 +1009,3 @@ func Test_IsUserInGroup(t *testing.T) {
 	assert.Nil(t, actualOutput)
 }
 
-func Test_RemoveUserFromGroup(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockIdentityStoreClient := mocks.NewMockIdentityStoreAPI(ctrl)
-
-	mockClient := &syncGSuite{
-		aws:                 nil,
-		google:              nil,
-		cfg:                 &config.Config{IdentityStoreID: "test-identity-store-id"},
-		identityStoreClient: mockIdentityStoreClient,
-		users:               make(map[string]*aws.User),
-	}
-
-	sampleUserInput := "test-user-id"
-	sampleGroupInput := "test-group-id"
-
-	sampleResponse := &identitystore.GetGroupMembershipIdOutput{
-		MembershipId: aws_sdk.String("test-membership-id"),
-	}
-
-	mockIdentityStoreClient.EXPECT().GetGroupMembershipId(gomock.Any()).MaxTimes(1).Return(sampleResponse, nil)
-	mockIdentityStoreClient.EXPECT().DeleteGroupMembership(
-		&identitystore.DeleteGroupMembershipInput{
-			IdentityStoreId: &mockClient.cfg.IdentityStoreID,
-			MembershipId:    sampleResponse.MembershipId,
-		},
-	).MaxTimes(1).Return(&identitystore.DeleteGroupMembershipOutput{}, nil)
-
-	err := mockClient.RemoveUserFromGroup(&sampleUserInput, &sampleGroupInput)
-
-	assert.Nil(t, err)
-}

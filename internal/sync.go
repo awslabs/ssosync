@@ -100,7 +100,7 @@ func (s *syncGSuite) SyncUsers(query string) error {
 			}).Debug("User already deleted")
 			continue
 		}
-		_, err = s.identityStoreClient.DeleteUser(&identitystore.DeleteUserInput{IdentityStoreId: &s.cfg.IdentityStoreID, UserId: &uu.ID})
+		err = s.aws.DeleteUser(uu)
 		if err != nil {
 			log.WithFields(log.Fields{
 				"email": u.PrimaryEmail,
@@ -206,11 +206,10 @@ func (s *syncGSuite) SyncGroups(query string) error {
 		} else {
 			log.Info("Creating group in AWS")
 			newGroup := aws.NewGroup(g.Email)
-			createGroupOutput, err := s.identityStoreClient.CreateGroup(&identitystore.CreateGroupInput{IdentityStoreId: &s.cfg.IdentityStoreID, DisplayName: &g.Email})
+			_, err := s.aws.CreateGroup(newGroup)
 			if err != nil {
 				return err
 			}
-			newGroup.ID = *createGroupOutput.GroupId
 			correlatedGroups[newGroup.DisplayName] = newGroup
 			group = newGroup
 		}
@@ -240,13 +239,7 @@ func (s *syncGSuite) SyncGroups(query string) error {
 			if _, ok := memberList[u.Username]; ok {
 				if !*b {
 					log.WithField("user", u.Username).Info("Adding user to group")
-					_, err = s.identityStoreClient.CreateGroupMembership(
-						&identitystore.CreateGroupMembershipInput{
-							IdentityStoreId: &s.cfg.IdentityStoreID,
-							GroupId:         &group.ID,
-							MemberId:        &identitystore.MemberId{UserId: &u.ID},
-						},
-					)
+					err = s.aws.AddUserToGroup(u, group)
 					if err != nil {
 						return err
 					}
@@ -254,7 +247,7 @@ func (s *syncGSuite) SyncGroups(query string) error {
 			} else {
 				if *b {
 					log.WithField("user", u.Username).Warn("Removing user from group")
-					err := s.RemoveUserFromGroup(&u.ID, &group.ID)
+					err := s.aws.RemoveUserFromGroup(u, group)
 					if err != nil {
 						return err
 					}
@@ -1040,35 +1033,6 @@ func (s *syncGSuite) IsUserInGroup(user *aws.User, group *aws.Group) (*bool, err
 	isUserInGroup := isUserInGroupOutput.Results[0].MembershipExists
 
 	return isUserInGroup, nil
-}
-
-func (s *syncGSuite) RemoveUserFromGroup(userID *string, groupID *string) error {
-	memberIDOutput, err := s.identityStoreClient.GetGroupMembershipId(
-		&identitystore.GetGroupMembershipIdInput{
-			IdentityStoreId: &s.cfg.IdentityStoreID,
-			GroupId:         groupID,
-			MemberId:        &identitystore.MemberId{UserId: userID},
-		},
-	)
-
-	if err != nil {
-		return err
-	}
-
-	memberID := memberIDOutput.MembershipId
-
-	_, err = s.identityStoreClient.DeleteGroupMembership(
-		&identitystore.DeleteGroupMembershipInput{
-			IdentityStoreId: &s.cfg.IdentityStoreID,
-			MembershipId:    memberID,
-		},
-	)
-
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
 
 func (s *syncGSuite) getGoogleUsersInGroup(group *admin.Group, userCache map[string]*admin.User, groupCache map[string]*admin.Group) []*admin.User {
