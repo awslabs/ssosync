@@ -109,11 +109,7 @@ func (s *syncGSuite) SyncUsers(query string) error {
 			}).Debug("User already deleted")
 			continue
 		}
-		_, err = identitystore.DeleteUser(ctx,
-			s.identityStore,
-			aws_sdk.String(s.cfg.IdentityStoreID),
-			aws_sdk.String(uu.ID),
-		)
+		err = s.aws.DeleteUser(uu)
 		if err != nil {
 			log.WithFields(log.Fields{
 				"email": u.PrimaryEmail,
@@ -220,15 +216,10 @@ func (s *syncGSuite) SyncGroups(query string) error {
 		} else {
 			log.Info("Creating group in AWS")
 			newGroup := aws.NewGroup(g.Email)
-			createGroupOutput, err := identitystore.CreateGroup(ctx,
-				s.identityStore,
-				aws_sdk.String(s.cfg.IdentityStoreID),
-				aws_sdk.String(g.Email),
-			)
+			_, err := s.aws.CreateGroup(newGroup)
 			if err != nil {
 				return err
 			}
-			newGroup.ID = *createGroupOutput.GroupId
 			correlatedGroups[newGroup.DisplayName] = newGroup
 			group = newGroup
 		}
@@ -258,12 +249,7 @@ func (s *syncGSuite) SyncGroups(query string) error {
 			if _, ok := memberList[u.Username]; ok {
 				if !*b {
 					log.WithField("user", u.Username).Info("Adding user to group")
-					_, err = identitystore.CreateGroupMembership(ctx,
-						s.identityStore,
-						aws_sdk.String(s.cfg.IdentityStoreID),
-						aws_sdk.String(group.ID),
-						aws_sdk.String(u.ID),
-					)
+					err = s.aws.AddUserToGroup(u, group)
 					if err != nil {
 						return err
 					}
@@ -271,7 +257,7 @@ func (s *syncGSuite) SyncGroups(query string) error {
 			} else {
 				if *b {
 					log.WithField("user", u.Username).Warn("Removing user from group")
-					err := s.RemoveUserFromGroup(&u.ID, &group.ID)
+					err := s.aws.RemoveUserFromGroup(u, group)
 					if err != nil {
 						return err
 					}
@@ -1085,33 +1071,22 @@ func (s *syncGSuite) GetGroupMembershipsLists(awsGroups []*interfaces.Group, aws
 	return awsGroupsUsers, nil
 }
 
-func (s *syncGSuite) RemoveUserFromGroup(userID *string, groupID *string) error {
-	memberIDOutput, err := identitystore.GetGroupMembershipId(
-		context.Background(),
-		s.identityStore,
-		&s.cfg.IdentityStoreID,
-		groupID,
-		aws_sdk.String(*userID),
+func (s *syncGSuite) IsUserInGroup(user *aws.User, group *aws.Group) (*bool, error) {
+	isUserInGroupOutput, err := s.identityStoreClient.IsMemberInGroups(
+		&identitystore.IsMemberInGroupsInput{
+			IdentityStoreId: &s.cfg.IdentityStoreID,
+			GroupIds:        []*string{&group.ID},
+			MemberId:        &identitystore.MemberId{UserId: &user.ID},
+		},
 	)
 
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	memberID := memberIDOutput.MembershipId
+	isUserInGroup := isUserInGroupOutput.Results[0].MembershipExists
 
-	_, err = identitystore.DeleteGroupMembership(
-		context.Background(),
-		s.identityStore,
-		&s.cfg.IdentityStoreID,
-		memberID,
-	)
-
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return isUserInGroup, nil
 }
 
 func (s *syncGSuite) getGoogleUsersInGroup(group *admin.Group, userCache map[string]*admin.User, groupCache map[string]*admin.Group) []*admin.User {
