@@ -351,9 +351,7 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 		}
 
 		log.Warn("deleting user")
-		_, err = s.identityStoreClient.DeleteUser(
-			&identitystore.DeleteUserInput{IdentityStoreId: &s.cfg.IdentityStoreID, UserId: &awsUserFull.ID},
-		)
+		err = s.aws.DeleteUser(awsUserFull)
 		if err != nil {
 			log.WithField("user", awsUser).Error("error deleting user")
 			return err
@@ -411,9 +409,7 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 		log := log.WithFields(log.Fields{"group": awsGroup.DisplayName})
 
 		log.Info("creating group")
-		newAwsGroup, err := s.identityStoreClient.CreateGroup(
-			&identitystore.CreateGroupInput{IdentityStoreId: &s.cfg.IdentityStoreID, DisplayName: &awsGroup.DisplayName},
-		)
+		_, err := s.aws.CreateGroup(awsGroup)
 		if err != nil {
 			log.Error("creating group")
 			return err
@@ -430,13 +426,7 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 			}
 
 			log.WithField("user", awsUserFull.Username).Info("adding user to group")
-			_, err = s.identityStoreClient.CreateGroupMembership(
-				&identitystore.CreateGroupMembershipInput{
-					IdentityStoreId: &s.cfg.IdentityStoreID,
-					GroupId:         newAwsGroup.GroupId,
-					MemberId:        &identitystore.MemberId{UserId: &awsUserFull.ID},
-				},
-			)
+			err = s.aws.AddUserToGroup(awsUserFull, awsGroup)
 			if err != nil {
 				return err
 			}
@@ -461,30 +451,16 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 				return err
 			}
 
-			log.WithField("user", awsUserFull.Username).Debug("checking user is in group already")
-			b, err := s.IsUserInGroup(awsUserFull, awsGroup)
+			log.WithField("user", awsUserFull.Username).Info("adding user to group")
+			err = s.aws.AddUserToGroup(awsUserFull, awsGroup)
 			if err != nil {
 				return err
-			}
-
-			if !*b {
-				log.WithField("user", awsUserFull.Username).Info("adding user to group")
-				_, err = s.identityStoreClient.CreateGroupMembership(
-					&identitystore.CreateGroupMembershipInput{
-						IdentityStoreId: &s.cfg.IdentityStoreID,
-						GroupId:         &awsGroup.ID,
-						MemberId:        &identitystore.MemberId{UserId: &awsUserFull.ID},
-					},
-				)
-				if err != nil {
-					return err
-				}
 			}
 		}
 
 		for _, awsUser := range deleteUsersFromGroup[awsGroup.DisplayName] {
 			log.WithField("user", awsUser.Username).Warn("removing user from group")
-			err := s.RemoveUserFromGroup(&awsUser.ID, &awsGroup.ID)
+			err := s.aws.RemoveUserFromGroup(awsUser, awsGroup)
 			if err != nil {
 				return err
 			}
@@ -504,9 +480,7 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 		}
 
 		log.Warn("deleting group")
-		_, err = s.identityStoreClient.DeleteGroup(
-			&identitystore.DeleteGroupInput{IdentityStoreId: &s.cfg.IdentityStoreID, GroupId: &awsGroupFull.ID},
-		)
+		err = s.aws.DeleteGroup(awsGroupFull)
 		if err != nil {
 			log.Error("deleting group")
 			return err
