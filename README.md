@@ -10,13 +10,33 @@
 
 SSO Sync will run on any platform that Go can build for. It is available in the [AWS Serverless Application Repository](https://console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync)
 
-> :warning: there are breaking changes for versions `>= 0.02`
+> [!CAUTION]
+> When using ssosync with an instance of IAM Identity Center integrated with AWS Control Tower. AWS Control Tower creates a number of groups and users (directly via the Identity Store API), when an external identity provider is configured these users and groups are can not be used to log in. However it is important to remember that because ssosync implemements a uni-directional sync it will make the IAM Identity Store match the subset of your Google Workspaces directory you specify, including removing these groups and users created by AWS Control Tower. There is a PFR [#179 Configurable handling of 'manually created' Users/Groups in IAM Identity Center](https://github.com/awslabs/ssosync/issues/179) to implement an option to ignore these users and groups, hopefully this will be implemented in version 3.x. However, this has a dependancy on PFR [#166 Ensure all groups/user creates in IAM Identity Store are via SCIM api and populate externalId field](https://github.com/awslabs/ssosync/issues/166), to be able to reliably and consistently disinguish between **SCIM Provisioned** users from **Manually Created** users
 
-> :warning: `>= 1.0.0-rc.5` groups to do not get deleted in AWS SSO when deleted in the Google Directory, and groups are synced by their email address
+> [!WARNING]
+> There are breaking changes for versions `>= 0.02`
 
-> :warning: `>= 2.0.0` this makes use of the **Identity Store API** which means:
-* if deploying the lambda from the [AWS Serverless Application Repository](https://console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync) then it needs to be deployed into the [IAM Identity Center delegated administration](https://docs.aws.amazon.com/singlesignon/latest/userguide/delegated-admin.html) account. Technically you could deploy in the management account but we would recommend against this.
-* if you are running the project as a cli tool, then the environment will need to be using credentials of a user in the [IAM Identity Center delegated administration](https://docs.aws.amazon.com/singlesignon/latest/userguide/delegated-admin.html) account, with appropriate permissions.
+> [!WARNING]
+> `>= 1.0.0-rc.5` groups to do not get deleted in AWS SSO when deleted in the Google Directory, and groups are synced by their email address
+
+> [!WARNING]
+> `>= 2.0.0` this makes use of the **Identity Store API** which means:
+> * if deploying the lambda from the [AWS Serverless Application Repository](https://console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync) then it needs to be deployed into the [IAM Identity Center delegated administration](https://docs.aws.amazon.com/singlesignon/latest/userguide/delegated-admin.html) account. Technically you could deploy in the management account but we would recommend against this.
+> * if you are running the project as a cli tool, then the environment will need to be using credentials of a user in the [IAM Identity Center delegated administration](https://docs.aws.amazon.com/singlesignon/latest/userguide/delegated-admin.html) account, with appropriate permissions.
+
+> [!WARNING]
+> `>= 2.1.0` make use of named IAM resources, so if deploying via CICD or IaC template will require **CAPABILITY_NAMED_IAM** to be specified.
+
+> [!IMPORTANT]
+> `>= 2.1.0` switched to using `provided.al2` powered by ARM64 instances.
+
+> [!IMPORTANT]
+> As of `v2.2.0` multiple query patterns are supported for both Group and User matching, simply separate each query with a `,`. For full sync of groups and/or users specify '*' in the relevant match field. 
+> User match and group match can now be used in combination with the sync method of groups.
+> Nested groups will now be flattened into the top level groups.
+> External users are ignored.
+> Group owners are treated as regular group members.
+> User details are now cached to reduce the number of api calls and improve execution times on large directories.
 
 ## Why?
 
@@ -134,7 +154,7 @@ Flags:
   -e, --endpoint string             AWS SSO SCIM API Endpoint
   -u, --google-admin string         Google Workspace admin user email
   -c, --google-credentials string   path to Google Workspace credentials file (default "credentials.json")
-  -g, --group-match string          Google Workspace Groups is a comma separated list of filter queries, examples: 'name:Admin* email:aws-*' or 'name:Admin*, name:Dev*', see: https://developers.google.com/admin-sdk/directory/v1/guides/search-groups, to sync ALL groups (and the user that are members of those groups) specify '*'
+  -g, --group-match string          Google Workspace Groups filter query parameter, a simple '*' denotes sync all groups (and any users that are members of those groups). example: 'name:Admin*,email:aws-*', 'name=Admins' or '*' see: https://developers.google.com/admin-sdk/directory/v1/guides/search-groups, if left empty no groups will be selected.
   -h, --help                        help for ssosync
       --ignore-groups strings       ignores these Google Workspace groups
       --ignore-users strings        ignores these Google Workspace users
@@ -142,7 +162,7 @@ Flags:
       --log-format string           log format (default "text")
       --log-level string            log level (default "info")
   -s, --sync-method string          Sync method to use (users_groups|groups) (default "groups")
-  -m, --user-match string           Google Workspace Users is a comma separated list of filter queries, examples: 'name:John* email:admin*' or 'name:John*, name:Jane*', see: https://developers.google.com/admin-sdk/directory/v1/guides/search-users, to sync ALL users specify '*'
+  -m, --user-match string           Google Workspace Users filter query parameter, a simple '*' denotes sync all users in the directory. example: 'name:John*,email:admin*', '*' or name=John Doe,email:admin*' see: https://developers.google.com/admin-sdk/directory/v1/guides/search-users, if left empty no users will be selected but if a pattern has been set for GroupMatch users that are members of the groups it matches will still be selected
   -v, --version                     version for ssosync
   -r, --region                      AWS region where identity store exists
   -i, --identity-store-id           AWS Identity Store ID
@@ -161,10 +181,9 @@ Flags Notes:
 * `--group-match` works for both `--sync-method` values and also in combination with `--ignore-groups` and `--ignore-users`.  This is the filter query passed to the [Google Workspace Directory API when search Groups](https://developers.google.com/admin-sdk/directory/v1/guides/search-groups), if `*` is specified then all groups will be synced, if the parameter is not present then no gropus will be synced.
 * `--user-match` works for both `--sync-method` values and also in combination with `--ignore-groups` and `--ignore-users`.  This is the filter query passed to the [Google Workspace Directory API when search Users](https://developers.google.com/admin-sdk/directory/v1/guides/search-users), if `*` is specified then all users will be synced, if the parameter is not present then no groups will be synced, (unless implicitly included as members of a group match by the --group-match parametewr.
 
-NOTES:
-
-1. Depending on the number of users and groups you have, maybe you can get `AWS SSO SCIM API rate limits errors`, and more frequently happens if you execute the sync many times in a short time.
-2. Depending on the number of users and groups you have, `--debug` flag generate too much logs lines in your AWS Lambda function.  So test it in locally with the `--debug` flag enabled and disable it when you use a AWS Lambda function.
+> [!NOTE]
+> 1. Depending on the number of users and groups you have, maybe you can get `AWS SSO SCIM API rate limits errors`, and more frequently happens if you execute the sync many times in a short time.
+> 2. Depending on the number of users and groups you have, `--debug` flag generate too much logs lines in your AWS Lambda function.  So test it in locally with the `--debug` flag enabled and disable it when you use a AWS Lambda function.
 
 ### Filtering Groups
 There are three stages to filtering groups that interact as follows:
@@ -174,13 +193,43 @@ There are three stages to filtering groups that interact as follows:
 
 ## AWS Lambda Usage
 
-NOTE: Using Lambda may incur costs in your AWS account. Please make sure you have checked
+> [!TIP]
+> Using Lambda may incur costs in your AWS account. Please make sure you have checked
 the pricing for AWS Lambda and CloudWatch before continuing.
 
-Running ssosync once means that any changes to your Google directory will not appear in
-AWS SSO. To sync. regularly, you can run ssosync via AWS Lambda.
+Additionally, before choosing to deploy with Lambda, please ensure that the [AWS Lambda SLAs](https://aws.amazon.com/lambda/sla/) are sufficient for your use cases.
 
-:warning: You find it in the [AWS Serverless Application Repository](https://eu-west-1.console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync).
+Running ssosync once means that any changes to your Google directory will not appear in
+AWS SSO. To sync regularly, you can run ssosync via AWS Lambda.
+
+> [!WARNING]
+> You find it in the [AWS Serverless Application Repository](https://eu-west-1.console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync).
+
+> [!TIP]
+> ### v2.1 Changes
+> * user and group selection fields in the Cloudformation template can now be left empty where not required and will not be added as environment variables to the Lambda function, this provides consistency with CLI use of ssosync.
+> * Stronger validation of parameters in the Cloudformation template, to improve likelhood of success for new users.
+> * Now supports multiple deployment patterns, defaults are consistent with previous versions.
+
+**App + secrets** This is the default mode and fully backwards compatible with previous versions
+
+**App only** This mode does not create the secrets but expects you to deployed a separate stack using the **Secrets only** mode within the same account
+> [!CAUTION]
+> If you want to use your own existing secrets then provide them as a comma separated list in the ##CrossStackConfigI## field in the following order:
+> __GoogleCredentials ARN__,__GoogleAdminEmail ARN__,__SCIMEndpoint ARN__,__SCIMAccessToken ARN__,__Region ARN__,__IdentityStoreID ARN__
+> 
+**App for cross-account** This mode is used where you have deployed the secrets in a separate account, the arns of the KMS key and secrets need to be passed into the __CrossStackConfig__ field, It is easiest to have created the secrets in the other account using the ** Secrest for cross-account** mode, as the output can simply copied and pasted into the above field.
+
+> [!CAUTION]
+> If you want to use your own existing secrets then provide them as a comma separated list in the __CrossStackConfig__ field in the following order:
+> __GoogleCredentials ARN__,__GoogleAdminEmail ARN__,__SCIMEndpoint ARN__,__SCIMAccessToken ARN__,__Region ARN__,__IdentityStoreID ARN__,__KMS Key ARN__
+
+> [!IMPORTANT]
+> Be sure to allow access to the key and secrets in their respective policies to the role __SSOSyncAppRole__ in the app account.
+
+**Secrets only** This mode creates a set of secrets but does not deploy the app itself, it requires the app is deployed in that same account using the **App only** mode. This allows for decoupling of the secrets and the app.
+
+**Secrets for cross-account** This mode creates a set of secrets and KMS key but does not deploy the app itself, this is for use with an app stack, deployed using the **App for cross-account** mode. This allows for a single set of secrets to be shared with multipl app instance for testing, and improve secrets security.
 
 ## SAM
 
@@ -188,7 +237,7 @@ You can use the AWS Serverless Application Model (SAM) to deploy this to your ac
 
 > Please, install the [AWS SAM CLI](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-install.html) and [GoReleaser](https://goreleaser.com/install/).
 
-Specify an Amazon S3 Bucket for the upload with `export S3_BUCKET=<YOUR_BUCKET>`.
+Specify an Amazon S3 Bucket for the upload with `export S3_BUCKET=<YOUR_BUCKET>` and an S3 prefix with `export S3_PREFIX=<YOUR_PREFIX>`.
 
 Execute `make package` in the console. Which will package and upload the function to the bucket. You can then use the `packaged.yaml` to configure and deploy the stack in [AWS CloudFormation Console](https://console.aws.amazon.com/cloudformation).
 

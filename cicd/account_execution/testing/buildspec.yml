@@ -3,7 +3,6 @@ version: 0.2
 env:
   variables:
     ShareWith: "NOT-SHARED"
-    pipeline: "SSOSync-Test"
     interval: 10
     Success: '"Succeeded"'
     InProgress: '"InProgress"'

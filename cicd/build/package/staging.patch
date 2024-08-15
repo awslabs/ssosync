@@ -1,7 +1,7 @@
---- template.yaml	2022-11-29 16:56:21.000000000 +0000
-+++ staging.yaml	2022-11-29 17:10:47.000000000 +0000
-@@ -27,7 +27,7 @@
-           - IncludeGroups
+--- template.yaml	2023-10-30 14:21:20
++++ staging.yaml	2023-10-30 14:21:59
+@@ -38,7 +38,7 @@
+           - ScheduleExpression
  
    AWS::ServerlessRepo::Application:
 -    Name: ssosync
@@ -9,72 +9,3 @@
      Description: Helping you populate AWS SSO directly with your Google Apps users.
      Author: Sebastian Doell
      SpdxLicenseId: Apache-2.0
-@@ -107,7 +107,7 @@
-       Ignore these Google Workspace users
-   IncludeGroups:
-     Type: String
--    Description: |
-+    Description: | 
-       Include only these Google Workspace groups. (Only applicable for SyncMethod user_groups)
-   SyncMethod:
-     Type: String
-@@ -116,14 +116,15 @@
-     AllowedValues:
-       - groups
-       - users_groups
--
--
--
-+      
-+      
-+      
- 
- Resources:
-   SSOSyncFunction:
-     Type: AWS::Serverless::Function
-     Properties:
-+      FunctionName: SSOSyncFunction
-       Runtime: go1.x
-       Handler: dist/ssosync_linux_amd64_v1/ssosync
-       Timeout: 300
-@@ -156,8 +157,6 @@
-                 - !Ref AWSSCIMAccessTokenSecret
-                 - !Ref AWSRegionSecret
-                 - !Ref AWSIdentityStoreIDSecret
--        - Version: '2012-10-17'
--          Statement:
-             - Sid: IdentityStoreAccesPolicy
-               Effect: Allow
-               Action:
-@@ -172,13 +171,13 @@
-                 - "identitystore:DeleteGroupMembership"
-               Resource:
-                 - "*"
--      Events:
--        SyncScheduledEvent:
--          Type: Schedule
--          Name: AWSSyncSchedule
--          Properties:
--            Enabled: true
--            Schedule: !Ref ScheduleExpression
-+
-+            - Sid: CodePipelinePolicy
-+              Effect: Allow
-+              Action:
-+                - codepipeline:PutJobSuccessResult
-+                - codepipeline:PutJobFailureResult
-+              Resource: "*"
- 
-   AWSGoogleCredentialsSecret:
-     Type: "AWS::SecretsManager::Secret"
-@@ -215,3 +214,10 @@
-     Properties:
-       Name: SSOSyncIdentityStoreID
-       SecretString: !Ref IdentityStoreID
-+
-+Outputs:
-+  FunctionArn:
-+    Description: "The Arn of the deployed lambda function"
-+    Value: !GetAtt SSOSyncFunction.Arn
-+    Export:
-+      Name: SSOSyncFunctionARN

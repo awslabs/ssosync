@@ -20,6 +20,10 @@ go-build:
 clean:
 	rm -f $(OUTPUT) $(PACKAGED_TEMPLATE)
 
+build-SSOSyncFunction:
+	GOOS=linux GOARCH=arm64 go build -o bootstrap main.go
+	cp dist/ssosync_linux_arm64/ssosync $(ARTIFACTS_DIR)/bootstrap
+
 .PHONY: install
 install:
 	go get ./...
@@ -45,6 +49,7 @@ publish:
 
 .PHONY: package
 package: build
+	cp dist/ssosync_linux_arm64/ssosync ./bootstrap
 	sam package --s3-bucket $(S3_BUCKET) --output-template-file $(PACKAGED_TEMPLATE) --s3-prefix $(S3_PREFIX)
 
 .PHONY: deploy

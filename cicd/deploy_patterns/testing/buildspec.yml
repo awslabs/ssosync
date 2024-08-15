@@ -1,0 +1,50 @@
+version: 0.2
+
+env:
+  variables:
+    ShareWith: "NOT-SHARED"
+    interval: 10
+    Success: '"Succeeded"'
+    InProgress: '"InProgress"'
+    Status: '"InProgress"'
+
+phases:
+  pre_build:
+    commands:
+      # Print all environment variables (handy for AWS CodeBuild logs
+      - env
+
+  build:
+    commands:
+      # zip up the content of TESTS 
+      - cp -r ${CODEBUILD_SRC_DIR_Tests}/* ./
+      - zip -r tests.zip ./ssosync
+      - zip -r tests.zip ./tests
+      - zip -r tests.zip ./deploy
+
+      # Auth into the Staging Account
+      - export $(printf "AWS_ACCESS_KEY_ID=%s AWS_SECRET_ACCESS_KEY=%s AWS_SESSION_TOKEN=%s" $(aws sts assume-role --role-arn "${StagingRole}" --role-session-name "CodePipelineRole" --query "Credentials.[AccessKeyId,SecretAccessKey,SessionToken]" --output text))
+
+      # upload the zipfile to the S3 Bucket
+      - aws s3 cp ./tests.zip s3://${TARGETS3BUCKET}/ 
+
+      # Start the test pipeline in the staging account
+      - export ExecutionId=$(aws codepipeline start-pipeline-execution --name $pipeline --output text)
+      - echo "ExecutionId=" $ExecutionId
+
+      - |
+        while expr "$Status" : "$InProgress" >/dev/null; do
+          sleep $interval
+          export Status="$(aws codepipeline get-pipeline-execution --pipeline-name $pipeline --output json --pipeline-execution-id $ExecutionId --query "pipelineExecution.status")"
+          echo $Status
+        done
+
+      - echo "We are done"
+
+      - |
+        if expr "$Status" : "$Success" >/dev/null; then
+          exit 0
+        else
+          exit 252
+        fi
+

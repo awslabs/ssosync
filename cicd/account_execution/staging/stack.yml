@@ -1,0 +1,77 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: 'AWS::Serverless-2016-10-31'
+
+Description: 
+  This CloudFormation template will deploy an instance of the SSOSync-Staging
+  candidate releases (via privately shared app in the AWS Serverless Application
+  Repository (SAR) within the Staging Account.
+
+Parameters:
+  AppArn:
+    Description: The candidate release in the SAR
+    Default: 'arn:aws:serverlessrepo:<AWS::Region>:<AccountId>:applications/<ApplicationName>'
+    Type: String
+  AppVersion:
+    Description: The version of this build in SAR
+    Default: 'v1.0.0-rc.10'
+    Type: String
+  GoogleAdminEmailArn:
+    Type: String
+  GoogleCredentialsArn:
+    Type: String
+  SCIMEndpointUrlArn:
+    Type: String
+  SCIMAccessTokenArn:
+    Type: String
+  RegionArn:
+    Type: String
+  IdentityStoreIdArn:
+    Type: String
+  GroupMatch:
+    Description: The search string to match Groups in Google Workspace
+    Default: 'name:AWS*'
+    Type: String
+
+Resources:
+  SARApp:
+    Type: AWS::Serverless::Application
+    Properties:
+      Location:
+        ApplicationId: !Ref AppArn
+        SemanticVersion: !Ref AppVersion
+      Parameters:
+        FunctionName: SSOSyncFunction
+        GoogleAdminEmail: !Join
+          - ''
+          - - '{{resolve:secretsmanager:'
+            - !Ref GoogleAdminEmailArn
+            - '}}'
+        GoogleCredentials: !Join
+          - ''
+          - - '{{resolve:secretsmanager:'
+            - !Ref GoogleCredentialsArn
+            - '}}'
+        SCIMEndpointUrl: !Join
+          - ''
+          - - '{{resolve:secretsmanager:'
+            - !Ref SCIMEndpointUrlArn
+            - '}}'
+        SCIMEndpointAccessToken: !Join
+          - ''
+          - - '{{resolve:secretsmanager:'
+            - !Ref SCIMAccessTokenArn
+            - '}}'
+        Region: !Join
+          - ''
+          - - '{{resolve:secretsmanager:'
+            - !Ref RegionArn
+            - '}}'
+        IdentityStoreID: !Join
+          - ''
+          - - '{{resolve:secretsmanager:'
+            - !Ref IdentityStoreIdArn
+            - '}}'
+        SyncMethod: groups
+        GoogleGroupMatch: !Ref GroupMatch
+        LogLevel: info
+        LogFormat: json

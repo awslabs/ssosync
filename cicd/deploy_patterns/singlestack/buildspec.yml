@@ -1,0 +1,74 @@
+version: 0.2
+
+env:
+  variables:
+    interval: 10
+    Success: '"Succeeded"'
+    InProgress: '"InProgress"'
+    Status: '"InProgress"'
+
+phases:
+
+  pre_build:
+    commands:
+      # Print all environment variables (handy for AWS CodeBuild logs
+      - env
+
+  build:
+    commands:
+      # Create parameters
+      - export AppVersion="${GitTag#v}-${GitVersionHash}"
+
+      # Copy in the tests
+      - cp -r cicd/tests ./
+
+      # Copy in the stack and params templates
+      - mkdir deploy
+      - cp cicd/deploy_patterns/singlestack/namedfunction.yml ./deploy/namedfunction.yml
+      - cp cicd/deploy_patterns/singlestack/unnamedfunction.yml ./deploy/unnamedfunction.yml
+
+      # Update params with the values for this run for a developer account
+      - |
+        jq -n \
+        --argjson Parameters "{\"AppArn\": \"$AppArn\", \"AppVersion\": \"$AppVersion\", \"GoogleAdminEmailArn\": \"$SecretGoogleAdminEmail\", \"GoogleCredentialsArn\": \"$SecretGoogleCredentials\", \"SCIMEndpointUrlArn\": \"$SecretSCIMEndpoint\", \"SCIMAccessTokenArn\": \"$SecretSCIMAccessToken\", \"RegionArn\": \"$SecretRegion\", \"IdentityStoreIdArn\": \"$SecretIdentityStoreID\", \"GroupMatch\": \"name:AWS*\"}" \
+        --argjson StackPolicy "{\"Statement\":[{\"Effect\": \"Allow\", \"NotAction\": \"Update:Delete\", \"Principal\": \"*\", \"Resource\": \"*\"}]}" \
+        '$ARGS.named' > ./deploy/singlestack.json
+      - cat ./deploy/singlestack.json
+
+
+  post_build:
+    commands:
+      # zip up the content of TESTS 
+      - zip -r singlestack.zip ./tests
+      - zip -r singlestack.zip ./deploy
+
+      # Auth into the Staging Account
+      - export $(printf "AWS_ACCESS_KEY_ID=%s AWS_SECRET_ACCESS_KEY=%s AWS_SESSION_TOKEN=%s" $(aws sts assume-role --role-arn "${StagingRole}" --role-session-name "CodePipelineRole" --query "Credentials.[AccessKeyId,SecretAccessKey,SessionToken]" --output text))
+
+      # upload the zipfile to the S3 Bucket
+      - aws s3 cp ./singlestack.zip s3://${TARGETS3BUCKET}/
+
+      # Start the test pipeline in the staging account
+      - export ExecutionId=$(aws codepipeline start-pipeline-execution --name $pipeline --output text)
+      - echo "ExecutionId=" $ExecutionId
+
+      - |
+        while expr "$Status" : "$InProgress" >/dev/null; do
+          sleep $interval
+          export Status="$(aws codepipeline get-pipeline-execution --pipeline-name $pipeline --output json --pipeline-execution-id $ExecutionId --query "pipelineExecution.status")"
+          echo $Status
+        done
+
+      - echo "We are done"
+
+      - |
+        if expr "$Status" : "$Success" >/dev/null; then
+          exit 0
+        else
+          exit 252
+        fi
+
+artifacts:
+  files:
+    - deploy/**/*
+    - tests/**/*

@@ -37,6 +37,10 @@ Parameters:
     Description:  Resource ARN for the CodeStar Connection to use
     Type: String
     AllowedPattern: '[A-Za-z0-9:/-]+'
+  SecretsConfig:
+    Description:  Output from the secrets.yaml stack
+    Type: String
+    AllowedPattern: '(arn:aws:secretsmanager:((us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-\d):[0-9]{8,12}:secret:[a-zA-Z0-9/_+=.@-]{1,512})(,(arn:aws:secretsmanager:((us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-\d):[0-9]{8,12}:secret:[a-zA-Z0-9/_+=.@-]{1,512})){3}((,arn:aws:secretsmanager:((us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-\d):[0-9]{8,12}:secret:[a-zA-Z0-9/_+=.@-]{1,512})|(,"")){4}(,arn:aws:kms:((us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-\d):[0-9]{12}:key/[a-zA-Z0-9/_+=.@-]{1,512})'
 
 Metadata:
   AWS::CloudFormation::Interface:
@@ -60,22 +64,28 @@ Metadata:
           default: Connection id for the CodeStar Connection to use
         Parameters:
           - CodeStarConnection
+      - Label:
+          default: Secrets ARNs
+        Parameters:
+          - SecretsConfig
             
     ParameterLabels:
       CodeStarConnection:
         default: "arn:aws:codestar-connections:<AWS::Region>:<AWS::AccountId>:connection/abcd1234-ab12-ab12--ab12-abcdef123456"
       ManagementAccount:
-        default: "123456789012"
-      ManagementBucket:
-        default: "my-bucket"
+        default: "What is the account id of the Test Orgs, Management account?"
       DelegatedAccount:
-        default: "123456789012"
-      DelegatedBucket:
-        default: "my-bucket"
+        default: "What is the account id of the Test Orgs, Delegated admin account?"
       NonDelegatedAccount:
-        default: "123456789012"
+        default: "What is the account id of the Test Orgs, Non-delegated admin account?"
+      ManagementBucket:
+        default: "Artifact Bucket within the Management account"
+      DelegatedBucket:
+        default: "Artifact Bucket within the Delegated Admin account"
       NonDelegatedBucket:
-        default: "my-bucket"
+        default: "Artifact Bucket within the Non-delegated Admin account"
+      SecretsConfig:
+        default: "TestConfig from the output of secrets.yaml"
 
 Resources:
 
@@ -89,6 +99,8 @@ Resources:
 
   ArtifactBucketKey:
     Type: AWS::KMS::Key
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Delete
     Properties: 
       Description: Key for this CodePipeline
       Enabled: true
@@ -196,7 +208,7 @@ Resources:
       Stages:
         - Name: Source
           Actions:
-            - Name: GitHub
+            - Name: GitHub-Repo
               Namespace: GitHub
               ActionTypeId:
                 Category: Source
@@ -211,9 +223,9 @@ Resources:
                 FullRepositoryId: awslabs/ssosync
                 BranchName: master
                 DetectChanges: true
-        - Name: App
+        - Name: Build-App
           Actions:
-            - Name: Git
+            - Name: Git-Metadata
               Namespace: Git
               InputArtifacts:
                 - Name: Source
@@ -228,7 +240,7 @@ Resources:
               Configuration:
                 ProjectName: !Ref GitMetadata
                 PrimarySource: Source
-            - Name: Build
+            - Name: GoLang-Build
               InputArtifacts:
                 - Name: Source
               ActionTypeId: 
@@ -243,7 +255,7 @@ Resources:
                 ProjectName: !Ref CodeBuildApp
                 PrimarySource: Source
                 EnvironmentVariables: '[{"name":"GitTag","value":"#{Git.Tag}","type":"PLAINTEXT"},{"name":"GitCommit","value":"#{Git.CommitId}","type":"PLAINTEXT"}]'
-            - Name: Package
+            - Name: SAM-Package-SAR-Stage
               ActionTypeId:
                 Category: Build
                 Owner: AWS
@@ -253,12 +265,13 @@ Resources:
               Configuration:
                 ProjectName: !Ref CodeBuildPackage
                 PrimarySource: Source
+                EnvironmentVariables: '[{"name":"GitTag","value":"#{Git.Tag}","type":"PLAINTEXT"},{"name":"GitVersionHash","value":"#{Git.CommitHash}","type":"PLAINTEXT"}]'
               OutputArtifacts:
                 - Name: Packaged
               InputArtifacts:
                 - Name: Built
                 - Name: Source
-        - Name: Test
+        - Name: Test-Account_Execution
           Actions:
             - Name: Staging
               Namespace: RC
@@ -278,7 +291,7 @@ Resources:
                 - Name: Source
                 - Name: Packaged
                 - Name: Built
-            - Name: Management
+            - Name: in_Management_account
               ActionTypeId:
                 Category: Build
                 Owner: AWS
@@ -291,7 +304,7 @@ Resources:
               InputArtifacts:
                 - Name: Source
                 - Name: Tests
-            - Name: Delegated
+            - Name: in_Delegated_admin_account
               ActionTypeId:
                 Category: Build
                 Owner: AWS
@@ -304,7 +317,7 @@ Resources:
               InputArtifacts:
                 - Name: Source
                 - Name: Tests
-            - Name: NonDelegated
+            - Name: in_a_Non-Delegated_account
               ActionTypeId:
                 Category: Build
                 Owner: AWS
@@ -317,9 +330,27 @@ Resources:
               InputArtifacts:
                 - Name: Source
                 - Name: Tests
-        - Name: Release
+        - Name: Test-Deploy_Patterns
           Actions:
-            - Name: ForRelease
+            - Name: SingleStack
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              RunOrder: 1
+              Configuration:
+                ProjectName: !Ref CodeBuildTestingSingleStack
+                PrimarySource: Source
+                EnvironmentVariables: '[{"name":"GitTag","value":"#{Git.Tag}","type":"PLAINTEXT"},{"name":"GitVersionHash","value":"#{Git.CommitHash}","type":"PLAINTEXT"}]'
+              InputArtifacts:
+                - Name: Source
+              OutputArtifacts:
+                - Name: SingleStack
+
+        - Name: Release-Publicly
+          Actions:
+            - Name: Does_this_commit_have_a_release_tag
               ActionTypeId:
                 Category: Build
                 Owner: AWS
@@ -332,7 +363,7 @@ Resources:
                 EnvironmentVariables: '[{"name":"GitIsRelease","value":"#{Git.IsRelease}","type":"PLAINTEXT"}]'
               InputArtifacts:
                 - Name: Source
-            - Name: Release
+            - Name: SAR-Release
               ActionTypeId:
                 Category: Build
                 Owner: AWS
@@ -360,13 +391,11 @@ Resources:
         BuildSpec: "cicd/build/gitvars/buildspec.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
-        Image: aws/codebuild/standard:5.0
+        Image: aws/codebuild/standard:7.0
         Type: LINUX_CONTAINER
         EnvironmentVariables:
           - Name: ARTIFACT_S3_BUCKET
             Value: !Sub ${ArtifactBucket}
-          - Name: GoVersion
-            Value: "1.18.2"
           - Name: GitRepo 
             Value: "https://github.com/awslabs/ssosync"
           - Name: GitBranch
@@ -397,13 +426,11 @@ Resources:
         BuildSpec: "cicd/build/build/buildspec.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
-        Image: aws/codebuild/standard:5.0
+        Image: aws/codebuild/standard:7.0
         Type: LINUX_CONTAINER
         EnvironmentVariables:
           - Name: ARTIFACT_S3_BUCKET
             Value: !Sub ${ArtifactBucket}
-          - Name: GoVersion
-            Value: "1.18.2"
           - Name: OUTPUT
             Value: main
           - Name: APP_NAME
@@ -434,7 +461,7 @@ Resources:
         BuildSpec: "cicd/build/package/buildspec.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
-        Image: aws/codebuild/standard:5.0
+        Image: aws/codebuild/standard:7.0
         Type: LINUX_CONTAINER
         EnvironmentVariables:
           - Name: ARTIFACT_S3_BUCKET
@@ -466,10 +493,10 @@ Resources:
       ServiceRole: !Ref CodeBuildPublishRole
       Source:
         Type: CODEPIPELINE
-        BuildSpec: "cicd/staging/build/buildspec.yml"
+        BuildSpec: "cicd/account_execution/staging/buildspec.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
-        Image: aws/codebuild/standard:5.0
+        Image: aws/codebuild/standard:7.0
         Type: LINUX_CONTAINER
         EnvironmentVariables:
           - Name: ARTIFACT_S3_BUCKET
@@ -478,6 +505,24 @@ Resources:
             Value: !Sub "${ManagementAccount},${DelegatedAccount},${NonDelegatedAccount}"
           - Name: AppArn
             Value: !Sub "arn:aws:serverlessrepo:${AWS::Region}:${AWS::AccountId}:applications/SSOSync-Staging"
+          - Name: SecretSCIMEndpoint
+            Value: !Select [0, !Split [',', !Ref SecretsConfig]]
+          - Name: SecretSCIMAccessToken
+            Value: !Select [1, !Split [',', !Ref SecretsConfig]]
+          - Name: SecretRegion
+            Value: !Select [2, !Split [',', !Ref SecretsConfig]]
+          - Name: SecretIdentityStoreID
+            Value: !Select [3, !Split [',', !Ref SecretsConfig]]
+          - Name: SecretGoogleCredentials
+            Value: !Select [4, !Split [',', !Ref SecretsConfig]]
+          - Name: SecretGoogleAdminEmail
+            Value: !Select [5, !Split [',', !Ref SecretsConfig]]
+          - Name: SecretWIFClientLibraryConfig
+            Value: !Select [6, !Split [',', !Ref SecretsConfig]]
+          - Name: SecretWIFServiceAccountEmail
+            Value: !Select [7, !Split [',', !Ref SecretsConfig]]
+          - Name: KeyForSecrets
+            Value: !Select [8, !Split [',', !Ref SecretsConfig]]
       Artifacts:
         Name: SSOSync-Build
         Type: CODEPIPELINE
@@ -501,16 +546,18 @@ Resources:
       ServiceRole: !Ref CodeBuildTestRole
       Source:
         Type: CODEPIPELINE
-        BuildSpec: "cicd/staging/testing/buildspec.yml"
+        BuildSpec: "cicd/account_execution/testing/buildspec.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
-        Image: aws/codebuild/standard:5.0
+        Image: aws/codebuild/standard:7.0
         Type: LINUX_CONTAINER
         EnvironmentVariables:
           - Name: TARGETS3BUCKET
             Value: !Sub ${ManagementBucket}
           - Name: StagingRole
             Value: !Sub "arn:aws:iam::${ManagementAccount}:role/SSOSync-ProdAccount-${AWS::Region}"
+          - Name: pipeline
+            Value: "SSOSync-Test-Account_Execution"
       Artifacts:
         Name: SSOSync-Build
         Type: CODEPIPELINE
@@ -528,16 +575,18 @@ Resources:
       ServiceRole: !Ref CodeBuildTestRole
       Source:
         Type: CODEPIPELINE
-        BuildSpec: "cicd/staging/testing/buildspec.yml"
+        BuildSpec: "cicd/account_execution/testing/buildspec.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
-        Image: aws/codebuild/standard:5.0
+        Image: aws/codebuild/standard:7.0
         Type: LINUX_CONTAINER
         EnvironmentVariables:
           - Name: TARGETS3BUCKET
             Value: !Sub ${DelegatedBucket}
           - Name: StagingRole
             Value: !Sub "arn:aws:iam::${DelegatedAccount}:role/SSOSync-ProdAccount-${AWS::Region}"
+          - Name: pipeline
+            Value: "SSOSync-Test-Account_Execution"
       Artifacts:
         Name: SSOSync-Build
         Type: CODEPIPELINE
@@ -555,17 +604,70 @@ Resources:
       ServiceRole: !Ref CodeBuildTestRole
       Source:
         Type: CODEPIPELINE
-        BuildSpec: "cicd/staging/testing/buildspec.yml"
+        BuildSpec: "cicd/account_execution/testing/buildspec.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
-        Image: aws/codebuild/standard:5.0
+        Image: aws/codebuild/standard:7.0
         Type: LINUX_CONTAINER
         EnvironmentVariables:
           - Name: TARGETS3BUCKET
             Value: !Sub ${NonDelegatedBucket}
           - Name: StagingRole
             Value: !Sub "arn:aws:iam::${NonDelegatedAccount}:role/SSOSync-ProdAccount-${AWS::Region}"
+          - Name: pipeline
+            Value: "SSOSync-Test-Account_Execution"
       Artifacts:      
+        Name: SSOSync-Build
+        Type: CODEPIPELINE
+      LogsConfig:
+        CloudWatchLogs:
+          GroupName: !Ref CodePipelineLogGroup
+          StreamName: !Ref CodeBuildTestingLogs
+          Status: ENABLED
+
+  CodeBuildTestingSingleStack:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: "SSOSync-Testing-SingleStack"
+      Description: "Deploy and execute a single stack deployment of ssosync into the Delegated account"
+      ServiceRole: !Ref CodeBuildTestRole
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: "cicd/deploy_patterns/singlestack/buildspec.yml"
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:7.0
+        Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: ARTIFACT_S3_BUCKET
+            Value: !Sub ${ArtifactBucket}
+          - Name: AppArn
+            Value: !Sub "arn:aws:serverlessrepo:${AWS::Region}:${AWS::AccountId}:applications/SSOSync-Staging"
+          - Name: SecretSCIMEndpoint
+            Value: !Select [0, !Split [',', !Ref SecretsConfig]]
+          - Name: SecretSCIMAccessToken
+            Value: !Select [1, !Split [',', !Ref SecretsConfig]]
+          - Name: SecretRegion
+            Value: !Select [2, !Split [',', !Ref SecretsConfig]]
+          - Name: SecretIdentityStoreID
+            Value: !Select [3, !Split [',', !Ref SecretsConfig]]
+          - Name: SecretGoogleCredentials
+            Value: !Select [4, !Split [',', !Ref SecretsConfig]]
+          - Name: SecretGoogleAdminEmail
+            Value: !Select [5, !Split [',', !Ref SecretsConfig]]
+          - Name: SecretWIFClientLibraryConfig
+            Value: !Select [6, !Split [',', !Ref SecretsConfig]]
+          - Name: SecretWIFServiceAccountEmail
+            Value: !Select [7, !Split [',', !Ref SecretsConfig]]
+          - Name: KeyForSecrets
+            Value: !Select [8, !Split [',', !Ref SecretsConfig]]
+          - Name: TARGETS3BUCKET
+            Value: !Sub ${DelegatedBucket}
+          - Name: StagingRole
+            Value: !Sub "arn:aws:iam::${DelegatedAccount}:role/SSOSync-ProdAccount-${AWS::Region}"
+          - Name: pipeline
+            Value: "SSOSync-SingleStack"
+      Artifacts:
         Name: SSOSync-Build
         Type: CODEPIPELINE
       LogsConfig:
@@ -591,7 +693,7 @@ Resources:
         BuildSpec: "cicd/release/approve/buildspec.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
-        Image: aws/codebuild/standard:5.0
+        Image: aws/codebuild/standard:7.0
         Type: LINUX_CONTAINER
         EnvironmentVariables:
           - Name: ARTIFACT_S3_BUCKET
@@ -622,7 +724,7 @@ Resources:
         BuildSpec: "cicd/release/public/buildspec.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
-        Image: aws/codebuild/standard:5.0
+        Image: aws/codebuild/standard:7.0
         Type: LINUX_CONTAINER
         EnvironmentVariables:
           - Name: ARTIFACT_S3_BUCKET
@@ -682,6 +784,7 @@ Resources:
               - !Sub ${CodeBuildTestingManagement.Arn}
               - !Sub ${CodeBuildTestingDelegated.Arn}
               - !Sub ${CodeBuildTestingNonDelegated.Arn}
+              - !Sub ${CodeBuildTestingSingleStack.Arn}
               - !Sub ${CodeBuildApproveRelease.Arn}
               - !Sub ${CodeBuildRelease.Arn}
               Effect: Allow
@@ -787,6 +890,19 @@ Resources:
               Resource:
               - !Sub ${ArtifactBucket.Arn}/*
               - !Sub ${AppBucket.Arn}/*
+            - Action: 'serverlessrepo:*'
+              Effect: Allow
+              Resource:
+              - !Sub arn:aws:serverlessrepo:${AWS::Region}:${AWS::AccountId}:applications/*
+            - Action:
+              - 'ssm:GetParameters'
+              - 'ssm:PutParameter'
+              - 'ssm:DeleteParameter'
+              - 'ssm:DeleteParameters'
+              - 'ssm:DescribeParameters'
+              Effect: Allow
+              Resource:
+              - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/SSOSync/*
 
   CodeBuildPublishRole:
     Type: AWS::IAM::Role

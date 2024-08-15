@@ -19,15 +19,16 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
+	"github.com/aws/aws-lambda-go/events"
+	"github.com/aws/aws-lambda-go/lambda"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
+        "github.com/aws/aws-sdk-go/service/codepipeline"
+	"github.com/aws/aws-sdk-go/service/secretsmanager"
 	"github.com/awslabs/ssosync/internal"
 	"github.com/awslabs/ssosync/internal/config"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-lambda-go/events"
-        "github.com/aws/aws-sdk-go/service/codepipeline"
-	"github.com/aws/aws-lambda-go/lambda"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/secretsmanager"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -66,14 +67,14 @@ Complete documentation is available at https://github.com/awslabs/ssosync`,
 // running inside of AWS Lambda, we use the Lambda
 // execution path.
 func Execute() {
-        if cfg.IsLambda {
-                log.Info("Executing as Lambda")
-        	lambda.Start(Handler) 
-	}
+    if cfg.IsLambda {
+        log.Info("Executing as Lambda")
+      	lambda.Start(Handler) 
+    }
 
-	if err := rootCmd.Execute(); err != nil {
-		log.Fatal(err)
-	}
+    if err := rootCmd.Execute(); err != nil {
+	log.Fatal(err)
+    }
 }
 
 func Handler(ctx context.Context, event events.CodePipelineEvent) (string, error) {
@@ -136,7 +137,7 @@ func Handler(ctx context.Context, event events.CodePipelineEvent) (string, error
 func init() {
 	// init config
 	cfg = config.New()
-	cfg.IsLambda = len(os.Getenv("_LAMBDA_SERVER_PORT")) > 0
+	cfg.IsLambda = len(os.Getenv("AWS_LAMBDA_FUNCTION_NAME")) > 0
 
 	// initialize cobra
 	cobra.OnInitialize(initConfig)
@@ -182,54 +183,104 @@ func initConfig() {
 		log.Fatalf(errors.Wrap(err, "cannot unmarshal config").Error())
 	}
 
-	// config logger
-	logConfig(cfg)
-
 	if cfg.IsLambda {
 		configLambda()
 	}
+
+	// config logger
+	logConfig(cfg)
+
 }
 
 func configLambda() {
-	s := session.Must(session.NewSession())
+        s := session.Must(session.NewSession())
 	svc := secretsmanager.New(s)
 	secrets := config.NewSecrets(svc)
 
-	unwrap, err := secrets.GoogleAdminEmail()
+	unwrap, err := secrets.GoogleAdminEmail(os.Getenv("GOOGLE_ADMIN"))
 	if err != nil {
-		log.Fatalf(errors.Wrap(err, "cannot read config").Error())
+		log.Fatalf(errors.Wrap(err, "cannot read config: GOOGLE_ADMIN").Error())
 	}
 	cfg.GoogleAdmin = unwrap
 
-	unwrap, err = secrets.GoogleCredentials()
+	unwrap, err = secrets.GoogleCredentials(os.Getenv("GOOGLE_CREDENTIALS"))
 	if err != nil {
-		log.Fatalf(errors.Wrap(err, "cannot read config").Error())
+		log.Fatalf(errors.Wrap(err, "cannot read config: GOOGLE_CREDENTIALS").Error())
 	}
 	cfg.GoogleCredentials = unwrap
 
-	unwrap, err = secrets.SCIMAccessToken()
+	unwrap, err = secrets.SCIMAccessToken(os.Getenv("SCIM_ACCESS_TOKEN"))
 	if err != nil {
-		log.Fatalf(errors.Wrap(err, "cannot read config").Error())
+		log.Fatalf(errors.Wrap(err, "cannot read config: SCIM_ACCESS_TOKEN").Error())
 	}
 	cfg.SCIMAccessToken = unwrap
 
-	unwrap, err = secrets.SCIMEndpointUrl()
+	unwrap, err = secrets.SCIMEndpointUrl(os.Getenv("SCIM_ENDPOINT"))
 	if err != nil {
-		log.Fatalf(errors.Wrap(err, "cannot read config").Error())
+		log.Fatalf(errors.Wrap(err, "cannot read config: SCIM_ENDPOINT").Error())
 	}
 	cfg.SCIMEndpoint = unwrap
 
-	unwrap, err = secrets.Region()
+	unwrap, err = secrets.Region(os.Getenv("REGION"))
 	if err != nil {
-		log.Fatalf(errors.Wrap(err, "cannot read config").Error())
+		log.Fatalf(errors.Wrap(err, "cannot read config: REGION").Error())
 	}
 	cfg.Region = unwrap
 
-	unwrap, err = secrets.IdentityStoreID()
+	unwrap, err = secrets.IdentityStoreID(os.Getenv("IDENTITY_STORE_ID"))
 	if err != nil {
-		log.Fatalf(errors.Wrap(err, "cannot read config").Error())
+		log.Fatalf(errors.Wrap(err, "cannot read config: IDENTITY_STORE_ID").Error())
 	}
 	cfg.IdentityStoreID = unwrap
+
+        unwrap = os.Getenv("LOG_LEVEL")
+        if len([]rune(unwrap)) != 0 {
+           cfg.LogLevel = unwrap
+	   log.WithField("LogLevel", unwrap).Debug("from EnvVar")
+        }
+
+        unwrap = os.Getenv("LOG_FORMAT")
+        if len([]rune(unwrap)) != 0 {
+           cfg.LogFormat = unwrap
+	   log.WithField("LogFormay", unwrap).Debug("from EnvVar")
+        }
+
+	unwrap = os.Getenv("SYNC_METHOD")
+        if len([]rune(unwrap)) != 0 {
+           cfg.SyncMethod = unwrap
+	   log.WithField("SyncMethod", unwrap).Debug("from EnvVar")
+        }
+
+	unwrap = os.Getenv("USER_MATCH")
+        if len([]rune(unwrap)) != 0 {
+	   cfg.UserMatch = unwrap
+	   log.WithField("UserMatch", unwrap).Debug("from EnvVar")
+        }
+
+	unwrap = os.Getenv("GROUP_MATCH")
+        if len([]rune(unwrap)) != 0 {
+           cfg.GroupMatch = unwrap
+	   log.WithField("GroupMatch", unwrap).Debug("from EnvVar")
+        }
+
+        unwrap = os.Getenv("IGNORE_GROUPS")
+        if len([]rune(unwrap)) != 0 {
+           cfg.IgnoreGroups = strings.Split(unwrap, ",")
+	   log.WithField("IgnoreGroups", unwrap).Debug("from EnvVar")
+        }
+
+        unwrap = os.Getenv("IGNORE_USERS")
+        if len([]rune(unwrap)) != 0 {
+           cfg.IgnoreUsers = strings.Split(unwrap, ",")
+	   log.WithField("IgnoreUsers", unwrap).Debug("from EnvVar")
+        }
+
+        unwrap = os.Getenv("INCLUDE_GROUPS")
+        if len([]rune(unwrap)) != 0 {
+           cfg.IncludeGroups = strings.Split(unwrap, ",")
+	   log.WithField("IncludeGroups", unwrap).Debug("from EnvVar")
+        }
+
 }
 
 func addFlags(cmd *cobra.Command, cfg *config.Config) {
@@ -244,8 +295,8 @@ func addFlags(cmd *cobra.Command, cfg *config.Config) {
 	rootCmd.Flags().StringSliceVar(&cfg.IgnoreUsers, "ignore-users", []string{}, "ignores these Google Workspace users")
 	rootCmd.Flags().StringSliceVar(&cfg.IgnoreGroups, "ignore-groups", []string{}, "ignores these Google Workspace groups")
 	rootCmd.Flags().StringSliceVar(&cfg.IncludeGroups, "include-groups", []string{}, "include only these Google Workspace groups, NOTE: only works when --sync-method 'users_groups'")
-	rootCmd.Flags().StringVarP(&cfg.UserMatch, "user-match", "m", "", "Google Workspace Users filter query parameter, example: 'name:John* email:admin*', see: https://developers.google.com/admin-sdk/directory/v1/guides/search-users")
-	rootCmd.Flags().StringVarP(&cfg.GroupMatch, "group-match", "g", "", "Google Workspace Groups filter query parameter, example: 'name:Admin* email:aws-*', see: https://developers.google.com/admin-sdk/directory/v1/guides/search-groups")
+	rootCmd.Flags().StringVarP(&cfg.UserMatch, "user-match", "m", "", "Google Workspace Users filter query parameter, example: 'name:John*' 'name=John Doe,email:admin*', to sync all users in the directory specify '*'. For query syntax and more examples see: https://developers.google.com/admin-sdk/directory/v1/guides/search-users")
+	rootCmd.Flags().StringVarP(&cfg.GroupMatch, "group-match", "g", "*", "Google Workspace Groups filter query parameter, example: 'name:Admin*' 'name=Admins,email:aws-*', to sync all groups (and their member users) specify '*'. For query syntax and more examples see: https://developers.google.com/admin-sdk/directory/v1/guides/search-groups")
 	rootCmd.Flags().StringVarP(&cfg.SyncMethod, "sync-method", "s", config.DefaultSyncMethod, "Sync method to use (users_groups|groups)")
 	rootCmd.Flags().StringVarP(&cfg.Region, "region", "r", "", "AWS Region where AWS SSO is enabled")
 	rootCmd.Flags().StringVarP(&cfg.IdentityStoreID, "identity-store-id", "i", "", "Identifier of Identity Store in AWS SSO")

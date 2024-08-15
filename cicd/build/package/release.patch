@@ -1,7 +1,7 @@
---- template.yaml	2022-11-29 16:56:21.000000000 +0000
-+++ release.yaml	2022-11-29 17:11:58.000000000 +0000
-@@ -27,7 +27,7 @@
-           - IncludeGroups
+--- template.yaml	2023-10-27 16:34:16
++++ release.yaml	2023-10-27 16:34:37
+@@ -36,7 +36,7 @@
+           - ScheduleExpression
  
    AWS::ServerlessRepo::Application:
 -    Name: ssosync
@@ -9,34 +9,3 @@
      Description: Helping you populate AWS SSO directly with your Google Apps users.
      Author: Sebastian Doell
      SpdxLicenseId: Apache-2.0
-@@ -107,7 +107,7 @@
-       Ignore these Google Workspace users
-   IncludeGroups:
-     Type: String
--    Description: |
-+    Description: | 
-       Include only these Google Workspace groups. (Only applicable for SyncMethod user_groups)
-   SyncMethod:
-     Type: String
-@@ -116,9 +116,9 @@
-     AllowedValues:
-       - groups
-       - users_groups
--
--
--
-+      
-+      
-+      
- 
- Resources:
-   SSOSyncFunction:
-@@ -156,8 +156,6 @@
-                 - !Ref AWSSCIMAccessTokenSecret
-                 - !Ref AWSRegionSecret
-                 - !Ref AWSIdentityStoreIDSecret
--        - Version: '2012-10-17'
--          Statement:
-             - Sid: IdentityStoreAccesPolicy
-               Effect: Allow
-               Action:

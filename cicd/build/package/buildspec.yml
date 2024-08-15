@@ -1,23 +1,27 @@
 version: 0.2
 
+env:
+  variables:
+    ShareWith: "NOT-SHARED"
+
 phases:
-  install:
+  pre_build:
     commands:
       # Print all environment variables (handy for AWS CodeBuild logs)
       - env
 
-  pre_build:
-    commands:
       - cp -r ${CODEBUILD_SRC_DIR_Built}/* ./
       - ls -la
 
       # Check that the files need to package exist
       - ls README.md
       - ls SAR.md
-      - ls dist/ssosync_linux_amd64_v1/ssosync
+      - ls dist/ssosync_linux_arm64/ssosync
+      - ls dist/ssosync_linux_amd64_v1/ssosync 
  
       # Check that the executable works
       - ./dist/ssosync_linux_amd64_v1/ssosync --version 
+      - mv dist/ssosync_linux_arm64/ssosync bootstrap
 
   build:
     commands:
@@ -30,10 +34,29 @@ phases:
       - patch release.yaml cicd/build/package/release.patch
       - sam package --no-progressbar --template-file release.yaml --s3-bucket ${S3Bucket} --output-template-file packaged-release.yaml
 
-  post_build:
-    commands:
       - ls packaged-staging.yaml
       - ls packaged-release.yaml
+
+  post_build:
+    commands:
+      # Create parameters
+      - export AppVersion="${GitTag#v}-${GitVersionHash}"
+      - aws ssm put-parameter --name "/SSOSync/Staging/Version" --value ${AppVersion} --type String --overwrite
+
+      # remove the previous builds
+      #- aws serverlessrepo delete-application --application-id ${AppArn}
+
+      # Package our application with AWS SAM
+      - echo sam publish --template packaged-staging.yaml --semantic-version ${AppVersion}
+      - sam publish --template packaged-staging.yaml --semantic-version ${AppVersion}
+
+      # Share with the StagingAccount
+      - |
+        if expr "${ShareWith}" : "NOT-SHARED" >/dev/null; then
+          echo "Skipping Sharing"
+        else
+          aws serverlessrepo put-application-policy --application-id ${AppArn} --statements Principals=${ShareWith},Actions=Deploy
+        fi
 
 artifacts:
   files:

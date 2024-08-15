@@ -17,7 +17,8 @@ package google
 
 import (
 	"context"
-        "strings"
+	"strings"
+	"errors"
 
 	"golang.org/x/oauth2/google"
 	admin "google.golang.org/api/admin/directory/v1"
@@ -101,15 +102,24 @@ func (c *client) GetUsers(query string) ([]*admin.User, error) {
 	u := make([]*admin.User, 0)
 	var err error
 
-	if query == "*" {
+	// If we have an empty query, return nothing.
+	if query == "" {
+		return u, err
+	}
+
+	// If we have wildcard then fetch all users
+	if query  == "*" {
                 err = c.service.Users.List().Customer("my_customer").Pages(c.ctx, func(users *admin.Users) error {
                         u = append(u, users.Users...)
                         return nil
                 })
-	} else if query != "" {
-                // In case we have multiple queries to process split on delimiter
-                queries := strings.Split(query, ",")
-                for _, subQuery := range queries {
+        } else {
+
+	        // The Google api doesn't support multi-part queries, but we do so we need to split into an array of query strings
+		queries := strings.Split(query, ",")
+
+		// Then call the api one query at a time, appending to our list
+		for _, subQuery := range queries {
 			err = c.service.Users.List().Query(subQuery).Customer("my_customer").Pages(c.ctx, func(users *admin.Users) error {
 				u = append(u, users.Users...)
 				return nil
@@ -117,7 +127,23 @@ func (c *client) GetUsers(query string) ([]*admin.User, error) {
 		}
 	}
 
+	// some people prefer to go by a mononym
+	// Google directory will accept a 'zero width space' for an empty name but will not accept a 'space'
+	// but
+	// Identity Store will accept and a 'space' for an empty name but not a 'zero width space'
+	// So we need to replace any 'zero width space' strings with a single 'space' to allow comparison and sync
+	for _, user := range u {
+		user.Name.GivenName = strings.Replace(user.Name.GivenName, string('\u200B'), " ", -1)
+        	user.Name.FamilyName = strings.Replace(user.Name.FamilyName, string('\u200B'), " ", -1)
+	}
+
+	// Check we've got some users otherwise something is wrong.
+        if len(u) == 0 {
+                return u, errors.New("google api returned 0 users?")
+        } 
 	return u, err
+
+
 }
 
 // GetGroups will get the groups from Google's Admin API
@@ -137,22 +163,35 @@ func (c *client) GetGroups(query string) ([]*admin.Group, error) {
 	g := make([]*admin.Group, 0)
 	var err error
 
-	// Add groups based on query string
-	if query == "*" {
-                err = c.service.Groups.List().Customer("my_customer").Pages(context.TODO(), func(groups *admin.Groups) error {
+        // If we have an empty query, then we are not looking for groups
+        if query  == "" {
+                return g, err
+        }
+
+        // If we have wildcard then fetch all groups
+        if query  == "*" {
+		err = c.service.Groups.List().Customer("my_customer").Pages(context.TODO(), func(groups *admin.Groups) error {
                         g = append(g, groups.Groups...)
                         return nil
                 })
-	} else if query != "" {
-                // In case we have multiple queries to process split on delimiter
-                queries := strings.Split(query, ",")
-		for _, subQuery := range queries {
+		return g, err
+        } else {
+
+        	// The Google api doesn't support multi-part queries, but we do so we need to split into an array of query strings
+        	queries := strings.Split(query, ",")
+
+        	// Then call the api one query at a time, appending to our list
+        	for _, subQuery := range queries {
 			err = c.service.Groups.List().Customer("my_customer").Query(subQuery).Pages(context.TODO(), func(groups *admin.Groups) error {
 				g = append(g, groups.Groups...)
 				return nil
 			})
 		}
+	}
 
+	// Check we've got some users otherwise something is wrong.
+	if len(g) == 0 {
+		return g, errors.New("google api return 0 groups?")
 	}
 	return g, err
 }
