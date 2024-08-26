@@ -155,7 +155,7 @@ Parameters:
     Description: |
       AWS IAM Identity Center - SCIM AccessToken
     Default: ""
-    AllowedPattern: '(?!.*\s)|([0-9a-zA-Z/=+-\\]{500,600})'
+    AllowedPattern: '(?!.*\s)|([0-9a-zA-Z/=+-\\]{500,620})'
     NoEcho: true
 
   Region:
