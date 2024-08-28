@@ -175,6 +175,7 @@ func (c *client) GetGroups(query string) ([]*admin.Group, error) {
                         return nil
                 })
 		return g, err
+	}
 
       	// The Google api doesn't support multi-part queries, but we do so we need to split into an array of query strings
        	queries := strings.Split(query, ",")
