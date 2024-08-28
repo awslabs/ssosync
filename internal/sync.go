@@ -805,6 +805,7 @@ func DoSync(ctx context.Context, cfg *config.Config) error {
 	if err != nil {
 	        log.WithField("error", err).Warn("Problem performing test query against Identity Store")
 		return err
+	}
 	log.WithField("Groups", response).Info("Test call for groups successful")
 
 	// Initialize sync client with
