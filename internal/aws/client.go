@@ -28,14 +28,15 @@ import (
 )
 
 var (
-	// User not found error
+	// ErrUserNotFound
 	ErrUserNotFound      = errors.New("user not found")
-	// Group not found error
+	// ErrGroupNotFound
 	ErrGroupNotFound     = errors.New("group not found")
-	// User not specified error
+	// ErrUserNotSpecified
 	ErrUserNotSpecified  = errors.New("user not specified")
 )
 
+// ErrHTTPNotOK
 type ErrHTTPNotOK struct {
 	StatusCode int
 }

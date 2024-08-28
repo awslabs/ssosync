@@ -882,6 +882,7 @@ func (s *syncGSuite) GetGroups() ([]*aws.Group, error) {
 	return awsGroups, nil
 }
 
+// ListGroupsPagesCallbackFn
 // Callback handler for paginated List of Groups
 func ListGroupsPagesCallbackFn(page *identitystore.ListGroupsOutput, lastPage bool) bool {
 	// Loop through each Group returned
@@ -915,6 +916,7 @@ func (s *syncGSuite) GetUsers() ([]*aws.User, error) {
 	return awsUsers, nil
 }
 
+// ListUsersPagesCallbackFn
 // Callback handler for paginated List of Users
 func ListUsersPagesCallbackFn(page *identitystore.ListUsersOutput, lastPage bool) bool {
 	// Loop through each User in ListUsersOutput and convert to native User object
@@ -924,6 +926,7 @@ func ListUsersPagesCallbackFn(page *identitystore.ListUsersOutput, lastPage bool
 	return !lastPage
 }
 
+// ConvertSdkUserObjToNative
 // Convert SDK user to native user object
 func ConvertSdkUserObjToNative(user *identitystore.User) *aws.User {
 	// Convert emails into native Email object
@@ -969,6 +972,7 @@ func ConvertSdkUserObjToNative(user *identitystore.User) *aws.User {
 	}
 }
 
+// CreateUserIDtoUserObjMap
 // Create User ID for user object map
 func CreateUserIDtoUserObjMap(awsUsers []*aws.User) map[string]*aws.User {
 	awsUsersMap := make(map[string]*aws.User)
@@ -980,6 +984,7 @@ func CreateUserIDtoUserObjMap(awsUsers []*aws.User) map[string]*aws.User {
 	return awsUsersMap
 }
 
+// ListGroupMembershipPagesCallbackFn
 // Handler for Paginated Group Membership List
 var ListGroupMembershipPagesCallbackFn func(page *identitystore.ListGroupMembershipsOutput, lastPage bool) bool
 
