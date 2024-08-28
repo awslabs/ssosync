@@ -88,7 +88,6 @@ func Handler(ctx context.Context, event events.CodePipelineEvent) (string, error
 
     if cfg.IsLambdaRunningInCodePipeline {
         log.Info("Lambda has been invoked by CodePipeline")
-	rtnMessage := ""
 
         if err != nil {
     	    // notify codepipeline and mark its job execution as Failure
@@ -109,7 +108,7 @@ func Handler(ctx context.Context, event events.CodePipelineEvent) (string, error
     	    if cplErr != nil {
                 log.Fatalf(errors.Wrap(err, "Failed to update CodePipeline jobID status").Error())
     	    }
-    	    rtnMessage = "Failure"
+	    rtnMessage := "Failure"
         } else {
             log.Info("Notifying CodePipeline and mark its job execution as Success")
             jobID := event.CodePipelineJob.ID
@@ -124,14 +123,14 @@ func Handler(ctx context.Context, event events.CodePipelineEvent) (string, error
             if cplErr != nil {
                 log.Fatalf(errors.Wrap(err, "Failed to update CodePipeline jobID status").Error())
             }
-    	    rtnMessage = "Success"
+	    rtnMessage := "Success"
         }
     } else {
         if err != nil {
             log.Fatalf(errors.Wrap(err, "Notifying Lambda and mark this execution as Failure").Error())
-    	    rtnMessage = "Failure"
+	    rtnMessage := "Failure"
         } else {
-    	    rtnMessage = "Success"
+	 rtnMessage := "Success"
         }
     }
     return rtnMessage, err
