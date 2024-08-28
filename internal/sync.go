@@ -393,7 +393,7 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 		log.Info("creating user")
 		_, err := s.aws.CreateUser(awsUser)
 		if err != nil {
-			errHTTP := new(aws.ErrHttpNotOK)
+			errHTTP := new(aws.ErrHTTPNotOK)
 			if errors.As(err, &errHTTP) && errHTTP.StatusCode == 409 {
 				log.WithField("user", awsUser.Username).Warn("user already exists")
 				continue
