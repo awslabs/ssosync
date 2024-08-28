@@ -393,8 +393,8 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 		log.Info("creating user")
 		_, err := s.aws.CreateUser(awsUser)
 		if err != nil {
-			errHttp := new(aws.ErrHttpNotOK)
-			if errors.As(err, &errHttp) && errHttp.StatusCode == 409 {
+			errHTTP := new(aws.ErrHTTPNotOK)
+			if errors.As(err, &errHTTP) && errHTTP.StatusCode == 409 {
 				log.WithField("user", awsUser.Username).Warn("user already exists")
 				continue
 			}
@@ -805,10 +805,8 @@ func DoSync(ctx context.Context, cfg *config.Config) error {
 	if err != nil {
 	        log.WithField("error", err).Warn("Problem performing test query against Identity Store")
 		return err
-	} else {
-	        log.WithField("Groups", response).Info("Test call for groups successful")
-                
-        }
+	}
+	log.WithField("Groups", response).Info("Test call for groups successful")
 
 	// Initialize sync client with
 	// 1. SCIM API client
@@ -884,6 +882,8 @@ func (s *syncGSuite) GetGroups() ([]*aws.Group, error) {
 	return awsGroups, nil
 }
 
+// ListGroupsPagesCallbackFn
+// Callback handler for paginated List of Groups
 func ListGroupsPagesCallbackFn(page *identitystore.ListGroupsOutput, lastPage bool) bool {
 	// Loop through each Group returned
 	for _, group := range page.Groups {
@@ -916,6 +916,8 @@ func (s *syncGSuite) GetUsers() ([]*aws.User, error) {
 	return awsUsers, nil
 }
 
+// ListUsersPagesCallbackFn
+// Callback handler for paginated List of Users
 func ListUsersPagesCallbackFn(page *identitystore.ListUsersOutput, lastPage bool) bool {
 	// Loop through each User in ListUsersOutput and convert to native User object
 	for _, user := range page.Users {
@@ -924,6 +926,8 @@ func ListUsersPagesCallbackFn(page *identitystore.ListUsersOutput, lastPage bool
 	return !lastPage
 }
 
+// ConvertSdkUserObjToNative
+// Convert SDK user to native user object
 func ConvertSdkUserObjToNative(user *identitystore.User) *aws.User {
 	// Convert emails into native Email object
 	userEmails := make([]aws.UserEmail, 0)
@@ -968,6 +972,8 @@ func ConvertSdkUserObjToNative(user *identitystore.User) *aws.User {
 	}
 }
 
+// CreateUserIDtoUserObjMap
+// Create User ID for user object map
 func CreateUserIDtoUserObjMap(awsUsers []*aws.User) map[string]*aws.User {
 	awsUsersMap := make(map[string]*aws.User)
 
@@ -978,6 +984,8 @@ func CreateUserIDtoUserObjMap(awsUsers []*aws.User) map[string]*aws.User {
 	return awsUsersMap
 }
 
+// ListGroupMembershipPagesCallbackFn
+// Handler for Paginated Group Membership List
 var ListGroupMembershipPagesCallbackFn func(page *identitystore.ListGroupMembershipsOutput, lastPage bool) bool
 
 func (s *syncGSuite) GetGroupMembershipsLists(awsGroups []*aws.Group, awsUsersMap map[string]*aws.User) (map[string][]*aws.User, error) {
@@ -986,8 +994,8 @@ func (s *syncGSuite) GetGroupMembershipsLists(awsGroups []*aws.Group, awsUsersMa
 
 	ListGroupMembershipPagesCallbackFn = func(page *identitystore.ListGroupMembershipsOutput, lastPage bool) bool {
 		for _, member := range page.GroupMemberships { // For every member in the group
-			userId := member.MemberId.UserId
-			user := awsUsersMap[*userId]
+			userID := member.MemberId.UserId
+			user := awsUsersMap[*userID]
 
 			// Append new user onto existing list of users
 			awsGroupsUsers[curGroup.DisplayName] = append(awsGroupsUsers[curGroup.DisplayName], user)
@@ -1034,12 +1042,12 @@ func (s *syncGSuite) IsUserInGroup(user *aws.User, group *aws.Group) (*bool, err
 	return isUserInGroup, nil
 }
 
-func (s *syncGSuite) RemoveUserFromGroup(userId *string, groupId *string) error {
-	memberIdOutput, err := s.identityStoreClient.GetGroupMembershipId(
+func (s *syncGSuite) RemoveUserFromGroup(userID *string, groupID *string) error {
+	memberIDOutput, err := s.identityStoreClient.GetGroupMembershipId(
 		&identitystore.GetGroupMembershipIdInput{
 			IdentityStoreId: &s.cfg.IdentityStoreID,
-			GroupId:         groupId,
-			MemberId:        &identitystore.MemberId{UserId: userId},
+			GroupId:         groupID,
+			MemberId:        &identitystore.MemberId{UserId: userID},
 		},
 	)
 
@@ -1047,12 +1055,12 @@ func (s *syncGSuite) RemoveUserFromGroup(userId *string, groupId *string) error 
 		return err
 	}
 
-	memberId := memberIdOutput.MembershipId
+	memberID := memberIDOutput.MembershipId
 
 	_, err = s.identityStoreClient.DeleteGroupMembership(
 		&identitystore.DeleteGroupMembershipInput{
 			IdentityStoreId: &s.cfg.IdentityStoreID,
-			MembershipId:    memberId,
+			MembershipId:    memberID,
 		},
 	)
 
