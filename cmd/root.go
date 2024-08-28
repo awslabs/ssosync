@@ -108,32 +108,31 @@ func Handler(ctx context.Context, event events.CodePipelineEvent) (string, error
     	    if cplErr != nil {
                 log.Fatalf(errors.Wrap(err, "Failed to update CodePipeline jobID status").Error())
     	    }
-	    rtnMessage := "Failure"
-        } else {
-            log.Info("Notifying CodePipeline and mark its job execution as Success")
-            jobID := event.CodePipelineJob.ID
-            if len(jobID) == 0 {
-    	       panic("CodePipeline Job ID is not set")
-            }
-            // mark the job as Success.
-            cplSuccess := &codepipeline.PutJobSuccessResultInput{
-    	       JobId: aws.String(jobID),
-            }
-            _, cplErr := cpl.PutJobSuccessResult(cplSuccess)
-            if cplErr != nil {
-                log.Fatalf(errors.Wrap(err, "Failed to update CodePipeline jobID status").Error())
-            }
-	    rtnMessage := "Success"
+	    return "Failure", err
         }
-    } else {
-        if err != nil {
-            log.Fatalf(errors.Wrap(err, "Notifying Lambda and mark this execution as Failure").Error())
-	    rtnMessage := "Failure"
-        } else {
-	 rtnMessage := "Success"
+
+        log.Info("Notifying CodePipeline and mark its job execution as Success")
+        jobID := event.CodePipelineJob.ID
+        if len(jobID) == 0 {
+    	    panic("CodePipeline Job ID is not set")
         }
+        // mark the job as Success.
+        cplSuccess := &codepipeline.PutJobSuccessResultInput{
+    	    JobId: aws.String(jobID),
+        }
+        _, cplErr := cpl.PutJobSuccessResult(cplSuccess)
+        if cplErr != nil {
+            log.Fatalf(errors.Wrap(err, "Failed to update CodePipeline jobID status").Error())
+        }
+    
+	return "Success", nil
     }
-    return rtnMessage, err
+        
+    if err != nil {
+        log.Fatalf(errors.Wrap(err, "Notifying Lambda and mark this execution as Failure").Error())
+    	return "Failure", err
+    }
+    return "Success", nil
 }
 
 func init() {
@@ -217,7 +216,7 @@ func configLambda() {
 	}
 	cfg.SCIMAccessToken = unwrap
 
-	unwrap, err = secrets.SCIMEndpointUrl(os.Getenv("SCIM_ENDPOINT"))
+	unwrap, err = secrets.SCIMEndpointURL(os.Getenv("SCIM_ENDPOINT"))
 	if err != nil {
 		log.Fatalf(errors.Wrap(err, "cannot read config: SCIM_ENDPOINT").Error())
 	}
