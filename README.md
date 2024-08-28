@@ -72,7 +72,7 @@ what it is going to do.
 The recommended installation is:
 * [Setup IAM Identity Center](https://docs.aws.amazon.com/singlesignon/latest/userguide/get-started-enable-identity-center.html), in the management account of your organization
 * Created a linked account `Identity` Account from which to manage IAM Identity Center
-* [Delegate administration](https://docs.aws.amazon.com/singlesignon/latest/userguide/delegated-admin.html) to the `Identity' account
+* [Delegate administration](https://docs.aws.amazon.com/singlesignon/latest/userguide/delegated-admin.html) to the `Identity` account
 * Deploy the [SSOSync app](https://console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync) from the AWS Serverless Application Repository
 
 
