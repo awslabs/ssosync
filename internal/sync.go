@@ -214,13 +214,18 @@ func (s *syncGSuite) SyncGroups(query string) error {
 			correlatedGroups[gg.DisplayName] = gg
 			group = gg
 		} else {
-			log.Info("Creating group in AWS")
 			newGroup := aws.NewGroup(g.Email)
-			createGroupOutput, err := s.identityStoreClient.CreateGroup(&identitystore.CreateGroupInput{IdentityStoreId: &s.cfg.IdentityStoreID, DisplayName: &g.Email})
-			if err != nil {
-				return err
+
+			if s.cfg.DryRun {
+				log.Info("IGNORED: Creating group in AWS")
+			} else {
+				log.Info("Creating group in AWS")
+				createGroupOutput, err := s.identityStoreClient.CreateGroup(&identitystore.CreateGroupInput{IdentityStoreId: &s.cfg.IdentityStoreID, DisplayName: &g.Email})
+				if err != nil {
+					return err
+				}
+				newGroup.ID = *createGroupOutput.GroupId
 			}
-			newGroup.ID = *createGroupOutput.GroupId
 			correlatedGroups[newGroup.DisplayName] = newGroup
 			group = newGroup
 		}
@@ -241,10 +246,17 @@ func (s *syncGSuite) SyncGroups(query string) error {
 		}
 
 		for _, u := range s.users {
-			log.WithField("user", u.Username).Debug("Checking user is in group already")
-			b, err := s.IsUserInGroup(u, group)
-			if err != nil {
-				return err
+			a := false
+			var b *bool = &a
+
+			if s.cfg.DryRun {
+				log.WithField("user", u.Username).Debug("IGNORED: Checking user is in group already")
+			} else {
+				log.WithField("user", u.Username).Debug("Checking user is in group already")
+				b, err = s.IsUserInGroup(u, group)
+				if err != nil {
+					return err
+				}
 			}
 
 			if _, ok := memberList[u.Username]; ok {
