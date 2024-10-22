@@ -21,31 +21,31 @@ import (
 	"github.com/golang/mock/gomock"
 )
 
-// MockIHttpClient is a mock of IHttpClient interface
-type MockIHttpClient struct {
+// IHTTPClient is a mock of IHTTPClient interface
+type IHTTPClient struct {
 	ctrl     *gomock.Controller
-	recorder *MockIHttpClientMockRecorder
+	recorder *IHTTPClientMockRecorder
 }
 
-// MockIHttpClientMockRecorder is the mock recorder for MockIHttpClient
-type MockIHttpClientMockRecorder struct {
-	mock *MockIHttpClient
+// IHTTPClientMockRecorder is the mock recorder for IHTTPClient
+type IHTTPClientMockRecorder struct {
+	mock *IHTTPClient
 }
 
-// NewMockIHttpClient creates a new mock instance
-func NewMockIHttpClient(ctrl *gomock.Controller) *MockIHttpClient {
-	mock := &MockIHttpClient{ctrl: ctrl}
-	mock.recorder = &MockIHttpClientMockRecorder{mock}
+// NewIHTTPClient creates a new mock instance
+func NewIHTTPClient(ctrl *gomock.Controller) *IHTTPClient {
+	mock := &IHTTPClient{ctrl: ctrl}
+	mock.recorder = &IHTTPClientMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use
-func (m *MockIHttpClient) EXPECT() *MockIHttpClientMockRecorder {
+func (m *IHTTPClient) EXPECT() *IHTTPClientMockRecorder {
 	return m.recorder
 }
 
 // Do mocks base method
-func (m *MockIHttpClient) Do(req *http.Request) (*http.Response, error) {
+func (m *IHTTPClient) Do(req *http.Request) (*http.Response, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Do", req)
 	ret0, _ := ret[0].(*http.Response)
@@ -54,7 +54,7 @@ func (m *MockIHttpClient) Do(req *http.Request) (*http.Response, error) {
 }
 
 // Do indicates an expected call of Do
-func (mr *MockIHttpClientMockRecorder) Do(req interface{}) *gomock.Call {
+func (mr *IHTTPClientMockRecorder) Do(req interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Do", reflect.TypeOf((*MockIHttpClient)(nil).Do), req)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Do", reflect.TypeOf((*IHTTPClient)(nil).Do), req)
 }

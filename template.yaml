@@ -163,7 +163,7 @@ Parameters:
     Description: |
       AWS IAM Identity Center - SCIM AccessToken
     Default: ""
-    AllowedPattern: '(?!.*\s)|([0-9a-zA-Z/=+-\\]{500,600})'
+    AllowedPattern: '(?!.*\s)|([0-9a-zA-Z/=+-\\]{500,620})'
     NoEcho: true
 
   Region:
@@ -552,12 +552,14 @@ Resources:
     Condition: CreateFunction
     Properties:
       FunctionName: !If [SetFunctionName, !Ref FunctionName, !Ref AWS::NoValue]
+      Description: "An instance of ssosync deplyed from the Serverless Application Repository, for details see http://https://github.com/awslabs/ssosync"
       Role: !If [RemoteSecrets, !GetAtt SSOSyncRoleRemote.Arn, !GetAtt SSOSyncRoleLocal.Arn]
       Runtime: provided.al2
       Handler: bootstrap
       Architectures:
         - arm64
       Timeout: !Ref TimeOut
+      ReservedConcurrentExecutions: 1
       Environment:
         Variables:
           LOG_LEVEL: !Ref LogLevel

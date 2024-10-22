@@ -72,7 +72,7 @@ func TestNewClient(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	x := mock.NewMockIHttpClient(ctrl)
+	x := mock.NewIHTTPClient(ctrl)
 
 	c, err := NewClient(x, &Config{
 		Endpoint: ":foo",
@@ -86,7 +86,7 @@ func TestSendRequestBadUrl(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	x := mock.NewMockIHttpClient(ctrl)
+	x := mock.NewIHTTPClient(ctrl)
 
 	c, err := NewClient(x, &Config{
 		Endpoint: "https://scim.example.com/",
@@ -104,7 +104,7 @@ func TestSendRequestBadStatusCode(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	x := mock.NewMockIHttpClient(ctrl)
+	x := mock.NewIHTTPClient(ctrl)
 
 	c, err := NewClient(x, &Config{
 		Endpoint: "https://scim.example.com/",
@@ -134,7 +134,7 @@ func TestSendRequestCheckAuthHeader(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	x := mock.NewMockIHttpClient(ctrl)
+	x := mock.NewIHTTPClient(ctrl)
 
 	c, err := NewClient(x, &Config{
 		Endpoint: "https://scim.example.com/",
@@ -169,7 +169,7 @@ func TestSendRequestWithBodyCheckHeaders(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	x := mock.NewMockIHttpClient(ctrl)
+	x := mock.NewIHTTPClient(ctrl)
 
 	c, err := NewClient(x, &Config{
 		Endpoint: "https://scim.example.com/",
@@ -206,7 +206,7 @@ func TestClient_FindUserByEmail(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	x := mock.NewMockIHttpClient(ctrl)
+	x := mock.NewIHTTPClient(ctrl)
 
 	c, err := NewClient(x, &Config{
 		Endpoint: "https://scim.example.com/",
@@ -282,7 +282,7 @@ func TestClient_FindGroupByDisplayName(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	x := mock.NewMockIHttpClient(ctrl)
+	x := mock.NewIHTTPClient(ctrl)
 
 	c, err := NewClient(x, &Config{
 		Endpoint: "https://scim.example.com/",
@@ -362,7 +362,7 @@ func TestClient_CreateUser(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	x := mock.NewMockIHttpClient(ctrl)
+	x := mock.NewIHTTPClient(ctrl)
 
 	c, err := NewClient(x, &Config{
 		Endpoint: "https://scim.example.com/",
@@ -407,7 +407,7 @@ func TestClient_UpdateUser(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	x := mock.NewMockIHttpClient(ctrl)
+	x := mock.NewIHTTPClient(ctrl)
 
 	c, err := NewClient(x, &Config{
 		Endpoint: "https://scim.example.com/",

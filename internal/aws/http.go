@@ -16,7 +16,7 @@ package aws
 
 import "net/http"
 
-// HttpClient is a generic HTTP Do interface
-type HttpClient interface {
+// HTTPClient is a generic HTTP Do interface
+type HTTPClient interface {
 	Do(req *http.Request) (*http.Response, error)
 }

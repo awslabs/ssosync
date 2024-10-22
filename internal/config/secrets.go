@@ -43,10 +43,10 @@ func (s *Secrets) SCIMAccessToken(secretArn string) (string, error) {
      return s.getSecret(secretArn)
 }
 
-// SCIMEndpointUrl ...
-func (s *Secrets) SCIMEndpointUrl(secretArn string) (string, error) {
+// SCIMEndpointURL ...
+func (s *Secrets) SCIMEndpointURL(secretArn string) (string, error) {
      if len([]rune(secretArn)) == 0 {
-        return s.getSecret("SSOSyncSCIMEndpointUrl")
+        return s.getSecret("SSOSyncSCIMEndpointURL")
      }
      return s.getSecret(secretArn)
 }
@@ -67,7 +67,7 @@ func (s *Secrets) Region(secretArn string) (string, error) {
      return s.getSecret(secretArn)
 }
 
-// Identity Store ID ...
+// IdentityStoreID ...
 func (s *Secrets) IdentityStoreID(secretArn string) (string, error) {
      if len([]rune(secretArn)) == 0 {
         return s.getSecret("IdentityStoreID")
