@@ -18,6 +18,7 @@ package google
 import (
 	"context"
 	"strings"
+	"errors"
 
 	"golang.org/x/oauth2/google"
 	admin "google.golang.org/api/admin/directory/v1"
@@ -119,11 +120,10 @@ func (c *client) GetUsers(query string) ([]*admin.User, error) {
                         u = append(u, users.Users...)
                         return nil
                 })
-		return u, err
-        }
+        } else {
 
-	// The Google api doesn't support multi-part queries, but we do so we need to split into an array of query strings
-	queries := strings.Split(query, ",")
+	        // The Google api doesn't support multi-part queries, but we do so we need to split into an array of query strings
+		queries := strings.Split(query, ",")
 
 	// Then call the api one query at a time, appending to our list
 	for _, subQuery := range queries {
@@ -132,6 +132,21 @@ func (c *client) GetUsers(query string) ([]*admin.User, error) {
 			return nil
 		})
 	}
+
+	// some people prefer to go by a mononym
+	// Google directory will accept a 'zero width space' for an empty name but will not accept a 'space'
+	// but
+	// Identity Store will accept and a 'space' for an empty name but not a 'zero width space'
+	// So we need to replace any 'zero width space' strings with a single 'space' to allow comparison and sync
+	for _, user := range u {
+		user.Name.GivenName = strings.Replace(user.Name.GivenName, string('\u200B'), " ", -1)
+        	user.Name.FamilyName = strings.Replace(user.Name.FamilyName, string('\u200B'), " ", -1)
+	}
+
+	// Check we've got some users otherwise something is wrong.
+        if len(u) == 0 {
+                return u, errors.New("google api returned 0 users?")
+        } 
 	return u, err
 
 
@@ -168,8 +183,8 @@ func (c *client) GetGroups(query string) ([]*admin.Group, error) {
 		return g, err
 	}
 
-        // The Google api doesn't support multi-part queries, but we do so we need to split into an array of query strings
-        queries := strings.Split(query, ",")
+      	// The Google api doesn't support multi-part queries, but we do so we need to split into an array of query strings
+       	queries := strings.Split(query, ",")
 
         // Then call the api one query at a time, appending to our list
         for _, subQuery := range queries {
@@ -177,6 +192,11 @@ func (c *client) GetGroups(query string) ([]*admin.Group, error) {
 			g = append(g, groups.Groups...)
 			return nil
 		})
+	}
+
+	// Check we've got some users otherwise something is wrong.
+	if len(g) == 0 {
+		return g, errors.New("google api return 0 groups?")
 	}
 	return g, err
 }
