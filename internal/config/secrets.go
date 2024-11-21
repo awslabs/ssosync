@@ -1,7 +1,6 @@
 package config
 
 import (
-	"encoding/base64"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/secretsmanager"
 )
@@ -81,16 +80,8 @@ func (s *Secrets) getSecret(secretKey string) (string, error) {
 	if r.SecretString != nil {
 		secretString = *r.SecretString
 	} else {
-		decodedBinarySecretBytes := make([]byte, base64.StdEncoding.DecodedLen(len(r.SecretBinary)))
-		l, err := base64.StdEncoding.Decode(decodedBinarySecretBytes, r.SecretBinary)
-		if err != nil {
-			return "", err
-		}
-		secretString = string(decodedBinarySecretBytes[:l])
+		secretString = string(r.SecretBinary)
 	}
 
 	return secretString, nil
 }
-
-
-
