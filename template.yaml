@@ -148,7 +148,7 @@ Parameters:
     Description: |
       AWS IAM Identity Center - SCIM Endpoint Url
     Default: ""
-    AllowedPattern: '(?!.*\s)|(https://scim.(us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-([0-9]{1}).amazonaws.com/(.*)-([a-z0-9]{4})-([a-z0-9]{4})-([a-z0-9]{12})/scim/v2/?)'
+    AllowedPattern: '(?!.*\s)|(https://scim.(us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-([0-9]{1}).amazonaws.com/([A-Za-z0-9]{11})-([A-Za-z0-9]{4})-([A-Za-z0-9]{4})-([A-Za-z0-9]{4})-([A-Za-z0-9]{12})/scim/v2/?)'
 
   SCIMEndpointAccessToken:
     Type: String
