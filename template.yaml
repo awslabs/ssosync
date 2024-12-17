@@ -15,6 +15,7 @@ Metadata:
           - SCIMEndpointAccessToken
           - Region
           - IdentityStoreID
+          - UserMappingTemplate
       - Label:
           default: Google Workspace Credentials 
         Parameters:
@@ -207,6 +208,13 @@ Parameters:
     Default: ""
     AllowedPattern: '(?!.*\s)|((([a-zA-Z0-9.\-_]{1,64})@([a-zA-Z0-9.\-]{5,260}))(,(([a-zA-Z0-9.\-_]{1,64})@([a-zA-Z0-9.\-]{5,260})))*)'
 
+  UserMappingTemplate:
+    Type: String
+    Description: |
+      [optional] Parameter name containing a GoTemplate used for mapping Google Workspace users into AWS IDC SCIM Users. (must output JSON)
+    Default: ""
+    AllowedPattern: "[a-zA-Z0-9_.-/]{0,2048}$"
+
   SyncMethod:
     Type: String
     Description: Sync method to use 
@@ -252,6 +260,10 @@ Conditions:
     - !Equals
         - !Ref SyncMethod
         - "users_groups"
+  SetUserMappingTemplate: !Not
+    - !Equals
+        - !Ref UserMappingTemplate
+        - ""
   OnSchedule: !Not
     - !Equals
         - !Ref ScheduleExpression
@@ -446,6 +458,15 @@ Resources:
                   - !If [CreateSecrets, !Ref SecretSCIMAccessToken, !Select [3, !Split [',', !Ref CrossStackConfig]]]
                   - !If [CreateSecrets, !Ref SecretRegion, !Select [4, !Split [',', !Ref CrossStackConfig]]]
                   - !If [CreateSecrets, !Ref SecretIdentityStoreID, !Select [5, !Split [',', !Ref CrossStackConfig]]]
+              - !If
+                - SetUserMappingTemplate
+                - Sid: GetParameterPolicy
+                  Effect: Allow
+                  Action:
+                    - "ssm:Get*"
+                  Resource:
+                    - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${UserMappingTemplate}
+                - !Ref "AWS::NoValue"
               - Sid: IdentityStoreAccesPolicy
                 Effect: Allow
                 Action:
@@ -501,6 +522,15 @@ Resources:
                   - !Select [3, !Split [',', !Ref CrossStackConfig]] # SCIMEndpointAccessToken
                   - !Select [4, !Split [',', !Ref CrossStackConfig]] # Region
                   - !Select [5, !Split [',', !Ref CrossStackConfig]] # IdentityStoreID
+              - !If
+                - SetUserMappingTemplate
+                - Sid: GetParameterPolicy
+                  Effect: Allow
+                  Action:
+                    - "ssm:Get*"
+                  Resource:
+                    - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${UserMappingTemplate}
+                - !Ref "AWS::NoValue"
               - Sid: KMSDecryptPolicy
                 Effect: Allow
                 Action:
@@ -558,6 +588,7 @@ Resources:
           IGNORE_GROUPS: !If [SetIgnoreGroups, !Ref IgnoreGroups, !Ref AWS::NoValue]
           IGNORE_USERS: !If [SetIgnoreUsers, !Ref IgnoreUsers, !Ref AWS::NoValue]
           INCLUDE_GROUPS: !If [SetIncludeGroups, !Ref IncludeGroups, !Ref AWS::NoValue]
+          USER_MAPPING_TEMPLATE: !If [SetUserMappingTemplate, !Ref UserMappingTemplate, !Ref AWS::NoValue]
       Events:
         SyncScheduledEvent:
           Type: Schedule

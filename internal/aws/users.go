@@ -21,64 +21,44 @@ import (
 // NewUser creates a user object representing a user with the given
 // details.
 func NewUser(firstName string, lastName string, email string, active bool) *User {
-	e := make([]UserEmail, 0)
-	e = append(e, UserEmail{
-		Value:   email,
-		Type:    "work",
-		Primary: true,
-	})
-
-	a := make([]UserAddress, 0)
-	a = append(a, UserAddress{
-		Type: "work",
-	})
-
 	return &User{
-		Schemas:  []string{"urn:ietf:params:scim:schemas:core:2.0:User"},
+		Schemas:  []string{SCIMSchemaCoreUser},
 		Username: email,
-		Name: struct {
-			FamilyName string `json:"familyName"`
-			GivenName  string `json:"givenName"`
-		}{
+		Name: UserName{
 			FamilyName: lastName,
 			GivenName:  firstName,
 		},
 		DisplayName: strings.Join([]string{firstName, lastName}, " "),
 		Active:      active,
-		Emails:      e,
-		Addresses:   a,
+		Emails:      []UserEmail{
+			{
+				Value:   email,
+				Type:    "work",
+				Primary: true,
+			},
+		},
 	}
 }
 
 // UpdateUser updates a user object representing a user with the given
 // details.
 func UpdateUser(id string, firstName string, lastName string, email string, active bool) *User {
-	e := make([]UserEmail, 0)
-	e = append(e, UserEmail{
-		Value:   email,
-		Type:    "work",
-		Primary: true,
-	})
-
-	a := make([]UserAddress, 0)
-	a = append(a, UserAddress{
-		Type: "work",
-	})
-
 	return &User{
-		Schemas:  []string{"urn:ietf:params:scim:schemas:core:2.0:User"},
+		Schemas:  []string{SCIMSchemaCoreUser},
 		ID:       id,
 		Username: email,
-		Name: struct {
-			FamilyName string `json:"familyName"`
-			GivenName  string `json:"givenName"`
-		}{
+		Name: UserName{
 			FamilyName: lastName,
 			GivenName:  firstName,
 		},
 		DisplayName: strings.Join([]string{firstName, lastName}, " "),
 		Active:      active,
-		Emails:      e,
-		Addresses:   a,
+		Emails:      []UserEmail{
+			{
+				Value:   email,
+				Type:    "work",
+				Primary: true,
+			},
+		},
 	}
 }

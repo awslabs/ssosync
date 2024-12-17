@@ -16,9 +16,7 @@
 package internal
 
 import (
-	"encoding/json"
 	"errors"
-	"log"
 	"reflect"
 	"strconv"
 	"testing"
@@ -28,19 +26,13 @@ import (
 	"github.com/awslabs/ssosync/internal/aws"
 	"github.com/awslabs/ssosync/internal/config"
 	"github.com/awslabs/ssosync/internal/mocks"
+	"github.com/awslabs/ssosync/internal/mocks/awsmock"
+	"github.com/awslabs/ssosync/internal/mocks/googlemock"
 	"github.com/golang/mock/gomock"
+	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	admin "google.golang.org/api/admin/directory/v1"
 )
-
-// toJSON return a json pretty of the stc
-func toJSON(stc interface{}) []byte {
-	JSON, err := json.MarshalIndent(stc, "", "  ")
-	if err != nil {
-		log.Fatal(err)
-	}
-	return JSON
-}
 
 func Test_getGroupOperations(t *testing.T) {
 	type args struct {
@@ -131,13 +123,13 @@ func Test_getGroupOperations(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			gotAdd, gotDelete, gotEquals := getGroupOperations(tt.args.awsGroups, tt.args.googleGroups)
 			if !reflect.DeepEqual(gotAdd, tt.wantAdd) {
-				t.Errorf("getGroupOperations() gotAdd = %s, want %s", toJSON(gotAdd), toJSON(tt.wantAdd))
+				t.Errorf("getGroupOperations() gotAdd = %s, want %s", toPrettyJSON(gotAdd), toPrettyJSON(tt.wantAdd))
 			}
 			if !reflect.DeepEqual(gotDelete, tt.wantDelete) {
-				t.Errorf("getGroupOperations() gotDelete = %s, want %s", toJSON(gotDelete), toJSON(tt.wantDelete))
+				t.Errorf("getGroupOperations() gotDelete = %s, want %s", toPrettyJSON(gotDelete), toPrettyJSON(tt.wantDelete))
 			}
 			if !reflect.DeepEqual(gotEquals, tt.wantEquals) {
-				t.Errorf("getGroupOperations() gotEquals = %s, want %s", toJSON(gotEquals), toJSON(tt.wantEquals))
+				t.Errorf("getGroupOperations() gotEquals = %s, want %s", toPrettyJSON(gotEquals), toPrettyJSON(tt.wantEquals))
 			}
 		})
 	}
@@ -170,6 +162,13 @@ func Test_getUserOperations(t *testing.T) {
 					},
 						Suspended:    false,
 						PrimaryEmail: "user-1@email.com",
+						Emails: []admin.UserEmail{
+							{
+								Address: "user-1@email.com",
+								Type:    "work",
+								Primary: true,
+							},
+						},
 					},
 					{Name: &admin.UserName{
 						GivenName:  "name-2",
@@ -177,6 +176,13 @@ func Test_getUserOperations(t *testing.T) {
 					},
 						Suspended:    false,
 						PrimaryEmail: "user-2@email.com",
+						Emails: []admin.UserEmail{
+							{
+								Address: "user-2@email.com",
+								Type:    "work",
+								Primary: true,
+							},
+						},
 					},
 				},
 			},
@@ -199,6 +205,13 @@ func Test_getUserOperations(t *testing.T) {
 					},
 						Suspended:    false,
 						PrimaryEmail: "user-1@email.com",
+						Emails: []admin.UserEmail{
+							{
+								Address: "user-1@email.com",
+								Type:    "work",
+								Primary: true,
+							},
+						},
 					},
 					{Name: &admin.UserName{
 						GivenName:  "name-2",
@@ -206,6 +219,13 @@ func Test_getUserOperations(t *testing.T) {
 					},
 						Suspended:    false,
 						PrimaryEmail: "user-2@email.com",
+						Emails: []admin.UserEmail{
+							{
+								Address: "user-2@email.com",
+								Type:    "work",
+								Primary: true,
+							},
+						},
 					},
 				},
 			},
@@ -250,6 +270,13 @@ func Test_getUserOperations(t *testing.T) {
 						},
 						Suspended:    false,
 						PrimaryEmail: "user-1@email.com",
+						Emails: []admin.UserEmail{
+							{
+								Address: "user-1@email.com",
+								Type:    "work",
+								Primary: true,
+							},
+						},
 					},
 					{
 						Name: &admin.UserName{
@@ -258,6 +285,13 @@ func Test_getUserOperations(t *testing.T) {
 						},
 						Suspended:    false,
 						PrimaryEmail: "user-2@email.com",
+						Emails: []admin.UserEmail{
+							{
+								Address: "user-2@email.com",
+								Type:    "work",
+								Primary: true,
+							},
+						},
 					},
 					{
 						Name: &admin.UserName{
@@ -266,6 +300,13 @@ func Test_getUserOperations(t *testing.T) {
 						},
 						Suspended:    true,
 						PrimaryEmail: "user-4@email.com",
+						Emails: []admin.UserEmail{
+							{
+								Address: "user-4@email.com",
+								Type:    "work",
+								Primary: true,
+							},
+						},
 					},
 				},
 			},
@@ -285,18 +326,21 @@ func Test_getUserOperations(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotAdd, gotDelete, gotUpdate, gotEquals := getUserOperations(tt.args.awsUsers, tt.args.googleUsers)
+			mapper, err := NewMapper("")
+			assert.NoError(t, err)
+
+			gotAdd, gotDelete, gotUpdate, gotEquals := getUserOperations(tt.args.awsUsers, tt.args.googleUsers, mapper)
 			if !reflect.DeepEqual(gotAdd, tt.wantAdd) {
-				t.Errorf("getUserOperations() gotAdd = %s, want %s", toJSON(gotAdd), toJSON(tt.wantAdd))
+				t.Errorf("getUserOperations() gotAdd = %s, want %s", toPrettyJSON(gotAdd), toPrettyJSON(tt.wantAdd))
 			}
 			if !reflect.DeepEqual(gotDelete, tt.wantDelete) {
-				t.Errorf("getUserOperations() gotDelete = %s, want %s", toJSON(gotDelete), toJSON(tt.wantDelete))
+				t.Errorf("getUserOperations() gotDelete = %s, want %s", toPrettyJSON(gotDelete), toPrettyJSON(tt.wantDelete))
 			}
 			if !reflect.DeepEqual(gotUpdate, tt.wantUpdate) {
-				t.Errorf("getUserOperations() gotUpdate = %s, want %s", toJSON(gotUpdate), toJSON(tt.wantUpdate))
+				t.Errorf("getUserOperations() gotUpdate = %s, want %s", toPrettyJSON(gotUpdate), toPrettyJSON(tt.wantUpdate))
 			}
 			if !reflect.DeepEqual(gotEquals, tt.wantEquals) {
-				t.Errorf("getUserOperations() gotEquals = %s, want %s", toJSON(gotEquals), toJSON(tt.wantEquals))
+				t.Errorf("getUserOperations() gotEquals = %s, want %s", toPrettyJSON(gotEquals), toPrettyJSON(tt.wantEquals))
 			}
 		})
 	}
@@ -351,10 +395,10 @@ func Test_getGroupUsersOperations(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			gotDelete, gotEquals := getGroupUsersOperations(tt.args.gGroupsUsers, tt.args.awsGroupsUsers)
 			if !reflect.DeepEqual(gotDelete, tt.wantDelete) {
-				t.Errorf("getGroupUsersOperations() gotDelete = %s, want %s", toJSON(gotDelete), toJSON(tt.wantDelete))
+				t.Errorf("getGroupUsersOperations() gotDelete = %s, want %s", toPrettyJSON(gotDelete), toPrettyJSON(tt.wantDelete))
 			}
 			if !reflect.DeepEqual(gotEquals, tt.wantEquals) {
-				t.Errorf("getGroupUsersOperations() gotEquals = %s, want %s", toJSON(gotEquals), toJSON(tt.wantEquals))
+				t.Errorf("getGroupUsersOperations() gotEquals = %s, want %s", toPrettyJSON(gotEquals), toPrettyJSON(tt.wantEquals))
 			}
 		})
 	}
@@ -568,38 +612,11 @@ func Test_GetUsersWithoutPagination(t *testing.T) {
 	expectedOutput := []*aws.User{
 		{
 			ID:       "user-1-test-id",
-			Schemas:  []string{"urn:ietf:params:scim:schemas:core:2.0:User"},
 			Username: "user-1@example.com",
-			Name: struct {
-				FamilyName string `json:"familyName"`
-				GivenName  string `json:"givenName"`
-			}{
-				FamilyName: "1",
-				GivenName:  "User",
-			},
-			DisplayName: "User 1",
-			Emails: []aws.UserEmail{
-				{Primary: true, Type: "work", Value: "user-1@example.com"},
-			},
-			Addresses: []aws.UserAddress{{Type: "Home"}},
 		},
 		{
 			ID:       "user-2-test-id",
-			Schemas:  []string{"urn:ietf:params:scim:schemas:core:2.0:User"},
 			Username: "user-2@example.com",
-			Name: struct {
-				FamilyName string `json:"familyName"`
-				GivenName  string `json:"givenName"`
-			}{
-				FamilyName: "2",
-				GivenName:  "User",
-			},
-			DisplayName: "User 2",
-			Emails: []aws.UserEmail{
-				{Primary: true, Type: "work", Value: "user-2@example.com"},
-				{Primary: false, Type: "personal", Value: "user-2-personal@example.com"},
-			},
-			Addresses: []aws.UserAddress{{Type: "Work"}, {Type: "Home"}},
 		},
 	}
 
@@ -647,18 +664,7 @@ func Test_GetUsersWithPagination(t *testing.T) {
 		}
 		usrNative := aws.User{
 			ID:       strconv.Itoa(i),
-			Schemas:  []string{"urn:ietf:params:scim:schemas:core:2.0:User"},
 			Username: strconv.Itoa(i),
-			Name: struct {
-				FamilyName string `json:"familyName"`
-				GivenName  string `json:"givenName"`
-			}{
-				FamilyName: strconv.Itoa(i),
-				GivenName:  "User",
-			},
-			DisplayName: "User " + strconv.Itoa(i),
-			Emails:      []aws.UserEmail{{Primary: true, Type: "work", Value: strconv.Itoa(i) + "@example.com"}},
-			Addresses:   []aws.UserAddress{{Type: "Home"}},
 		}
 
 		expectedOutput = append(expectedOutput, &usrNative)
@@ -768,20 +774,7 @@ func Test_ConvertSdkUserObjToNative(t *testing.T) {
 
 	expectedOutput := &aws.User{
 		ID:       "user-1-test-id",
-		Schemas:  []string{"urn:ietf:params:scim:schemas:core:2.0:User"},
 		Username: "user-1@example.com",
-		Name: struct {
-			FamilyName string `json:"familyName"`
-			GivenName  string `json:"givenName"`
-		}{
-			FamilyName: "1",
-			GivenName:  "User",
-		},
-		DisplayName: "User 1",
-		Emails: []aws.UserEmail{
-			{Primary: true, Type: "work", Value: "user-1@example.com"},
-		},
-		Addresses: []aws.UserAddress{{Type: "Home"}},
 	}
 
 	actualOutput := ConvertSdkUserObjToNative(sampleInput)
@@ -798,10 +791,7 @@ func Test_CreateUserIDtoUserObjMap(t *testing.T) {
 			ID:       "user-1-test-id",
 			Schemas:  []string{"urn:ietf:params:scim:schemas:core:2.0:User"},
 			Username: "user-1@example.com",
-			Name: struct {
-				FamilyName string `json:"familyName"`
-				GivenName  string `json:"givenName"`
-			}{
+			Name: aws.UserName{
 				FamilyName: "1",
 				GivenName:  "User",
 			},
@@ -815,10 +805,7 @@ func Test_CreateUserIDtoUserObjMap(t *testing.T) {
 			ID:       "user-2-test-id",
 			Schemas:  []string{"urn:ietf:params:scim:schemas:core:2.0:User"},
 			Username: "user-2@example.com",
-			Name: struct {
-				FamilyName string `json:"familyName"`
-				GivenName  string `json:"givenName"`
-			}{
+			Name: aws.UserName{
 				FamilyName: "2",
 				GivenName:  "User",
 			},
@@ -837,10 +824,7 @@ func Test_CreateUserIDtoUserObjMap(t *testing.T) {
 		ID:       "user-1-test-id",
 		Schemas:  []string{"urn:ietf:params:scim:schemas:core:2.0:User"},
 		Username: "user-1@example.com",
-		Name: struct {
-			FamilyName string `json:"familyName"`
-			GivenName  string `json:"givenName"`
-		}{
+		Name: aws.UserName{
 			FamilyName: "1",
 			GivenName:  "User",
 		},
@@ -855,10 +839,7 @@ func Test_CreateUserIDtoUserObjMap(t *testing.T) {
 		ID:       "user-2-test-id",
 		Schemas:  []string{"urn:ietf:params:scim:schemas:core:2.0:User"},
 		Username: "user-2@example.com",
-		Name: struct {
-			FamilyName string `json:"familyName"`
-			GivenName  string `json:"givenName"`
-		}{
+		Name: aws.UserName{
 			FamilyName: "2",
 			GivenName:  "User",
 		},
@@ -1041,4 +1022,354 @@ func Test_RemoveUserFromGroup(t *testing.T) {
 	err := mockClient.RemoveUserFromGroup(&sampleUserInput, &sampleGroupInput)
 
 	assert.Nil(t, err)
+}
+
+func Test_SyncGroupsUsers(t *testing.T) {
+	type args struct {
+		googleGroups        []*admin.Group
+		googleUsers         []*admin.User
+		googleMembers       map[string][]*admin.Member
+		awsGroups           map[string]*identitystore.Group
+		awsUsers            map[string]*aws.User
+		awsMembers          map[string][]*identitystore.GroupMembership
+		userMappingTemplate string
+	}
+	tests := []struct {
+		name       string
+		args       args
+	}{
+		{
+			name: "add missing users, groups and memberships from Google to AWS",
+			args: args{
+				googleGroups: []*admin.Group{
+					{
+						Name: "test.group",
+						Email: "test.group@example.com",
+					},
+				},
+				googleUsers: []*admin.User{
+					{
+						Id:           "701984",
+						PrimaryEmail: "test.user@example.com",
+						Name: &admin.UserName{
+							FamilyName: "a",
+							GivenName:  "b",
+						},
+						Emails: []admin.UserEmail{
+							{Address: "test.user@example.com", Type: "work", Primary: true},
+							{Address: "test.user1@example.com", Type: "work", Primary: false},
+							{Address: "test.user2@example.com", Type: "work", Primary: false},
+						},
+						Addresses: []admin.UserAddress{
+							{
+								Type:          "work",
+								StreetAddress: "100 Universal City Plaza",
+								Locality:      "Hollywood",
+								Region:        "CA",
+								PostalCode:    "91608",
+								Country:       "USA",
+								Formatted:     "100 Universal City Plaza Hollywood, CA 91608 USA",
+								Primary:       true,
+							},
+						},
+						Organizations: []admin.UserOrganization{
+							{
+								Name: "Universal Studios",
+								CostCenter: "4130",
+								Department: "Tour Operations",
+								Domain: "Theme Park",
+							},
+						},
+						Suspended: false,
+					},
+				},
+				googleMembers: map[string][]*admin.Member{
+					"test.group@example.com": {
+						{
+							Id: "701984",
+							Type: "USER",
+							Email: "test.user@example.com",
+							Status: "ACTIVE",
+						},
+					},
+				},
+				awsGroups: map[string]*identitystore.Group{},
+				awsUsers: map[string]*aws.User{
+					"d7eee97b-cd92-49a6-8dfc-c1c1f3f62eaa": {
+						ID: "d7eee97b-cd92-49a6-8dfc-c1c1f3f62eaa",
+						ExternalID: "701984",
+						Username:   "test.user@example.com",
+						Name: aws.UserName{
+							FamilyName: "a",
+							GivenName:  "b",
+						},
+						DisplayName: "b a",
+						Emails: []aws.UserEmail{
+							{
+								Value:   "test.user@example.com",
+								Type:    "work",
+								Primary: true,
+							},
+						},
+						Addresses: []aws.UserAddress{
+							{
+								Type:          "work",
+								StreetAddress: "100 Universal City Plaza",
+								Locality:      "Hollywood",
+								Region:        "CA",
+								PostalCode:    "91608",
+								Country:       "USA",
+								Formatted:     "100 Universal City Plaza Hollywood, CA 91608 USA",
+								Primary:       true,
+							},
+						},
+						Enterprise: &aws.EnterpriseUser{
+							EmployeeNumber: "701984",
+							Organization: "Universal Studios",
+							CostCenter: "4130",
+							Department: "Tour Operations",
+							Division: "Theme Park",
+						},
+						Active:  true,
+						Schemas: []string{
+							"urn:ietf:params:scim:schemas:core:2.0:User",
+							"urn:ietf:params:scim:schemas:extension:enterprise:2.0:User",
+						},
+					},
+				},
+				awsMembers: map[string][]*identitystore.GroupMembership{},
+				userMappingTemplate: "",
+			},
+		},
+		{
+			name: "delete users, groups and memberships from Google to AWS",
+			args: args{
+				googleGroups: []*admin.Group{},
+				googleUsers: []*admin.User{},
+				googleMembers: map[string][]*admin.Member{},
+				awsGroups: map[string]*identitystore.Group{
+					"1fa72470-a518-4185-b960-9446e7fec95f": {
+						GroupId: aws_sdk.String("1fa72470-a518-4185-b960-9446e7fec95f"),
+						DisplayName: aws_sdk.String("test.group@example.com"),
+					},
+				},
+				awsUsers: map[string]*aws.User{
+					"d7eee97b-cd92-49a6-8dfc-c1c1f3f62eaa": {
+						ID: "d7eee97b-cd92-49a6-8dfc-c1c1f3f62eaa",
+						ExternalID: "701984",
+						Username:   "test.user@example.com",
+						Name: aws.UserName{
+							FamilyName: "a",
+							GivenName:  "b",
+						},
+						DisplayName: "b a",
+						Emails: []aws.UserEmail{
+							{
+								Value:   "test.user@example.com",
+								Type:    "work",
+								Primary: true,
+							},
+						},
+						Addresses: []aws.UserAddress{
+							{
+								Type:          "work",
+								StreetAddress: "100 Universal City Plaza",
+								Locality:      "Hollywood",
+								Region:        "CA",
+								PostalCode:    "91608",
+								Country:       "USA",
+								Formatted:     "100 Universal City Plaza Hollywood, CA 91608 USA",
+								Primary:       true,
+							},
+						},
+						Enterprise: &aws.EnterpriseUser{
+							EmployeeNumber: "701984",
+							Organization: "Universal Studios",
+							CostCenter: "4130",
+							Department: "Tour Operations",
+							Division: "Theme Park",
+						},
+						Active:  true,
+						Schemas: []string{
+							"urn:ietf:params:scim:schemas:core:2.0:User",
+							"urn:ietf:params:scim:schemas:extension:enterprise:2.0:User",
+						},
+					},
+				},
+				awsMembers: map[string][]*identitystore.GroupMembership{},
+				userMappingTemplate: "",
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			log.SetLevel(log.DebugLevel)
+
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			mockIdentityStoreClient := mocks.NewMockIdentityStoreAPI(ctrl)
+			mockGoogleDirectoryClient := mock_google.NewMockClient(ctrl)
+			mockAWSClient := mock_aws.NewMockClient(ctrl)
+
+			mockGoogleDirectoryClient.EXPECT().GetGroups(gomock.Any()).AnyTimes().Return(tt.args.googleGroups, nil)
+
+			mockGoogleDirectoryClient.EXPECT().GetUsers(gomock.Any()).AnyTimes().Return(tt.args.googleUsers, nil)
+
+			mockGoogleDirectoryClient.EXPECT().GetGroupMembers(gomock.Any()).AnyTimes().
+				DoAndReturn(func (group *admin.Group) ([]*admin.Member, error) {
+					members, ok := tt.args.googleMembers[group.Email]
+					if ok {
+						return members, nil
+					}
+					return nil, nil
+				})
+
+			mockIdentityStoreClient.EXPECT().
+				ListGroupsPages(gomock.Any(), gomock.Any()).AnyTimes().
+				Do(func (input *identitystore.ListGroupsInput, callback func (page *identitystore.ListGroupsOutput, lastPage bool) bool) {
+					awsGroups := []*identitystore.Group{}
+					for _, g := range tt.args.awsGroups {
+						awsGroups = append(awsGroups, g)
+					}
+					callback(&identitystore.ListGroupsOutput{Groups: awsGroups}, false)
+				})
+
+			mockIdentityStoreClient.EXPECT().
+				ListUsersPages(gomock.Any(), gomock.Any()).AnyTimes().
+				Do(func (input *identitystore.ListUsersInput, callback func (page *identitystore.ListUsersOutput, lastPage bool) bool) {
+					identityStoreUsers := []*identitystore.User{}
+					for _, user := range tt.args.awsUsers {
+						identityStoreUsers = append(identityStoreUsers, &identitystore.User{
+							UserId: aws_sdk.String(user.ID),
+							UserName: aws_sdk.String(user.Username),
+						})
+					}
+					callback(&identitystore.ListUsersOutput{Users: identityStoreUsers}, false)
+			})
+
+			mockIdentityStoreClient.EXPECT().
+				ListGroupMembershipsPages(gomock.Any(), gomock.Any()).AnyTimes().
+				Do(func (input *identitystore.ListGroupMembershipsInput, callback func (page *identitystore.ListGroupMembershipsOutput, lastPage bool) bool) {
+					awsMembers, ok := tt.args.awsMembers[*input.GroupId]
+					if !ok {
+						callback(&identitystore.ListGroupMembershipsOutput{}, true)
+						return
+					}
+					callback(&identitystore.ListGroupMembershipsOutput{GroupMemberships: awsMembers}, true)					
+			})
+			mockIdentityStoreClient.EXPECT().
+				CreateGroupMembership(gomock.Any()).AnyTimes().
+				Return(&identitystore.CreateGroupMembershipOutput{}, nil)
+
+			createGroupCount := 0
+			for _, gGroup := range tt.args.googleGroups {
+				found := false
+				for _, awsGroup := range tt.args.awsGroups {
+					if awsGroup.DisplayName == &gGroup.Email {
+						found = true
+						break
+					}
+				}
+				if !found {
+					createGroupCount++
+				}
+			}
+			mockIdentityStoreClient.EXPECT().
+				CreateGroup(gomock.Any()).MaxTimes(createGroupCount).
+				Return(&identitystore.CreateGroupOutput{}, nil)
+
+			deleteGroupCount := 0
+			for _, awsGroup := range tt.args.awsGroups {
+				found := false
+				for _, googleGroup := range tt.args.googleGroups {
+					if awsGroup.DisplayName == &googleGroup.Email {
+						found = true
+						break
+					}
+				}
+				if !found {
+					deleteGroupCount++
+				}
+			}
+			mockIdentityStoreClient.EXPECT().
+				DeleteGroup(gomock.Any()).MaxTimes(deleteGroupCount).
+				Return(&identitystore.DeleteGroupOutput{}, nil)
+	
+			mockAWSClient.EXPECT().FindUserByEmail(gomock.Any()).AnyTimes().
+				DoAndReturn(func (email string) (*aws.User, error) {
+					for _, awsUser := range tt.args.awsUsers {
+						if awsUser.Username == email {
+							return awsUser, nil
+						}
+					}
+					return nil, nil
+				})
+			mockAWSClient.EXPECT().FindGroupByDisplayName(gomock.Any()).AnyTimes().
+				DoAndReturn(func (name string) (*aws.Group, error) {
+					for _, awsGroup := range tt.args.awsGroups {
+						if *awsGroup.DisplayName == name {
+							memberships, ok := tt.args.awsMembers[*awsGroup.GroupId]
+							members := []string{}
+							if ok {
+								for _, m := range memberships {
+									members = append(members, *m.MemberId.UserId)
+								}
+							}
+							return &aws.Group{
+								ID: *awsGroup.GroupId,
+								DisplayName: name,
+								Members: members,
+							}, nil
+						}
+					}
+					return nil, nil
+				})
+
+			createUserCount := 0
+			for _, gUser := range tt.args.googleUsers {
+				found := false
+				for _, awsUser := range tt.args.awsUsers {
+					if awsUser.Username == gUser.PrimaryEmail {
+						found = true
+						break
+					}
+				}
+				if !found {
+					createUserCount++
+				}
+			}
+			mockAWSClient.EXPECT().CreateUser(gomock.Any()).MaxTimes(createUserCount).Return(&aws.User{}, nil)			
+
+			deleteUserCount := 0
+			for _, awsUser := range tt.args.awsUsers {
+				found := false
+				for _, googleUser := range tt.args.googleUsers {
+					if awsUser.Username == googleUser.PrimaryEmail {
+						found = true
+						break
+					}
+				}
+				if !found {
+					deleteUserCount++
+				}
+			}
+			mockIdentityStoreClient.EXPECT().DeleteUser(gomock.Any()).
+				MaxTimes(deleteUserCount).Return(&identitystore.DeleteUserOutput{}, nil)			
+
+			mockClient, err := New(
+				&config.Config{
+					IdentityStoreID: "test-identity-store-id",
+					UserMappingTemplate: tt.args.userMappingTemplate,
+				},
+				mockAWSClient,
+				mockGoogleDirectoryClient,
+				mockIdentityStoreClient,
+			)
+			assert.Nil(t, err)
+
+			err = mockClient.SyncGroupsUsers("", "")
+			assert.Nil(t, err)
+		})
+	}
 }

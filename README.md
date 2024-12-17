@@ -128,6 +128,18 @@ Additionally, authenticate your AWS credentials. Follow this  [section](https://
 
 To obtain your `Identity store ID`, go to the AWS Identity Center console and select settings. Under the `Identity Source` section, copy the `Identity store ID`.
 
+You can customize how Google user's attributes are mapped to AWS users by providing the name of an AWS Parameter containing a custom JSON template;
+the engine that parses the template supports GoTemplate sintax with:
+
+- [sprig](https://github.com/Masterminds/sprig) functions
+- custom template functions:
+
+  - `listFindFirst $list $dictConditions`
+
+    returns the first element of the list matching the given conditions:
+
+    For example `listFindFirst $list (dict "Primary" true)` returns the first element of the list whose `Primary` value is `true`.
+
 ## Local Usage
 
 ```bash
@@ -149,23 +161,24 @@ Usage:
   ssosync [flags]
 
 Flags:
-  -t, --access-token string         AWS SSO SCIM API Access Token
-  -d, --debug                       enable verbose / debug logging
-  -e, --endpoint string             AWS SSO SCIM API Endpoint
-  -u, --google-admin string         Google Workspace admin user email
-  -c, --google-credentials string   path to Google Workspace credentials file (default "credentials.json")
-  -g, --group-match string          Google Workspace Groups filter query parameter, a simple '*' denotes sync all groups (and any users that are members of those groups). example: 'name:Admin*,email:aws-*', 'name=Admins' or '*' see: https://developers.google.com/admin-sdk/directory/v1/guides/search-groups, if left empty no groups will be selected.
-  -h, --help                        help for ssosync
-      --ignore-groups strings       ignores these Google Workspace groups
-      --ignore-users strings        ignores these Google Workspace users
-      --include-groups strings      include only these Google Workspace groups, NOTE: only works when --sync-method 'users_groups'
-      --log-format string           log format (default "text")
-      --log-level string            log level (default "info")
-  -s, --sync-method string          Sync method to use (users_groups|groups) (default "groups")
-  -m, --user-match string           Google Workspace Users filter query parameter, a simple '*' denotes sync all users in the directory. example: 'name:John*,email:admin*', '*' or name=John Doe,email:admin*' see: https://developers.google.com/admin-sdk/directory/v1/guides/search-users, if left empty no users will be selected but if a pattern has been set for GroupMatch users that are members of the groups it matches will still be selected
-  -v, --version                     version for ssosync
-  -r, --region                      AWS region where identity store exists
-  -i, --identity-store-id           AWS Identity Store ID
+  -t, --access-token string            AWS SSO SCIM API Access Token
+  -d, --debug                          enable verbose / debug logging
+  -e, --endpoint string                AWS SSO SCIM API Endpoint
+  -u, --google-admin string            Google Workspace admin user email
+  -c, --google-credentials string      path to Google Workspace credentials file (default "credentials.json")
+  -g, --group-match string             Google Workspace Groups filter query parameter, a simple '*' denotes sync all groups (and any users that are members of those groups). example: 'name:Admin*,email:aws-*', 'name=Admins' or '*' see: https://developers.google.com/admin-sdk/directory/v1/guides/search-groups, if left empty no groups will be selected.
+  -h, --help                           help for ssosync
+      --ignore-groups strings          ignores these Google Workspace groups
+      --ignore-users strings           ignores these Google Workspace users
+      --include-groups strings         include only these Google Workspace groups, NOTE: only works when --sync-method 'users_groups'
+      --log-format string              log format (default "text")
+      --log-level string               log level (default "info")
+  -s, --sync-method string             Sync method to use (users_groups|groups) (default "groups")
+      --user-mapping-template string   Template for mapping users from Google Workspace to AWS
+  -m, --user-match string              Google Workspace Users filter query parameter, a simple '*' denotes sync all users in the directory. example: 'name:John*,email:admin*', '*' or name=John Doe,email:admin*' see: https://developers.google.com/admin-sdk/directory/v1/guides/search-users, if left empty no users will be selected but if a pattern has been set for GroupMatch users that are members of the groups it matches will still be selected
+  -v, --version                        version for ssosync
+  -r, --region                         AWS region where identity store exists
+  -i, --identity-store-id              AWS Identity Store ID
 ```
 
 The function has `two behaviour` and these are controlled by the `--sync-method` flag, this behavior could be
