@@ -42,3 +42,4 @@ staging.yaml
 *.rej
 cicd/.DS_Store
 *.swo
+cicd/.DS_Store
