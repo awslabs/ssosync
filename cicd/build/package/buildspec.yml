@@ -16,12 +16,12 @@ phases:
       # Check that the files need to package exist
       - ls README.md
       - ls SAR.md
-      - ls dist/ssosync_linux_arm64/ssosync
+      - ls dist/ssosync_linux_arm64_v8.0/ssosync
       - ls dist/ssosync_linux_amd64_v1/ssosync 
  
       # Check that the executable works
       - ./dist/ssosync_linux_amd64_v1/ssosync --version 
-      - mv dist/ssosync_linux_arm64/ssosync bootstrap
+      - mv dist/ssosync_linux_arm64_v8.0/ssosync bootstrap
 
   build:
     commands:
