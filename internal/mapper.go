@@ -132,14 +132,18 @@ func NewMapper(userTemplate string) (UserMapper, error) {
 {
 	{{- with .Id -}}"externalId": {{ . | quote }},{{- end -}}
 	"userName": {{ .PrimaryEmail | quote }},
+	{{- with .Name -}}
 	"name": {
-		"familyName": {{ .Name.FamilyName | quote }},
-		"givenName": {{ .Name.GivenName | quote }}
+		{{- with .FamilyName -}}"familyName": {{ . | quote }}{{- with $.Name.GivenName -}},{{- end -}}{{- end -}}
+		{{- with .GivenName -}}
+		"givenName": {{ . | quote }}
+		{{- end -}}
 	},
-	"displayName": {{ printf "%s %s" .Name.GivenName .Name.FamilyName | quote }},
+	"displayName": {{ list .GivenName .FamilyName | join " " | trim | quote }},
+	{{- end -}}
 	{{- with .Websites -}}
-	{{- with listFindFirst . (dict "Primary" true) -}}
-	{{- with .Value -}}"ProfileUrl": {{ .Value | quote }},{{- end -}}
+	{{- with default (first .) (listFindFirst . (dict "Primary" true)) -}}
+	{{- with .Value -}}"ProfileUrl": {{ . | quote }},{{- end -}}
 	{{- end -}}
 	{{- end -}}
 	{{- with .Emails -}}
@@ -167,7 +171,7 @@ func NewMapper(userTemplate string) (UserMapper, error) {
 	{{- end -}}
 	{{- with .Phones -}}
 	{{- with default (first .) (listFindFirst . (dict "Primary" true)) -}}
-	"phones": [{
+	"phoneNumbers": [{
 		{{- with .Value -}}"value": {{ . | quote }},{{- end -}}
 		"type": {{ default "work" (.Type | quote) }}
 	}],

@@ -71,6 +71,24 @@ func TestMapUser(t *testing.T) {
 							Primary:       false,
 						},
 					},
+					Websites: []admin.UserWebsite{
+						{
+							Primary: true,
+							Type: "work",
+							Value: "https://test.user.com",
+						},
+					},
+					Phones: []admin.UserPhone{
+						{
+							Primary: true,
+							Type: "work",
+							Value: "5550279999",
+						},
+						{
+							Type: "work",
+							Value: "5554468748",
+						},
+					},
 					Organizations: []admin.UserOrganization{
 						{
 							Name: "Universal Studios",
@@ -110,6 +128,13 @@ func TestMapUser(t *testing.T) {
 						Primary:       true,
 					},
 				},
+				ProfileUrl: "https://test.user.com",
+				PhoneNumbers: []aws.UserPhoneNumber{
+					{
+						Type: "work",
+						Value: "5550279999",
+					},
+				},
 				Enterprise: &aws.EnterpriseUser{
 					EmployeeNumber: "701984",
 					Organization: "Universal Studios",
@@ -125,13 +150,130 @@ func TestMapUser(t *testing.T) {
 			},
 		},
 		{
+			name: "Map user with missing name",
+			args: args{
+				googleUser: &admin.User{
+					PrimaryEmail: "test.user@example.com",
+					Suspended: false,
+				},
+			},
+			wantUser: &aws.User{
+				Username: "test.user@example.com",
+				Active:      true,
+				Schemas:     []string{
+					"urn:ietf:params:scim:schemas:core:2.0:User",
+				},
+			},
+		},
+		{
+			name: "Map user with missing given name",
+			args: args{
+				googleUser: &admin.User{
+					PrimaryEmail: "test.user@example.com",
+					Name: &admin.UserName{
+						FamilyName: "a",
+					},
+					Suspended: false,
+				},
+			},
+			wantUser: &aws.User{
+				Username: "test.user@example.com",
+				Name: aws.UserName{
+					FamilyName: "a",
+				},
+				DisplayName: "a",
+				Active:      true,
+				Schemas:     []string{
+					"urn:ietf:params:scim:schemas:core:2.0:User",
+				},
+			},
+		},
+		{
+			name: "Map user with missing family name",
+			args: args{
+				googleUser: &admin.User{
+					PrimaryEmail: "test.user@example.com",
+					Name: &admin.UserName{
+						GivenName: "b",
+					},
+					Suspended: false,
+				},
+			},
+			wantUser: &aws.User{
+				Username: "test.user@example.com",
+				Name: aws.UserName{
+					GivenName: "b",
+				},
+				DisplayName: "b",
+				Active:      true,
+				Schemas:     []string{
+					"urn:ietf:params:scim:schemas:core:2.0:User",
+				},
+			},
+		},
+		{
+			name: "Map user with multiple websites",
+			args: args{
+				googleUser: &admin.User{
+					PrimaryEmail: "test.user@example.com",
+					Websites: []admin.UserWebsite{
+						{
+							Type: "blog",
+							Value: "https://test.user.com",
+						},
+						{
+							Primary: true,
+							Type: "work",
+							Value: "https://work.test.user.com",
+						},
+					},
+					Suspended: false,
+				},
+			},
+			wantUser: &aws.User{
+				Username: "test.user@example.com",
+				ProfileUrl: "https://work.test.user.com",
+				Active:      true,
+				Schemas:     []string{
+					"urn:ietf:params:scim:schemas:core:2.0:User",
+				},
+			},
+		},
+		{
+			name: "Map user with missing primary website",
+			args: args{
+				googleUser: &admin.User{
+					PrimaryEmail: "test.user@example.com",
+					Websites: []admin.UserWebsite{
+						{
+							Type: "blog",
+							Value: "https://test.user.com",
+						},
+						{
+							Type: "work",
+							Value: "https://work.test.user.com",
+						},
+					},
+					Suspended: false,
+				},
+			},
+			wantUser: &aws.User{
+				Username: "test.user@example.com",
+				ProfileUrl: "https://test.user.com",
+				Active:      true,
+				Schemas:     []string{
+					"urn:ietf:params:scim:schemas:core:2.0:User",
+				},
+			},
+		},
+		{
 			name: "Override user nickname",
 			args: args{
 				googleUser: &admin.User{
 					PrimaryEmail: "test.user@example.com",
 					Name: &admin.UserName{
 						FamilyName: "a",
-						GivenName:  "b",
+						GivenName: "b",
 					},
 					Suspended: false,
 				},
@@ -141,7 +283,7 @@ func TestMapUser(t *testing.T) {
 				Username: "test.user@example.com",
 				Name: aws.UserName{
 					FamilyName: "a",
-					GivenName:  "b",
+					GivenName: "b",
 				},
 				DisplayName: "b a",
 				Nickname:    "testuser",
