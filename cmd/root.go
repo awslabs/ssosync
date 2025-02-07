@@ -25,7 +25,7 @@ import (
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
-        "github.com/aws/aws-sdk-go/service/codepipeline"
+	"github.com/aws/aws-sdk-go/service/codepipeline"
 	"github.com/aws/aws-sdk-go/service/secretsmanager"
 	"github.com/awslabs/ssosync/internal"
 	"github.com/awslabs/ssosync/internal/config"
@@ -67,72 +67,72 @@ Complete documentation is available at https://github.com/awslabs/ssosync`,
 // running inside of AWS Lambda, we use the Lambda
 // execution path.
 func Execute() {
-    if cfg.IsLambda {
-        log.Info("Executing as Lambda")
-      	lambda.Start(Handler) 
-    }
+	if cfg.IsLambda {
+		log.Info("Executing as Lambda")
+		lambda.Start(Handler)
+	}
 
-    if err := rootCmd.Execute(); err != nil {
-	log.Fatal(err)
-    }
+	if err := rootCmd.Execute(); err != nil {
+		log.Fatal(err)
+	}
 }
 
 // Handler for when executing as a lambda
 func Handler(ctx context.Context, event events.CodePipelineEvent) (string, error) {
-    log.Debug(event)
-    err := rootCmd.Execute()
-    s := session.Must(session.NewSession())
-    cpl := codepipeline.New(s)
+	log.Debug(event)
+	err := rootCmd.Execute()
+	s := session.Must(session.NewSession())
+	cpl := codepipeline.New(s)
 
-    cfg.IsLambdaRunningInCodePipeline = len(event.CodePipelineJob.ID) > 0
+	cfg.IsLambdaRunningInCodePipeline = len(event.CodePipelineJob.ID) > 0
 
-    if cfg.IsLambdaRunningInCodePipeline {
-        log.Info("Lambda has been invoked by CodePipeline")
+	if cfg.IsLambdaRunningInCodePipeline {
+		log.Info("Lambda has been invoked by CodePipeline")
 
-        if err != nil {
-    	    // notify codepipeline and mark its job execution as Failure
-    	    log.Fatalf(errors.Wrap(err, "Notifying CodePipeline and mark its job execution as Failure").Error())
-    	    jobID := event.CodePipelineJob.ID
-    	    if len(jobID) == 0 {
-    		panic("CodePipeline Job ID is not set")
-    	    }  
-    	    // mark the job as Failure.
-    	    cplFailure := &codepipeline.PutJobFailureResultInput{
-    		JobId: aws.String(jobID),
-    		FailureDetails: &codepipeline.FailureDetails{
-    			Message: aws.String(err.Error()),
-    			Type: aws.String("JobFailed"),
-    		},
-    	    }
-    	    _, cplErr := cpl.PutJobFailureResult(cplFailure)
-    	    if cplErr != nil {
-                log.Fatalf(errors.Wrap(err, "Failed to update CodePipeline jobID status").Error())
-    	    }
-	    return "Failure", err
-        }
+		if err != nil {
+			// notify codepipeline and mark its job execution as Failure
+			log.Fatalf(errors.Wrap(err, "Notifying CodePipeline and mark its job execution as Failure").Error())
+			jobID := event.CodePipelineJob.ID
+			if len(jobID) == 0 {
+				panic("CodePipeline Job ID is not set")
+			}
+			// mark the job as Failure.
+			cplFailure := &codepipeline.PutJobFailureResultInput{
+				JobId: aws.String(jobID),
+				FailureDetails: &codepipeline.FailureDetails{
+					Message: aws.String(err.Error()),
+					Type:    aws.String("JobFailed"),
+				},
+			}
+			_, cplErr := cpl.PutJobFailureResult(cplFailure)
+			if cplErr != nil {
+				log.Fatalf(errors.Wrap(err, "Failed to update CodePipeline jobID status").Error())
+			}
+			return "Failure", err
+		}
 
-        log.Info("Notifying CodePipeline and mark its job execution as Success")
-        jobID := event.CodePipelineJob.ID
-        if len(jobID) == 0 {
-    	    panic("CodePipeline Job ID is not set")
-        }
-        // mark the job as Success.
-        cplSuccess := &codepipeline.PutJobSuccessResultInput{
-    	    JobId: aws.String(jobID),
-        }
-        _, cplErr := cpl.PutJobSuccessResult(cplSuccess)
-        if cplErr != nil {
-            log.Fatalf(errors.Wrap(err, "Failed to update CodePipeline jobID status").Error())
-        }
-    
+		log.Info("Notifying CodePipeline and mark its job execution as Success")
+		jobID := event.CodePipelineJob.ID
+		if len(jobID) == 0 {
+			panic("CodePipeline Job ID is not set")
+		}
+		// mark the job as Success.
+		cplSuccess := &codepipeline.PutJobSuccessResultInput{
+			JobId: aws.String(jobID),
+		}
+		_, cplErr := cpl.PutJobSuccessResult(cplSuccess)
+		if cplErr != nil {
+			log.Fatalf(errors.Wrap(err, "Failed to update CodePipeline jobID status").Error())
+		}
+
+		return "Success", nil
+	}
+
+	if err != nil {
+		log.Fatalf(errors.Wrap(err, "Notifying Lambda and mark this execution as Failure").Error())
+		return "Failure", err
+	}
 	return "Success", nil
-    }
-        
-    if err != nil {
-        log.Fatalf(errors.Wrap(err, "Notifying Lambda and mark this execution as Failure").Error())
-    	return "Failure", err
-    }
-    return "Success", nil
 }
 
 func init() {
@@ -194,7 +194,7 @@ func initConfig() {
 }
 
 func configLambda() {
-        s := session.Must(session.NewSession())
+	s := session.Must(session.NewSession())
 	svc := secretsmanager.New(s)
 	secrets := config.NewSecrets(svc)
 
@@ -234,53 +234,53 @@ func configLambda() {
 	}
 	cfg.IdentityStoreID = unwrap
 
-        unwrap = os.Getenv("LOG_LEVEL")
-        if len([]rune(unwrap)) != 0 {
-           cfg.LogLevel = unwrap
-	   log.WithField("LogLevel", unwrap).Debug("from EnvVar")
-        }
+	unwrap = os.Getenv("LOG_LEVEL")
+	if len([]rune(unwrap)) != 0 {
+		cfg.LogLevel = unwrap
+		log.WithField("LogLevel", unwrap).Debug("from EnvVar")
+	}
 
-        unwrap = os.Getenv("LOG_FORMAT")
-        if len([]rune(unwrap)) != 0 {
-           cfg.LogFormat = unwrap
-	   log.WithField("LogFormay", unwrap).Debug("from EnvVar")
-        }
+	unwrap = os.Getenv("LOG_FORMAT")
+	if len([]rune(unwrap)) != 0 {
+		cfg.LogFormat = unwrap
+		log.WithField("LogFormay", unwrap).Debug("from EnvVar")
+	}
 
 	unwrap = os.Getenv("SYNC_METHOD")
-        if len([]rune(unwrap)) != 0 {
-           cfg.SyncMethod = unwrap
-	   log.WithField("SyncMethod", unwrap).Debug("from EnvVar")
-        }
+	if len([]rune(unwrap)) != 0 {
+		cfg.SyncMethod = unwrap
+		log.WithField("SyncMethod", unwrap).Debug("from EnvVar")
+	}
 
 	unwrap = os.Getenv("USER_MATCH")
-        if len([]rune(unwrap)) != 0 {
-	   cfg.UserMatch = unwrap
-	   log.WithField("UserMatch", unwrap).Debug("from EnvVar")
-        }
+	if len([]rune(unwrap)) != 0 {
+		cfg.UserMatch = unwrap
+		log.WithField("UserMatch", unwrap).Debug("from EnvVar")
+	}
 
 	unwrap = os.Getenv("GROUP_MATCH")
-        if len([]rune(unwrap)) != 0 {
-           cfg.GroupMatch = unwrap
-	   log.WithField("GroupMatch", unwrap).Debug("from EnvVar")
-        }
+	if len([]rune(unwrap)) != 0 {
+		cfg.GroupMatch = unwrap
+		log.WithField("GroupMatch", unwrap).Debug("from EnvVar")
+	}
 
-        unwrap = os.Getenv("IGNORE_GROUPS")
-        if len([]rune(unwrap)) != 0 {
-           cfg.IgnoreGroups = strings.Split(unwrap, ",")
-	   log.WithField("IgnoreGroups", unwrap).Debug("from EnvVar")
-        }
+	unwrap = os.Getenv("IGNORE_GROUPS")
+	if len([]rune(unwrap)) != 0 {
+		cfg.IgnoreGroups = strings.Split(unwrap, ",")
+		log.WithField("IgnoreGroups", unwrap).Debug("from EnvVar")
+	}
 
-        unwrap = os.Getenv("IGNORE_USERS")
-        if len([]rune(unwrap)) != 0 {
-           cfg.IgnoreUsers = strings.Split(unwrap, ",")
-	   log.WithField("IgnoreUsers", unwrap).Debug("from EnvVar")
-        }
+	unwrap = os.Getenv("IGNORE_USERS")
+	if len([]rune(unwrap)) != 0 {
+		cfg.IgnoreUsers = strings.Split(unwrap, ",")
+		log.WithField("IgnoreUsers", unwrap).Debug("from EnvVar")
+	}
 
-        unwrap = os.Getenv("INCLUDE_GROUPS")
-        if len([]rune(unwrap)) != 0 {
-           cfg.IncludeGroups = strings.Split(unwrap, ",")
-	   log.WithField("IncludeGroups", unwrap).Debug("from EnvVar")
-        }
+	unwrap = os.Getenv("INCLUDE_GROUPS")
+	if len([]rune(unwrap)) != 0 {
+		cfg.IncludeGroups = strings.Split(unwrap, ",")
+		log.WithField("IncludeGroups", unwrap).Debug("from EnvVar")
+	}
 
 }
 
@@ -301,6 +301,7 @@ func addFlags(cmd *cobra.Command, cfg *config.Config) {
 	rootCmd.Flags().StringVarP(&cfg.SyncMethod, "sync-method", "s", config.DefaultSyncMethod, "Sync method to use (users_groups|groups)")
 	rootCmd.Flags().StringVarP(&cfg.Region, "region", "r", "", "AWS Region where AWS SSO is enabled")
 	rootCmd.Flags().StringVarP(&cfg.IdentityStoreID, "identity-store-id", "i", "", "Identifier of Identity Store in AWS SSO")
+	rootCmd.PersistentFlags().BoolVarP(&cfg.DryRun, "dry-run", "n", config.DefaultDebug, "Print the commands, but do not perform any modifications.")
 }
 
 func logConfig(cfg *config.Config) {
