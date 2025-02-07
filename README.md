@@ -6,6 +6,9 @@
 [![License Apache 2](https://img.shields.io/badge/License-Apache2-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 [![Taylor Swift](https://img.shields.io/badge/secured%20by-taylor%20swift-brightgreen.svg)](https://twitter.com/SwiftOnSecurity)
 
+## Quick Start
+Want to dive straight in get ssisync up and running? Then this [lab](https://catalog.workshops.aws/control-tower/en-US/authentication-authorization/google-workspace) in the [AWS Control Tower Workshop](https://catalog.workshops.aws/control-tower/en-US) (you don't need AWS Control Tower, this lab only uses IAM Identity Center which is typically deployed by AWS Control Tower).  The lab will guide you through the full setup process on both AWS and Google Workspace, using the Lambda from the Serverless application repository, which is the recommend and simplist deployment method.
+
 > Helping you populate AWS SSO directly with your Google Apps users
 
 SSO Sync will run on any platform that Go can build for. It is available in the [AWS Serverless Application Repository](https://console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync)
