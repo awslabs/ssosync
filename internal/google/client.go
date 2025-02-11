@@ -17,8 +17,8 @@ package google
 
 import (
 	"context"
-	"strings"
 	"errors"
+	"strings"
 
 	"golang.org/x/oauth2/google"
 	admin "google.golang.org/api/admin/directory/v1"
@@ -124,13 +124,14 @@ func (c *client) GetUsers(query string) ([]*admin.User, error) {
 
 	        // The Google api doesn't support multi-part queries, but we do so we need to split into an array of query strings
 		queries := strings.Split(query, ",")
-
-	// Then call the api one query at a time, appending to our list
-	for _, subQuery := range queries {
-		err = c.service.Users.List().Query(subQuery).Customer(c.customerId).Pages(c.ctx, func(users *admin.Users) error {
-			u = append(u, users.Users...)
-			return nil
-		})
+	
+		// Then call the api one query at a time, appending to our list
+		for _, subQuery := range queries {
+			err = c.service.Users.List().Query(subQuery).Customer(c.customerId).Pages(c.ctx, func(users *admin.Users) error {
+				u = append(u, users.Users...)
+				return nil
+			})
+		}
 	}
 
 	// some people prefer to go by a mononym
@@ -146,9 +147,9 @@ func (c *client) GetUsers(query string) ([]*admin.User, error) {
 	// Check we've got some users otherwise something is wrong.
         if len(u) == 0 {
                 return u, errors.New("google api returned 0 users?")
-        } 
+        }
 	return u, err
-
+	
 
 }
 
