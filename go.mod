@@ -3,6 +3,7 @@ module github.com/awslabs/ssosync
 go 1.16
 
 require (
+	cloud.google.com/go/compute v1.12.1 // indirect
 	github.com/BurntSushi/toml v1.0.0
 	github.com/aws/aws-lambda-go v1.23.0
 	github.com/aws/aws-sdk-go v1.44.102
