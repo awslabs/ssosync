@@ -104,12 +104,24 @@ func listFindFirstFun(list interface{}, search map[string]interface{}) interface
 }
 
 func interfaceFilterMatch(element interface{}, search map[string]interface{}) bool {
-	s := reflect.ValueOf(element)
-	for fieldName, searchValue := range search {
-		fieldValue := s.FieldByName(fieldName)
-		if !fieldValue.Equal(reflect.ValueOf(searchValue)) {
-			return false
+	elem := reflect.ValueOf(element)
+	switch elem.Kind() {
+	case reflect.Map:
+		elemMap := elem.Interface().(map[string]interface{})
+		for fieldName, searchValue := range search {
+			if fieldValue, ok := elemMap[fieldName]; !ok || fieldValue != searchValue {
+				return false
+			}
 		}
+	case reflect.Struct:
+		for fieldName, searchValue := range search {
+			fieldValue := elem.FieldByName(fieldName)
+			if !fieldValue.IsValid() || fieldValue.Interface() != searchValue {
+				return false
+			}
+		}
+	default:
+		return false
 	}
 	return true
 }
@@ -142,48 +154,48 @@ func NewMapper(userTemplate string) (UserMapper, error) {
 	"displayName": {{ list .GivenName .FamilyName | join " " | trim | quote }},
 	{{- end -}}
 	{{- with .Websites -}}
-	{{- with default (first .) (listFindFirst . (dict "Primary" true)) -}}
-	{{- with .Value -}}"ProfileUrl": {{ . | quote }},{{- end -}}
+	{{- with default (first .) (listFindFirst . (dict "primary" true)) -}}
+	{{- with .value -}}"profileUrl": {{ . | quote }},{{- end -}}
 	{{- end -}}
 	{{- end -}}
 	{{- with .Emails -}}
-	{{- with default (first .) (listFindFirst . (dict "Primary" true)) -}}
+	{{- with default (first .) (listFindFirst . (dict "primary" true)) -}}
 	"emails": [{
-		{{- with .Address -}}"value": {{ . | quote }},{{- end -}}
-		"type": {{ default "work" (.Type | quote) }},
+		{{- with .address -}}"value": {{ . | quote }},{{- end -}}
+		"type": {{ default "work" .type | quote }},
 		"primary": true
 	}],
 	{{- end -}}
 	{{- end -}}
 	{{- with .Addresses -}}
-	{{- with default (first .) (listFindFirst . (dict "Primary" true)) -}}
+	{{- with default (first .) (listFindFirst . (dict "primary" true)) -}}
 	"addresses": [{
-		{{- with .StreetAddress -}}"streetAddress": {{ . | quote }},{{- end -}}
-		{{- with .Locality -}}"locality": {{ . | quote }},{{- end -}}
-		{{- with .Region -}}"region": {{ . | quote }},{{- end -}}
-		{{- with .PostalCode -}}"postalCode": {{ . | quote }},{{- end -}}
-		{{- with .Country -}}"country": {{ . | quote }},{{- end -}}
-		{{- with .Formatted -}}"formatted": {{ . | quote }},{{- end -}}
-		"type": {{ default "work" (.Type | quote) }},
+		{{- with .streetAddress -}}"streetAddress": {{ . | quote }},{{- end -}}
+		{{- with .locality -}}"locality": {{ . | quote }},{{- end -}}
+		{{- with .region -}}"region": {{ . | quote }},{{- end -}}
+		{{- with .postalCode -}}"postalCode": {{ . | quote }},{{- end -}}
+		{{- with .country -}}"country": {{ . | quote }},{{- end -}}
+		{{- with .formatted -}}"formatted": {{ . | quote }},{{- end -}}
+		"type": {{ default "work" .type | quote }},
 		"primary": true
 	}],
 	{{- end -}}
 	{{- end -}}
 	{{- with .Phones -}}
-	{{- with default (first .) (listFindFirst . (dict "Primary" true)) -}}
+	{{- with default (first .) (listFindFirst . (dict "primary" true)) -}}
 	"phoneNumbers": [{
-		{{- with .Value -}}"value": {{ . | quote }},{{- end -}}
-		"type": {{ default "work" (.Type | quote) }}
+		{{- with .value -}}"value": {{ . | quote }},{{- end -}}
+		"type": {{ default "work" .type | quote }}
 	}],
 	{{- end -}}
 	{{- end -}}
 	{{- with .Organizations -}}
-	{{- with default (first .) (listFindFirst . (dict "Primary" true)) -}}
+	{{- with default (first .) (listFindFirst . (dict "primary" true)) -}}
 	"urn:ietf:params:scim:schemas:extension:enterprise:2.0:User": {
-		{{- with .Name -}}"organization": {{ . | quote }},{{- end -}}
-		{{- with .CostCenter -}}"costCenter": {{ . | quote }},{{- end -}}
-		{{- with .Department -}}"department": {{ . | quote }},{{- end -}}
-		{{- with .Domain -}}"division": {{ . | quote }},{{- end -}}
+		{{- with .name -}}"organization": {{ . | quote }},{{- end -}}
+		{{- with .costCenter -}}"costCenter": {{ . | quote }},{{- end -}}
+		{{- with .department -}}"department": {{ . | quote }},{{- end -}}
+		{{- with .domain -}}"division": {{ . | quote }},{{- end -}}
 		"employeeNumber": {{ $.Id | quote }}
 	},
 	{{- $userSchemas = append $userSchemas "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User" -}}

@@ -301,8 +301,8 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 	if err != nil {
 		return err
 	}
-	log.WithField("googleGroups", googleGroups).Debug("Groups to sync")
-	log.WithField("googleUsers", googleUsers).Debug("Users to sync")
+	log.WithField("googleGroups", toJSON(googleGroups)).Debug("Groups to sync")
+	log.WithField("googleUsers", toJSON(googleUsers)).Debug("Users to sync")
 
 	log.Info("get existing aws groups")
 	awsGroups, err := s.GetGroups()
@@ -344,6 +344,18 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 	// create list of changes by operations
 	addAWSUsers, delAWSUsers, updateAWSUsers, _ := getUserOperations(scimUsers, googleUsers, s.mapper)
 	addAWSGroups, delAWSGroups, equalAWSGroups := getGroupOperations(awsGroups, googleGroups)
+
+	log.WithFields(log.Fields{
+		"addAWSUsers": toJSON(addAWSUsers),
+		"delAWSUsers": toJSON(delAWSUsers),
+		"updateAWSUsers": toJSON(updateAWSUsers),
+	}).Debug("getUserOperations results")
+
+	log.WithFields(log.Fields{
+		"addAWSGroups": toJSON(addAWSGroups),
+		"delAWSGroups": toJSON(delAWSGroups),
+		"equalAWSGroups": toJSON(equalAWSGroups),
+	}).Debug("getGroupOperations results")
 
 	log.Info("syncing changes")
 	// delete aws users (deleted in google)
@@ -676,25 +688,33 @@ func getUserOperations(awsUsers []*aws.User, googleUsers []*admin.User, mapper U
 		if awsUser, found := awsMap[gUser.PrimaryEmail]; found {
 			mapped, err := mapper.Map(awsUser, gUser)
 			if err != nil {
-				log.WithField("gUser", gUser).Error("Failed to map Google user")
+				log.WithFields(log.Fields{"gUser": toJSON(gUser), "error": err}).Error("Failed to map Google user")
+				// consider the users as equals for skipping its processing
+				equals = append(equals, awsUser)
 				continue
 			}
 			if !reflect.DeepEqual(awsUser, mapped) {
-				log.WithField("gUser", toJSON(gUser)).Debug("update")
-				log.WithField("awsUser", toJSON(awsUser)).Debug("update")
-				log.WithField("mappedUser", toJSON(mapped)).Debug("update")
+				log.WithFields(log.Fields{
+					"gUser": toJSON(gUser),
+					"awsUser": toJSON(awsUser),
+					"mappedUser": toJSON(mapped),
+				}).Debug("update")
 				update = append(update, mapped)
 			} else {
-			        log.WithField("awsUser", toJSON(awsUser)).Debug("equals")
+				log.WithFields(log.Fields{
+					"gUser": toJSON(gUser),
+					"awsUser": toJSON(awsUser),
+					"mappedUser": toJSON(mapped),
+				}).Debug("equals")
 				equals = append(equals, awsUser)
 			}
 		} else {
-		        log.WithField("gUser", toJSON(gUser)).Debug("add")
 			mapped, err := mapper.Map(&aws.User{}, gUser)
 			if err != nil {
-				log.WithField("gUser", gUser).Error("Failed to map Google user")
+				log.WithFields(log.Fields{"gUser": toJSON(gUser), "error": err}).Error("Failed to map Google user")
 				continue
 			}
+			log.WithFields(log.Fields{"gUser": toJSON(gUser), "mappedUser": toJSON(mapped)}).Debug("add")
 			add = append(add, mapped)
 		}
 	}

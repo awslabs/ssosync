@@ -44,62 +44,61 @@ func TestMapUser(t *testing.T) {
 						FamilyName: "a",
 						GivenName:  "b",
 					},
-					Emails: []admin.UserEmail{
-						{Address: "test.user@example.com", Type: "work", Primary: true},
-						{Address: "test.user1@example.com", Type: "work", Primary: false},
-						{Address: "test.user2@example.com", Type: "work", Primary: false},
+					Emails: []map[string]interface{}{
+						{"address": "test.user@example.com", "type": "work", "primary": true},
+						{"address": "test.user1@example.com", "type": "work", "primary": false},
+						{"address": "test.user2@example.com", "type": "work", "primary": false},
 					},
-					Addresses: []admin.UserAddress{
+					Addresses: []map[string]interface{}{
 						{
-							Type:          "work",
-							StreetAddress: "100 Universal City Plaza",
-							Locality:      "Hollywood",
-							Region:        "CA",
-							PostalCode:    "91608",
-							Country:       "USA",
-							Formatted:     "100 Universal City Plaza Hollywood, CA 91608 USA",
-							Primary:       true,
+							"type":          "work",
+							"streetAddress": "100 Universal City Plaza",
+							"locality":      "Hollywood",
+							"region":        "CA",
+							"postalCode":    "91608",
+							"country":       "USA",
+							"formatted":     "100 Universal City Plaza Hollywood, CA 91608 USA",
+							"primary":       true,
 						},
 						{
-							Type:          "home",
-							StreetAddress: "101 Universal City Plaza",
-							Locality:      "Hollywood",
-							Region:        "CA",
-							PostalCode:    "91608",
-							Country:       "USA",
-							Formatted:     "101 Universal City Plaza Hollywood, CA 91608 USA",
-							Primary:       false,
-						},
-					},
-					Websites: []admin.UserWebsite{
-						{
-							Primary: true,
-							Type: "work",
-							Value: "https://test.user.com",
+							"type":          "home",
+							"streetAddress": "101 Universal City Plaza",
+							"locality":      "Hollywood",
+							"region":        "CA",
+							"postalCode":    "91608",
+							"country":       "USA",
+							"formatted":     "101 Universal City Plaza Hollywood, CA 91608 USA",
+							"primary":       false,
 						},
 					},
-					Phones: []admin.UserPhone{
+					Websites: []map[string]interface{}{
 						{
-							Primary: true,
-							Type: "work",
-							Value: "5550279999",
-						},
-						{
-							Type: "work",
-							Value: "5554468748",
+							"primary": true,
+							"type":    "work",
+							"value":   "https://test.user.com",
 						},
 					},
-					Organizations: []admin.UserOrganization{
+					Phones: []map[string]interface{}{
 						{
-							Name: "Universal Studios",
-							CostCenter: "4130",
-							Department: "Tour Operations",
-							Domain: "Theme Park",
+							"primary": true,
+							"type":    "work",
+							"value":   "5550279999",
+						},
+						{
+							"type":  "work",
+							"value": "5554468748",
+						},
+					},
+					Organizations: []map[string]interface{}{
+						{
+							"name":       "Universal Studios",
+							"costCenter": "4130",
+							"department": "Tour Operations",
+							"domain":     "Theme Park",
 						},
 					},
 					Suspended: false,
 				},
-				template: "",
 			},
 			wantUser: &aws.User{
 				ExternalID: "701984",
@@ -131,18 +130,18 @@ func TestMapUser(t *testing.T) {
 				ProfileUrl: "https://test.user.com",
 				PhoneNumbers: []aws.UserPhoneNumber{
 					{
-						Type: "work",
+						Type:  "work",
 						Value: "5550279999",
 					},
 				},
 				Enterprise: &aws.EnterpriseUser{
 					EmployeeNumber: "701984",
-					Organization: "Universal Studios",
-					CostCenter: "4130",
-					Department: "Tour Operations",
-					Division: "Theme Park",
+					Organization:   "Universal Studios",
+					CostCenter:     "4130",
+					Department:     "Tour Operations",
+					Division:       "Theme Park",
 				},
-				Active:  true,
+				Active: true,
 				Schemas: []string{
 					"urn:ietf:params:scim:schemas:core:2.0:User",
 					"urn:ietf:params:scim:schemas:extension:enterprise:2.0:User",
@@ -154,13 +153,13 @@ func TestMapUser(t *testing.T) {
 			args: args{
 				googleUser: &admin.User{
 					PrimaryEmail: "test.user@example.com",
-					Suspended: false,
+					Suspended:    false,
 				},
 			},
 			wantUser: &aws.User{
 				Username: "test.user@example.com",
-				Active:      true,
-				Schemas:     []string{
+				Active:   true,
+				Schemas: []string{
 					"urn:ietf:params:scim:schemas:core:2.0:User",
 				},
 			},
@@ -183,7 +182,7 @@ func TestMapUser(t *testing.T) {
 				},
 				DisplayName: "a",
 				Active:      true,
-				Schemas:     []string{
+				Schemas: []string{
 					"urn:ietf:params:scim:schemas:core:2.0:User",
 				},
 			},
@@ -206,7 +205,7 @@ func TestMapUser(t *testing.T) {
 				},
 				DisplayName: "b",
 				Active:      true,
-				Schemas:     []string{
+				Schemas: []string{
 					"urn:ietf:params:scim:schemas:core:2.0:User",
 				},
 			},
@@ -216,25 +215,25 @@ func TestMapUser(t *testing.T) {
 			args: args{
 				googleUser: &admin.User{
 					PrimaryEmail: "test.user@example.com",
-					Websites: []admin.UserWebsite{
+					Websites: []map[string]interface{}{
 						{
-							Type: "blog",
-							Value: "https://test.user.com",
+							"type":  "blog",
+							"value": "https://test.user.com",
 						},
 						{
-							Primary: true,
-							Type: "work",
-							Value: "https://work.test.user.com",
+							"primary": true,
+							"type":    "work",
+							"value":   "https://work.test.user.com",
 						},
 					},
 					Suspended: false,
 				},
 			},
 			wantUser: &aws.User{
-				Username: "test.user@example.com",
+				Username:   "test.user@example.com",
 				ProfileUrl: "https://work.test.user.com",
-				Active:      true,
-				Schemas:     []string{
+				Active:     true,
+				Schemas: []string{
 					"urn:ietf:params:scim:schemas:core:2.0:User",
 				},
 			},
@@ -244,24 +243,24 @@ func TestMapUser(t *testing.T) {
 			args: args{
 				googleUser: &admin.User{
 					PrimaryEmail: "test.user@example.com",
-					Websites: []admin.UserWebsite{
+					Websites: []map[string]interface{}{
 						{
-							Type: "blog",
-							Value: "https://test.user.com",
+							"type": "blog",
+							"value": "https://test.user.com",
 						},
 						{
-							Type: "work",
-							Value: "https://work.test.user.com",
+							"type":  "work",
+							"value": "https://work.test.user.com",
 						},
 					},
 					Suspended: false,
 				},
 			},
 			wantUser: &aws.User{
-				Username: "test.user@example.com",
+				Username:   "test.user@example.com",
 				ProfileUrl: "https://test.user.com",
-				Active:      true,
-				Schemas:     []string{
+				Active:     true,
+				Schemas: []string{
 					"urn:ietf:params:scim:schemas:core:2.0:User",
 				},
 			},
@@ -273,7 +272,7 @@ func TestMapUser(t *testing.T) {
 					PrimaryEmail: "test.user@example.com",
 					Name: &admin.UserName{
 						FamilyName: "a",
-						GivenName: "b",
+						GivenName:  "b",
 					},
 					Suspended: false,
 				},
@@ -283,12 +282,12 @@ func TestMapUser(t *testing.T) {
 				Username: "test.user@example.com",
 				Name: aws.UserName{
 					FamilyName: "a",
-					GivenName: "b",
+					GivenName:  "b",
 				},
 				DisplayName: "b a",
 				Nickname:    "testuser",
 				Active:      true,
-				Schemas:     []string{
+				Schemas: []string{
 					"urn:ietf:params:scim:schemas:core:2.0:User",
 				},
 			},
@@ -303,16 +302,16 @@ func TestMapUser(t *testing.T) {
 						GivenName:  "b",
 					},
 					Suspended: false,
-					Addresses: []admin.UserAddress{
+					Addresses: []map[string]interface{}{
 						{
-							Type:          "work",
-							StreetAddress: "100 Universal City Plaza",
-							Locality:      "Hollywood",
-							Region:        "CA",
-							PostalCode:    "91608",
-							Country:       "USA",
-							Formatted:     "100 Universal City Plaza Hollywood, CA 91608 USA",
-							Primary:       true,
+							"type":          "work",
+							"streetAddress": "100 Universal City Plaza",
+							"locality":      "Hollywood",
+							"region":        "CA",
+							"postalCode":    "91608",
+							"country":       "USA",
+							"formatted":     "100 Universal City Plaza Hollywood, CA 91608 USA",
+							"primary":       true,
 						},
 					},
 				},
@@ -327,7 +326,7 @@ func TestMapUser(t *testing.T) {
 				DisplayName: "b a",
 				Active:      true,
 				Addresses:   nil,
-				Schemas:     []string{
+				Schemas: []string{
 					"urn:ietf:params:scim:schemas:core:2.0:User",
 				},
 			},
@@ -342,26 +341,26 @@ func TestMapUser(t *testing.T) {
 						GivenName:  "b",
 					},
 					Suspended: false,
-					Addresses: []admin.UserAddress{
+					Addresses: []map[string]interface{}{
 						{
-							Type:          "work",
-							StreetAddress: "100 Universal City Plaza",
-							Locality:      "Hollywood",
-							Region:        "CA",
-							PostalCode:    "91608",
-							Country:       "USA",
-							Formatted:     "100 Universal City Plaza Hollywood, CA 91608 USA",
-							Primary:       true,
+							"type":          "work",
+							"streetAddress": "100 Universal City Plaza",
+							"locality":      "Hollywood",
+							"region":        "CA",
+							"postalCode":    "91608",
+							"country":       "USA",
+							"formatted":     "100 Universal City Plaza Hollywood, CA 91608 USA",
+							"primary":       true,
 						},
 						{
-							Type:          "home",
-							StreetAddress: "101 Universal City Plaza",
-							Locality:      "Hollywood",
-							Region:        "CA",
-							PostalCode:    "91608",
-							Country:       "USA",
-							Formatted:     "101 Universal City Plaza Hollywood, CA 91608 USA",
-							Primary:       false,
+							"type":          "home",
+							"streetAddress": "101 Universal City Plaza",
+							"locality":      "Hollywood",
+							"region":        "CA",
+							"postalCode":    "91608",
+							"country":       "USA",
+							"formatted":     "101 Universal City Plaza Hollywood, CA 91608 USA",
+							"primary":       false,
 						},
 					},
 				},
@@ -375,12 +374,12 @@ func TestMapUser(t *testing.T) {
 				},
 				DisplayName: "b a",
 				Active:      true,
-				Addresses:   []aws.UserAddress{
+				Addresses: []aws.UserAddress{
 					{
-						Type: "work",	
+						Type: "work",
 					},
 				},
-				Schemas:     []string{
+				Schemas: []string{
 					"urn:ietf:params:scim:schemas:core:2.0:User",
 				},
 			},
@@ -395,34 +394,34 @@ func TestMapUser(t *testing.T) {
 						GivenName:  "b",
 					},
 					Suspended: false,
-					Addresses: []admin.UserAddress{
+					Addresses: []map[string]interface{}{
 						{
-							Type:          "work",
-							StreetAddress: "100 Universal City Plaza",
-							Locality:      "Hollywood",
-							Region:        "CA",
-							PostalCode:    "91608",
-							Country:       "USA",
-							Formatted:     "100 Universal City Plaza Hollywood, CA 91608 USA",
-							Primary:       true,
+							"type":          "work",
+							"streetAddress": "100 Universal City Plaza",
+							"locality":      "Hollywood",
+							"region":        "CA",
+							"postalCode":    "91608",
+							"country":       "USA",
+							"formatted":     "100 Universal City Plaza Hollywood, CA 91608 USA",
+							"primary":       true,
 						},
 						{
-							Type:          "home",
-							StreetAddress: "101 Universal City Plaza",
-							Locality:      "Hollywood",
-							Region:        "CA",
-							PostalCode:    "91608",
-							Country:       "USA",
-							Formatted:     "101 Universal City Plaza Hollywood, CA 91608 USA",
-							Primary:       false,
+							"type":          "home",
+							"streetAddress": "101 Universal City Plaza",
+							"locality":      "Hollywood",
+							"region":        "CA",
+							"postalCode":    "91608",
+							"country":       "USA",
+							"formatted":     "101 Universal City Plaza Hollywood, CA 91608 USA",
+							"primary":       false,
 						},
 					},
 				},
 				template: `{
-					{{- with listFindFirst .Addresses (dict "Type" "home") -}}
+					{{- with listFindFirst .Addresses (dict "type" "home") -}}
 					"addresses": [{
-						{{- with .StreetAddress -}}"streetAddress": {{ . | quote }},{{- end -}}
-						"type": {{ .Type | quote }},
+						{{- with .streetAddress -}}"streetAddress": {{ . | quote }},{{- end -}}
+						"type": {{ .type | quote }},
 						"primary": true
 					}]
 					{{- end -}}
@@ -437,14 +436,14 @@ func TestMapUser(t *testing.T) {
 				},
 				DisplayName: "b a",
 				Active:      true,
-				Addresses:   []aws.UserAddress{
+				Addresses: []aws.UserAddress{
 					{
-						Type: "home",
+						Type:          "home",
 						StreetAddress: "101 Universal City Plaza",
-						Primary: true,
+						Primary:       true,
 					},
 				},
-				Schemas:     []string{
+				Schemas: []string{
 					"urn:ietf:params:scim:schemas:core:2.0:User",
 				},
 			},

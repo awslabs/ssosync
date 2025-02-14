@@ -138,7 +138,7 @@ the engine that parses the template supports GoTemplate sintax with:
 
     returns the first element of the list matching the given conditions:
 
-    For example `listFindFirst $list (dict "Primary" true)` returns the first element of the list whose `Primary` value is `true`.
+    For example `listFindFirst $list (dict "primary" true)` returns the first element of the list whose `primary` value is `true`.
 
 ## Local Usage
 

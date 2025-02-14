@@ -162,11 +162,11 @@ func Test_getUserOperations(t *testing.T) {
 					},
 						Suspended:    false,
 						PrimaryEmail: "user-1@email.com",
-						Emails: []admin.UserEmail{
+						Emails: []map[string]interface{}{
 							{
-								Address: "user-1@email.com",
-								Type:    "work",
-								Primary: true,
+								"address": "user-1@email.com",
+								"type":    "work",
+								"primary": true,
 							},
 						},
 					},
@@ -176,11 +176,11 @@ func Test_getUserOperations(t *testing.T) {
 					},
 						Suspended:    false,
 						PrimaryEmail: "user-2@email.com",
-						Emails: []admin.UserEmail{
+						Emails: []map[string]interface{}{
 							{
-								Address: "user-2@email.com",
-								Type:    "work",
-								Primary: true,
+								"address": "user-2@email.com",
+								"type":    "work",
+								"primary": true,
 							},
 						},
 					},
@@ -205,11 +205,11 @@ func Test_getUserOperations(t *testing.T) {
 					},
 						Suspended:    false,
 						PrimaryEmail: "user-1@email.com",
-						Emails: []admin.UserEmail{
+						Emails: []map[string]interface{}{
 							{
-								Address: "user-1@email.com",
-								Type:    "work",
-								Primary: true,
+								"address": "user-1@email.com",
+								"type":    "work",
+								"primary": true,
 							},
 						},
 					},
@@ -219,11 +219,11 @@ func Test_getUserOperations(t *testing.T) {
 					},
 						Suspended:    false,
 						PrimaryEmail: "user-2@email.com",
-						Emails: []admin.UserEmail{
+						Emails: []map[string]interface{}{
 							{
-								Address: "user-2@email.com",
-								Type:    "work",
-								Primary: true,
+								"address": "user-2@email.com",
+								"type":    "work",
+								"primary": true,
 							},
 						},
 					},
@@ -270,11 +270,11 @@ func Test_getUserOperations(t *testing.T) {
 						},
 						Suspended:    false,
 						PrimaryEmail: "user-1@email.com",
-						Emails: []admin.UserEmail{
+						Emails: []map[string]interface{}{
 							{
-								Address: "user-1@email.com",
-								Type:    "work",
-								Primary: true,
+								"address": "user-1@email.com",
+								"type":    "work",
+								"primary": true,
 							},
 						},
 					},
@@ -285,11 +285,11 @@ func Test_getUserOperations(t *testing.T) {
 						},
 						Suspended:    false,
 						PrimaryEmail: "user-2@email.com",
-						Emails: []admin.UserEmail{
+						Emails: []map[string]interface{}{
 							{
-								Address: "user-2@email.com",
-								Type:    "work",
-								Primary: true,
+								"address": "user-2@email.com",
+								"type":    "work",
+								"primary": true,
 							},
 						},
 					},
@@ -300,11 +300,11 @@ func Test_getUserOperations(t *testing.T) {
 						},
 						Suspended:    true,
 						PrimaryEmail: "user-4@email.com",
-						Emails: []admin.UserEmail{
+						Emails: []map[string]interface{}{
 							{
-								Address: "user-4@email.com",
-								Type:    "work",
-								Primary: true,
+								"address": "user-4@email.com",
+								"type":    "work",
+								"primary": true,
 							},
 						},
 					},
@@ -1055,29 +1055,29 @@ func Test_SyncGroupsUsers(t *testing.T) {
 							FamilyName: "a",
 							GivenName:  "b",
 						},
-						Emails: []admin.UserEmail{
-							{Address: "test.user@example.com", Type: "work", Primary: true},
-							{Address: "test.user1@example.com", Type: "work", Primary: false},
-							{Address: "test.user2@example.com", Type: "work", Primary: false},
+						Emails: []map[string]interface{}{
+							{"address": "test.user@example.com", "type": "work", "primary": true},
+							{"address": "test.user1@example.com", "type": "work", "primary": false},
+							{"address": "test.user2@example.com", "type": "work", "primary": false},
 						},
-						Addresses: []admin.UserAddress{
+						Addresses: []map[string]interface{}{
 							{
-								Type:          "work",
-								StreetAddress: "100 Universal City Plaza",
-								Locality:      "Hollywood",
-								Region:        "CA",
-								PostalCode:    "91608",
-								Country:       "USA",
-								Formatted:     "100 Universal City Plaza Hollywood, CA 91608 USA",
-								Primary:       true,
+								"type":          "work",
+								"streetAddress": "100 Universal City Plaza",
+								"locality":      "Hollywood",
+								"region":        "CA",
+								"postalCode":    "91608",
+								"country":       "USA",
+								"formatted":     "100 Universal City Plaza Hollywood, CA 91608 USA",
+								"primary":       true,
 							},
 						},
-						Organizations: []admin.UserOrganization{
+						Organizations: []map[string]interface{}{
 							{
-								Name: "Universal Studios",
-								CostCenter: "4130",
-								Department: "Tour Operations",
-								Domain: "Theme Park",
+								"name": "Universal Studios",
+								"costCenter": "4130",
+								"department": "Tour Operations",
+								"domain": "Theme Park",
 							},
 						},
 						Suspended: false,
