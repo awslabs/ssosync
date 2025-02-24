@@ -92,8 +92,8 @@ type UserPhoneNumber struct {
 }
 
 type ManagerRef struct {
-	Value string `json:"value"`
-	Ref string `json:"$ref"`
+	Value string `json:"value,omitempty"`
+	Ref string `json:"$ref,omitempty"`
 }
 
 type EnterpriseUser struct {
@@ -113,7 +113,7 @@ type User struct {
 	Username string   `json:"userName"`
 	Name              UserName          `json:"name"`
 	DisplayName string        `json:"displayName"`
-	Nickname          string            `json:"nickname,omitempty"`
+	NickName          string            `json:"nickName,omitempty"`
 	ProfileUrl        string            `json:"profileUrl,omitempty"`
 	Active      bool          `json:"active"`
 	Emails      []UserEmail   `json:"emails"`

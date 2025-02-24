@@ -303,6 +303,7 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 	}
 	log.WithField("googleGroups", toJSON(googleGroups)).Debug("Groups to sync")
 	log.WithField("googleUsers", toJSON(googleUsers)).Debug("Users to sync")
+	log.WithField("googleGroupsUsers", toJSON(googleGroupsUsers)).Debug("User memberships to sync")
 
 	log.Info("get existing aws groups")
 	awsGroups, err := s.GetGroups()
@@ -537,7 +538,7 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
                 return nil, nil, nil, err
         }
         for _, u := range googleUsers {
-		log.WithField("user", toJSON(u)).Debug("processing member of gUserDetailCache")
+		//log.WithField("user", toJSON(u)).Debug("processing member of gUserDetailCache")
                 gUserDetailCache[u.PrimaryEmail] = u
         }
 

@@ -276,7 +276,7 @@ func TestMapUser(t *testing.T) {
 					},
 					Suspended: false,
 				},
-				template: `{"nickname": {{ splitList "@" .PrimaryEmail | initial | join "" | replace "." "" | quote }}}`,
+				template: `{"nickName": {{ splitList "@" .PrimaryEmail | initial | join "" | replace "." "" | quote }}}`,
 			},
 			wantUser: &aws.User{
 				Username: "test.user@example.com",
@@ -285,7 +285,7 @@ func TestMapUser(t *testing.T) {
 					GivenName:  "b",
 				},
 				DisplayName: "b a",
-				Nickname:    "testuser",
+				NickName:    "testuser",
 				Active:      true,
 				Schemas: []string{
 					"urn:ietf:params:scim:schemas:core:2.0:User",

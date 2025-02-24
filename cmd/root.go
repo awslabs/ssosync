@@ -27,7 +27,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
         "github.com/aws/aws-sdk-go/service/codepipeline"
 	"github.com/aws/aws-sdk-go/service/secretsmanager"
-	"github.com/aws/aws-sdk-go/service/ssm"
 	"github.com/awslabs/ssosync/internal"
 	"github.com/awslabs/ssosync/internal/config"
 	"github.com/pkg/errors"
@@ -199,7 +198,6 @@ func configLambda() {
         s := session.Must(session.NewSession())
 	svc := secretsmanager.New(s)
 	secrets := config.NewSecrets(svc)
-	parameters := config.NewParameters(ssm.New(s))
 
 	unwrap, err := secrets.GoogleAdminEmail(os.Getenv("GOOGLE_ADMIN"))
 	if err != nil {
@@ -239,7 +237,7 @@ func configLambda() {
 
 	unwrap = os.Getenv("USER_MAPPING_TEMPLATE")
 	if len([]rune(unwrap)) != 0 {
-		unwrap, err = parameters.UserMappingTemplate(unwrap)
+		unwrap, err = secrets.UserMappingTemplate(unwrap)
 		if err != nil {
 			log.Fatal(errors.Wrap(err, "cannot read config: USER_MAPPING_TEMPLATE").Error())
 		}

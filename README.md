@@ -128,7 +128,7 @@ Additionally, authenticate your AWS credentials. Follow this  [section](https://
 
 To obtain your `Identity store ID`, go to the AWS Identity Center console and select settings. Under the `Identity Source` section, copy the `Identity store ID`.
 
-You can customize how Google user's attributes are mapped to AWS users by providing the name of an AWS Parameter containing a custom JSON template;
+You can customize how Google user's attributes are mapped to AWS users by providing a custom JSON template;
 the engine that parses the template supports GoTemplate sintax with:
 
 - [sprig](https://github.com/Masterminds/sprig) functions
@@ -139,6 +139,19 @@ the engine that parses the template supports GoTemplate sintax with:
     returns the first element of the list matching the given conditions:
 
     For example `listFindFirst $list (dict "primary" true)` returns the first element of the list whose `primary` value is `true`.
+
+For example the template
+
+```json
+{
+  "nickName": {{ .PrimaryEmail }}
+}
+```
+
+will fill the `nickName` attribute with the user's primary email.
+
+> [!IMPORTANT]
+> Consider the [IAM Identity Center SCIM implementation constraints](https://docs.aws.amazon.com/singlesignon/latest/developerguide/createuser.html#constraints-createuser) when you specify your custom mapping template.
 
 ## Local Usage
 
@@ -223,13 +236,13 @@ AWS SSO. To sync regularly, you can run ssosync via AWS Lambda.
 **App only** This mode does not create the secrets but expects you to deployed a separate stack using the **Secrets only** mode within the same account
 > [!CAUTION]
 > If you want to use your own existing secrets then provide them as a comma separated list in the ##CrossStackConfigI## field in the following order:
-> __GoogleCredentials ARN__,__GoogleAdminEmail ARN__,__SCIMEndpoint ARN__,__SCIMAccessToken ARN__,__Region ARN__,__IdentityStoreID ARN__
+> __GoogleCredentials ARN__,__GoogleAdminEmail ARN__,__SCIMEndpoint ARN__,__SCIMAccessToken ARN__,__Region ARN__,__IdentityStoreID ARN__,__UserMappingTemplate ARN__
 > 
 **App for cross-account** This mode is used where you have deployed the secrets in a separate account, the arns of the KMS key and secrets need to be passed into the __CrossStackConfig__ field, It is easiest to have created the secrets in the other account using the ** Secrest for cross-account** mode, as the output can simply copied and pasted into the above field.
 
 > [!CAUTION]
 > If you want to use your own existing secrets then provide them as a comma separated list in the __CrossStackConfig__ field in the following order:
-> __GoogleCredentials ARN__,__GoogleAdminEmail ARN__,__SCIMEndpoint ARN__,__SCIMAccessToken ARN__,__Region ARN__,__IdentityStoreID ARN__,__KMS Key ARN__
+> __GoogleCredentials ARN__,__GoogleAdminEmail ARN__,__SCIMEndpoint ARN__,__SCIMAccessToken ARN__,__Region ARN__,__IdentityStoreID ARN__,__UserMappingTemplate ARN__,__KMS Key ARN__
 
 > [!IMPORTANT]
 > Be sure to allow access to the key and secrets in their respective policies to the role __SSOSyncAppRole__ in the app account.
