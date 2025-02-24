@@ -37,6 +37,8 @@ type Config struct {
 	Region string `mapstructure:"region"`
 	// IdentityStoreID is the ID of the identity store
 	IdentityStoreID string `mapstructure:"identity_store_id"`
+	// UserMappingTemplate is the template used to map users from Google Workspace to AWS
+	UserMappingTemplate string `mapstructure:"user_mapping_template"`
 }
 
 const (

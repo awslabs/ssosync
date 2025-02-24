@@ -66,6 +66,14 @@ func (s *Secrets) IdentityStoreID(secretArn string) (string, error) {
      return s.getSecret(secretArn)
 }
 
+// UserMappingTemplate ...
+func (s *Secrets) UserMappingTemplate(secretArn string) (string, error) {
+	if len([]rune(secretArn)) == 0 {
+		return s.getSecret("UserMappingTemplate")
+	}
+	return s.getSecret(secretArn)
+}
+
 func (s *Secrets) getSecret(secretKey string) (string, error) {
 	r, err := s.svc.GetSecretValue(&secretsmanager.GetSecretValueInput{
 		SecretId:     aws.String(secretKey),

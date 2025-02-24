@@ -16,7 +16,7 @@ phases:
       - apt -qq --yes upgrade
       
       # Install go.lang
-      - GoVersion=${GOLANG_20_VERSION}
+      - GoVersion=${GOLANG_21_VERSION}
 
       # Install golint - now deprecated
       - go install golang.org/x/lint/golint@latest
