@@ -17,9 +17,14 @@ package google
 
 import (
 	"context"
-	"strings"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"os"
+	"strings"
+	"time"
 
+	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	admin "google.golang.org/api/admin/directory/v1"
 	"google.golang.org/api/option"
@@ -40,6 +45,38 @@ type client struct {
 
 // NewClient creates a new client for Google's Admin API
 func NewClient(ctx context.Context, adminEmail string, serviceAccountKey []byte) (Client, error) {
+	// Allow injecting access token via env var pointing to a file with { "access_token": "...", "expiry": "..." }
+	if tokenPath := os.Getenv("SSOSYNC_ACCESS_TOKEN_FILE"); tokenPath != "" {
+		data, err := os.ReadFile(tokenPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read token file: %w", err)
+		}
+		var tokenData struct {
+			AccessToken string `json:"access_token"`
+			Expiry      string `json:"expiry"`
+		}
+		if err := json.Unmarshal(data, &tokenData); err != nil {
+			return nil, fmt.Errorf("failed to parse token file: %w", err)
+		}
+		expiry := time.Now().Add(time.Hour)
+		if tokenData.Expiry != "" {
+			if parsedExpiry, err := time.Parse(time.RFC3339, tokenData.Expiry); err == nil {
+				expiry = parsedExpiry
+			}
+		}
+		tok := &oauth2.Token{
+			AccessToken: tokenData.AccessToken,
+			TokenType:   "Bearer",
+			Expiry:      expiry,
+		}
+		ts := oauth2.StaticTokenSource(tok)
+		srv, err := admin.NewService(ctx, option.WithTokenSource(ts))
+		if err != nil {
+			return nil, fmt.Errorf("admin service: %w", err)
+		}
+		return &client{ctx: ctx, service: srv}, nil
+	}
+
 	config, err := google.JWTConfigFromJSON(serviceAccountKey, admin.AdminDirectoryGroupReadonlyScope,
 		admin.AdminDirectoryGroupMemberReadonlyScope,
 		admin.AdminDirectoryUserReadonlyScope)
