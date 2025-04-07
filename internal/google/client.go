@@ -17,9 +17,14 @@ package google
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"os"
 	"strings"
+	"time"
 
+	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	admin "google.golang.org/api/admin/directory/v1"
 	"google.golang.org/api/option"
@@ -43,8 +48,63 @@ const (
 	MaxRetries = 5
 )
 
+// loadAccessTokenFile reads an oauth2 token from disk. The file must contain
+// JSON like { "access_token": "...", "expiry": "RFC3339-timestamp" }. Both
+// fields are required: a missing or malformed expiry is rejected so a
+// short-lived token can't masquerade as a long-lived one. An already-expired
+// token is also rejected up front since oauth2.StaticTokenSource does not
+// refresh.
+func loadAccessTokenFile(path string, now time.Time) (*oauth2.Token, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read token file: %w", err)
+	}
+	var tokenData struct {
+		AccessToken string `json:"access_token"`
+		Expiry      string `json:"expiry"`
+	}
+	if err := json.Unmarshal(data, &tokenData); err != nil {
+		return nil, fmt.Errorf("failed to parse token file: %w", err)
+	}
+	if tokenData.AccessToken == "" {
+		return nil, errors.New("token file: access_token is empty")
+	}
+	if tokenData.Expiry == "" {
+		return nil, errors.New("token file: expiry is required")
+	}
+	expiry, err := time.Parse(time.RFC3339, tokenData.Expiry)
+	if err != nil {
+		return nil, fmt.Errorf("token file: expiry is not RFC3339: %w", err)
+	}
+	if !expiry.After(now) {
+		return nil, fmt.Errorf("token file: token already expired at %s", expiry.Format(time.RFC3339))
+	}
+	return &oauth2.Token{
+		AccessToken: tokenData.AccessToken,
+		TokenType:   "Bearer",
+		Expiry:      expiry,
+	}, nil
+}
+
 // NewClient creates a new client for Google's Admin API
 func NewClient(ctx context.Context, adminEmail string, serviceAccountKey []byte) (Client, error) {
+	// Allow injecting an access token from a file pointed at by
+	// SSOSYNC_ACCESS_TOKEN_FILE. The token is used as-is via a
+	// non-refreshing oauth2.StaticTokenSource, so loadAccessTokenFile
+	// rejects empty / missing-expiry / already-expired tokens.
+	if tokenPath := os.Getenv("SSOSYNC_ACCESS_TOKEN_FILE"); tokenPath != "" {
+		tok, err := loadAccessTokenFile(tokenPath, time.Now())
+		if err != nil {
+			return nil, err
+		}
+		ts := oauth2.StaticTokenSource(tok)
+		srv, err := admin.NewService(ctx, option.WithTokenSource(ts))
+		if err != nil {
+			return nil, fmt.Errorf("admin service: %w", err)
+		}
+		return &client{ctx: ctx, service: srv}, nil
+	}
+
 	config, err := google.JWTConfigFromJSON(serviceAccountKey, admin.AdminDirectoryGroupReadonlyScope,
 		admin.AdminDirectoryGroupMemberReadonlyScope,
 		admin.AdminDirectoryUserReadonlyScope)
