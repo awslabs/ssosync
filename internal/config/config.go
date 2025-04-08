@@ -13,6 +13,8 @@ type Config struct {
 	GoogleCredentials string `mapstructure:"google_credentials"`
 	// GoogleAdmin ...
 	GoogleAdmin string `mapstructure:"google_admin"`
+	// CustomerId ...
+	CustomerId string `mapstructure:"customer_id"`
 	// UserMatch ...
 	UserMatch string `mapstructure:"user_match"`
 	// GroupFilter ...
@@ -46,6 +48,8 @@ const (
 	DefaultLogFormat = "text"
 	// DefaultDebug is the default debug status.
 	DefaultDebug = false
+	// DefaultCustomerId is the default customer id
+	DefaultCustomerId = "my_customer"
 	// DefaultGoogleCredentials is the default credentials path
 	DefaultGoogleCredentials = "credentials.json"
 	// DefaultSyncMethod is the default sync method to use.
@@ -60,5 +64,6 @@ func New() *Config {
 		LogFormat:         DefaultLogFormat,
 		SyncMethod:        DefaultSyncMethod,
 		GoogleCredentials: DefaultGoogleCredentials,
+		CustomerId:        DefaultCustomerId,
 	}
 }
