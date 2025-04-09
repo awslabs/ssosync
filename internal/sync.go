@@ -768,7 +768,7 @@ func DoSync(ctx context.Context, cfg *config.Config) error {
 
 	httpClient := retryClient.StandardClient()
 
-	googleClient, err := google.NewClient(ctx, cfg.GoogleAdmin, creds)
+	googleClient, err := google.NewClient(ctx, cfg.GoogleAdmin, cfg.CustomerId, creds)
 	if err != nil {
 	        log.WithField("error", err).Warn("Problem establising a connection to Google directory")
 		return err
