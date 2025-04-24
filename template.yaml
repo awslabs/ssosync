@@ -124,8 +124,10 @@ Resources:
   SSOSyncV2Function:
     Type: AWS::Serverless::Function
     Properties:
-      Runtime: go1.x
-      Handler: dist/ssosync_linux_amd64_v1/ssosync
+      Runtime: provided.al2
+      Handler: bootstrap
+      Architectures:
+        - arm64
       Timeout: 900
       Environment:
         Variables:
@@ -180,6 +182,8 @@ Resources:
           Properties:
             Enabled: true
             Schedule: !Ref ScheduleExpression
+    Metadata:
+      BuildMethod: makefile
 
   AWSGoogleCredentialsSecret:
     Type: "AWS::SecretsManager::Secret"
