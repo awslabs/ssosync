@@ -67,6 +67,9 @@ func NewClient(ctx context.Context, adminEmail string, serviceAccountKey []byte)
 func (c *client) GetDeletedUsers() ([]*admin.User, error) {
 	u := make([]*admin.User, 0)
 	err := c.service.Users.List().Customer("my_customer").ShowDeleted("true").Pages(c.ctx, func(users *admin.Users) error {
+		if err != nil {
+			return err
+		}
 		u = append(u, users.Users...)
 		return nil
 	})
@@ -78,6 +81,9 @@ func (c *client) GetDeletedUsers() ([]*admin.User, error) {
 func (c *client) GetGroupMembers(g *admin.Group) ([]*admin.Member, error) {
 	m := make([]*admin.Member, 0)
 	err := c.service.Members.List(g.Id).Pages(context.TODO(), func(members *admin.Members) error {
+		if err != nil {
+			return err
+		}
 		m = append(m, members.Members...)
 		return nil
 	})
