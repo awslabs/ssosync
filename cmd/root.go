@@ -193,18 +193,25 @@ func initConfig() {
 
 }
 
+func maybeSecret(value string, fallback func(string) (string, error)) (string, error) {
+	if strings.HasPrefix(value, "arn:aws:secretsmanager:") {
+		return fallback(value)
+	}
+	return value, nil
+}
+
 func configLambda() {
         s := session.Must(session.NewSession())
 	svc := secretsmanager.New(s)
 	secrets := config.NewSecrets(svc)
 
-	unwrap, err := secrets.GoogleAdminEmail(os.Getenv("GOOGLE_ADMIN"))
+	unwrap, err := maybeSecret(os.Getenv("GOOGLE_ADMIN"), secrets.GoogleAdminEmail)
 	if err != nil {
 		log.Fatalf(errors.Wrap(err, "cannot read config: GOOGLE_ADMIN").Error())
 	}
 	cfg.GoogleAdmin = unwrap
 
-	unwrap, err = secrets.GoogleCredentials(os.Getenv("GOOGLE_CREDENTIALS"))
+	unwrap, err = maybeSecret(os.Getenv("GOOGLE_CREDENTIALS"), secrets.GoogleCredentials)
 	if err != nil {
 		log.Fatalf(errors.Wrap(err, "cannot read config: GOOGLE_CREDENTIALS").Error())
 	}
@@ -222,13 +229,13 @@ func configLambda() {
 	}
 	cfg.SCIMEndpoint = unwrap
 
-	unwrap, err = secrets.Region(os.Getenv("REGION"))
+	unwrap, err = maybeSecret(os.Getenv("REGION"), secrets.Region)
 	if err != nil {
 		log.Fatalf(errors.Wrap(err, "cannot read config: REGION").Error())
 	}
 	cfg.Region = unwrap
 
-	unwrap, err = secrets.IdentityStoreID(os.Getenv("IDENTITY_STORE_ID"))
+	unwrap, err = maybeSecret(os.Getenv("IDENTITY_STORE_ID"), secrets.IdentityStoreID)
 	if err != nil {
 		log.Fatalf(errors.Wrap(err, "cannot read config: IDENTITY_STORE_ID").Error())
 	}
