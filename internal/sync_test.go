@@ -38,7 +38,7 @@ import (
 func toJSON(stc interface{}) []byte {
 	JSON, err := json.MarshalIndent(stc, "", "  ")
 	if err != nil {
-		log.Fatalf(err.Error())
+		log.Fatal(err.Error())
 	}
 	return JSON
 }
