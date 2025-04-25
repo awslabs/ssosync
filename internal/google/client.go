@@ -66,6 +66,8 @@ func NewClient(ctx context.Context, adminEmail string, serviceAccountKey []byte)
 // GetDeletedUsers will get the deleted users from the Google's Admin API.
 func (c *client) GetDeletedUsers() ([]*admin.User, error) {
 	u := make([]*admin.User, 0)
+	var err error
+
 	err := c.service.Users.List().Customer("my_customer").ShowDeleted("true").Pages(c.ctx, func(users *admin.Users) error {
 		if err != nil {
 			return err
@@ -80,6 +82,8 @@ func (c *client) GetDeletedUsers() ([]*admin.User, error) {
 // GetGroupMembers will get the members of the group specified
 func (c *client) GetGroupMembers(g *admin.Group) ([]*admin.Member, error) {
 	m := make([]*admin.Member, 0)
+	var err error
+
 	err := c.service.Members.List(g.Id).Pages(context.TODO(), func(members *admin.Members) error {
 		if err != nil {
 			return err
