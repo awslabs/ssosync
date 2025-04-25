@@ -110,7 +110,7 @@ func (c *client) GetUsers(query string) ([]*admin.User, error) {
 	// If we have wildcard then fetch all users
 	if query == "*" {
 		err = c.service.Users.List().Customer("my_customer").Pages(c.ctx, func(users *admin.Users) error {
-			if err {
+			if err != nil {
 				return err
 			}
 			u = append(u, users.Users...)
@@ -124,7 +124,7 @@ func (c *client) GetUsers(query string) ([]*admin.User, error) {
 		// Then call the api one query at a time, appending to our list
 		for _, subQuery := range queries {
 			err = c.service.Users.List().Query(subQuery).Customer("my_customer").Pages(c.ctx, func(users *admin.Users) error {
-				if err {
+				if err != nil {
 					return err
 				}
 				u = append(u, users.Users...)
@@ -176,7 +176,7 @@ func (c *client) GetGroups(query string) ([]*admin.Group, error) {
 	// If we have wildcard then fetch all groups
 	if query == "*" {
 		err = c.service.Groups.List().Customer("my_customer").Pages(context.TODO(), func(groups *admin.Groups) error {
-			if err {
+			if err != nil {
 				return err
 			}
 			g = append(g, groups.Groups...)
@@ -191,7 +191,7 @@ func (c *client) GetGroups(query string) ([]*admin.Group, error) {
 	// Then call the api one query at a time, appending to our list
 	for _, subQuery := range queries {
 		err = c.service.Groups.List().Customer("my_customer").Query(subQuery).Pages(context.TODO(), func(groups *admin.Groups) error {
-			if err {
+			if err != nil {
 				return err
 			}
 			g = append(g, groups.Groups...)
