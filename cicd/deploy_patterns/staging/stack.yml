@@ -29,7 +29,7 @@ Parameters:
     Type: String
   GroupMatch:
     Description: The search string to match Groups in Google Workspace
-    Default: 'name:AWS*, name=AWS_TEST'
+    Default: 'name:AWS*,name=AWS_TEST'
     Type: String
 
 Resources:
