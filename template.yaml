@@ -449,15 +449,16 @@ Resources:
               - Sid: IdentityStoreAccesPolicy
                 Effect: Allow
                 Action:
-                  - "identitystore:List*"
-                  - "identitystore:Describe*"
-                  - "identitystore:IsMemberInGroups"
-                  - "identitystore:GetGroupMembershipId"
+                  - "identitystore:DeleteUser"
                   - "identitystore:CreateGroup"
                   - "identitystore:CreateGroupMembership"
+                  - "identitystore:ListGroups"
+                  - "identitystore:ListUsers"
+                  - "identitystore:ListGroupMemberships"
+                  - "identitystore:IsMemberInGroups"
+                  - "identitystore:GetGroupMembershipId"
                   - "identitystore:DeleteGroupMembership"
                   - "identitystore:DeleteGroup"
-                  - "identitystore:DeleteUser"
                 Resource:
                   - "*"
               - Sid: CodePipelinePolicy
