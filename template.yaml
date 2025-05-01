@@ -28,6 +28,7 @@ Metadata:
           - GoogleGroupMatch
           - IgnoreUsers
           - IgnoreGroups
+          - UserMappingTemplate
       - Label:
           default: "Configuration options for users_groups Mode only"
         Parameters:
@@ -79,7 +80,7 @@ Parameters:
       [App for cross-account] this is the AppConfig from the ouputs of the Secrets for cross-account stack.
       [Secrets for cross-account] this is the AWS account id into which you will be deplying the SSOSync app?
     Default: ""
-    AllowedPattern: '(?!.*\s)|(\d{12})|(arn:aws:secretsmanager:((us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-\d):[0-9]{8,12}:secret:[a-zA-Z0-9/_+=.@-]{1,512})(,arn:aws:secretsmanager:((us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-\d):[0-9]{8,12}:secret:[a-zA-Z0-9/_+=.@-]{1,512}){5}(,arn:aws:kms:((us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-\d):[0-9]{12}:key/[a-zA-Z0-9/_+=.@-]{1,512})?'
+    AllowedPattern: '(?!.*\s)|(\d{12})|(arn:aws:secretsmanager:((us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-\d):[0-9]{8,12}:secret:[a-zA-Z0-9/_+=.@-]{1,512})(,arn:aws:secretsmanager:((us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-\d):[0-9]{8,12}:secret:[a-zA-Z0-9/_+=.@-]{1,512}){6}(,arn:aws:kms:((us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-\d):[0-9]{12}:key/[a-zA-Z0-9/_+=.@-]{1,512})?'
 
   FunctionName:
     Type: String
@@ -206,6 +207,13 @@ Parameters:
       [optional] Include only these Google Workspace groups, leave empty if not required. (Only applicable for SyncMethod user_groups)
     Default: ""
     AllowedPattern: '(?!.*\s)|((([a-zA-Z0-9.\-_]{1,64})@([a-zA-Z0-9.\-]{5,260}))(,(([a-zA-Z0-9.\-_]{1,64})@([a-zA-Z0-9.\-]{5,260})))*)'
+
+  UserMappingTemplate:
+    Type: String
+    Description: |
+      [optional] GoTemplate used for mapping Google Workspace users into AWS IDC SCIM Users. (JSON output)
+    Default: ""
+    AllowedPattern: '(?!.*\s)|[a-zA-Z0-9_.-/]{0,2048}$'
 
   SyncMethod:
     Type: String
@@ -446,6 +454,7 @@ Resources:
                   - !If [CreateSecrets, !Ref SecretSCIMAccessToken, !Select [3, !Split [',', !Ref CrossStackConfig]]]
                   - !If [CreateSecrets, !Ref SecretRegion, !Select [4, !Split [',', !Ref CrossStackConfig]]]
                   - !If [CreateSecrets, !Ref SecretIdentityStoreID, !Select [5, !Split [',', !Ref CrossStackConfig]]]
+                  - !If [CreateSecrets, !Ref SecretUserMappingTemplate, !Select [6, !Split [',', !Ref CrossStackConfig]]]
               - Sid: IdentityStoreAccesPolicy
                 Effect: Allow
                 Action:
@@ -501,12 +510,13 @@ Resources:
                   - !Select [3, !Split [',', !Ref CrossStackConfig]] # SCIMEndpointAccessToken
                   - !Select [4, !Split [',', !Ref CrossStackConfig]] # Region
                   - !Select [5, !Split [',', !Ref CrossStackConfig]] # IdentityStoreID
+                  - !Select [6, !Split [',', !Ref CrossStackConfig]] # UserMappingTemplate
               - Sid: KMSDecryptPolicy
                 Effect: Allow
                 Action:
                   - kms:Decrypt
                 Resource:
-                  -  !Select [6, !Split [',', !Ref CrossStackConfig]] # KMSSecret
+                  -  !Select [7, !Split [',', !Ref CrossStackConfig]] # KMSSecret
               - Sid: IdentityStoreAccesPolicy
                 Effect: Allow
                 Action:
@@ -558,6 +568,7 @@ Resources:
           IGNORE_GROUPS: !If [SetIgnoreGroups, !Ref IgnoreGroups, !Ref AWS::NoValue]
           IGNORE_USERS: !If [SetIgnoreUsers, !Ref IgnoreUsers, !Ref AWS::NoValue]
           INCLUDE_GROUPS: !If [SetIncludeGroups, !Ref IncludeGroups, !Ref AWS::NoValue]
+          USER_MAPPING_TEMPLATE: !If [CreateSecrets, !Ref SecretUserMappingTemplate, !Select [6, !Split [',', !Ref CrossStackConfig]]]
       Events:
         SyncScheduledEvent:
           Type: Schedule
@@ -741,6 +752,29 @@ Resources:
             - secretsmanager:GetSecretValue
           Resource: '*'
 
+  SecretUserMappingTemplate:
+    Type: "AWS::SecretsManager::Secret"
+    Condition: CreateSecrets
+    Properties:
+      Name: SSOSyncUserMappingTemplate
+      SecretString: !Ref UserMappingTemplate
+      KmsKeyId: !If [CreateKey, !Ref KeyAlias, alias/aws/secretsmanager]
+
+  SecretUserMappingTemplatePolicy:
+    Type: AWS::SecretsManager::ResourcePolicy
+    Condition: CreateKey
+    Properties:
+      SecretId: !Ref SecretUserMappingTemplate
+      ResourcePolicy:
+        Version: 2012-10-17
+        Statement:
+        - Effect: Allow
+          Principal:
+            AWS: !Sub arn:aws:iam::${CrossStackConfig}:root
+          Action:
+            - secretsmanager:GetSecretValue
+          Resource: '*'
+
 Outputs:
   FunctionArn:
     Condition: OutputFunction
@@ -752,13 +786,13 @@ Outputs:
   AppConfigLocal:
     Condition: OutputSecrets
     Description: "The Comma Separated list of secrets ARNs to copy and paste into the CrossStackConfig field of the App only stack."
-    Value: !Sub ${SecretGoogleCredentials},${SecretGoogleAdminEmail},${SecretSCIMEndpoint},${SecretSCIMAccessToken},${SecretRegion},${SecretIdentityStoreID}
+    Value: !Sub ${SecretGoogleCredentials},${SecretGoogleAdminEmail},${SecretSCIMEndpoint},${SecretSCIMAccessToken},${SecretRegion},${SecretIdentityStoreID},${SecretUserMappingTemplate}
     Export:
       Name: AppConfig
 
   AppConfigRemote:
     Condition: CreateKey
     Description: "The Comma Separated list of Secrets and KMS Key ARNs to copy and paste into the CrossStackConfig field of the app for cross-account stack."
-    Value: !Sub ${SecretGoogleCredentials},${SecretGoogleAdminEmail},${SecretSCIMEndpoint},${SecretSCIMAccessToken},${SecretRegion},${SecretIdentityStoreID},arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/${KeyForSecrets}
+    Value: !Sub ${SecretGoogleCredentials},${SecretGoogleAdminEmail},${SecretSCIMEndpoint},${SecretSCIMAccessToken},${SecretRegion},${SecretIdentityStoreID},${SecretUserMappingTemplate},arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/${KeyForSecrets}
     Export:
       Name: AppConfig

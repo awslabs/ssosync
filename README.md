@@ -131,6 +131,31 @@ Additionally, authenticate your AWS credentials. Follow this  [section](https://
 
 To obtain your `Identity store ID`, go to the AWS Identity Center console and select settings. Under the `Identity Source` section, copy the `Identity store ID`.
 
+You can customize how Google user's attributes are mapped to AWS users by providing a custom JSON template;
+the engine that parses the template supports GoTemplate sintax with:
+
+- [sprig](https://github.com/Masterminds/sprig) functions
+- custom template functions:
+
+  - `listFindFirst $list $dictConditions`
+
+    returns the first element of the list matching the given conditions:
+
+    For example `listFindFirst $list (dict "primary" true)` returns the first element of the list whose `primary` value is `true`.
+
+For example the template
+
+```json
+{
+  "nickName": {{ .PrimaryEmail }}
+}
+```
+
+will fill the `nickName` attribute with the user's primary email.
+
+> [!IMPORTANT]
+> Consider the [IAM Identity Center SCIM implementation constraints](https://docs.aws.amazon.com/singlesignon/latest/developerguide/createuser.html#constraints-createuser) when you specify your custom mapping template.
+
 ## Local Usage
 
 ```bash
@@ -152,23 +177,24 @@ Usage:
   ssosync [flags]
 
 Flags:
-  -t, --access-token string         AWS SSO SCIM API Access Token
-  -d, --debug                       enable verbose / debug logging
-  -e, --endpoint string             AWS SSO SCIM API Endpoint
-  -u, --google-admin string         Google Workspace admin user email
-  -c, --google-credentials string   path to Google Workspace credentials file (default "credentials.json")
-  -g, --group-match string          Google Workspace Groups filter query parameter, a simple '*' denotes sync all groups (and any users that are members of those groups). example: 'name:Admin*,email:aws-*', 'name=Admins' or '*' see: https://developers.google.com/admin-sdk/directory/v1/guides/search-groups, if left empty no groups will be selected.
-  -h, --help                        help for ssosync
-      --ignore-groups strings       ignores these Google Workspace groups
-      --ignore-users strings        ignores these Google Workspace users
-      --include-groups strings      include only these Google Workspace groups, NOTE: only works when --sync-method 'users_groups'
-      --log-format string           log format (default "text")
-      --log-level string            log level (default "info")
-  -s, --sync-method string          Sync method to use (users_groups|groups) (default "groups")
-  -m, --user-match string           Google Workspace Users filter query parameter, a simple '*' denotes sync all users in the directory. example: 'name:John*,email:admin*', '*' or name=John Doe,email:admin*' see: https://developers.google.com/admin-sdk/directory/v1/guides/search-users, if left empty no users will be selected but if a pattern has been set for GroupMatch users that are members of the groups it matches will still be selected
-  -v, --version                     version for ssosync
-  -r, --region                      AWS region where identity store exists
-  -i, --identity-store-id           AWS Identity Store ID
+  -t, --access-token string            AWS SSO SCIM API Access Token
+  -d, --debug                          enable verbose / debug logging
+  -e, --endpoint string                AWS SSO SCIM API Endpoint
+  -u, --google-admin string            Google Workspace admin user email
+  -c, --google-credentials string      path to Google Workspace credentials file (default "credentials.json")
+  -g, --group-match string             Google Workspace Groups filter query parameter, a simple '*' denotes sync all groups (and any users that are members of those groups). example: 'name:Admin*,email:aws-*', 'name=Admins' or '*' see: https://developers.google.com/admin-sdk/directory/v1/guides/search-groups, if left empty no groups will be selected.
+  -h, --help                           help for ssosync
+      --ignore-groups strings          ignores these Google Workspace groups
+      --ignore-users strings           ignores these Google Workspace users
+      --include-groups strings         include only these Google Workspace groups, NOTE: only works when --sync-method 'users_groups'
+      --log-format string              log format (default "text")
+      --log-level string               log level (default "info")
+  -s, --sync-method string             Sync method to use (users_groups|groups) (default "groups")
+      --user-mapping-template string   Template for mapping users from Google Workspace to AWS
+  -m, --user-match string              Google Workspace Users filter query parameter, a simple '*' denotes sync all users in the directory. example: 'name:John*,email:admin*', '*' or name=John Doe,email:admin*' see: https://developers.google.com/admin-sdk/directory/v1/guides/search-users, if left empty no users will be selected but if a pattern has been set for GroupMatch users that are members of the groups it matches will still be selected
+  -v, --version                        version for ssosync
+  -r, --region                         AWS region where identity store exists
+  -i, --identity-store-id              AWS Identity Store ID
 ```
 
 The function has `two behaviour` and these are controlled by the `--sync-method` flag, this behavior could be
@@ -213,13 +239,13 @@ AWS SSO. To sync regularly, you can run ssosync via AWS Lambda.
 **App only** This mode does not create the secrets but expects you to deployed a separate stack using the **Secrets only** mode within the same account
 > [!CAUTION]
 > If you want to use your own existing secrets then provide them as a comma separated list in the ##CrossStackConfigI## field in the following order:
-> __GoogleCredentials ARN__,__GoogleAdminEmail ARN__,__SCIMEndpoint ARN__,__SCIMAccessToken ARN__,__Region ARN__,__IdentityStoreID ARN__
+> __GoogleCredentials ARN__,__GoogleAdminEmail ARN__,__SCIMEndpoint ARN__,__SCIMAccessToken ARN__,__Region ARN__,__IdentityStoreID ARN__,__UserMappingTemplate ARN__
 > 
 **App for cross-account** This mode is used where you have deployed the secrets in a separate account, the arns of the KMS key and secrets need to be passed into the __CrossStackConfig__ field, It is easiest to have created the secrets in the other account using the ** Secrest for cross-account** mode, as the output can simply copied and pasted into the above field.
 
 > [!CAUTION]
 > If you want to use your own existing secrets then provide them as a comma separated list in the __CrossStackConfig__ field in the following order:
-> __GoogleCredentials ARN__,__GoogleAdminEmail ARN__,__SCIMEndpoint ARN__,__SCIMAccessToken ARN__,__Region ARN__,__IdentityStoreID ARN__,__KMS Key ARN__
+> __GoogleCredentials ARN__,__GoogleAdminEmail ARN__,__SCIMEndpoint ARN__,__SCIMAccessToken ARN__,__Region ARN__,__IdentityStoreID ARN__,__UserMappingTemplate ARN__,__KMS Key ARN__
 
 > [!IMPORTANT]
 > Be sure to allow access to the key and secrets in their respective policies to the role __SSOSyncAppRole__ in the app account.

@@ -172,6 +172,7 @@ func initConfig() {
 		"sync_method",
 		"region",
 		"identity_store_id",
+		"user_mapping_template",
 	}
 
 	for _, e := range appEnvVars {
@@ -233,6 +234,15 @@ func configLambda() {
 		log.Fatalf(errors.Wrap(err, "cannot read config: IDENTITY_STORE_ID").Error())
 	}
 	cfg.IdentityStoreID = unwrap
+
+	unwrap = os.Getenv("USER_MAPPING_TEMPLATE")
+	if len([]rune(unwrap)) != 0 {
+		unwrap, err = secrets.UserMappingTemplate(unwrap)
+		if err != nil {
+			log.Fatal(errors.Wrap(err, "cannot read config: USER_MAPPING_TEMPLATE").Error())
+		}
+		cfg.UserMappingTemplate = unwrap
+	}
 
         unwrap = os.Getenv("LOG_LEVEL")
         if len([]rune(unwrap)) != 0 {
@@ -301,6 +311,7 @@ func addFlags(cmd *cobra.Command, cfg *config.Config) {
 	rootCmd.Flags().StringVarP(&cfg.SyncMethod, "sync-method", "s", config.DefaultSyncMethod, "Sync method to use (users_groups|groups)")
 	rootCmd.Flags().StringVarP(&cfg.Region, "region", "r", "", "AWS Region where AWS SSO is enabled")
 	rootCmd.Flags().StringVarP(&cfg.IdentityStoreID, "identity-store-id", "i", "", "Identifier of Identity Store in AWS SSO")
+	rootCmd.Flags().StringVar(&cfg.UserMappingTemplate, "user-mapping-template", "", "Template for mapping users from Google Workspace to AWS")
 }
 
 func logConfig(cfg *config.Config) {

@@ -19,6 +19,7 @@ import (
 	"context"
 	"errors"
 	"io/ioutil"
+	"reflect"
 
 	"github.com/awslabs/ssosync/internal/aws"
 	"github.com/awslabs/ssosync/internal/config"
@@ -48,17 +49,23 @@ type syncGSuite struct {
 	identityStoreClient identitystoreiface.IdentityStoreAPI
 
 	users map[string]*aws.User
+	mapper UserMapper
 }
 
 // New will create a new SyncGSuite object
-func New(cfg *config.Config, a aws.Client, g google.Client, ids identitystoreiface.IdentityStoreAPI) SyncGSuite {
+func New(cfg *config.Config, a aws.Client, g google.Client, ids identitystoreiface.IdentityStoreAPI) (SyncGSuite, error) {
+	mapper, err := NewMapper(cfg.UserMappingTemplate)
+	if err != nil {
+		return nil, err
+	}
 	return &syncGSuite{
 		aws:                 a,
 		google:              g,
 		cfg:                 cfg,
 		identityStoreClient: ids,
 		users:               make(map[string]*aws.User),
-	}
+		mapper:              mapper,
+	}, nil
 }
 
 // SyncUsers will Sync Google Users to AWS SSO SCIM
@@ -73,6 +80,7 @@ func New(cfg *config.Config, a aws.Client, g google.Client, ids identitystoreifa
 //  orgName=Engineering orgTitle:Manager
 //  EmploymentData.projects:'GeneGnomes'
 func (s *syncGSuite) SyncUsers(query string) error {
+
 	log.Debug("get deleted users")
 	deletedUsers, err := s.google.GetDeletedUsers()
 	if err != nil {
@@ -129,14 +137,13 @@ func (s *syncGSuite) SyncUsers(query string) error {
 			s.users[uu.Username] = uu
 			// Update the user when suspended state is changed
 			if uu.Active == u.Suspended {
+				mapped, err := s.mapper.Map(uu, u)
+				if err != nil {
+					return err
+				}
 				log.Debug("Mismatch active/suspended, updating user")
 				// create new user object and update the user
-				_, err := s.aws.UpdateUser(aws.UpdateUser(
-					uu.ID,
-					u.Name.GivenName,
-					u.Name.FamilyName,
-					u.PrimaryEmail,
-					!u.Suspended))
+				_, err = s.aws.UpdateUser(mapped)
 				if err != nil {
 					return err
 				}
@@ -145,11 +152,11 @@ func (s *syncGSuite) SyncUsers(query string) error {
 		}
 
 		ll.Info("creating user")
-		uu, err := s.aws.CreateUser(aws.NewUser(
-			u.Name.GivenName,
-			u.Name.FamilyName,
-			u.PrimaryEmail,
-			!u.Suspended))
+		mapped, err := s.mapper.Map(&aws.User{}, u)
+		if err != nil {
+			return err
+		}
+		uu, err = s.aws.CreateUser(mapped)
 		if err != nil {
 			return err
 		}
@@ -294,8 +301,9 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 	if err != nil {
 		return err
 	}
-	log.WithField("googleGroups", googleGroups).Debug("Groups to sync")
-	log.WithField("googleUsers", googleUsers).Debug("Users to sync")
+	log.WithField("googleGroups", toJSON(googleGroups)).Debug("Groups to sync")
+	log.WithField("googleUsers", toJSON(googleUsers)).Debug("Users to sync")
+	log.WithField("googleGroupsUsers", toJSON(googleGroupsUsers)).Debug("User memberships to sync")
 
 	log.Info("get existing aws groups")
 	awsGroups, err := s.GetGroups()
@@ -305,13 +313,15 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 	}
 
 	log.Info("get existing aws users")
+	// populates only user.ID and user.username
 	awsUsers, err := s.GetUsers()
 	if err != nil {
 		log.Error("error getting aws users")
 		return err
 	}
 
-	log.Info("get active status for aws users")
+	log.Info("get full attributes for aws users")
+	scimUsers := make([]*aws.User, 0)
 	for _, awsUser := range awsUsers {
 		scimUser, err := s.aws.FindUserByEmail(awsUser.Username)
 
@@ -320,11 +330,11 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 			return err
 		}
 
-		awsUser.Active = scimUser.Active
+		scimUsers = append(scimUsers, scimUser)
 	}
 
 	log.Info("preparing map of user id's to user")
-	awsUsersMap := CreateUserIDtoUserObjMap(awsUsers)
+	awsUsersMap := CreateUserIDtoUserObjMap(scimUsers)
 
 	log.Debug("preparing list of aws groups and their members")
 	awsGroupsUsers, err := s.GetGroupMembershipsLists(awsGroups, awsUsersMap)
@@ -333,8 +343,20 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 	}
 
 	// create list of changes by operations
-	addAWSUsers, delAWSUsers, updateAWSUsers, _ := getUserOperations(awsUsers, googleUsers)
+	addAWSUsers, delAWSUsers, updateAWSUsers, _ := getUserOperations(scimUsers, googleUsers, s.mapper)
 	addAWSGroups, delAWSGroups, equalAWSGroups := getGroupOperations(awsGroups, googleGroups)
+
+	log.WithFields(log.Fields{
+		"addAWSUsers": toJSON(addAWSUsers),
+		"delAWSUsers": toJSON(delAWSUsers),
+		"updateAWSUsers": toJSON(updateAWSUsers),
+	}).Debug("getUserOperations results")
+
+	log.WithFields(log.Fields{
+		"addAWSGroups": toJSON(addAWSGroups),
+		"delAWSGroups": toJSON(delAWSGroups),
+		"equalAWSGroups": toJSON(equalAWSGroups),
+	}).Debug("getGroupOperations results")
 
 	log.Info("syncing changes")
 	// delete aws users (deleted in google)
@@ -343,18 +365,12 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 
 		log := log.WithFields(log.Fields{"user": awsUser.Username})
 
-		log.Debug("finding user")
-		awsUserFull, err := s.aws.FindUserByEmail(awsUser.Username)
-		if err != nil {
-			return err
-		}
-
 		log.Warn("deleting user")
 		_, err = s.identityStoreClient.DeleteUser(
-			&identitystore.DeleteUserInput{IdentityStoreId: &s.cfg.IdentityStoreID, UserId: &awsUserFull.ID},
+			&identitystore.DeleteUserInput{IdentityStoreId: &s.cfg.IdentityStoreID, UserId: &awsUser.ID},
 		)
 		if err != nil {
-			log.WithField("user", awsUser).Error("error deleting user")
+			log.WithField("user", toJSON(awsUser)).Error("error deleting user")
 			return err
 		}
 	}
@@ -365,21 +381,10 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 
 		log := log.WithFields(log.Fields{"user": awsUser.Username})
 
-		log.Debug("finding user")
-		awsUserFull, err := s.aws.FindUserByEmail(awsUser.Username)
-		if err != nil {
-			return err
-		}
-
 		log.Warn("updating user")
-		_, err = s.aws.UpdateUser(aws.UpdateUser(
-			awsUserFull.ID,
-			awsUser.Name.GivenName,
-			awsUser.Name.FamilyName,
-			awsUser.Username,
-			awsUser.Active))
+		_, err = s.aws.UpdateUser(awsUser)
 		if err != nil {
-		 	log.WithField("user", awsUser).Error("error updating user")
+		 	log.WithField("user", toJSON(awsUser)).Error("error updating user")
 			return err
 		}
 	}
@@ -398,7 +403,7 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 				log.WithField("user", awsUser.Username).Warn("user already exists")
 				continue
 			}
-			log.WithField("user", awsUser).Error("error creating user")
+			log.WithField("user", toJSON(awsUser)).Error("error creating user")
 			return err
 		}
 	}
@@ -533,7 +538,7 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
                 return nil, nil, nil, err
         }
         for _, u := range googleUsers {
-		log.WithField("email", u).Debug("processing member of gUserDetailCache")
+		//log.WithField("user", toJSON(u)).Debug("processing member of gUserDetailCache")
                 gUserDetailCache[u.PrimaryEmail] = u
         }
 
@@ -555,7 +560,7 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 
         log.Debug("process users from google, filtering as required")
 	for _, u := range googleUsers {
-		log.WithField("email", u).Debug("processing userMatch")
+		log.WithField("email", u.PrimaryEmail).Debug("processing userMatch")
 
                 // Remove any users that should be ignored
 		if s.ignoreUser(u.PrimaryEmail) {
@@ -645,10 +650,10 @@ func getGroupOperations(awsGroups []*aws.Group, googleGroups []*admin.Group) (ad
 	// AWS Groups found and not found in google
 	for _, gGroup := range googleGroups {
 		if _, found := awsMap[gGroup.Name]; found {	
-		 	log.WithField("gGroup", gGroup).Debug("equals")
+		 	log.WithField("gGroup", toJSON(gGroup)).Debug("equals")
 			equals = append(equals, awsMap[gGroup.Name])
 		} else {
-		 	log.WithField("gGroup", gGroup).Debug("add")
+		 	log.WithField("gGroup", toJSON(gGroup)).Debug("add")
 			add = append(add, aws.NewGroup(gGroup.Name))
 		}
 	}
@@ -656,7 +661,7 @@ func getGroupOperations(awsGroups []*aws.Group, googleGroups []*admin.Group) (ad
 	// Google Groups founds and not in aws
 	for _, awsGroup := range awsGroups {
 		if _, found := googleMap[awsGroup.DisplayName]; !found {
-		 	log.WithField("awsGroup", awsGroup).Debug("delete")
+		 	log.WithField("awsGroup", toJSON(awsGroup)).Debug("delete")
 			delete = append(delete, aws.NewGroup(awsGroup.DisplayName))
 		}
 	}
@@ -665,45 +670,61 @@ func getGroupOperations(awsGroups []*aws.Group, googleGroups []*admin.Group) (ad
 }
 
 // getUserOperations returns the users of AWS that must be added, deleted, updated and are equals
-func getUserOperations(awsUsers []*aws.User, googleUsers []*admin.User) (add []*aws.User, delete []*aws.User, update []*aws.User, equals []*aws.User) {
+func getUserOperations(awsUsers []*aws.User, googleUsers []*admin.User, mapper UserMapper) (add []*aws.User, delete []*aws.User, update []*aws.User, equals []*aws.User) {
 
 	log.Debug("getUserOperations()")
 	awsMap := make(map[string]*aws.User)
-	googleMap := make(map[string]struct{})
+	googleMap := make(map[string]*admin.User)
 
 	for _, awsUser := range awsUsers {
 		awsMap[awsUser.Username] = awsUser
 	}
 
 	for _, gUser := range googleUsers {
-		googleMap[gUser.PrimaryEmail] = struct{}{}
+		googleMap[gUser.PrimaryEmail] = gUser
 	}
 
 	// AWS Users found and not found in google
 	for _, gUser := range googleUsers {
 		if awsUser, found := awsMap[gUser.PrimaryEmail]; found {
-			if awsUser.Active == gUser.Suspended ||
-				awsUser.Name.GivenName != gUser.Name.GivenName ||
-				awsUser.Name.FamilyName != gUser.Name.FamilyName {
-				log.WithField("gUser", gUser).Debug("update")
-				log.WithField("awsUser", awsUser).Debug("update")
-				update = append(update, aws.NewUser(gUser.Name.GivenName, gUser.Name.FamilyName, gUser.PrimaryEmail, !gUser.Suspended))
-
+			mapped, err := mapper.Map(awsUser, gUser)
+			if err != nil {
+				log.WithFields(log.Fields{"gUser": toJSON(gUser), "error": err}).Error("Failed to map Google user")
+				// consider the users as equals for skipping its processing
+				equals = append(equals, awsUser)
+				continue
+			}
+			if !reflect.DeepEqual(awsUser, mapped) {
+				log.WithFields(log.Fields{
+					"gUser": toJSON(gUser),
+					"awsUser": toJSON(awsUser),
+					"mappedUser": toJSON(mapped),
+				}).Debug("update")
+				update = append(update, mapped)
 			} else {
-			        log.WithField("awsUser", awsUser).Debug("equals")
+				log.WithFields(log.Fields{
+					"gUser": toJSON(gUser),
+					"awsUser": toJSON(awsUser),
+					"mappedUser": toJSON(mapped),
+				}).Debug("equals")
 				equals = append(equals, awsUser)
 			}
 		} else {
-		        log.WithField("gUser", gUser).Debug("add")
-			add = append(add, aws.NewUser(gUser.Name.GivenName, gUser.Name.FamilyName, gUser.PrimaryEmail, !gUser.Suspended))
+			mapped, err := mapper.Map(&aws.User{}, gUser)
+			if err != nil {
+				log.WithFields(log.Fields{"gUser": toJSON(gUser), "error": err}).Error("Failed to map Google user")
+				continue
+			}
+			log.WithFields(log.Fields{"gUser": toJSON(gUser), "mappedUser": toJSON(mapped)}).Debug("add")
+			add = append(add, mapped)
 		}
 	}
 
 	// Google Users founds and not in aws
 	for _, awsUser := range awsUsers {
 		if _, found := googleMap[awsUser.Username]; !found {
-			log.WithField("awsUser", awsUser).Debug("delete")
-			delete = append(delete, aws.NewUser(awsUser.Name.GivenName, awsUser.Name.FamilyName, awsUser.Username, awsUser.Active))
+			log.WithField("awsUser", toJSON(awsUser)).Debug("delete")
+			delete = append(delete, awsUser)
 		}
 	}
 
@@ -812,7 +833,11 @@ func DoSync(ctx context.Context, cfg *config.Config) error {
 	// 1. SCIM API client
 	// 2. Google Directory API client
 	// 3. Identity Store Public API client
-	c := New(cfg, awsScimClient, googleClient, identityStoreClient)
+	c, err := New(cfg, awsScimClient, googleClient, identityStoreClient)
+	if err != nil {
+		log.WithField("error", err).Warn("Problem creating sync client")
+		return err
+	}
 
 	log.WithField("sync_method", cfg.SyncMethod).Info("syncing")
 	if cfg.SyncMethod == config.DefaultSyncMethod {
@@ -929,46 +954,9 @@ func ListUsersPagesCallbackFn(page *identitystore.ListUsersOutput, lastPage bool
 // ConvertSdkUserObjToNative
 // Convert SDK user to native user object
 func ConvertSdkUserObjToNative(user *identitystore.User) *aws.User {
-	// Convert emails into native Email object
-	userEmails := make([]aws.UserEmail, 0)
-
-	for _, email := range user.Emails {
-		if email.Value == nil || email.Type == nil || email.Primary == nil {
-              		// This must be a user created by AWS Control Tower
-                        // Need feature development to make how these users are treated
-			// configurable.
-			continue
-		}
-		userEmails = append(userEmails, aws.UserEmail{
-			Value:   *email.Value,
-			Type:    *email.Type,
-			Primary: *email.Primary,
-		})
-	}
-
-	// Convert addresses into native Address object
-	userAddresses := make([]aws.UserAddress, 0)
-
-	for _, address := range user.Addresses {
-		userAddresses = append(userAddresses, aws.UserAddress{
-			Type: *address.Type,
-		})
-	}
-
 	return &aws.User{
 		ID:       *user.UserId,
-		Schemas:  []string{"urn:ietf:params:scim:schemas:core:2.0:User"},
 		Username: *user.UserName,
-		Name: struct {
-			FamilyName string `json:"familyName"`
-			GivenName  string `json:"givenName"`
-		}{
-			FamilyName: *user.Name.FamilyName,
-			GivenName:  *user.Name.GivenName,
-		},
-		DisplayName: *user.DisplayName,
-		Emails:      userEmails,
-		Addresses:   userAddresses,
 	}
 }
 
@@ -1103,7 +1091,7 @@ func (s *syncGSuite) getGoogleUsersInGroup(group *admin.Group, userCache map[str
 		    	log.WithField("Email:", m.Email).Debug("calling getGoogleGroupMembers() for nested group")
 			_, found := groupCache[m.Email]
 			if found {
-                        	membersUsers = append (membersUsers, s.getGoogleUsersInGroup(groupCache[m.Email], userCache, groupCache)...)
+                               membersUsers = append(membersUsers, s.getGoogleUsersInGroup(groupCache[m.Email], userCache, groupCache)...)
 			} else {
                         	log.WithField("id", m.Email).Warn("missing nested group")
 			}
