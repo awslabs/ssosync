@@ -23,7 +23,7 @@ type Config struct {
 	SCIMAccessToken string `mapstructure:"scim_access_token"`
 	// IsLambda ...
 	IsLambda bool
-        // IsLambdaRunningInCodePipeline ...
+	// IsLambdaRunningInCodePipeline ...
 	IsLambdaRunningInCodePipeline bool
 	// Ignore users ...
 	IgnoreUsers []string `mapstructure:"ignore_users"`
@@ -37,6 +37,8 @@ type Config struct {
 	Region string `mapstructure:"region"`
 	// IdentityStoreID is the ID of the identity store
 	IdentityStoreID string `mapstructure:"identity_store_id"`
+	// Print the commands, but do not perform any modifications.
+	DryRun bool
 }
 
 const (
