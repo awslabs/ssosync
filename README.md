@@ -246,7 +246,7 @@ Execute `make package` in the console. Which will package and upload the functio
 Build
 
 ```bash
-aws cloudformation validate-template --template-body  file://template.yaml 1>/dev/null &&
+aws cloudformation validate-template --template-body  file://sar-template.yaml 1>/dev/null &&
 sam validate &&
 sam build
 ```

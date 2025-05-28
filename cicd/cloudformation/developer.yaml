@@ -418,7 +418,7 @@ Resources:
           - Name: S3Bucket
             Value: !Ref AppBucket
           - Name: Template
-            Value: template.yaml
+            Value: sar-template.yaml
       Artifacts:
         Name: SSOSync
         Type: CODEPIPELINE

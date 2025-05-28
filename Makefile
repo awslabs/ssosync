@@ -1,10 +1,10 @@
-OUTPUT = main # Referenced as Handler in template.yaml
+OUTPUT = main # Referenced as Handler in sar-template.yaml
 RELEASER = goreleaser
 PACKAGED_TEMPLATE = packaged.yaml
 STACK_NAME := $(STACK_NAME)
 S3_BUCKET := $(S3_BUCKET)
 S3_PREFIX := $(S3_PREFIX)
-TEMPLATE = template.yaml
+TEMPLATE = sar-template.yaml
 APP_NAME ?= ssosync
 GOREL ?= go run github.com/goreleaser/goreleaser/v2@latest
 
