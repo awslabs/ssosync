@@ -15,8 +15,8 @@ func TestConfig(t *testing.T) {
 
 	assert.NotNil(cfg)
 
-	assert.Equal(cfg.LogLevel, DefaultLogLevel)
-	assert.Equal(cfg.LogFormat, DefaultLogFormat)
-	assert.Equal(cfg.Debug, DefaultDebug)
-	assert.Equal(cfg.GoogleCredentials, DefaultGoogleCredentials)
+	assert.Equal(DefaultLogLevel, cfg.LogLevel)
+	assert.Equal(DefaultLogFormat, cfg.LogFormat)
+	assert.Equal(DefaultDebug, cfg.Debug)
+	assert.Equal(DefaultGoogleCredentials, cfg.GoogleCredentials)
 }

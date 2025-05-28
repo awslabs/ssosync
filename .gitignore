@@ -34,12 +34,8 @@ ssosync
 # Noise from os/editors
 .DS_Store
 *.swp
-*/.DS_Store
-cicd/.DS_Store
 release.yaml
 staging.yaml
 *.orig
 *.rej
-cicd/.DS_Store
 *.swo
-cicd/.DS_Store

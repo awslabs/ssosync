@@ -1,0 +1,78 @@
+{
+  "name": "Golang",
+  "image": "mcr.microsoft.com/devcontainers/go:1.24-bookworm",
+  "features": {
+    "ghcr.io/devcontainers-extra/features/aws-cdk": {},
+    "ghcr.io/devcontainers/features/aws-cli": {},
+    //"ghcr.io/devcontainers-extra/features/pnpm": {}
+    "ghcr.io/customink/codespaces-features/sam-cli": {},
+    "ghcr.io/brokeyourbike/devcontainer-features/mockery-go:0": {}
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "amazonwebservices.amazon-q-vscode",
+        "golang.Go",
+        "ms-vscode.makefile-tools",
+        "redhat.vscode-yaml",
+        "github.vscode-github-actions",
+        "GitHub.vscode-pull-request-github"
+      ],
+      "settings": {
+        "editor.formatOnSave": true,
+        "terminal.integrated.allowChords": false,
+        "editor.codeActionsOnSave": {
+          "source.organizeImports": "always"
+        },
+        "typescript.updateImportsOnFileMove.enabled": "always",
+        "javascript.updateImportsOnFileMove.enabled": "always",
+        "go.useLanguageServer": true,
+        "go.lintTool": "golangci-lint",
+        "go.lintFlags": [
+          "--path-mode=abs",
+          "--fast-only"
+        ],
+        "go.formatTool": "custom",
+        "go.alternateTools": {
+          "customFormatter": "golangci-lint"
+        },
+        "go.formatFlags": [
+          "fmt",
+          "--stdin"
+        ]
+      }
+    }
+  },
+  "mounts": [
+    {
+      "source": "aws-cache",
+      "target": "/home/vscode/.cache/aws",
+      "type": "volume"
+    },
+    {
+      "source": "go-cache",
+      "target": "/home/vscode/.cache/go-build",
+      "type": "volume"
+    },
+    {
+      "source": "${localEnv:HOME}/.ssh",
+      "target": "/home/vscode/.ssh",
+      "type": "bind"
+    },
+    {
+      "source": "${localEnv:HOME}/.aws",
+      "target": "/home/vscode/.aws",
+      "type": "bind"
+    },
+    {
+      "source": "${localEnv:HOME}/.gitconfig-aws",
+      "target": "/home/vscode/.gitconfig",
+      "type": "bind"
+    }
+  ],
+  "remoteUser": "vscode",
+  "containerEnv": {
+    " GOPROXY": "direct"
+  },
+  "postCreateCommand": "sudo chmod auog+rwx /home/vscode/.cache -R && npm install -g npm && npm install -g repolinter"
+}

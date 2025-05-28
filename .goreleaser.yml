@@ -1,38 +1,41 @@
-# .goreleaser.yml
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
 project_name: ssosync
+version: 2
 
 before:
   hooks:
     - go mod download
 builds:
-- env:
-    - CGO_ENABLED=0
-  goos:
-    - linux
-    - darwin
-    - windows
-  goarch:
-    - 386
-    - amd64
-    - arm
-    - arm64
-  ignore:
-    - goos: darwin
-      goarch: 386
-    - goos: windows
-      goarch: 386
-  ldflags:
-     - -s -w -X github.com/awslabs/ssosync/cmd.version={{.Version}} -X github.com/awslabs/ssosync/cmd.commit={{.Commit}} -X github.com/awslabs/ssosync/cmd.date={{.Date}} -X github.com/awslabs/ssosync/cmd.builtBy=goreleaser
+  - env:
+      - CGO_ENABLED=0
+      - GOAMD64=v1 # explicit default
+      - GOARM64=v8.2
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - "386"
+      - amd64
+      - arm
+      - arm64
+    ignore:
+      - goos: darwin
+        goarch: "386"
+      - goos: windows
+        goarch: "386"
+    ldflags:
+      - -s -w -X github.com/awslabs/ssosync/cmd.version={{.Version}} -X github.com/awslabs/ssosync/cmd.commit={{.Commit}} -X github.com/awslabs/ssosync/cmd.date={{.Date}} -X github.com/awslabs/ssosync/cmd.builtBy=goreleaser
 checksum:
-  name_template: '{{ .ProjectName }}_checksums.txt'
+  name_template: "{{ .ProjectName }}_checksums.txt"
 changelog:
   sort: asc
   filters:
     exclude:
-    - '^docs:'
-    - '^test:'
-    - Merge pull request
-    - Merge branch
+      - "^docs:"
+      - "^test:"
+      - Merge pull request
+      - Merge branch
 archives:
   - name_template: >-
       {{- .ProjectName }}_
@@ -42,6 +45,6 @@ archives:
       {{- else }}{{ .Arch }}{{ end }}
       {{- if .Arm }}v{{ .Arm }}{{ end -}}
     format_overrides:
-    - goos: windows
-      format: zip
-
+      - goos: windows
+        formats:
+          - zip

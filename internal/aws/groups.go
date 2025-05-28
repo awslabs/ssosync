@@ -14,9 +14,11 @@
 
 package aws
 
+import "github.com/awslabs/ssosync/internal/interfaces"
+
 // NewGroup creates an object representing a group with the given name
-func NewGroup(groupName string) *Group {
-	return &Group{
+func NewGroup(groupName string) *interfaces.Group {
+	return &interfaces.Group{
 		Schemas:     []string{"urn:ietf:params:scim:schemas:core:2.0:Group"},
 		DisplayName: groupName,
 	}

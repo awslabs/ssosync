@@ -16,7 +16,7 @@ Metadata:
           - Region
           - IdentityStoreID
       - Label:
-          default: Google Workspace Credentials 
+          default: Google Workspace Credentials
         Parameters:
           - GoogleAdminEmail
           - GoogleCredentials
@@ -117,7 +117,7 @@ Parameters:
     AllowedValues:
       - json
       - text
-        
+
   TimeOut:
     Type: Number
     Description: |
@@ -126,7 +126,7 @@ Parameters:
     MinValue: 1
     MaxValue: 900
 
-# Secrets
+  # Secrets
   GoogleCredentials:
     Type: String
     Description: |
@@ -209,73 +209,73 @@ Parameters:
 
   SyncMethod:
     Type: String
-    Description: Sync method to use 
+    Description: Sync method to use
     Default: groups
     AllowedValues:
       - groups
       - users_groups
 
 Conditions:
-  SetFunctionName: !Not 
+  SetFunctionName: !Not
     - !Equals
-        - !Ref FunctionName
-        - ""
+      - !Ref FunctionName
+      - ""
   SetGoogleUserMatch: !And
     - !Not
-        - !Equals
-            - !Ref GoogleUserMatch
-            - ""
-    - !Equals
-        - !Ref SyncMethod
-        - "groups"
-  SetGoogleGroupMatch: !And 
-    - !Not
-        - !Equals
-            - !Ref GoogleGroupMatch
-            - ""
-    - !Equals
-        - !Ref SyncMethod
-        - "groups"
-  SetIgnoreGroups: !Not 
-    - !Equals
-        - !Ref IgnoreGroups
+      - !Equals
+        - !Ref GoogleUserMatch
         - ""
+    - !Equals
+      - !Ref SyncMethod
+      - "groups"
+  SetGoogleGroupMatch: !And
+    - !Not
+      - !Equals
+        - !Ref GoogleGroupMatch
+        - ""
+    - !Equals
+      - !Ref SyncMethod
+      - "groups"
+  SetIgnoreGroups: !Not
+    - !Equals
+      - !Ref IgnoreGroups
+      - ""
   SetIgnoreUsers: !Not
     - !Equals
-        - !Ref IgnoreUsers
-        - ""
+      - !Ref IgnoreUsers
+      - ""
   SetIncludeGroups: !And
     - !Not
-        - !Equals
-            - !Ref IncludeGroups
-            - ""
+      - !Equals
+        - !Ref IncludeGroups
+        - ""
     - !Equals
-        - !Ref SyncMethod
-        - "users_groups"
+      - !Ref SyncMethod
+      - "users_groups"
   OnSchedule: !Not
     - !Equals
-        - !Ref ScheduleExpression
-        - ""
+      - !Ref ScheduleExpression
+      - ""
   CreateFunction: !Or
     - !Equals
-        - !Ref DeployPattern
-        - "App for cross-account"
+      - !Ref DeployPattern
+      - "App for cross-account"
     - !Equals
-        - !Ref DeployPattern
-        - "App + secrets"
+      - !Ref DeployPattern
+      - "App + secrets"
     - !Equals
-        - !Ref DeployPattern
-        - "App only"
+      - !Ref DeployPattern
+      - "App only"
   CreateSecrets: !Or
     - !Equals
-        - !Ref DeployPattern
-        - "App + secrets"
+      - !Ref DeployPattern
+      - "App + secrets"
     - !Equals
-        - !Ref DeployPattern
-        - "Secrets only"
+      - !Ref DeployPattern
+      - "Secrets only"
     - !Equals
-        - !Ref DeployPattern
-        - "Secrets for cross-account"
+      - !Ref DeployPattern
+      - "Secrets for cross-account"
   CreateKey: !Equals
     - !Ref DeployPattern
     - "Secrets for cross-account"
@@ -284,21 +284,21 @@ Conditions:
     - "App for cross-account"
   LocalSecrets: !Or
     - !Equals
-        - !Ref DeployPattern
-        - "App + secrets"
+      - !Ref DeployPattern
+      - "App + secrets"
     - !Equals
-        - !Ref DeployPattern
-        - "App only"
+      - !Ref DeployPattern
+      - "App only"
   OutputFunction: !Or
     - !Equals
-        - !Ref DeployPattern
-        - "App + secrets"
+      - !Ref DeployPattern
+      - "App + secrets"
     - !Equals
-        - !Ref DeployPattern
-        - "App only"
+      - !Ref DeployPattern
+      - "App only"
     - !Equals
-        - !Ref DeployPattern
-        - "App for cross-account"
+      - !Ref DeployPattern
+      - "App for cross-account"
   OutputSecrets: !Equals
     - !Ref DeployPattern
     - "Secrets only"
@@ -307,59 +307,59 @@ Rules:
   SecretValues:
     RuleCondition: !Or
       - !Equals
-          - !Ref DeployPattern
-          - "App + secrets"
+        - !Ref DeployPattern
+        - "App + secrets"
       - !Equals
-          - !Ref DeployPattern
-          - "Secrets only"
+        - !Ref DeployPattern
+        - "Secrets only"
       - !Equals
-          - !Ref DeployPattern
-          - "Secrets for cross-account"
+        - !Ref DeployPattern
+        - "Secrets for cross-account"
     Assertions:
       - Assert: !Not
           - !Equals
-              - !Ref GoogleCredentials
-              - ""
-        AssertDescription: 'The contents of the Credentials.json is required for this deployment type.'
+            - !Ref GoogleCredentials
+            - ""
+        AssertDescription: "The contents of the Credentials.json is required for this deployment type."
       - Assert: !Not
           - !Equals
-              - !Ref GoogleAdminEmail
-              - ""
-        AssertDescription: 'The email address of a directory admin is required for this deployment type.'
+            - !Ref GoogleAdminEmail
+            - ""
+        AssertDescription: "The email address of a directory admin is required for this deployment type."
       - Assert: !Not
           - !Equals
-              - !Ref SCIMEndpointUrl
-              - ""
-        AssertDescription: 'The SCIM url from IAM Identity Center is required for this deployment type.'
+            - !Ref SCIMEndpointUrl
+            - ""
+        AssertDescription: "The SCIM url from IAM Identity Center is required for this deployment type."
       - Assert: !Not
           - !Equals
-              - !Ref SCIMEndpointAccessToken
-              - ""
-        AssertDescription: 'The SCIM Access Token is required for this deployment type.'
+            - !Ref SCIMEndpointAccessToken
+            - ""
+        AssertDescription: "The SCIM Access Token is required for this deployment type."
       - Assert: !Not
           - !Equals
-              - !Ref Region
-              - ""
-        AssertDescription: 'The Region in which IAM Identity Center is deployed is required for this deployment type.'
+            - !Ref Region
+            - ""
+        AssertDescription: "The Region in which IAM Identity Center is deployed is required for this deployment type."
       - Assert: !Not
           - !Equals
-              - !Ref IdentityStoreID
-              - ""
-        AssertDescription: 'The Identity Store Id for IAM Identity Center is required for this deployment type.'
+            - !Ref IdentityStoreID
+            - ""
+        AssertDescription: "The Identity Store Id for IAM Identity Center is required for this deployment type."
 
   LocalSecrets:
-    RuleCondition:  !Or
+    RuleCondition: !Or
       - !Equals
-          - !Ref DeployPattern
-          - "App + secrets"
+        - !Ref DeployPattern
+        - "App + secrets"
       - !Equals
-          - !Ref DeployPattern
-          - "Secrets only"
+        - !Ref DeployPattern
+        - "Secrets only"
     Assertions:
       - Assert: !Equals
           - !Ref CrossStackConfig
           - ""
-        AssertDescription: 'Do not provide a Cross Stack Configuration for this deployment type.'
+        AssertDescription: "Do not provide a Cross Stack Configuration for this deployment type."
 
   CrossSecrets:
     RuleCondition: !Equals
@@ -368,51 +368,50 @@ Rules:
     Assertions:
       - Assert: !Not
           - !Equals
-              - !Ref CrossStackConfig
-              - ""
-        AssertDescription: 'The AWS account id, of the account where you intend to deploy the app.'
+            - !Ref CrossStackConfig
+            - ""
+        AssertDescription: "The AWS account id, of the account where you intend to deploy the app."
 
   CrossApp:
     RuleCondition: !Or
       - !Equals
-          - !Ref DeployPattern
-          - "App"
+        - !Ref DeployPattern
+        - "App"
       - !Equals
-          - !Ref DeployPattern
-          - "App for cross-account"
+        - !Ref DeployPattern
+        - "App for cross-account"
     Assertions:
       - Assert: !Equals
           - !Ref GoogleCredentials
           - ""
-        AssertDescription: 'A value for GoogleCredentials is not required for this deployment type.'
+        AssertDescription: "A value for GoogleCredentials is not required for this deployment type."
       - Assert: !Equals
           - !Ref GoogleAdminEmail
           - ""
-        AssertDescription: 'A value for GoogleAdminEmail is not required for this deployment type.'
+        AssertDescription: "A value for GoogleAdminEmail is not required for this deployment type."
       - Assert: !Equals
           - !Ref SCIMEndpointUrl
           - ""
-        AssertDescription: 'A value for SCIMEndpointUrl is not required for this deployment type.'
+        AssertDescription: "A value for SCIMEndpointUrl is not required for this deployment type."
       - Assert: !Equals
           - !Ref SCIMEndpointAccessToken
           - ""
-        AssertDescription: 'A value for SCIMEndpointAccessToken is not required for this deployment type.'
+        AssertDescription: "A value for SCIMEndpointAccessToken is not required for this deployment type."
       - Assert: !Equals
           - !Ref Region
           - ""
-        AssertDescription: 'A value for Region is not required for this deployment type.'
+        AssertDescription: "A value for Region is not required for this deployment type."
       - Assert: !Equals
           - !Ref IdentityStoreID
           - ""
-        AssertDescription: 'A value for IdentityStoreID is not required for this deployment type.'
+        AssertDescription: "A value for IdentityStoreID is not required for this deployment type."
       - Assert: !Not
           - !Equals
-              - !Ref CrossStackConfig
-              - ""
-        AssertDescription: 'AppConfig copied from the outputs of the secrets stack is required for this deployment type.'
+            - !Ref CrossStackConfig
+            - ""
+        AssertDescription: "AppConfig copied from the outputs of the secrets stack is required for this deployment type."
 
 Resources:
-
   SSOSyncRoleLocal:
     Type: AWS::IAM::Role
     Condition: LocalSecrets
@@ -422,30 +421,54 @@ Resources:
         Version: 2012-10-17
         Statement:
           - Action:
-            - sts:AssumeRole
+              - sts:AssumeRole
             Effect: Allow
             Principal:
               Service:
-              - lambda.amazonaws.com
+                - lambda.amazonaws.com
       Path: /
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AWSLambdaExecute
       Policies:
         - PolicyName: SSOSyncAppPolicy
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: "2012-10-17"
             Statement:
               - Sid: SSMGetParameterPolicy
                 Effect: Allow
                 Action:
                   - "secretsmanager:Get*"
                 Resource:
-                  - !If [CreateSecrets, !Ref SecretGoogleCredentials, !Select [0, !Split [',', !Ref CrossStackConfig]]]
-                  - !If [CreateSecrets, !Ref SecretGoogleAdminEmail, !Select [1, !Split [',', !Ref CrossStackConfig]]]
-                  - !If [CreateSecrets, !Ref SecretSCIMEndpoint, !Select [2, !Split [',', !Ref CrossStackConfig]]]
-                  - !If [CreateSecrets, !Ref SecretSCIMAccessToken, !Select [3, !Split [',', !Ref CrossStackConfig]]]
-                  - !If [CreateSecrets, !Ref SecretRegion, !Select [4, !Split [',', !Ref CrossStackConfig]]]
-                  - !If [CreateSecrets, !Ref SecretIdentityStoreID, !Select [5, !Split [',', !Ref CrossStackConfig]]]
+                  - !If [
+                      CreateSecrets,
+                      !Ref SecretGoogleCredentials,
+                      !Select [0, !Split [",", !Ref CrossStackConfig]],
+                    ]
+                  - !If [
+                      CreateSecrets,
+                      !Ref SecretGoogleAdminEmail,
+                      !Select [1, !Split [",", !Ref CrossStackConfig]],
+                    ]
+                  - !If [
+                      CreateSecrets,
+                      !Ref SecretSCIMEndpoint,
+                      !Select [2, !Split [",", !Ref CrossStackConfig]],
+                    ]
+                  - !If [
+                      CreateSecrets,
+                      !Ref SecretSCIMAccessToken,
+                      !Select [3, !Split [",", !Ref CrossStackConfig]],
+                    ]
+                  - !If [
+                      CreateSecrets,
+                      !Ref SecretRegion,
+                      !Select [4, !Split [",", !Ref CrossStackConfig]],
+                    ]
+                  - !If [
+                      CreateSecrets,
+                      !Ref SecretIdentityStoreID,
+                      !Select [5, !Split [",", !Ref CrossStackConfig]],
+                    ]
               - Sid: IdentityStoreAccesPolicy
                 Effect: Allow
                 Action:
@@ -477,36 +500,36 @@ Resources:
         Version: 2012-10-17
         Statement:
           - Action:
-            - sts:AssumeRole
+              - sts:AssumeRole
             Effect: Allow
             Principal:
               Service:
-              - lambda.amazonaws.com
+                - lambda.amazonaws.com
       Path: /
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AWSLambdaExecute
       Policies:
         - PolicyName: SSOSyncAppPolicy
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: "2012-10-17"
             Statement:
               - Sid: SSMGetParameterPolicy
                 Effect: Allow
                 Action:
                   - "secretsmanager:Get*"
                 Resource:
-                  - !Select [0, !Split [',', !Ref CrossStackConfig]] # GoogleCredentials
-                  - !Select [1, !Split [',', !Ref CrossStackConfig]] # GoogleAdminEmail
-                  - !Select [2, !Split [',', !Ref CrossStackConfig]] # SCIMEndpointUrl
-                  - !Select [3, !Split [',', !Ref CrossStackConfig]] # SCIMEndpointAccessToken
-                  - !Select [4, !Split [',', !Ref CrossStackConfig]] # Region
-                  - !Select [5, !Split [',', !Ref CrossStackConfig]] # IdentityStoreID
+                  - !Select [0, !Split [",", !Ref CrossStackConfig]] # GoogleCredentials
+                  - !Select [1, !Split [",", !Ref CrossStackConfig]] # GoogleAdminEmail
+                  - !Select [2, !Split [",", !Ref CrossStackConfig]] # SCIMEndpointUrl
+                  - !Select [3, !Split [",", !Ref CrossStackConfig]] # SCIMEndpointAccessToken
+                  - !Select [4, !Split [",", !Ref CrossStackConfig]] # Region
+                  - !Select [5, !Split [",", !Ref CrossStackConfig]] # IdentityStoreID
               - Sid: KMSDecryptPolicy
                 Effect: Allow
                 Action:
                   - kms:Decrypt
                 Resource:
-                  -  !Select [6, !Split [',', !Ref CrossStackConfig]] # KMSSecret
+                  - !Select [6, !Split [",", !Ref CrossStackConfig]] # KMSSecret
               - Sid: IdentityStoreAccesPolicy
                 Effect: Allow
                 Action:
@@ -535,8 +558,13 @@ Resources:
     Properties:
       FunctionName: !If [SetFunctionName, !Ref FunctionName, !Ref AWS::NoValue]
       Description: "An instance of ssosync deplyed from the Serverless Application Repository, for details see http://https://github.com/awslabs/ssosync"
-      Role: !If [RemoteSecrets, !GetAtt SSOSyncRoleRemote.Arn, !GetAtt SSOSyncRoleLocal.Arn]
-      Runtime: provided.al2
+      Role:
+        !If [
+          RemoteSecrets,
+          !GetAtt SSOSyncRoleRemote.Arn,
+          !GetAtt SSOSyncRoleLocal.Arn,
+        ]
+      Runtime: provided.al2023
       Handler: bootstrap
       Architectures:
         - arm64
@@ -546,26 +574,61 @@ Resources:
         Variables:
           LOG_LEVEL: !Ref LogLevel
           LOG_FORMAT: !Ref LogFormat
-          GOOGLE_CREDENTIALS: !If [CreateSecrets, !Ref SecretGoogleCredentials, !Select [0, !Split [',', !Ref CrossStackConfig]]]
-          GOOGLE_ADMIN: !If [CreateSecrets, !Ref SecretGoogleAdminEmail, !Select [1, !Split [',', !Ref CrossStackConfig]]]
-          SCIM_ENDPOINT: !If [CreateSecrets, !Ref SecretSCIMEndpoint, !Select [2, !Split [',', !Ref CrossStackConfig]]]
-          SCIM_ACCESS_TOKEN: !If [CreateSecrets, !Ref SecretSCIMAccessToken, !Select [3, !Split [',', !Ref CrossStackConfig]]]
-          REGION: !If [CreateSecrets, !Ref SecretRegion, !Select [4, !Split [',', !Ref CrossStackConfig]]]
-          IDENTITY_STORE_ID: !If [CreateSecrets, !Ref SecretIdentityStoreID, !Select [5, !Split [',', !Ref CrossStackConfig]]]
-          USER_MATCH: !If [SetGoogleUserMatch, !Ref GoogleUserMatch, !Ref AWS::NoValue]
-          GROUP_MATCH: !If [SetGoogleGroupMatch, !Ref GoogleGroupMatch, !Ref AWS::NoValue]
+          GOOGLE_CREDENTIALS:
+            !If [
+              CreateSecrets,
+              !Ref SecretGoogleCredentials,
+              !Select [0, !Split [",", !Ref CrossStackConfig]],
+            ]
+          GOOGLE_ADMIN:
+            !If [
+              CreateSecrets,
+              !Ref SecretGoogleAdminEmail,
+              !Select [1, !Split [",", !Ref CrossStackConfig]],
+            ]
+          SCIM_ENDPOINT:
+            !If [
+              CreateSecrets,
+              !Ref SecretSCIMEndpoint,
+              !Select [2, !Split [",", !Ref CrossStackConfig]],
+            ]
+          SCIM_ACCESS_TOKEN:
+            !If [
+              CreateSecrets,
+              !Ref SecretSCIMAccessToken,
+              !Select [3, !Split [",", !Ref CrossStackConfig]],
+            ]
+          REGION:
+            !If [
+              CreateSecrets,
+              !Ref SecretRegion,
+              !Select [4, !Split [",", !Ref CrossStackConfig]],
+            ]
+          IDENTITY_STORE_ID:
+            !If [
+              CreateSecrets,
+              !Ref SecretIdentityStoreID,
+              !Select [5, !Split [",", !Ref CrossStackConfig]],
+            ]
+          USER_MATCH:
+            !If [SetGoogleUserMatch, !Ref GoogleUserMatch, !Ref AWS::NoValue]
+          GROUP_MATCH:
+            !If [SetGoogleGroupMatch, !Ref GoogleGroupMatch, !Ref AWS::NoValue]
           SYNC_METHOD: !Ref SyncMethod
-          IGNORE_GROUPS: !If [SetIgnoreGroups, !Ref IgnoreGroups, !Ref AWS::NoValue]
-          IGNORE_USERS: !If [SetIgnoreUsers, !Ref IgnoreUsers, !Ref AWS::NoValue]
-          INCLUDE_GROUPS: !If [SetIncludeGroups, !Ref IncludeGroups, !Ref AWS::NoValue]
+          IGNORE_GROUPS:
+            !If [SetIgnoreGroups, !Ref IgnoreGroups, !Ref AWS::NoValue]
+          IGNORE_USERS:
+            !If [SetIgnoreUsers, !Ref IgnoreUsers, !Ref AWS::NoValue]
+          INCLUDE_GROUPS:
+            !If [SetIncludeGroups, !Ref IncludeGroups, !Ref AWS::NoValue]
       Events:
         SyncScheduledEvent:
           Type: Schedule
           Name: AWSSyncSchedule
           Properties:
             Enabled: !If [OnSchedule, false, true]
-            Schedule: !If [OnSchedule, !Ref ScheduleExpression, "rate(15 minutes)"]
-
+            Schedule:
+              !If [OnSchedule, !Ref ScheduleExpression, "rate(15 minutes)"]
 
   KeyAlias:
     Type: AWS::KMS::Alias
@@ -588,20 +651,20 @@ Resources:
         Version: 2012-10-17
         Id: key-default-1
         Statement:
-        - Sid: Enable IAM User Permissions
-          Effect: Allow
-          Principal:
-            AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
-          Action: 'kms:*'
-          Resource: '*'
-        - Sid: AppRole in Other account
-          Effect: Allow
-          Principal:
-            AWS: !Sub arn:aws:iam::${CrossStackConfig}:root
-          Action:
-            - kms:Decrypt
-            - kms:DescribeKey
-          Resource: '*'
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+            Action: "kms:*"
+            Resource: "*"
+          - Sid: AppRole in Other account
+            Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${CrossStackConfig}:root
+            Action:
+              - kms:Decrypt
+              - kms:DescribeKey
+            Resource: "*"
 
   SecretGoogleCredentials:
     Type: "AWS::SecretsManager::Secret"
@@ -619,12 +682,12 @@ Resources:
       ResourcePolicy:
         Version: 2012-10-17
         Statement:
-        - Effect: Allow
-          Principal:
-            AWS: !Sub arn:aws:iam::${CrossStackConfig}:root
-          Action:
-            - secretsmanager:GetSecretValue
-          Resource: '*'
+          - Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${CrossStackConfig}:root
+            Action:
+              - secretsmanager:GetSecretValue
+            Resource: "*"
 
   SecretGoogleAdminEmail:
     Type: "AWS::SecretsManager::Secret"
@@ -642,12 +705,12 @@ Resources:
       ResourcePolicy:
         Version: 2012-10-17
         Statement:
-        - Effect: Allow
-          Principal:
-            AWS: !Sub arn:aws:iam::${CrossStackConfig}:root
-          Action:
-            - secretsmanager:GetSecretValue
-          Resource: '*'
+          - Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${CrossStackConfig}:root
+            Action:
+              - secretsmanager:GetSecretValue
+            Resource: "*"
 
   SecretSCIMEndpoint: # This can be moved to custom provider
     Type: "AWS::SecretsManager::Secret"
@@ -665,13 +728,13 @@ Resources:
       ResourcePolicy:
         Version: 2012-10-17
         Statement:
-        - Effect: Allow
-          Principal:
-            AWS: !Sub arn:aws:iam::${CrossStackConfig}:root
-          Action:
-            - secretsmanager:GetSecretValue
-          Resource: '*'
-        
+          - Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${CrossStackConfig}:root
+            Action:
+              - secretsmanager:GetSecretValue
+            Resource: "*"
+
   SecretSCIMAccessToken: # This can be moved to custom provider
     Type: "AWS::SecretsManager::Secret"
     Condition: CreateSecrets
@@ -688,13 +751,13 @@ Resources:
       ResourcePolicy:
         Version: 2012-10-17
         Statement:
-        - Effect: Allow
-          Principal:
-            AWS: !Sub arn:aws:iam::${CrossStackConfig}:root
-          Action:
-            - secretsmanager:GetSecretValue
-          Resource: '*'
-        
+          - Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${CrossStackConfig}:root
+            Action:
+              - secretsmanager:GetSecretValue
+            Resource: "*"
+
   SecretRegion:
     Type: "AWS::SecretsManager::Secret"
     Condition: CreateSecrets
@@ -711,13 +774,13 @@ Resources:
       ResourcePolicy:
         Version: 2012-10-17
         Statement:
-        - Effect: Allow
-          Principal:
-            AWS: !Sub arn:aws:iam::${CrossStackConfig}:root
-          Action:
-            - secretsmanager:GetSecretValue
-          Resource: '*'
-                
+          - Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${CrossStackConfig}:root
+            Action:
+              - secretsmanager:GetSecretValue
+            Resource: "*"
+
   SecretIdentityStoreID:
     Type: "AWS::SecretsManager::Secret"
     Condition: CreateSecrets
@@ -734,12 +797,12 @@ Resources:
       ResourcePolicy:
         Version: 2012-10-17
         Statement:
-        - Effect: Allow
-          Principal:
-            AWS: !Sub arn:aws:iam::${CrossStackConfig}:root
-          Action:
-            - secretsmanager:GetSecretValue
-          Resource: '*'
+          - Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${CrossStackConfig}:root
+            Action:
+              - secretsmanager:GetSecretValue
+            Resource: "*"
 
 Outputs:
   FunctionArn:

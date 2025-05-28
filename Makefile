@@ -6,11 +6,13 @@ S3_BUCKET := $(S3_BUCKET)
 S3_PREFIX := $(S3_PREFIX)
 TEMPLATE = template.yaml
 APP_NAME ?= ssosync
-
+GOREL ?= go run github.com/goreleaser/goreleaser/v2@latest
 
 .PHONY: test
 test:
-	go test ./...
+	rm internal/mocks/* -f
+	mockery
+	go test ./... -coverprofile=coverage.out
 
 .PHONY: go-build
 go-build:
@@ -29,7 +31,7 @@ install:
 	go get ./...
 
 main: main.go
-	goreleaser build --snapshot --rm-dist
+	$(GOREL) build --snapshot --clean
 
 # compile the code to run in Lambda (local or real)
 .PHONY: lambda

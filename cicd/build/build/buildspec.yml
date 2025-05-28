@@ -3,18 +3,18 @@ version: 0.2
 env:
   variables:
     GO111MODULE: "on"
-    git-credential-helper: yes            
+    git-credential-helper: yes
 
 phases:
-  install: 
+  install:
     commands:
       # Add goreleaser repo
       - echo 'deb [trusted=yes] https://repo.goreleaser.com/apt/ /' | sudo tee /etc/apt/sources.list.d/goreleaser.list
-      
+
       # Update the repos
       - apt -qq --yes update
       - apt -qq --yes upgrade
-      
+
       # Install go.lang
       - GoVersion=${GOLANG_20_VERSION}
 
@@ -22,7 +22,7 @@ phases:
       - go install golang.org/x/lint/golint@latest
 
       # Install staticcheck - use static install from tarball
-      - wget -qO- https://github.com/dominikh/go-tools/releases/download/2023.1.6/staticcheck_linux_386.tar.gz | tar -xvz -C ./
+      - wget -qO- https://github.com/dominikh/go-tools/releases/download/2025.1.1/staticcheck_linux_386.tar.gz | tar -xvz -C ./
 
       # Install Testify to use common assertions and mocks in tests
       - go get github.com/stretchr/testify
@@ -31,7 +31,7 @@ phases:
       #      - go install github.com/goreleaser/goreleaser@latest
       - apt -qq --yes install goreleaser
 
-  pre_build: 
+  pre_build:
     commands:
       # Print all environment variables (handy for AWS CodeBuild logs)
       - env
@@ -63,7 +63,7 @@ phases:
       # Does it exist?
       - ls ${APP_NAME}
 
-      # Does it run? 
+      # Does it run?
       - ./${APP_NAME} --version
 
   post_build:
@@ -71,9 +71,8 @@ phases:
       # Tweak the .goreleaser.yml so it uses the vairables from .Env
       - patch .goreleaser.yml cicd/build/build/goreleaser.patch
 
-      # Make main 
+      # Make main
       - goreleaser build --snapshot --clean
-
 
       # Check we've packaged something useful
       - ./dist/ssosync_linux_amd64_v1/ssosync --version

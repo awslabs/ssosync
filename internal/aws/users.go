@@ -16,24 +16,26 @@ package aws
 
 import (
 	"strings"
+
+	"github.com/awslabs/ssosync/internal/interfaces"
 )
 
 // NewUser creates a user object representing a user with the given
 // details.
-func NewUser(firstName string, lastName string, email string, active bool) *User {
-	e := make([]UserEmail, 0)
-	e = append(e, UserEmail{
+func NewUser(firstName string, lastName string, email string, active bool) *interfaces.User {
+	e := make([]interfaces.UserEmail, 0)
+	e = append(e, interfaces.UserEmail{
 		Value:   email,
 		Type:    "work",
 		Primary: true,
 	})
 
-	a := make([]UserAddress, 0)
-	a = append(a, UserAddress{
+	a := make([]interfaces.UserAddress, 0)
+	a = append(a, interfaces.UserAddress{
 		Type: "work",
 	})
 
-	return &User{
+	return &interfaces.User{
 		Schemas:  []string{"urn:ietf:params:scim:schemas:core:2.0:User"},
 		Username: email,
 		Name: struct {
@@ -52,20 +54,20 @@ func NewUser(firstName string, lastName string, email string, active bool) *User
 
 // UpdateUser updates a user object representing a user with the given
 // details.
-func UpdateUser(id string, firstName string, lastName string, email string, active bool) *User {
-	e := make([]UserEmail, 0)
-	e = append(e, UserEmail{
+func UpdateUser(id string, firstName string, lastName string, email string, active bool) *interfaces.User {
+	e := make([]interfaces.UserEmail, 0)
+	e = append(e, interfaces.UserEmail{
 		Value:   email,
 		Type:    "work",
 		Primary: true,
 	})
 
-	a := make([]UserAddress, 0)
-	a = append(a, UserAddress{
+	a := make([]interfaces.UserAddress, 0)
+	a = append(a, interfaces.UserAddress{
 		Type: "work",
 	})
 
-	return &User{
+	return &interfaces.User{
 		Schemas:  []string{"urn:ietf:params:scim:schemas:core:2.0:User"},
 		ID:       id,
 		Username: email,

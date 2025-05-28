@@ -1,0 +1,23 @@
+all: false
+dir: "{{.InterfaceDir}}"
+filename: "mocks_{{.InterfaceDir}}.go"
+force-file-write: true
+formatter: goimports
+log-level: info
+structname: "{{.Mock}}{{.InterfaceName}}"
+pkgname: "mocks"
+recursive: false
+require-template-schema-exists: true
+template: testify
+template-schema: "{{.Template}}.schema.json"
+packages:
+  github.com/awslabs/ssosync/internal/interfaces:
+    config:
+      all: true
+      dir: "internal/mocks"
+      filename: "mocks_{{.InterfaceName}}.go"
+  github.com/awslabs/ssosync/internal/http:
+    config:
+      all: true
+      dir: "internal/mocks"
+      filename: "mocks_{{.InterfaceName}}.go"

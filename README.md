@@ -31,7 +31,7 @@ SSO Sync will run on any platform that Go can build for. It is available in the 
 > `>= 2.1.0` make use of named IAM resources, so if deploying via CICD or IaC template will require **CAPABILITY_NAMED_IAM** to be specified.
 
 > [!IMPORTANT]
-> `>= 2.1.0` switched to using `provided.al2` powered by ARM64 instances.
+> `>= 2.1.0 < 2.3.0` switched to using `provided.al2` powered by ARM64 instances.
 
 > [!IMPORTANT]
 > As of `v2.2.0` multiple query patterns are supported for both Group and User matching, simply separate each query with a `,`. For full sync of groups and/or users specify '*' in the relevant match field. 
@@ -40,6 +40,9 @@ SSO Sync will run on any platform that Go can build for. It is available in the 
 > External users are ignored.
 > Group owners are treated as regular group members.
 > User details are now cached to reduce the number of api calls and improve execution times on large directories.
+
+> [!IMPORTANT]
+> `>= 2.3.0` switched to using `provided.al2023` powered by ARM64 instances with golang 1.24 binaries.
 
 ## Why?
 

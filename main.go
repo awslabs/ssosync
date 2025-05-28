@@ -15,14 +15,19 @@
 package main
 
 import (
-	"math/rand"
-	"time"
+	"log"
 
 	"github.com/awslabs/ssosync/cmd"
 )
 
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
+)
+
 func init() {
-	rand.Seed(time.Now().UnixNano())
+	log.Printf("SSOSync %s, commit %s, built at %s", version, commit, date)
 }
 
 func main() {

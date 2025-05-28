@@ -1,21 +1,22 @@
 package config
 
 import (
-	"encoding/base64"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/secretsmanager"
+        "context"
+        "encoding/base64"
+        "github.com/aws/aws-sdk-go-v2/aws"
+        "github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 )
 
 // Secrets ...
 type Secrets struct {
-	svc *secretsmanager.SecretsManager
+        svc *secretsmanager.Client
 }
 
 // NewSecrets ...
-func NewSecrets(svc *secretsmanager.SecretsManager) *Secrets {
-	return &Secrets{
-		svc: svc,
-	}
+func NewSecrets(svc *secretsmanager.Client) *Secrets {
+        return &Secrets{
+                svc: svc,
+        }
 }
 
 // GoogleAdminEmail ...
@@ -67,30 +68,30 @@ func (s *Secrets) IdentityStoreID(secretArn string) (string, error) {
 }
 
 func (s *Secrets) getSecret(secretKey string) (string, error) {
-	r, err := s.svc.GetSecretValue(&secretsmanager.GetSecretValueInput{
-		SecretId:     aws.String(secretKey),
-		VersionStage: aws.String("AWSCURRENT"),
-	})
+        ctx := context.Background()
+        r, err := s.svc.GetSecretValue(ctx, &secretsmanager.GetSecretValueInput{
+                SecretId:     aws.String(secretKey),
+                VersionStage: aws.String("AWSCURRENT"),
+        })
 
-	if err != nil {
-		return "", err
-	}
+        if err != nil {
+                return "", err
+        }
 
-	var secretString string
+        var secretString string
 
-	if r.SecretString != nil {
-		secretString = *r.SecretString
-	} else {
-		decodedBinarySecretBytes := make([]byte, base64.StdEncoding.DecodedLen(len(r.SecretBinary)))
-		l, err := base64.StdEncoding.Decode(decodedBinarySecretBytes, r.SecretBinary)
-		if err != nil {
-			return "", err
-		}
-		secretString = string(decodedBinarySecretBytes[:l])
-	}
+        if r.SecretString != nil {
+                secretString = *r.SecretString
+        } else {
+                decodedBinarySecretBytes := make([]byte, base64.StdEncoding.DecodedLen(len(r.SecretBinary)))
+                l, err := base64.StdEncoding.Decode(decodedBinarySecretBytes, r.SecretBinary)
+                if err != nil {
+                        return "", err
+                }
+                secretString = string(decodedBinarySecretBytes[:l])
+        }
 
-	return secretString, nil
+        return secretString, nil
 }
-
 
 

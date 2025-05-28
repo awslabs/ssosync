@@ -17,17 +17,18 @@ package aws
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
+	"log"
 	"net/http"
 	"net/url"
 	"testing"
 
-	"github.com/golang/mock/gomock"
+	"github.com/awslabs/ssosync/internal/interfaces"
+	"github.com/awslabs/ssosync/internal/mocks"
 	"github.com/stretchr/testify/assert"
-
-	"github.com/awslabs/ssosync/internal/aws/mock"
+	"github.com/stretchr/testify/mock"
 )
 
 type nopCloser struct {
@@ -36,242 +37,237 @@ type nopCloser struct {
 
 func (nopCloser) Close() error { return nil }
 
-type httpReqMatcher struct {
-	httpReq *http.Request
-	headers map[string]string
-	body    string
-}
+var scheme = "https"
+var host = "scim.example.com"
 
-func (r *httpReqMatcher) Matches(req interface{}) bool {
-	m, ok := req.(*http.Request)
-	if !ok {
-		return false
-	}
+var baseUrl = scheme + "://" + host
 
-	for k, v := range r.headers {
-		if m.Header.Get(k) != v {
+func requestMatcher(expectedMethod string, expectedPath string, expectedRawQuery string, expectedBody []byte) func(req *http.Request) bool {
+	return func(req *http.Request) bool {
+		if req.Method != expectedMethod {
+			log.Fatalf("Incorrect method %s <> %s", req.Method, expectedMethod)
 			return false
 		}
-	}
-
-	if m.Body != nil {
-		got, _ := ioutil.ReadAll(m.Body)
-		if string(got) != r.body {
+		if req.URL.Scheme != scheme {
+			log.Fatalf("Incorrect scheme  %s <> %s", req.URL.Scheme, scheme)
 			return false
 		}
+		if req.URL.Host != host {
+			log.Fatalf("Incorrect host  %s <> %s", req.URL.Host, host)
+			return false
+		}
+		if req.URL.Path != expectedPath {
+			log.Fatalf("Incorrect path  %s <> %s", req.URL.Path, expectedPath)
+			return false
+		}
+		if req.URL.RawQuery != expectedRawQuery {
+			log.Fatalf("Incorrect rawQuery  %s <> %s", req.URL.RawQuery, expectedRawQuery)
+			return false
+		}
+		// for key, values := range req.Header {
+		// 	for _, value := range values {
+		// 		assert.Equal(t, value, actual.Header.Get(key))
+		// 	}
+		// }
+		if expectedBody != nil {
+			reqBody, err := io.ReadAll(req.Body)
+			if err != nil {
+				fmt.Println(err)
+				return false
+			}
+			if reqBody != nil && !bytes.Equal(expectedBody, reqBody) {
+				log.Println("Incorrect body")
+				log.Println(string(expectedBody))
+				log.Println("============================")
+				log.Println(string(reqBody))
+				return false
+			}
+		}
+		return true
 	}
-
-	return m.URL.String() == r.httpReq.URL.String() && m.Method == r.httpReq.Method
-}
-
-func (r *httpReqMatcher) String() string {
-	return fmt.Sprintf("is %s", r.httpReq.URL)
-}
-
-func TestNewClient(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	x := mock.NewIHTTPClient(ctrl)
-
-	c, err := NewClient(x, &Config{
-		Endpoint: ":foo",
-		Token:    "bearerToken",
-	})
-	assert.Error(t, err)
-	assert.Nil(t, c)
 }
 
 func TestSendRequestBadUrl(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	x := mock.NewIHTTPClient(ctrl)
+	x := mocks.NewMockClient(t)
+	x.EXPECT().Do(mock.Anything).Return(nil, errors.New("BadURL")).Once()
 
 	c, err := NewClient(x, &Config{
-		Endpoint: "https://scim.example.com/",
+		Endpoint: baseUrl,
 		Token:    "bearerToken",
 	})
+
 	assert.NoError(t, err)
 	cc := c.(*client)
 
-	r, err := cc.sendRequest(http.MethodGet, ":foo")
+	r, err := cc.get(":foo", nil)
 	assert.Error(t, err)
 	assert.Nil(t, r)
 }
 
 func TestSendRequestBadStatusCode(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	x := mock.NewIHTTPClient(ctrl)
-
-	c, err := NewClient(x, &Config{
-		Endpoint: "https://scim.example.com/",
-		Token:    "bearerToken",
-	})
-	assert.NoError(t, err)
-	cc := c.(*client)
-
-	calledURL, _ := url.Parse("https://scim.example.com/")
-
-	req := httpReqMatcher{httpReq: &http.Request{
-		URL:    calledURL,
-		Method: http.MethodGet,
-	}}
-
-	x.EXPECT().Do(&req).MaxTimes(1).Return(&http.Response{
+	x := mocks.NewMockClient(t)
+	x.EXPECT().Do(mock.Anything).Return(&http.Response{
 		Status:     "ERROR",
 		StatusCode: 500,
-		Body:       nopCloser{bytes.NewBufferString("")},
-	}, nil)
+	}, nil).Once()
 
-	_, err = cc.sendRequest(http.MethodGet, "https://scim.example.com/")
+	c, err := NewClient(x, &Config{
+		Endpoint: baseUrl,
+		Token:    "bearerToken",
+	})
+
+	assert.NoError(t, err)
+	cc := c.(*client)
+
+	r, err := cc.get(":foo", nil)
 	assert.Error(t, err)
+	assert.Nil(t, r)
+
 }
 
-func TestSendRequestCheckAuthHeader(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	x := mock.NewIHTTPClient(ctrl)
+func TestPrepareRequest(t *testing.T) {
+	x := mocks.NewMockClient(t)
 
 	c, err := NewClient(x, &Config{
-		Endpoint: "https://scim.example.com/",
+		Endpoint: baseUrl,
 		Token:    "bearerToken",
 	})
+
 	assert.NoError(t, err)
 	cc := c.(*client)
 
-	calledURL, _ := url.Parse("https://scim.example.com/")
+	r, err := cc.prepareRequest(http.MethodGet, "/abcd", nil)
+	assert.NoError(t, err)
+	assert.Equal(t, "Bearer bearerToken", r.Header.Get("Authorization"))
+	assert.Equal(t, "application/scim+json", r.Header.Get("Content-Type"))
+	assert.Equal(t, http.MethodGet, r.Method)
+	assert.Equal(t, "https://scim.example.com/abcd", r.URL.String())
 
-	req := httpReqMatcher{
-		httpReq: &http.Request{
-			URL:    calledURL,
-			Method: http.MethodGet,
-		},
-		headers: map[string]string{
-			"Authorization": "Bearer bearerToken",
-		},
-	}
+}
 
-	x.EXPECT().Do(&req).MaxTimes(1).Return(&http.Response{
+func TestPost(t *testing.T) {
+	x := mocks.NewMockClient(t)
+	body := &interfaces.User{Schemas: nil, Username: "", DisplayName: "", Active: false, Emails: nil, Addresses: nil}
+	by, _ := json.Marshal(body)
+	json.Unmarshal(by, body)
+	by, _ = json.Marshal(body)
+
+	x.EXPECT().Do(mock.MatchedBy(requestMatcher(http.MethodPost, "/foo", "", by))).Return(&http.Response{
 		Status:     "OK",
 		StatusCode: 200,
 		Body:       nopCloser{bytes.NewBufferString("")},
-	}, nil)
-
-	_, err = cc.sendRequest(http.MethodGet, "https://scim.example.com/")
-	assert.NoError(t, err)
-}
-
-func TestSendRequestWithBodyCheckHeaders(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	x := mock.NewIHTTPClient(ctrl)
+	}, nil).Once()
 
 	c, err := NewClient(x, &Config{
-		Endpoint: "https://scim.example.com/",
+		Endpoint: baseUrl,
 		Token:    "bearerToken",
 	})
+
 	assert.NoError(t, err)
 	cc := c.(*client)
 
-	calledURL, _ := url.Parse("https://scim.example.com/")
+	_, err = cc.post("/foo", body)
+	assert.NoError(t, err)
+}
 
-	req := httpReqMatcher{
-		httpReq: &http.Request{
-			URL:    calledURL,
-			Method: http.MethodPost,
-		},
-		headers: map[string]string{
-			"Authorization": "Bearer bearerToken",
-			"Content-Type":  "application/scim+json",
-		},
-		body: "{\"schemas\":null,\"userName\":\"\",\"name\":{\"familyName\":\"\",\"givenName\":\"\"},\"displayName\":\"\",\"active\":false,\"emails\":null,\"addresses\":null}",
-	}
+func TestPut(t *testing.T) {
+	x := mocks.NewMockClient(t)
+	body := &interfaces.User{Schemas: nil, Username: "", DisplayName: "", Active: false, Emails: nil, Addresses: nil}
+	by, _ := json.Marshal(body)
+	json.Unmarshal(by, body)
+	by, _ = json.Marshal(body)
 
-	x.EXPECT().Do(&req).MaxTimes(1).Return(&http.Response{
+	x.EXPECT().Do(mock.MatchedBy(requestMatcher(http.MethodPut, "/foo", "", by))).Return(&http.Response{
 		Status:     "OK",
 		StatusCode: 200,
 		Body:       nopCloser{bytes.NewBufferString("")},
-	}, nil)
+	}, nil).Once()
 
-	_, err = cc.sendRequestWithBody(http.MethodPost, "https://scim.example.com/", &User{})
+	c, err := NewClient(x, &Config{
+		Endpoint: baseUrl,
+		Token:    "bearerToken",
+	})
+
+	assert.NoError(t, err)
+	cc := c.(*client)
+
+	_, err = cc.put("/foo", body)
+	assert.NoError(t, err)
+}
+
+func TestGet(t *testing.T) {
+	x := mocks.NewMockClient(t)
+
+	c, err := NewClient(x, &Config{
+		Endpoint: baseUrl,
+		Token:    "bearerToken",
+	})
+
+	assert.NoError(t, err)
+	cc := c.(*client)
+
+	r, err := cc.prepareRequest(http.MethodGet, "/abcd", nil)
+	assert.NoError(t, err)
+	assert.Equal(t, "Bearer bearerToken", r.Header.Get("Authorization"))
+	assert.Equal(t, http.MethodGet, r.Method)
+	assert.Equal(t, "https://scim.example.com/abcd", r.URL.String())
+
+	filter := "userName eq \"test@example.com\""
+	r.URL.RawQuery = "filter=" + url.QueryEscape(filter)
+	x.EXPECT().Do(r).Return(&http.Response{
+		Status:     "OK",
+		StatusCode: 200,
+		Body:       nopCloser{bytes.NewBufferString("")},
+	}, nil).Once()
+
+	_, err = cc.get("/abcd", func(r *http.Request) {
+		r.URL.RawQuery = "filter=" + url.QueryEscape(filter)
+	})
 	assert.NoError(t, err)
 }
 
 func TestClient_FindUserByEmail(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	x := mock.NewIHTTPClient(ctrl)
-
-	c, err := NewClient(x, &Config{
-		Endpoint: "https://scim.example.com/",
-		Token:    "bearerToken",
-	})
-	assert.NoError(t, err)
-
-	calledURL, _ := url.Parse("https://scim.example.com/Users")
-
-	filter := "userName eq \"test@example.com\""
-
-	q := calledURL.Query()
-	q.Add("filter", filter)
-
-	calledURL.RawQuery = q.Encode()
-
-	req := httpReqMatcher{
-		httpReq: &http.Request{
-			URL:    calledURL,
-			Method: http.MethodGet,
-		},
-	}
-
-	// Error in response
-	x.EXPECT().Do(&req).MaxTimes(1).Return(&http.Response{
-		Status:     "OK",
-		StatusCode: 200,
-		Body:       nopCloser{bytes.NewBufferString("")},
-	}, nil)
-
-	u, err := c.FindUserByEmail("test@example.com")
-	assert.Nil(t, u)
-	assert.Error(t, err)
-
 	// False
-	r := &UserFilterResults{
+	falseResult, _ := json.Marshal(&interfaces.UserFilterResults{
 		TotalResults: 0,
-	}
-	falseResult, _ := json.Marshal(r)
+	})
 
-	x.EXPECT().Do(&req).MaxTimes(1).Return(&http.Response{
+	rq := "filter=userName+eq+%22test%40example.com%22"
+
+	x := mocks.NewMockClient(t)
+	x.EXPECT().Do(mock.MatchedBy(requestMatcher(http.MethodGet, "/Users", rq, nil))).Once().Return(&http.Response{
 		Status:     "OK",
 		StatusCode: 200,
 		Body:       nopCloser{bytes.NewBuffer(falseResult)},
-	}, nil)
+	}, nil).Once()
 
-	u, err = c.FindUserByEmail("test@example.com")
-	assert.Nil(t, u)
-	assert.Error(t, err)
-
-	// True
-	r = &UserFilterResults{
+	trueResult, _ := json.Marshal(&interfaces.UserFilterResults{
 		TotalResults: 1,
-		Resources: []User{
+		Resources: []interfaces.User{
 			{
 				Username: "test@example.com",
 			},
 		},
-	}
-	trueResult, _ := json.Marshal(r)
-	x.EXPECT().Do(&req).MaxTimes(1).Return(&http.Response{
+	})
+	x.EXPECT().Do(mock.MatchedBy(requestMatcher(http.MethodGet, "/Users", rq, nil))).Once().Return(&http.Response{
 		Status:     "OK",
 		StatusCode: 200,
 		Body:       nopCloser{bytes.NewBuffer(trueResult)},
 	}, nil)
+
+	c, err := NewClient(x, &Config{
+		Endpoint: baseUrl,
+		Token:    "bearerToken",
+	})
+
+	assert.NoError(t, err)
+	cc := c.(*client)
+
+	u, err := cc.FindUserByEmail("test@example.com")
+	assert.EqualError(t, err, ErrUserNotFound.Error())
+	assert.Nil(t, u)
+
+	// True
 
 	u, err = c.FindUserByEmail("test@example.com")
 	assert.NotNil(t, u)
@@ -279,78 +275,45 @@ func TestClient_FindUserByEmail(t *testing.T) {
 }
 
 func TestClient_FindGroupByDisplayName(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
-	x := mock.NewIHTTPClient(ctrl)
-
-	c, err := NewClient(x, &Config{
-		Endpoint: "https://scim.example.com/",
-		Token:    "bearerToken",
-	})
-	assert.NoError(t, err)
-
-	calledURL, _ := url.Parse("https://scim.example.com/Groups")
-
-	filter := "displayName eq \"testGroup\""
-
-	q := calledURL.Query()
-	q.Add("filter", filter)
-
-	calledURL.RawQuery = q.Encode()
-
-	req := httpReqMatcher{
-		httpReq: &http.Request{
-			URL:    calledURL,
-			Method: http.MethodGet,
-		},
-	}
-
-	// Error in response
-	x.EXPECT().Do(&req).MaxTimes(1).Return(&http.Response{
-		Status:     "OK",
-		StatusCode: 200,
-		Body:       nopCloser{bytes.NewBufferString("")},
-	}, nil)
-
-	u, err := c.FindGroupByDisplayName("testGroup")
-	assert.Nil(t, u)
-	assert.Error(t, err)
-
-	// False
-	r := &GroupFilterResults{
+	falseResult, _ := json.Marshal(&interfaces.GroupFilterResults{
 		TotalResults: 0,
-	}
-	falseResult, _ := json.Marshal(r)
-
-	x.EXPECT().Do(&req).MaxTimes(1).Return(&http.Response{
+	})
+	rq := "filter=displayName+eq+%22testGroup%22"
+	x := mocks.NewMockClient(t)
+	x.EXPECT().Do(mock.MatchedBy(requestMatcher(http.MethodGet, "/Groups", rq, nil))).Once().Return(&http.Response{
 		Status:     "OK",
 		StatusCode: 200,
 		Body:       nopCloser{bytes.NewBuffer(falseResult)},
-	}, nil)
+	}, nil).Once()
 
-	u, err = c.FindGroupByDisplayName("testGroup")
-	assert.Nil(t, u)
-	assert.Error(t, err)
-
-	// True
-	r = &GroupFilterResults{
+	trueResult, _ := json.Marshal(&interfaces.GroupFilterResults{
 		TotalResults: 1,
-		Resources: []Group{
+		Resources: []interfaces.Group{
 			{
 				DisplayName: "testGroup",
 			},
 		},
-	}
-	trueResult, _ := json.Marshal(r)
-	x.EXPECT().Do(&req).MaxTimes(1).Return(&http.Response{
+	})
+	x.EXPECT().Do(mock.MatchedBy(requestMatcher(http.MethodGet, "/Groups", rq, nil))).Once().Return(&http.Response{
 		Status:     "OK",
 		StatusCode: 200,
 		Body:       nopCloser{bytes.NewBuffer(trueResult)},
 	}, nil)
 
-	u, err = c.FindGroupByDisplayName("testGroup")
-	assert.NotNil(t, u)
+	c, err := NewClient(x, &Config{
+		Endpoint: baseUrl,
+		Token:    "bearerToken",
+	})
+
+	assert.NoError(t, err)
+
+	g, err := c.FindGroupByDisplayName("testGroup")
+	assert.Nil(t, g)
+	assert.EqualError(t, err, ErrGroupNotFound.Error())
+
+	g, err = c.FindGroupByDisplayName("testGroup")
+	assert.NotNil(t, g)
 	assert.NoError(t, err)
 }
 
@@ -358,37 +321,26 @@ func TestClient_CreateUser(t *testing.T) {
 	nu := NewUser("Lee", "Packham", "test@example.com", true)
 	nuResult := *nu
 	nuResult.ID = "userId"
-
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	x := mock.NewIHTTPClient(ctrl)
-
-	c, err := NewClient(x, &Config{
-		Endpoint: "https://scim.example.com/",
-		Token:    "bearerToken",
-	})
-	assert.NoError(t, err)
-
-	calledURL, _ := url.Parse("https://scim.example.com/Users")
-
+	// trick to ensure after marshalling we have the correct string
 	requestJSON, _ := json.Marshal(nu)
-
-	req := httpReqMatcher{
-		httpReq: &http.Request{
-			URL:    calledURL,
-			Method: http.MethodPost,
-		},
-		body: string(requestJSON),
-	}
+	json.Unmarshal(requestJSON, nu)
+	requestJSON, _ = json.Marshal(nu)
 
 	response, _ := json.Marshal(nuResult)
 
-	x.EXPECT().Do(&req).MaxTimes(1).Return(&http.Response{
+	x := mocks.NewMockClient(t)
+	x.EXPECT().Do(mock.MatchedBy(requestMatcher(http.MethodPost, "/Users", "", requestJSON))).Once().Return(&http.Response{
 		Status:     "OK",
 		StatusCode: 200,
 		Body:       nopCloser{bytes.NewBuffer(response)},
-	}, nil)
+	}, nil).Once()
+
+	c, err := NewClient(x, &Config{
+		Endpoint: baseUrl,
+		Token:    "bearerToken",
+	})
+
+	assert.NoError(t, err)
 
 	r, err := c.CreateUser(nu)
 	assert.NotNil(t, r)
@@ -403,33 +355,20 @@ func TestClient_UpdateUser(t *testing.T) {
 	nu := UpdateUser("userId", "Lee", "Packham", "test@example.com", true)
 	nuResult := *nu
 	nuResult.ID = "userId"
+	requestJSON, _ := json.Marshal(nu)
+	json.Unmarshal(requestJSON, nu)
+	requestJSON, _ = json.Marshal(nu)
+	response, _ := json.Marshal(nuResult)
 
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	x := mock.NewIHTTPClient(ctrl)
+	x := mocks.NewMockClient(t)
 
 	c, err := NewClient(x, &Config{
-		Endpoint: "https://scim.example.com/",
+		Endpoint: baseUrl,
 		Token:    "bearerToken",
 	})
 	assert.NoError(t, err)
 
-	calledURL, _ := url.Parse("https://scim.example.com/Users/userId")
-
-	requestJSON, _ := json.Marshal(nu)
-
-	req := httpReqMatcher{
-		httpReq: &http.Request{
-			URL:    calledURL,
-			Method: http.MethodPut,
-		},
-		body: string(requestJSON),
-	}
-
-	response, _ := json.Marshal(nuResult)
-
-	x.EXPECT().Do(&req).MaxTimes(1).Return(&http.Response{
+	x.EXPECT().Do(mock.MatchedBy(requestMatcher(http.MethodPut, "/Users/userId", "", requestJSON))).Times(1).Return(&http.Response{
 		Status:     "OK",
 		StatusCode: 200,
 		Body:       nopCloser{bytes.NewBuffer(response)},
