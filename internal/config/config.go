@@ -39,6 +39,8 @@ type Config struct {
 	IdentityStoreID string `mapstructure:"identity_store_id"`
 	// Precaching queries as a comma separated list of query strings
 	PrecacheQueries string
+	// DryRun flag, when set to true, no change will be made in the Identity Store
+	DryRun bool
 }
 
 const (
