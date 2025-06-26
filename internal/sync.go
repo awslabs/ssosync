@@ -774,12 +774,23 @@ func DoSync(ctx context.Context, cfg *config.Config) error {
 		return err
 	}
 
-	awsScimClient, err := aws.NewClient(
-		httpClient,
-		&aws.Config{
-			Endpoint: cfg.SCIMEndpoint,
-			Token:    cfg.SCIMAccessToken,
-		})
+    if s.cfg.DryRun {
+        log.Warn("This is a DRY RUN - actions will not be actually performed")
+        awsScimClient, err := aws.NewDryClient(
+            httpClient,
+            &aws.Config{
+                Endpoint: cfg.SCIMEndpoint,
+                Token:    cfg.SCIMAccessToken,
+            })
+        defer log.Warn("This was a DRY RUN - actions were not actually performed")
+    } else {
+        awsScimClient, err := aws.NewClient(
+            httpClient,
+            &aws.Config{
+                Endpoint: cfg.SCIMEndpoint,
+                Token:    cfg.SCIMAccessToken,
+            })
+    }
 	if err != nil {
 	        log.WithField("error", err).Warn("Problem establising a SCIM connection to AWS IAM Identity Center")
 		return err
