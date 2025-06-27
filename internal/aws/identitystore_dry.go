@@ -26,22 +26,16 @@ func NewDryIdentityStore(sess *session.Session) identitystoreiface.IdentityStore
 // **********************
 
 func (d *DryIdentityStore) CreateGroup(input *identitystore.CreateGroupInput) (*identitystore.CreateGroupOutput, error) {
-    // TODO: make it work
-    // TODO: inline varaible
-	mockGroupId := input.DisplayName + "virtual"
 	return &identitystore.CreateGroupOutput{
-		GroupId: &mockGroupId,
+		GroupId: aws.String(*input.DisplayName + "virtual"),
 		IdentityStoreId: input.IdentityStoreId,
 	}, nil
 }
 
 func (d *DryIdentityStore) CreateGroupMembership(input *identitystore.CreateGroupMembershipInput) (*identitystore.CreateGroupMembershipOutput, error) {
-    // TODO: make it work
-    // TODO: inline varaible
-	mockMembershipId := input.GroupId + input.MemberId.UserId + "virtual"
 	return &identitystore.CreateGroupMembershipOutput{
 		IdentityStoreId: input.IdentityStoreId,
-		MembershipId: &mockMembershipId,
+		MembershipId: aws.String(*input.GroupId + *input.MemberId.UserId + "virtual"),
 	}, nil
 }
 
