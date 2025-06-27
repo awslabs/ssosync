@@ -774,41 +774,50 @@ func DoSync(ctx context.Context, cfg *config.Config) error {
 		return err
 	}
 
-    if s.cfg.DryRun {
-        log.Warn("This is a DRY RUN - actions will not be actually performed")
-        awsScimClient, err := aws.NewDryClient(
-            httpClient,
-            &aws.Config{
-                Endpoint: cfg.SCIMEndpoint,
-                Token:    cfg.SCIMAccessToken,
-            })
-        defer log.Warn("This was a DRY RUN - actions were not actually performed")
-    } else {
-        awsScimClient, err := aws.NewClient(
-            httpClient,
-            &aws.Config{
-                Endpoint: cfg.SCIMEndpoint,
-                Token:    cfg.SCIMAccessToken,
-            })
-    }
-	if err != nil {
-	        log.WithField("error", err).Warn("Problem establising a SCIM connection to AWS IAM Identity Center")
-		return err
-	}
-
 	// Initialize AWS session
 	sess, err := aws_sdk_sess.NewSession(&aws_sdk.Config{
 		// AWS Region to send requests to, provided by config
 		Region: &cfg.Region,
 	})
-
 	if err != nil {
 	        log.WithField("error", err).Warn("Problem establising a session for Identity Store")
 		return err
 	}
 
-	// Initialize AWS Identity Store Public API Client with session
-	identityStoreClient := identitystore.New(sess)
+    var awsScimClient aws.Client
+    var identityStoreClient *identitystore.IdentityStore
+    if cfg.DryRun {
+        log.Warn("This is a DRY RUN - actions will not be actually performed")
+        defer log.Warn("This was a DRY RUN - actions were not actually performed")
+
+        awsScimClient, err = aws.NewDryClient(
+            httpClient,
+            &aws.Config{
+                Endpoint: cfg.SCIMEndpoint,
+                Token:    cfg.SCIMAccessToken,
+            })
+        if err != nil {
+                log.WithField("error", err).Warn("Problem establising a SCIM connection to AWS IAM Identity Center")
+            return err
+        }
+
+        // TODO: use a dry identityStore
+        identityStoreClient = identitystore.New(sess)
+    } else {
+        awsScimClient, err = aws.NewClient(
+            httpClient,
+            &aws.Config{
+                Endpoint: cfg.SCIMEndpoint,
+                Token:    cfg.SCIMAccessToken,
+            })
+        if err != nil {
+                log.WithField("error", err).Warn("Problem establising a SCIM connection to AWS IAM Identity Center")
+            return err
+        }
+
+        identityStoreClient = identitystore.New(sess)
+    }
+
 
 	response, err := identityStoreClient.ListGroups(
                 &identitystore.ListGroupsInput{IdentityStoreId: &cfg.IdentityStoreID})

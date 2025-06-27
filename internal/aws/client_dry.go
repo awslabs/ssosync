@@ -1,15 +1,6 @@
 package aws
 
 import (
-	"bytes"
-	"encoding/json"
-	"errors"
-	"fmt"
-	"io/ioutil"
-	"net/http"
-	"net/url"
-	"path"
-
 	log "github.com/sirupsen/logrus"
 )
 
@@ -41,7 +32,7 @@ func (dc *dryClient) CreateUser(u *User) (*User, error) {
 }
 
 func (dc *dryClient) FindGroupByDisplayName(name string) (*Group, error) {
-    // this is only used to determie group corelations
+    // this is only used to determine group correlations
     // and for group deletion, so can be straight pass-through
     return dc.c.FindGroupByDisplayName(name)
 }
@@ -50,22 +41,22 @@ func (dc *dryClient) FindUserByEmail(email string) (*User, error) {
     u, err := dc.c.FindUserByEmail(email)
     if err != nil {
         if err != ErrUserNotFound {
-            return u, err;
+            return u, err
         }
 
         for _, vu := range dc.virtualUsers {
             for _, e := range vu.Emails {
                 if e.Value == email {
-                    // TODO: log user fetch from virtualTable?
-                    return vu, nil
+                    log.Debug("User fetch fail, but user found in the virtual state")
+                    return &vu, nil
                 }
             }
         }
         // no match
-        return u, err;
+        return u, err
 
     }
-    return u, nil;
+    return u, nil
 }
 
 func (dc *dryClient) UpdateUser(u *User) (*User, error) {
