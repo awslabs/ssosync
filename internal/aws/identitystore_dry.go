@@ -22,15 +22,40 @@ func NewDryIdentityStore(sess *session.Session) identitystoreiface.IdentityStore
 
 
 // **********************
+// Noop-success
+// **********************
+
+// TODO: return output in terms of input, don't do any real work, don't do things, don't call functions
+CreateGroup
+CreateGroupMembership
+DeleteGroup
+DeleteGroupMembership
+DeleteUser
+
+
+// **********************
 // Passthrough methods
 // **********************
 
-// TODO: implement the following methods on DryIdentityStore in terms of calling 
-GetGroupMembershipId
-IsMemberInGroups
-ListGroupMembershipsPages
-ListGroupsPages
-ListUsersPages
+func (d *DryIdentityStore) GetGroupMembershipId(input *identitystore.GetGroupMembershipIdInput) (*identitystore.GetGroupMembershipIdOutput, error) {
+	return d.client.GetGroupMembershipId(input)
+}
+
+func (d *DryIdentityStore) IsMemberInGroups(input *identitystore.IsMemberInGroupsInput) (*identitystore.IsMemberInGroupsOutput, error) {
+	return d.client.IsMemberInGroups(input)
+}
+
+func (d *DryIdentityStore) ListGroupMembershipsPages(input *identitystore.ListGroupMembershipsInput, fn func(*identitystore.ListGroupMembershipsOutput, bool) bool) error {
+	return d.client.ListGroupMembershipsPages(input, fn)
+}
+
+func (d *DryIdentityStore) ListGroupsPages(input *identitystore.ListGroupsInput, fn func(*identitystore.ListGroupsOutput, bool) bool) error {
+	return d.client.ListGroupsPages(input, fn)
+}
+
+func (d *DryIdentityStore) ListUsersPages(input *identitystore.ListUsersInput, fn func(*identitystore.ListUsersOutput, bool) bool) error {
+	return d.client.ListUsersPages(input, fn)
+}
 
 // ********************
 // LLM generated
