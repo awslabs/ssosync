@@ -785,7 +785,7 @@ func DoSync(ctx context.Context, cfg *config.Config) error {
 	}
 
     var awsScimClient aws.Client
-    var identityStoreClient *identitystore.IdentityStore
+    var identityStoreClient identitystoreiface.IdentityStoreAPI
     if cfg.DryRun {
         log.Warn("This is a DRY RUN - actions will not be actually performed")
         defer log.Warn("This was a DRY RUN - actions were not actually performed")
@@ -801,8 +801,7 @@ func DoSync(ctx context.Context, cfg *config.Config) error {
             return err
         }
 
-        // TODO: use a dry identityStore
-        identityStoreClient = identitystore.New(sess)
+        identityStoreClient = aws.NewDryIdentityStore()
     } else {
         awsScimClient, err = aws.NewClient(
             httpClient,
