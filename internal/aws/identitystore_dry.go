@@ -3,18 +3,21 @@ package aws
 import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/request"
+	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/identitystore"
 	"github.com/aws/aws-sdk-go/service/identitystore/identitystoreiface"
 )
 
 type DryIdentityStore struct{
     *NullIdentityStore
-    // TODO: use actual client underneath
+    client identitystoreiface.IdentityStoreAPI
 }
 
-func NewDryIdentityStore() identitystoreiface.IdentityStoreAPI {
-    // TODO: initialize the actual client
-	return &DryIdentityStore{}
+func NewDryIdentityStore(sess *session.Session) identitystoreiface.IdentityStoreAPI {
+	return &DryIdentityStore{
+		NullIdentityStore: &NullIdentityStore{},
+		client: identitystore.New(sess),
+	}
 }
 
 // ********************
