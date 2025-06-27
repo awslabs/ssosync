@@ -801,6 +801,7 @@ func DoSync(ctx context.Context, cfg *config.Config) error {
             return err
         }
 
+        // TODO: pass the same sess parameter as to the real identityStore
         identityStoreClient = aws.NewDryIdentityStore()
     } else {
         awsScimClient, err = aws.NewClient(
