@@ -35,8 +35,9 @@ func NewDryClient(c HTTPClient, config *Config) (Client, error) {
 }
 
 func (dc *dryClient) CreateUser(u *User) (*User, error) {
-    // TODO: add user to virtualUsers by id
-    return u, nil;
+    dc.virtualUsers[u.Username] = *u
+    // TODO: will there be an ID issue?
+    return u, nil
 }
 
 func (dc *dryClient) FindGroupByDisplayName(name string) (*Group, error) {
@@ -46,11 +47,28 @@ func (dc *dryClient) FindGroupByDisplayName(name string) (*Group, error) {
 }
 
 func (dc *dryClient) FindUserByEmail(email string) (*User, error) {
-    // TODO: handle error from dryState
-    return dc.c.FindUserByEmail(email)
+    u, err := dc.c.FindUserByEmail(email)
+    if err != nil {
+        if err != ErrUserNotFound {
+            return u, err;
+        }
+
+        for _, vu := range dc.virtualUsers {
+            for _, e := range vu.Emails {
+                if e.Value == email {
+                    // TODO: log user fetch from virtualTable?
+                    return vu, nil
+                }
+            }
+        }
+        // no match
+        return u, err;
+
+    }
+    return u, nil;
 }
 
 func (dc *dryClient) UpdateUser(u *User) (*User, error) {
-    // TODO: update user in virtualUselrs by id
-    return u, nil;
+    dc.virtualUsers[u.Username] = *u
+    return u, nil
 }
