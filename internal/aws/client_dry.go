@@ -6,7 +6,6 @@ import (
 
 
 type dryClient struct {
-    // TODO: can I specify that I want lovercase "c" client? The concrete implementation
     c Client
     // users scheduled for creation, but not actually existing in AWS
     virtualUsers map[string]User
@@ -27,7 +26,6 @@ func NewDryClient(c HTTPClient, config *Config) (Client, error) {
 
 func (dc *dryClient) CreateUser(u *User) (*User, error) {
     dc.virtualUsers[u.Username] = *u
-    // TODO: will there be an ID issue?
     return u, nil
 }
 
