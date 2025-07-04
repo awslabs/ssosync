@@ -26,6 +26,7 @@ import (
 	"github.com/hashicorp/go-retryablehttp"
 
 	aws_sdk "github.com/aws/aws-sdk-go/aws"
+	awsclient "github.com/aws/aws-sdk-go/aws/client"
 	aws_sdk_sess "github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/identitystore"
 	"github.com/aws/aws-sdk-go/service/identitystore/identitystoreiface"
@@ -774,7 +775,20 @@ func DoSync(ctx context.Context, cfg *config.Config) error {
 		return err
 	}
 
-	awsScimClient, err := aws.NewClient(
+	mkAwsScimClient := aws.NewClient
+	mkIdentityStoreClient := func(p awsclient.ConfigProvider, cfgs ...*aws_sdk.Config) identitystoreiface.IdentityStoreAPI {
+		return identitystore.New(p, cfgs...)
+	}
+
+	if cfg.DryRun {
+		log.Warn("This is a DRY RUN - actions will *not* be actually performed")
+		defer log.Warn("This was a DRY RUN - actions were *not* actually performed")
+
+		mkAwsScimClient = aws.NewClient
+		mkIdentityStoreClient = aws.NewDryIdentityStore
+	}
+
+	awsScimClient, err := mkAwsScimClient(
 		httpClient,
 		&aws.Config{
 			Endpoint: cfg.SCIMEndpoint,
@@ -797,7 +811,7 @@ func DoSync(ctx context.Context, cfg *config.Config) error {
 	}
 
 	// Initialize AWS Identity Store Public API Client with session
-	identityStoreClient := identitystore.New(sess)
+	identityStoreClient := mkIdentityStoreClient(sess)
 
 	response, err := identityStoreClient.ListGroups(
                 &identitystore.ListGroupsInput{IdentityStoreId: &cfg.IdentityStoreID})
