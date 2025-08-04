@@ -38,7 +38,8 @@ phases:
 
       # Fetch all dependencies
       # - go env -w GOPROXY=direct
-      - go get ./...
+      - go get -u ./...
+      - go mod tidy
 
       # Run staticcheck
       - staticcheck/staticcheck ./...
