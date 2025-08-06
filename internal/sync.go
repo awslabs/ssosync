@@ -563,7 +563,7 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
         // For larger directories this will reduce execution time and avoid throttling limits
         // however if you have directory with 10s of 1000s of users you may want to down scope 
         // this to a specific OU path or disable by leaving empty.
-        if len(s.cfg.PrecacheQueries) > 0 {
+        if s.cfg.PrecacheQueries != "DISABLED" {
  		log.Info("Precaching users from google, for the following querie strings '" + s.cfg.PrecacheQueries + "'.") 
         	googleUsers, err = s.google.GetUsers(s.cfg.PrecacheQueries) 
         	if err != nil {
