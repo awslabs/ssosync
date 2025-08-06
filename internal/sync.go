@@ -564,7 +564,7 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
         // however if you have directory with 10s of 1000s of users you may want to down scope 
         // this to a specific OU path or disable by leaving empty.
         if len(s.cfg.PrecacheQueries) > 0 {
- 		log.Debug("Precaching users from google, with the OrgUnitPath of '" + s.cfg.PrecacheQueries + "'to use as cache") 
+ 		log.Info("Precaching users from google, for the following querie strings '" + s.cfg.PrecacheQueries + "'.") 
         	googleUsers, err = s.google.GetUsers(s.cfg.PrecacheQueries) 
         	if err != nil {
         	        return nil, nil, nil, err
@@ -573,6 +573,8 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
         	      	log.WithField("email", u).Debug("processing member of gUserDetailCache")
                 	gUserDetailCache[u.PrimaryEmail] = u
         	}
+	} else {
+		log.Info("Precaching disabled, caching on the fly")
 	}
 
 	log.Debug("get groups from google")
