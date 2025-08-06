@@ -577,6 +577,7 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
         	      		log.WithField("email", u).Debug("processing member of gUserDetailCache")
                 		gUserDetailCache[u.PrimaryEmail] = u
         		}
+		}
 	} else {
 		log.Info("Precaching DISABLED, caching on the fly")
 	}
