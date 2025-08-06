@@ -153,10 +153,6 @@ func (c *client) GetUsers(query string) ([]*admin.User, error) {
 		user.Name.FamilyName = strings.Replace(user.Name.FamilyName, string('\u200B'), " ", -1)
 	}
 
-	// Check we've got some users otherwise something is wrong.
-	if len(u) == 0 {
-		return u, errors.New("google api returned 0 users?")
-	}
 	return u, err
 
 }

@@ -566,15 +566,19 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
         if s.cfg.PrecacheQueries != "DISABLED" {
  		log.Info("Precaching users from google, for the following querie strings '" + s.cfg.PrecacheQueries + "'.") 
         	googleUsers, err = s.google.GetUsers(s.cfg.PrecacheQueries) 
-        	if err != nil {
-        	        return nil, nil, nil, err
-        	}
-        	for _, u := range googleUsers {
-        	      	log.WithField("email", u).Debug("processing member of gUserDetailCache")
-                	gUserDetailCache[u.PrimaryEmail] = u
-        	}
+		if err != nil {
+                        return nil, nil, nil, err
+                }
+
+		if len(googleUsers) == 0 {
+			log.Warn("Precaching failed, caching on the fly")
+		} else {
+        		for _, u := range googleUsers {
+        	      		log.WithField("email", u).Debug("processing member of gUserDetailCache")
+                		gUserDetailCache[u.PrimaryEmail] = u
+        		}
 	} else {
-		log.Info("Precaching disabled, caching on the fly")
+		log.Info("Precaching DISABLED, caching on the fly")
 	}
 
 	log.Debug("get groups from google")
