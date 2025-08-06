@@ -37,6 +37,8 @@ type Config struct {
 	Region string `mapstructure:"region"`
 	// IdentityStoreID is the ID of the identity store
 	IdentityStoreID string `mapstructure:"identity_store_id"`
+	// Precaching queries as a comma separated list of query strings
+	PrecacheQueries string
 }
 
 const (
@@ -50,6 +52,8 @@ const (
 	DefaultGoogleCredentials = "credentials.json"
 	// DefaultSyncMethod is the default sync method to use.
 	DefaultSyncMethod = "groups"
+	// DefaultPrecacheQueries
+	DefaultPrecacheQueries = "OrgUnitPath=/"
 )
 
 // New returns a new Config
@@ -60,5 +64,6 @@ func New() *Config {
 		LogFormat:         DefaultLogFormat,
 		SyncMethod:        DefaultSyncMethod,
 		GoogleCredentials: DefaultGoogleCredentials,
+		PrecacheQueries: DefaultPrecacheQueries,
 	}
 }

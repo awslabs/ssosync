@@ -526,17 +526,7 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
         gGroupDetailCache := make(map[string]*admin.Group)
 	gUniqUsers := make(map[string]*admin.User)
 
-        // For large directories this will reduce execution time and avoid throttling limits
-        log.Debug("Fetching ALL users from google, to use as cache")
-	googleUsers, err := s.google.GetUsers("*")
-        if err != nil {
-                return nil, nil, nil, err
-        }
-        for _, u := range googleUsers {
-		log.WithField("email", u).Debug("processing member of gUserDetailCache")
-                gUserDetailCache[u.PrimaryEmail] = u
-        }
-
+        // Precaching group data, this will speed up processing of nested groups, etc...
         log.Debug("Fetching ALL groups from google, to use as cache")
 	googleGroups, err := s.google.GetGroups("*")
         if err != nil {
@@ -548,7 +538,7 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 
 	// Fetch Users
         log.Debug("get users from google, based on UserMatch,  regardless of group membership")
-        googleUsers, err = s.google.GetUsers(queryUsers)
+        googleUsers, err := s.google.GetUsers(queryUsers)
         if err != nil {
                 return nil, nil, nil, err
         }
@@ -569,6 +559,21 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
                 }
 
         }
+
+        // For larger directories this will reduce execution time and avoid throttling limits
+        // however if you have directory with 10s of 1000s of users you may want to down scope 
+        // this to a specific OU path or disable by leaving empty.
+        if len(s.cfg.PrecacheQueries) > 0 {
+ 		log.Debug("Precaching users from google, with the OrgUnitPath of '" + s.cfg.PrecacheQueries + "'to use as cache") 
+        	googleUsers, err = s.google.GetUsers(s.cfg.PrecacheQueries) 
+        	if err != nil {
+        	        return nil, nil, nil, err
+        	}
+        	for _, u := range googleUsers {
+        	      	log.WithField("email", u).Debug("processing member of gUserDetailCache")
+                	gUserDetailCache[u.PrimaryEmail] = u
+        	}
+	}
 
 	log.Debug("get groups from google")
         gGroups, err := s.google.GetGroups(queryGroups)
@@ -1120,9 +1125,19 @@ func (s *syncGSuite) getGoogleUsersInGroup(group *admin.Group, userCache map[str
                 if found {
                         membersUsers = append(membersUsers, userCache[m.Email])
                 } else {
-                        log.WithField("id", m.Email).Warn("missing user")
-                        continue
+                        log.WithField("id", m.Email).Warn("not found in cache, fetching user")
+			googleUsers, err := s.google.GetUsers("email="+m.Email)
+        		if err != nil {
+				log.WithField("id", m.Email).Warn("missing user")
+                        	continue
+        		} else {
+				for _, u := range googleUsers {
+	                		userCache[u.PrimaryEmail] = u
+                        		membersUsers = append(membersUsers, userCache[m.Email])
+				}
+			} 			
                 }
+
         }
 
         return membersUsers
