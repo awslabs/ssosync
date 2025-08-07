@@ -288,7 +288,7 @@ func configLambda() {
            log.WithField("PrecacheQueries", unwrap).Debug("from EnvVar")
         }
 
-	unwrap = os.Getenv("PRECACHE_QUERIES")
+	unwrap = os.Getenv("DRY_RUN")
         if len([]rune(unwrap)) != 0 {
 	   cfg.DryRun = strings.ToLower(unwrap) == "true"
 	   log.WithField("DryRun", unwrap).Debug("from EnvVar")
