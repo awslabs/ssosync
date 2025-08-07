@@ -287,6 +287,12 @@ func configLambda() {
            cfg.PrecacheQueries = unwrap
            log.WithField("PrecacheQueries", unwrap).Debug("from EnvVar")
         }
+
+	unwrap = os.Getenv("PRECACHE_QUERIES")
+        if len([]rune(unwrap)) != 0 {
+	   cfg.DryRun = strings.ToLower(unwrap) == "true"
+	   log.WithField("DryRun", unwrap).Debug("from EnvVar")
+	}
 }
 
 func addFlags(cmd *cobra.Command, cfg *config.Config) {
@@ -325,3 +331,4 @@ func logConfig(cfg *config.Config) {
 		log.SetLevel(level)
 	}
 }
+
