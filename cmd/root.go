@@ -282,6 +282,11 @@ func configLambda() {
 	   log.WithField("IncludeGroups", unwrap).Debug("from EnvVar")
         }
 
+        unwrap = os.Getenv("PRECACHE_QUERIES")
+        if len([]rune(unwrap)) != 0 {
+           cfg.PrecacheQueries = unwrap
+           log.WithField("PrecacheQueries", unwrap).Debug("from EnvVar")
+        }
 }
 
 func addFlags(cmd *cobra.Command, cfg *config.Config) {
@@ -301,6 +306,7 @@ func addFlags(cmd *cobra.Command, cfg *config.Config) {
 	rootCmd.Flags().StringVarP(&cfg.SyncMethod, "sync-method", "s", config.DefaultSyncMethod, "Sync method to use (users_groups|groups)")
 	rootCmd.Flags().StringVarP(&cfg.Region, "region", "r", "", "AWS Region where AWS SSO is enabled")
 	rootCmd.Flags().StringVarP(&cfg.IdentityStoreID, "identity-store-id", "i", "", "Identifier of Identity Store in AWS SSO")
+	rootCmd.Flags().StringVarP(&cfg.PrecacheQueries, "precache-queries", "p", config.DefaultPrecacheQueries, "Google Workspace Users filter queries parameter, example: 'OrgUnitPath=/ isSuspend=false isArchived=false', to precache all users within that Org Unit Path. For query syntax and more examples see: https://developers.google.com/admin-sdk/directory/v1/guides/search-users. To disable and use caching on the fly, 'DISABLED'.")
 }
 
 func logConfig(cfg *config.Config) {

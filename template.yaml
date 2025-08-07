@@ -117,7 +117,15 @@ Parameters:
     AllowedValues:
       - json
       - text
-        
+
+  MemorySize:
+    Type: Number
+    Description: |
+      [required] the amount of RAM allocated to the function, within range 128-10240MB. default is 128MB.
+    Default: 128
+    MinValue: 128
+    MaxValue: 10240
+     
   TimeOut:
     Type: Number
     Description: |
@@ -540,6 +548,7 @@ Resources:
       Handler: bootstrap
       Architectures:
         - arm64
+      MemorySize: !Ref MemorySize
       Timeout: !Ref TimeOut
       ReservedConcurrentExecutions: 1
       Environment:
