@@ -293,7 +293,7 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 	log.Debug("preparing list of google users, groups and their members")
 	googleGroups, googleUsers, googleGroupsUsers, err := s.getGoogleGroupsAndUsers(queryGroups, queryUsers)
 	if err != nil {
-getGoogleGroupsAndUsers		return err
+		return err
 	}
 	log.WithField("googleGroups", googleGroups).Debug("Groups to sync")
 	log.WithField("googleUsers", googleUsers).Debug("Users to sync")
