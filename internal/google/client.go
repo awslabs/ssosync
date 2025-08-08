@@ -84,7 +84,7 @@ func (c *client) GetGroupMembers(g *admin.Group) ([]*admin.Member, error) {
 	m := make([]*admin.Member, 0)
 	var err error
 
-	err = c.service.Members.List(g.Id).Pages(context.TODO(), func(members *admin.Members) error {
+	err = c.service.Members.List(g.Id).IncludeDerivedMembership("true").Pages(context.TODO(), func(members *admin.Members) error {
 		if err != nil {
 			return err
 		}

@@ -243,7 +243,7 @@ func configLambda() {
         unwrap = os.Getenv("LOG_FORMAT")
         if len([]rune(unwrap)) != 0 {
            cfg.LogFormat = unwrap
-	   log.WithField("LogFormay", unwrap).Debug("from EnvVar")
+	   log.WithField("LogFormat", unwrap).Debug("from EnvVar")
         }
 
 	unwrap = os.Getenv("SYNC_METHOD")

@@ -293,7 +293,7 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 	log.Debug("preparing list of google users, groups and their members")
 	googleGroups, googleUsers, googleGroupsUsers, err := s.getGoogleGroupsAndUsers(queryGroups, queryUsers)
 	if err != nil {
-		return err
+getGoogleGroupsAndUsers		return err
 	}
 	log.WithField("googleGroups", googleGroups).Debug("Groups to sync")
 	log.WithField("googleUsers", googleUsers).Debug("Users to sync")
@@ -546,16 +546,16 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 
         log.Debug("process users from google, filtering as required")
 	for _, u := range googleUsers {
-		log.WithField("email", u).Debug("processing userMatch")
+		log.WithField("email", u.PrimaryEmail).Debug("processing userMatch")
 
                 // Remove any users that should be ignored
 		if s.ignoreUser(u.PrimaryEmail) {
-                	log.WithField("id", u.PrimaryEmail).Debug("ignoring user")
+                	log.Debug("ignoring user")
 			continue
 		}
                 _, ok := gUniqUsers[u.PrimaryEmail]
                 if !ok {
-                	log.WithField("id", u.PrimaryEmail).Debug("adding user")
+                	log.Debug("adding user")
                 	gUniqUsers[u.PrimaryEmail] = u
                 }
 
