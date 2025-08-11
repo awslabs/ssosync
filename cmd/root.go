@@ -309,11 +309,11 @@ func addFlags(cmd *cobra.Command, cfg *config.Config) {
 	rootCmd.Flags().StringSliceVar(&cfg.IgnoreGroups, "ignore-groups", []string{}, "ignores these Google Workspace groups")
 	rootCmd.Flags().StringSliceVar(&cfg.IncludeGroups, "include-groups", []string{}, "include only these Google Workspace groups, NOTE: only works when --sync-method 'users_groups'")
 	rootCmd.Flags().StringVarP(&cfg.UserMatch, "user-match", "m", "", "Google Workspace Users filter query parameter, example: 'name:John*' 'name=John Doe,email:admin*', to sync all users in the directory specify '*'. For query syntax and more examples see: https://developers.google.com/admin-sdk/directory/v1/guides/search-users")
-	rootCmd.Flags().StringVarP(&cfg.GroupMatch, "group-match", "g", "*", "Google Workspace Groups filter query parameter, example: 'name:Admin*' 'name=Admins,email:aws-*', to sync all groups (and their member users) specify '*'. For query syntax and more examples see: https://developers.google.com/admin-sdk/directory/v1/guides/search-groups")
+	rootCmd.Flags().StringVarP(&cfg.GroupMatch, "group-match", "g", "*", "Google Workspace Groups filter query parameter, example: 'name:Admin*' 'name=AWS-Admins,email:aws*', to sync all groups (and their member users) specify '*'. For query syntax and more examples see: https://developers.google.com/admin-sdk/directory/v1/guides/search-groups")
 	rootCmd.Flags().StringVarP(&cfg.SyncMethod, "sync-method", "s", config.DefaultSyncMethod, "Sync method to use (users_groups|groups)")
 	rootCmd.Flags().StringVarP(&cfg.Region, "region", "r", "", "AWS Region where AWS SSO is enabled")
 	rootCmd.Flags().StringVarP(&cfg.IdentityStoreID, "identity-store-id", "i", "", "Identifier of Identity Store in AWS SSO")
-	rootCmd.Flags().StringVarP(&cfg.PrecacheQueries, "precache-queries", "p", config.DefaultPrecacheQueries, "Google Workspace Users filter queries parameter, example: 'OrgUnitPath=/ isSuspend=false isArchived=false', to precache all users within that Org Unit Path. For query syntax and more examples see: https://developers.google.com/admin-sdk/directory/v1/guides/search-users. To disable and use caching on the fly, 'DISABLED'.")
+	rootCmd.Flags().StringVarP(&cfg.PrecacheQueries, "precache-queries", "p", config.DefaultPrecacheQueries, "Google Workspace Users filter queries parameter, example: 'OrgUnitPath=/ isSuspend=false isArchived=false', to precache all users within that Org Unit Path. If a OrgUnitPath contains spaces, then the string needs to be quoted, i.e. OrgUnitPath='/OU_1/OU 2'. For query syntax and more examples see: https://developers.google.com/admin-sdk/directory/v1/guides/search-users. To disable and use caching on the fly, 'DISABLED'.")
 }
 
 func logConfig(cfg *config.Config) {

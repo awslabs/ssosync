@@ -558,8 +558,8 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 
 		if _, found := gUniqUsers[u.PrimaryEmail]; !found {
                 	log.WithField("email", u.PrimaryEmail).Debug("adding user")
-                	gUniqUsers[u.PrimaryEmail] = u
 			gUserDetailCache[u.PrimaryEmail] = u
+                	gUniqUsers[u.PrimaryEmail] = gUserDetailCache[u.PrimaryEmail]
                 } else {
 			log.WithField("email", u.PrimaryEmail).Debug("already existing")
 		}
@@ -1105,7 +1105,7 @@ func (s *syncGSuite) RemoveUserFromGroup(userID *string, groupID *string) error 
 }
 
 func (s *syncGSuite) getGoogleUsersInGroup(group *admin.Group, userCache map[string]*admin.User, groupCache map[string]*admin.Group) []*admin.User {
-	log.WithField("Email:", group.Email).Debug("getGoogleGroupMembers()")
+	log.WithField("Email:", group.Email).Debug("getGoogleUsersInGroup()")
 
 	 // retrieve the members of the group
 	groupMembers, err := s.google.GetGroupMembers(group)
@@ -1116,18 +1116,18 @@ func (s *syncGSuite) getGoogleUsersInGroup(group *admin.Group, userCache map[str
 
 	// process the members of the group
         for _, m := range groupMembers {
-        	log.WithField("email", m.Email).Debug("processing member")
+        	log.WithField("member", m).Debug("processing member")
 
                 // Ignore any external members, since they don't have users
                 // that can be synced
                 if m.Type == "USER" && m.Status != "ACTIVE" {
-                        log.WithField("id", m.Email).Warn("ignoring external user")
+                        log.WithField("id", m.Email).Warn("ignoring user: external user")
                         continue
                 }
 
                 // Remove any users that should be ignored
                 if s.ignoreUser(m.Email) {
-                        log.WithField("id", m.Email).Debug("ignoring user")
+                        log.WithField("id", m.Email).Debug("ignoring user: ignore list")
                         continue
                 }
 
