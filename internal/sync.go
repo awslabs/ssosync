@@ -1116,39 +1116,40 @@ func (s *syncGSuite) getGoogleUsersInGroup(group *admin.Group, userCache map[str
 
 	// process the members of the group
         for _, m := range groupMembers {
-        	log.WithField("member", m).Debug("processing member")
-
                 // Ignore any external members, since they don't have users
                 // that can be synced
-                if m.Type == "USER" && m.Status != "ACTIVE" {
-                        log.WithField("id", m.Email).Warn("ignoring user: external user")
+                if m.Type == "USER" && m.Status != "ACTIVE" && m.Status != "SUSPENDED" {
+                        log.WithField("id", m.Email).Warn("skipping member: external user")
+                        continue
+                }
+
+		// Ignoring nested groups, since we included indirect membership in the query
+ 		if m.Type == "Group" {
+		        log.WithField("id", m.Email).Warn("skipping member: nested group")
                         continue
                 }
 
                 // Remove any users that should be ignored
                 if s.ignoreUser(m.Email) {
-                        log.WithField("id", m.Email).Debug("ignoring user: ignore list")
+                        log.WithField("email", m.Email).Debug("skipping member: ignore list")
                         continue
                 }
 
                 // Find the group member in the cache of UserDetails
-                _, found := userCache[m.Email]
-                if found {
-                        membersUsers = append(membersUsers, userCache[m.Email])
-                } else {
-                        log.WithField("id", m.Email).Warn("not found in cache, fetching user")
+                if _, found := userCache[m.Email]; !found {
+                        log.WithField("email", m.Email).Warn("not found in cache, fetching user")
 			googleUsers, err := s.google.GetUsers("email="+m.Email)
         		if err != nil {
 				log.WithField("error:", err).Error("Fetching user")
                         	continue
-        		} else {
-				for _, u := range googleUsers {
-					log.WithField("email", u.PrimaryEmail).Debug("caching user")
-	                		userCache[u.PrimaryEmail] = u
-                        		membersUsers = append(membersUsers, userCache[m.Email])
-				}
-			} 			
-                }
+        		}
+			for _, u := range googleUsers {
+				log.WithField("email", u.PrimaryEmail).Debug("caching user")
+	               		userCache[u.PrimaryEmail] = u
+			}
+		}
+                log.WithField("email", m.Email).Debug("adding member")
+                membersUsers = append(membersUsers, userCache[m.Email])
 
         }
 
