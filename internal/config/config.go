@@ -55,7 +55,7 @@ const (
 	// DefaultSyncMethod is the default sync method to use.
 	DefaultSyncMethod = "groups"
 	// DefaultPrecacheQueries
-	DefaultPrecacheQueries = "OrgUnitPath=/ isSuspended=false isArchived=false"
+	DefaultPrecacheQueries = "OrgUnitPath=/ isArchived=false"
 )
 
 // New returns a new Config
