@@ -1135,7 +1135,7 @@ func (s *syncGSuite) getGoogleUsersInGroup(group *admin.Group, userCache map[str
                 } 
 
 		// Ignoring nested groups, since we included indirect membership in the query
- 		if m.Type == "Group" {
+ 		if m.Type == "GROUP" {
 		        log.WithField("id", m.Email).Warn("skipping member: nested group")
                         continue
                 }
