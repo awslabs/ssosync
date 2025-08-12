@@ -1158,9 +1158,12 @@ func (s *syncGSuite) getGoogleUsersInGroup(group *admin.Group, userCache map[str
 				log.WithField("email", u.PrimaryEmail).Debug("caching user")
 	               		userCache[u.PrimaryEmail] = u
 			}
+                	log.WithField("email", m.Email).Debug("adding member")
+                	membersUsers = append(membersUsers, userCache[m.Email])
+		} else {
+                	log.WithField("email", m.Email).Debug("adding member")
+                	membersUsers = append(membersUsers, userCache[m.Email])
 		}
-                log.WithField("email", m.Email).Debug("adding member")
-                membersUsers = append(membersUsers, userCache[m.Email])
 
         }
 
