@@ -19,6 +19,7 @@ import (
 	"context"
 	"errors"
 	"io/ioutil"
+	"strings"
 
 	"github.com/awslabs/ssosync/internal/aws"
 	"github.com/awslabs/ssosync/internal/config"
@@ -567,8 +568,6 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 			log.WithField("email", u.PrimaryEmail).Debug("already existing")
 			continue
 		}
-		log.WithField("user", u).Warn("Unhandled user from userMatch")
-
         }
 
         // For larger directories this will reduce execution time and avoid throttling limits
@@ -576,9 +575,22 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
         // this to a specific OU path or disable by leaving empty.
         if s.cfg.PrecacheQueries != "DISABLED" {
 
- 		log.WithField("PrecacheQueries", s.cfg.PrecacheQueries).WithField("queryFilters", s.cfg.UserFilter).Info("google.GetUsers() Precaching users from Google")
+		precacheQueries :=""
+ 		log.WithField("Precache OrgUnitPaths", s.cfg.PrecacheQueries).Info("to be converted to queries")
+		for _, orgUnitPath := range strings.Split(s.cfg.PrecacheQueries, ",") {
+			log.WithField("orgUnitPath", orgUnitPath).Debug("format into query string")
+			orgUnitPath = strings.TrimSpace(orgUnitPath)
+			orgUnitPath = strings.TrimSuffix(orgUnitPath, "/")
+			if strings.ContainsRune(orgUnitPath, ' ') {
+				precacheQueries = precacheQueries + ",OrgUnitPath='" + orgUnitPath + "'"
+			} else {
+				precacheQueries = precacheQueries + ",OrgUnitPath=" + orgUnitPath
+			}
+		}
 
-        	googleUsers, err = s.google.GetUsers(s.cfg.PrecacheQueries, s.cfg.UserFilter) 
+ 		log.WithField("PrecacheQueries", precacheQueries).WithField("queryFilters", s.cfg.UserFilter).Info("google.GetUsers() Precaching users from Google")
+
+        	googleUsers, err = s.google.GetUsers(precacheQueries, s.cfg.UserFilter) 
 		if err != nil {
 			log.WithField("error", err).Error("Precaching failed, caching on the fly")
                 } else if len(googleUsers) == 0 {
@@ -593,7 +605,6 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
                         		log.WithField("email", u.PrimaryEmail).Debug("already in cache")
 					continue
                 		}
-				log.WithField("user", u).Warn("unhandled user")
         		}
 		}
 	} else {

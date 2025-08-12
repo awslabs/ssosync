@@ -72,6 +72,8 @@ Resources:
             - !Ref IdentityStoreIdArn
             - '}}'
         SyncMethod: groups
+	SyncSuspended: "True"
+	PrecacheQueries: "/Catering/,/Maintenance/Vending Machines"
         GoogleGroupMatch: !Ref GroupMatch
-        LogLevel: info
+        LogLevel: debug
         LogFormat: json
