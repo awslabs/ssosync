@@ -143,17 +143,17 @@ Parameters:
       If enabled suspended users that match either the UserMatch of GroupMatch criteria they will be replicated.
     Default: "False"
     AllowedValues:
-      - True
-      - False
+      - "True"
+      - "False"
       
   DryRun:
     Type: String
     Description: | 
       Enabled Dry Run, means the lambda will execute highlighting the changes it would make to the Identity Store, will not making any changes.
-    Default: False
+    Default: "False"
     AllowedValues:
-      - True
-      - False
+      - "True"
+      - "False"
 
   PrecacheQueries:
     Type: String
