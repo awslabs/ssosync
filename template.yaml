@@ -141,7 +141,7 @@ Parameters:
     Type: String
     Description: |
       If enabled suspended users that match either the UserMatch of GroupMatch criteria they will be replicated.
-    Default: False
+    Default: "False"
     AllowedValues:
       - True
       - False
