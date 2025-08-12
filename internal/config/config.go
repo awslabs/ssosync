@@ -41,6 +41,10 @@ type Config struct {
 	PrecacheQueries string
 	// DryRun flag, when set to true, no change will be made in the Identity Store
 	DryRun bool
+	// sync suspended user, if true suspended user and their group memberships are sync'd into IAM Identity Center
+	SyncSuspended bool
+	// User filter string
+	UserFilter string
 }
 
 const (
@@ -55,7 +59,9 @@ const (
 	// DefaultSyncMethod is the default sync method to use.
 	DefaultSyncMethod = "groups"
 	// DefaultPrecacheQueries
-	DefaultPrecacheQueries = "OrgUnitPath=/ isArchived=false"
+	DefaultPrecacheQueries = "OrgUnitPath=/"
+	// DefaultSyncSuspended
+	DefaultSyncSuspended = false
 )
 
 // New returns a new Config

@@ -144,6 +144,12 @@ func init() {
 	cobra.OnInitialize(initConfig)
 	addFlags(rootCmd, cfg)
 
+	if cfg.SyncSuspended {
+		cfg.UserFilter = " isArchived=false"
+	} else {
+		cfg.UserFilter = " isSuspended=false isArchived=false"
+	}
+
 	rootCmd.SetVersionTemplate(fmt.Sprintf("%s, commit %s, built at %s by %s\n", version, commit, date, builtBy))
 
 	// silence on the root cmd
@@ -293,6 +299,12 @@ func configLambda() {
 	   cfg.DryRun = strings.ToLower(unwrap) == "true"
 	   log.WithField("DryRun", unwrap).Debug("from EnvVar")
 	}
+
+        unwrap = os.Getenv("SYNC_SUSPENDED")
+        if len([]rune(unwrap)) != 0 {
+           cfg.SyncSuspended = strings.ToLower(unwrap) == "true"
+           log.WithField("SyncSuspendedDry", unwrap).Debug("from EnvVar")
+        }
 }
 
 func addFlags(cmd *cobra.Command, cfg *config.Config) {
@@ -301,6 +313,7 @@ func addFlags(cmd *cobra.Command, cfg *config.Config) {
 	rootCmd.PersistentFlags().StringVarP(&cfg.LogFormat, "log-format", "", config.DefaultLogFormat, "log format")
 	rootCmd.PersistentFlags().StringVarP(&cfg.LogLevel, "log-level", "", config.DefaultLogLevel, "log level")
 	rootCmd.PersistentFlags().BoolVarP(&cfg.DryRun, "dry-run", "n", false, "Do *not* perform any actions, instead list what would happen")
+        rootCmd.PersistentFlags().BoolVarP(&cfg.SyncSuspended, "suspended", "", config.DefaultSyncSuspended, "included suspended users and their group memberships when syncing")
 	rootCmd.Flags().StringVarP(&cfg.SCIMAccessToken, "access-token", "t", "", "AWS SSO SCIM API Access Token")
 	rootCmd.Flags().StringVarP(&cfg.SCIMEndpoint, "endpoint", "e", "", "AWS SSO SCIM API Endpoint")
 	rootCmd.Flags().StringVarP(&cfg.GoogleCredentials, "google-credentials", "c", config.DefaultGoogleCredentials, "path to Google Workspace credentials file")
@@ -313,7 +326,8 @@ func addFlags(cmd *cobra.Command, cfg *config.Config) {
 	rootCmd.Flags().StringVarP(&cfg.SyncMethod, "sync-method", "s", config.DefaultSyncMethod, "Sync method to use (users_groups|groups)")
 	rootCmd.Flags().StringVarP(&cfg.Region, "region", "r", "", "AWS Region where AWS SSO is enabled")
 	rootCmd.Flags().StringVarP(&cfg.IdentityStoreID, "identity-store-id", "i", "", "Identifier of Identity Store in AWS SSO")
-	rootCmd.Flags().StringVarP(&cfg.PrecacheQueries, "precache-queries", "p", config.DefaultPrecacheQueries, "Google Workspace Users filter queries parameter, example: 'OrgUnitPath=/ isSuspend=false isArchived=false', to precache all users within that Org Unit Path. If a OrgUnitPath contains spaces, then the string needs to be quoted, i.e. OrgUnitPath='/OU_1/OU 2'. For query syntax and more examples see: https://developers.google.com/admin-sdk/directory/v1/guides/search-users. To disable and use caching on the fly, 'DISABLED'.")
+	rootCmd.Flags().StringVarP(&cfg.PrecacheQueries, "precache-queries", "p", config.DefaultPrecacheQueries, "Google Workspace Users filter queries parameter, example: 'OrgUnitPath=/', to precache all users within that Org Unit Path. If a OrgUnitPath contains spaces, then the string needs to be quoted, i.e. OrgUnitPath='/OU_1/OU 2'. For query syntax and more examples see: https://developers.google.com/admin-sdk/directory/v1/guides/search-users. To disable and use caching on the fly, 'DISABLED'.")
+
 }
 
 func logConfig(cfg *config.Config) {

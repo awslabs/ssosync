@@ -110,7 +110,7 @@ func (s *syncGSuite) SyncUsers(query string) error {
 	}
 
 	log.Debug("get active google users")
-	googleUsers, err := s.google.GetUsers(query)
+	googleUsers, err := s.google.GetUsers(query, s.cfg.UserFilter)
 	if err != nil {
 		return err
 	}
@@ -290,7 +290,7 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 	log.WithField("queryGroup", queryGroups).Info("get google groups")
 	log.WithField("queryUsers", queryUsers).Info("get google users")
 
-	log.Debug("preparing list of google users, groups and their members")
+	log.Info("preparing list of google users, groups and their members")
 	googleGroups, googleUsers, googleGroupsUsers, err := s.getGoogleGroupsAndUsers(queryGroups, queryUsers)
 	if err != nil {
 		return err
@@ -539,8 +539,9 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
         }
 
 	// Fetch Users
-        log.WithField("queryUsers", queryUsers).Info("google.GetUsers() fetching userMatch")
-        googleUsers, err := s.google.GetUsers(queryUsers)
+        log.WithField("queryUsers", queryUsers).WithField("queryFilters", s.cfg.UserFilter).Info("google.GetUsers() fetching userMatch")
+
+        googleUsers, err := s.google.GetUsers(queryUsers, s.cfg.UserFilter)
         if err != nil {
 		log.WithField("error", err).Error("failed fetching userMatch from Google")
                 return nil, nil, nil, err
@@ -570,9 +571,10 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
         // however if you have directory with 10s of 1000s of users you may want to down scope 
         // this to a specific OU path or disable by leaving empty.
         if s.cfg.PrecacheQueries != "DISABLED" {
- 		log.WithField("PrecacheQueries", s.cfg.PrecacheQueries).Info("google.GetUsers() Precaching users from Google")
 
-        	googleUsers, err = s.google.GetUsers(s.cfg.PrecacheQueries) 
+ 		log.WithField("PrecacheQueries", s.cfg.PrecacheQueries).WithField("queryFilters", s.cfg.UserFilter).Info("google.GetUsers() Precaching users from Google")
+
+        	googleUsers, err = s.google.GetUsers(s.cfg.PrecacheQueries, s.cfg.UserFilter) 
 		if err != nil {
 			log.WithField("error", err).Error("Precaching failed, caching on the fly")
                 } else if len(googleUsers) == 0 {
@@ -1123,6 +1125,13 @@ func (s *syncGSuite) getGoogleUsersInGroup(group *admin.Group, userCache map[str
                         continue
                 }
 
+                // Ignore any external members, since they don't have users
+                // that can be synced
+                if m.Type == "USER" && m.Status == "SUSPENDED" && !s.cfg.SyncSuspended {
+                        log.WithField("id", m.Email).Warn("skipping member: suspended user")
+                        continue
+                } 
+
 		// Ignoring nested groups, since we included indirect membership in the query
  		if m.Type == "Group" {
 		        log.WithField("id", m.Email).Warn("skipping member: nested group")
@@ -1138,7 +1147,7 @@ func (s *syncGSuite) getGoogleUsersInGroup(group *admin.Group, userCache map[str
                 // Find the group member in the cache of UserDetails
                 if _, found := userCache[m.Email]; !found {
                         log.WithField("email", m.Email).Warn("not found in cache, fetching user")
-			googleUsers, err := s.google.GetUsers("email="+m.Email)
+			googleUsers, err := s.google.GetUsers("email="+m.Email, s.cfg.UserFilter)
         		if err != nil {
 				log.WithField("error:", err).Error("Fetching user")
                         	continue
