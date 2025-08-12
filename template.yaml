@@ -141,25 +141,25 @@ Parameters:
     Type: String
     Description: |
       If enabled suspended users that match either the UserMatch of GroupMatch criteria they will be replicated.
-    Default: "False"
+    Default: false
     AllowedValues:
-      - "True"
-      - "False"
+      - true
+      - false
       
   DryRun:
     Type: String
     Description: | 
       Enabled Dry Run, means the lambda will execute highlighting the changes it would make to the Identity Store, will not making any changes.
-    Default: "False"
+    Default: false
     AllowedValues:
-      - "True"
-      - "False"
+      - true
+      - false
 
   PrecacheQueries:
     Type: String
     Description: | 
       If running against a very large Google directory, you can precaching only a subset of users based on OrgUnitPaths within the directory. The default is the whole directory. The format is a comma separate list of OrgUnitPaths, /OU1,/OU2/OU 3 in this example all users within the tree of /OU1 and /OU2/OU 3 would be precached but not from /OU2 itself. Specifying DISABLED, disables precaching.
-    Default: "/"
+    Default: /
     AllowedPattern: '(DISABLED)|(^\/$)|(\/[a-zA-Z0-9_\/\- ]{1,50})(?:,(\?\/[a-zA-Z0-9_\/\- ]{1,50}))?'
 
 # Secrets
