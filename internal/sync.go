@@ -1118,6 +1118,8 @@ func (s *syncGSuite) getGoogleUsersInGroup(group *admin.Group, userCache map[str
 
 	// process the members of the group
         for _, m := range groupMembers {
+                log.WithField("member", m).Debug("processing group member")
+
                 // Ignore any external members, since they don't have users
                 // that can be synced
                 if m.Type == "USER" && m.Status != "ACTIVE" && m.Status != "SUSPENDED" {
