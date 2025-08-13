@@ -160,7 +160,7 @@ Parameters:
     Description: | 
       If running against a very large Google directory, you can precaching only a subset of users based on OrgUnitPaths within the directory. The default is the whole directory. The format is a comma separate list of OrgUnitPaths, /OU1,/OU2/OU 3 in this example all users within the tree of /OU1 and /OU2/OU 3 would be precached but not from /OU2 itself. Specifying DISABLED, disables precaching.
     Default: ""
-    AllowedPattern: '(?!.*\s)|(DISABLED)|(^\/$)|(\/[a-zA-Z0-9_\/\- ]{1,50})(?:(,\/[a-zA-Z0-9_\/\- ]{1,50}))*'
+    AllowedPattern: '(DISABLED)|(^\/$)|(\/[a-zA-Z0-9_\/\- ]{1,50})(?:(,\/[a-zA-Z0-9_\/\- ]{1,50}))*'
 
 # Secrets
   GoogleCredentials:
@@ -294,10 +294,6 @@ Conditions:
   SetSyncSuspended: !Equals
     - !Ref SyncSuspended
     - "sync"
-  SetPrecacheQueries: !Not
-    - !Equals
-        - !Ref PrecacheQueries
-        - ""
   OnSchedule: !Not
     - !Equals
         - !Ref ScheduleExpression
@@ -599,15 +595,15 @@ Resources:
           SCIM_ACCESS_TOKEN: !If [CreateSecrets, !Ref SecretSCIMAccessToken, !Select [3, !Split [',', !Ref CrossStackConfig]]]
           REGION: !If [CreateSecrets, !Ref SecretRegion, !Select [4, !Split [',', !Ref CrossStackConfig]]]
           IDENTITY_STORE_ID: !If [CreateSecrets, !Ref SecretIdentityStoreID, !Select [5, !Split [',', !Ref CrossStackConfig]]]
-          !If [SetGoogleUserMatch, USER_MATCH: !Ref GoogleUserMatch, !Ref AWS::NoValue]
-          !If [SetGoogleGroupMatch, GROUP_MATCH: !Ref GoogleGroupMatch, !Ref AWS::NoValue]
+          USER_MATCH: !If [SetGoogleUserMatch, !Ref GoogleUserMatch, !Ref AWS::NoValue]
+          GROUP_MATCH: !If [SetGoogleGroupMatch, !Ref GoogleGroupMatch, !Ref AWS::NoValue]
           SYNC_METHOD: !Ref SyncMethod
-          !If [SetIgnoreGroups, IGNORE_GROUPS: !Ref IgnoreGroups, !Ref AWS::NoValue]
-          !If [SetIgnoreUsers, IGNORE_USERS: !Ref IgnoreUsers, !Ref AWS::NoValue]
-          !If [SetIncludeGroups, INCLUDE_GROUPS: !Ref IncludeGroups, !Ref AWS::NoValue]
-          !If [SetDryRun, DRY_RUN: 'True', !Ref AWS::NoValue]
-          !If [SetSyncSuspended, SYNC_SUSPENDED: 'True', !Ref AWS::NoValue]
-          !If [SetPrecacheQueries, PRECACHE_QUERIES: !Ref PrecacheQueries, !Ref AWS::NoValue]
+          IGNORE_GROUPS: !If [SetIgnoreGroups, !Ref IgnoreGroups, !Ref AWS::NoValue]
+          IGNORE_USERS: !If [SetIgnoreUsers, !Ref IgnoreUsers, !Ref AWS::NoValue]
+          INCLUDE_GROUPS: !If [SetIncludeGroups, !Ref IncludeGroups, !Ref AWS::NoValue]
+          DRY_RUN: !If [SetDryRun, 'True', !Ref AWS::NoValue]
+          SYNC_SUSPENDED: !If [SetSyncSuspended, 'True', 'False']
+          PRECACHE_QUERIES: !Ref PrecacheQueries
 
       Events:
         SyncScheduledEvent:
