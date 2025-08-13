@@ -247,7 +247,7 @@ func configLambda() {
 	if err != nil {
 		log.Fatal(errors.Wrap(err, "Failed to create secret cache").Error())
 	}
-	
+
 	// Get sensitive values from Secrets Manager with caching
 	cfg.GoogleAdmin = getSecretFromCache(getEnv("GOOGLE_ADMIN", config.DefaultGoogleCredentials))
 	cfg.SCIMEndpoint = getSecretFromCache(getEnv("SCIM_ENDPOINT", ""))
@@ -270,7 +270,6 @@ func configLambda() {
 	cfg.SyncSuspended = getEnv("SYNC_SUSPENDED", false)
 
 }
-
 
 func getSecretFromCache(secretName string) string {
 	value, err := secretCache.GetSecretString(secretName)
@@ -318,4 +317,3 @@ func logConfig(cfg *config.Config) {
 		log.SetLevel(level)
 	}
 }
-

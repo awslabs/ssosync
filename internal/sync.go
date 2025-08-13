@@ -606,7 +606,6 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
         // however if you have directory with 10s of 1000s of users you may want to down scope 
         // this to a specific OU path or disable by leaving empty.
         if s.cfg.PrecacheOrgUnits[0] != "DISABLED" {
-
 		precacheQueries := ""
  		log.WithField("Precache OrgUnitPaths", s.cfg.PrecacheOrgUnits).Info("to be converted to queries")
 		for _, orgUnitPath := range s.cfg.PrecacheOrgUnits {
@@ -848,16 +847,13 @@ func DoSync(ctx context.Context, cfg *config.Config) error {
 	}
 
 	mkAwsScimClient := aws.NewClient
-	mkIdentityStoreClient := func(p awsclient.ConfigProvider, cfgs ...*aws_sdk.Config) identitystoreiface.IdentityStoreAPI {
-		return identitystore.New(p, cfgs...)
+	if cfg.DryRun {
+		mkAwsScimClient = aws.NewDryClient
 	}
 
 	if cfg.DryRun {
 		log.Warn("This is a DRY RUN - actions will *not* be actually performed")
 		defer log.Warn("This was a DRY RUN - actions were *not* actually performed")
-
-		mkAwsScimClient = aws.NewClient
-		mkIdentityStoreClient = aws.NewDryIdentityStore
 	}
 
 	awsScimClient, err := mkAwsScimClient(
@@ -880,6 +876,12 @@ func DoSync(ctx context.Context, cfg *config.Config) error {
 	identityStoreClient := aws_identitystore.NewFromConfig(aws_cfg, func(o *aws_identitystore.Options) {
 		o.Region = cfg.Region
 	})
+
+	// Wrap with dry run client if in dry run mode
+	var finalIdentityStoreClient interfaces.IdentityStoreAPI = identityStoreClient
+	if cfg.DryRun {
+		finalIdentityStoreClient = aws.NewDryIdentityStore(identityStoreClient)
+	}
 
 	// Perform a lightweight test query to validate connectivity
 	testCtx, cancel := context.WithTimeout(ctx, time.Second*30)
@@ -904,7 +906,7 @@ func DoSync(ctx context.Context, cfg *config.Config) error {
 	// 1. SCIM API client
 	// 2. Google Directory API client
 	// 3. Identity Store Public API client
-	c := New(cfg, awsScimClient, googleClient, identityStoreClient)
+	c := New(cfg, awsScimClient, googleClient, finalIdentityStoreClient)
 
 	log.WithField("sync_method", cfg.SyncMethod).Info("syncing")
 	if cfg.SyncMethod == config.DefaultSyncMethod {

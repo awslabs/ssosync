@@ -1,4 +1,4 @@
-#!/bin/bash -eu
+#!/bin/bash -eux
 
 # This is a workaround for a limitation of CodeBuild / CodePipeline, where the git metadata is missing.
 # It brings in the git metadata by checking out the repository and winding it to the currently building commit.

@@ -12,11 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package aws
+package http
 
-import "net/http"
+import (
+	"net/http"
+)
 
-// HTTPClient is a generic HTTP Do interface
-type HTTPClient interface {
+// Client defines the interface for HTTP clients
+type Client interface {
 	Do(req *http.Request) (*http.Response, error)
 }

@@ -349,7 +349,7 @@ Resources:
           - Name: ARTIFACT_S3_BUCKET
             Value: !Sub ${ArtifactBucket}
           - Name: GitRepo
-            Value: "https://github.com/awslabs/ssosync"
+            Value: !Sub "https://github.com/${OwnerName}/${RepoName}"
           - Name: GitBranch
             Value: !Ref BranchName
       Artifacts:
@@ -377,7 +377,7 @@ Resources:
         Type: CODEPIPELINE
         BuildSpec: "cicd/build/build/buildspec.yml"
       Environment:
-        ComputeType: BUILD_GENERAL1_SMALL
+        ComputeType: BUILD_GENERAL1_MEDIUM
         Image: aws/codebuild/standard:7.0
         Type: LINUX_CONTAINER
         EnvironmentVariables:

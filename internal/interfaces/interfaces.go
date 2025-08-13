@@ -4,56 +4,46 @@ import (
 	"context"
 
 	"github.com/aws/aws-sdk-go-v2/service/identitystore"
+	"github.com/aws/aws-sdk-go-v2/service/identitystore/types"
 )
 
-// IdentityStoreAPI interface for AWS Identity Store operations
+// IdentityStoreAPI defines the interface for the AWS Identity Store API methods used in the application
 type IdentityStoreAPI interface {
-	CreateGroup(ctx context.Context, params *identitystore.CreateGroupInput, optFns ...func(*identitystore.Options)) (*identitystore.CreateGroupOutput, error)
-	CreateGroupMembership(ctx context.Context, params *identitystore.CreateGroupMembershipInput, optFns ...func(*identitystore.Options)) (*identitystore.CreateGroupMembershipOutput, error)
-	DeleteGroup(ctx context.Context, params *identitystore.DeleteGroupInput, optFns ...func(*identitystore.Options)) (*identitystore.DeleteGroupOutput, error)
-	DeleteGroupMembership(ctx context.Context, params *identitystore.DeleteGroupMembershipInput, optFns ...func(*identitystore.Options)) (*identitystore.DeleteGroupMembershipOutput, error)
-	DeleteUser(ctx context.Context, params *identitystore.DeleteUserInput, optFns ...func(*identitystore.Options)) (*identitystore.DeleteUserOutput, error)
-	GetGroupMembershipId(ctx context.Context, params *identitystore.GetGroupMembershipIdInput, optFns ...func(*identitystore.Options)) (*identitystore.GetGroupMembershipIdOutput, error)
+	identitystore.ListGroupsAPIClient
+	identitystore.ListUsersAPIClient
+	identitystore.ListGroupMembershipsAPIClient
+
 	IsMemberInGroups(ctx context.Context, params *identitystore.IsMemberInGroupsInput, optFns ...func(*identitystore.Options)) (*identitystore.IsMemberInGroupsOutput, error)
-	ListGroupMemberships(ctx context.Context, params *identitystore.ListGroupMembershipsInput, optFns ...func(*identitystore.Options)) (*identitystore.ListGroupMembershipsOutput, error)
-	ListGroups(ctx context.Context, params *identitystore.ListGroupsInput, optFns ...func(*identitystore.Options)) (*identitystore.ListGroupsOutput, error)
-	ListUsers(ctx context.Context, params *identitystore.ListUsersInput, optFns ...func(*identitystore.Options)) (*identitystore.ListUsersOutput, error)
+	GetGroupMembershipId(ctx context.Context, params *identitystore.GetGroupMembershipIdInput, optFns ...func(*identitystore.Options)) (*identitystore.GetGroupMembershipIdOutput, error)
+	DeleteGroupMembership(ctx context.Context, params *identitystore.DeleteGroupMembershipInput, optFns ...func(*identitystore.Options)) (*identitystore.DeleteGroupMembershipOutput, error)
+	CreateGroup(ctx context.Context, params *identitystore.CreateGroupInput, optFns ...func(*identitystore.Options)) (*identitystore.CreateGroupOutput, error)
+	DeleteGroup(ctx context.Context, params *identitystore.DeleteGroupInput, optFns ...func(*identitystore.Options)) (*identitystore.DeleteGroupOutput, error)
+	CreateGroupMembership(ctx context.Context, params *identitystore.CreateGroupMembershipInput, optFns ...func(*identitystore.Options)) (*identitystore.CreateGroupMembershipOutput, error)
+	DeleteUser(ctx context.Context, params *identitystore.DeleteUserInput, optFns ...func(*identitystore.Options)) (*identitystore.DeleteUserOutput, error)
+	CreateUser(ctx context.Context, params *identitystore.CreateUserInput, optFns ...func(*identitystore.Options)) (*identitystore.CreateUserOutput, error)
 }
 
-// User represents a user in the system
-type User struct {
-	ID          string        `json:"id"`
-	Schemas     []string      `json:"schemas"`
-	Username    string        `json:"userName"`
-	Name        UserName      `json:"name"`
-	DisplayName string        `json:"displayName"`
-	Emails      []UserEmail   `json:"emails"`
-	Addresses   []UserAddress `json:"addresses"`
-	Active      bool          `json:"active"`
+type IdentityStorePaginators interface {
+	NewListUsersPaginator(client identitystore.ListUsersAPIClient, params *identitystore.ListUsersInput, optFns ...func(*identitystore.ListUsersPaginatorOptions)) *ListUsersPaginator
+	NewListGroupMembershipsPaginator(client identitystore.ListGroupMembershipsAPIClient, params *identitystore.ListGroupMembershipsInput, optFns ...func(*identitystore.ListGroupMembershipsPaginatorOptions)) *ListGroupMembershipsPaginator
+	NewListGroupsPaginator(client identitystore.ListGroupsAPIClient, params *identitystore.ListGroupsInput, optFns ...func(*identitystore.ListGroupsPaginatorOptions)) *ListGroupsPaginator
+}
+type IdentityStorePaginatedAPI interface {
+	ListGroupsPager(ctx context.Context, paginator ListGroupsPaginator, lambdaConvert func(types.Group) *Group) ([]*Group, error)
+	ListGroupMembershipsPager(ctx context.Context, paginator ListGroupMembershipsPaginator) ([]string, error)
+	ListUsersPager(ctx context.Context, paginator ListUsersPaginator, lambdaConvert func(types.User) *User) ([]*User, error)
 }
 
-// UserName represents the name components of a user
-type UserName struct {
-	FamilyName string `json:"familyName"`
-	GivenName  string `json:"givenName"`
+type ListUsersPaginator interface {
+	HasMorePages() bool
+	NextPage(ctx context.Context, optFns ...func(*identitystore.Options)) (*identitystore.ListUsersOutput, error)
 }
 
-// UserEmail represents an email address for a user
-type UserEmail struct {
-	Value   string `json:"value"`
-	Type    string `json:"type"`
-	Primary bool   `json:"primary"`
+type ListGroupsPaginator interface {
+	HasMorePages() bool
+	NextPage(ctx context.Context, optFns ...func(*identitystore.Options)) (*identitystore.ListGroupsOutput, error)
 }
-
-// UserAddress represents an address for a user
-type UserAddress struct {
-	Type string `json:"type"`
-}
-
-// Group represents a group in the system
-type Group struct {
-	ID          string   `json:"id"`
-	Schemas     []string `json:"schemas"`
-	DisplayName string   `json:"displayName"`
-	Members     []string `json:"members"`
+type ListGroupMembershipsPaginator interface {
+	HasMorePages() bool
+	NextPage(ctx context.Context, optFns ...func(*identitystore.Options)) (*identitystore.ListGroupMembershipsOutput, error)
 }

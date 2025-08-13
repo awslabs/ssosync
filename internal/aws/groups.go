@@ -14,10 +14,15 @@
 
 package aws
 
+import (
+	"github.com/awslabs/ssosync/internal/constants"
+)
+
 // NewGroup creates an object representing a group with the given name
 func NewGroup(groupName string) *Group {
 	return &Group{
-		Schemas:     []string{"urn:ietf:params:scim:schemas:core:2.0:Group"},
+		Schemas:     []string{constants.SCIMSchemaGroup},
 		DisplayName: groupName,
+		Members:     []string{}, // Initialize as empty slice, not nil
 	}
 }

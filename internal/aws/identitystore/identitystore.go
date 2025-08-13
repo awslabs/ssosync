@@ -56,7 +56,7 @@ func IsMemberInGroups(ctx context.Context, client interfaces.IdentityStoreAPI, i
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Check if user is member of any of the groups
 	for _, membershipResult := range result.Results {
 		if membershipResult.MembershipExists {
@@ -69,84 +69,84 @@ func IsMemberInGroups(ctx context.Context, client interfaces.IdentityStoreAPI, i
 // ListGroups lists all groups with pagination support
 func ListGroups(ctx context.Context, client interfaces.IdentityStoreAPI, identityStoreID *string, converter func(types.Group) *interfaces.Group) ([]*interfaces.Group, error) {
 	var groups []*interfaces.Group
-	
+
 	paginator := identitystore.NewListGroupsPaginator(client, &identitystore.ListGroupsInput{
 		IdentityStoreId: identityStoreID,
 	})
-	
+
 	for paginator.HasMorePages() {
 		page, err := paginator.NextPage(ctx)
 		if err != nil {
 			return nil, err
 		}
-		
+
 		for _, group := range page.Groups {
 			if convertedGroup := converter(group); convertedGroup != nil {
 				groups = append(groups, convertedGroup)
 			}
 		}
 	}
-	
+
 	return groups, nil
 }
 
 // ListGroupsPager is a helper function for paginated group listing
 func ListGroupsPager(ctx context.Context, paginator *identitystore.ListGroupsPaginator, converter func(types.Group) *interfaces.Group) ([]*interfaces.Group, error) {
 	var groups []*interfaces.Group
-	
+
 	for paginator.HasMorePages() {
 		page, err := paginator.NextPage(ctx)
 		if err != nil {
 			return nil, err
 		}
-		
+
 		for _, group := range page.Groups {
 			if convertedGroup := converter(group); convertedGroup != nil {
 				groups = append(groups, convertedGroup)
 			}
 		}
 	}
-	
+
 	return groups, nil
 }
 
 // ListUsersPager is a helper function for paginated user listing
 func ListUsersPager(ctx context.Context, paginator *identitystore.ListUsersPaginator, converter func(types.User) *interfaces.User) ([]*interfaces.User, error) {
 	var users []*interfaces.User
-	
+
 	for paginator.HasMorePages() {
 		page, err := paginator.NextPage(ctx)
 		if err != nil {
 			return nil, err
 		}
-		
+
 		for _, user := range page.Users {
 			if convertedUser := converter(user); convertedUser != nil {
 				users = append(users, convertedUser)
 			}
 		}
 	}
-	
+
 	return users, nil
 }
 
 // ListGroupMembershipsPager is a helper function for paginated group membership listing
 func ListGroupMembershipsPager(ctx context.Context, paginator *identitystore.ListGroupMembershipsPaginator, converter func(types.GroupMembership) *interfaces.User) ([]*interfaces.User, error) {
 	var users []*interfaces.User
-	
+
 	for paginator.HasMorePages() {
 		page, err := paginator.NextPage(ctx)
 		if err != nil {
 			return nil, err
 		}
-		
+
 		for _, membership := range page.GroupMemberships {
 			if convertedUser := converter(membership); convertedUser != nil {
 				users = append(users, convertedUser)
 			}
 		}
 	}
-	
+
 	return users, nil
 }
 
@@ -164,7 +164,7 @@ func GetGroupMembershipId(ctx context.Context, client interfaces.IdentityStoreAP
 // DeleteGroupMembership deletes a group membership
 func DeleteGroupMembership(ctx context.Context, client interfaces.IdentityStoreAPI, identityStoreID *string, membershipID *string) (*identitystore.DeleteGroupMembershipOutput, error) {
 	return client.DeleteGroupMembership(ctx, &identitystore.DeleteGroupMembershipInput{
-		IdentityStoreId:   identityStoreID,
-		MembershipId:      membershipID,
+		IdentityStoreId: identityStoreID,
+		MembershipId:    membershipID,
 	})
 }

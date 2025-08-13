@@ -17,13 +17,40 @@ package aws
 import (
 	"testing"
 
+	"github.com/awslabs/ssosync/internal/constants"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestNewGroup(t *testing.T) {
-	g := NewGroup("test_group@example.com")
+	displayName := "Test Group"
+	group := NewGroup(displayName)
 
-	assert.Len(t, g.Schemas, 1)
-	assert.Equal(t, g.Schemas[0], "urn:ietf:params:scim:schemas:core:2.0:Group")
-	assert.Equal(t, g.DisplayName, "test_group@example.com")
+	assert.NotNil(t, group)
+	assert.Equal(t, displayName, group.DisplayName)
+	assert.Contains(t, group.Schemas, constants.SCIMSchemaGroup)
+	assert.Empty(t, group.Members)
+	assert.Empty(t, group.ID) // ID should be empty for new groups
+}
+
+func TestNewGroupWithEmptyName(t *testing.T) {
+	group := NewGroup("")
+
+	assert.NotNil(t, group)
+	assert.Equal(t, "", group.DisplayName)
+	assert.Contains(t, group.Schemas, constants.SCIMSchemaGroup)
+}
+
+func TestNewGroupSchemas(t *testing.T) {
+	group := NewGroup("Test Group")
+
+	assert.Len(t, group.Schemas, 1)
+	assert.Equal(t, constants.SCIMSchemaGroup, group.Schemas[0])
+}
+
+func TestNewGroupMembers(t *testing.T) {
+	group := NewGroup("Test Group")
+
+	// New groups should have empty members slice
+	assert.NotNil(t, group.Members)
+	assert.Len(t, group.Members, 0)
 }

@@ -1,16 +1,18 @@
 package aws
 
 import (
+	internal_http "github.com/awslabs/ssosync/internal/http"
+	"github.com/awslabs/ssosync/internal/interfaces"
 	log "github.com/sirupsen/logrus"
 )
 
 type dryClient struct {
 	c Client
 	// users scheduled for creation, but not actually existing in AWS
-	virtualUsers map[string]User
+	virtualUsers map[string]interfaces.User
 }
 
-func NewDryClient(c HTTPClient, config *Config) (Client, error) {
+func NewDryClient(c internal_http.Client, config *Config) (Client, error) {
 	// create the client by calling NewClient
 	client, err := NewClient(c, config)
 	if err != nil {
@@ -19,22 +21,23 @@ func NewDryClient(c HTTPClient, config *Config) (Client, error) {
 
 	return &dryClient{
 		c:            client,
-		virtualUsers: make(map[string]User),
+		virtualUsers: make(map[string]interfaces.User),
 	}, nil
 }
 
-func (dc *dryClient) CreateUser(u *User) (*User, error) {
+func (dc *dryClient) CreateUser(u *interfaces.User) (*interfaces.User, error) {
+	log.WithField("user", u.Username).Info("DRY RUN: Would create user")
 	dc.virtualUsers[u.Username] = *u
 	return u, nil
 }
 
-func (dc *dryClient) FindGroupByDisplayName(name string) (*Group, error) {
+func (dc *dryClient) FindGroupByDisplayName(name string) (*interfaces.Group, error) {
 	// this is only used to determine group correlations
 	// and for group deletion, so can be straight pass-through
 	return dc.c.FindGroupByDisplayName(name)
 }
 
-func (dc *dryClient) FindUserByEmail(email string) (*User, error) {
+func (dc *dryClient) FindUserByEmail(email string) (*interfaces.User, error) {
 	u, err := dc.c.FindUserByEmail(email)
 	if err != nil {
 		if err != ErrUserNotFound {
@@ -56,7 +59,8 @@ func (dc *dryClient) FindUserByEmail(email string) (*User, error) {
 	return u, nil
 }
 
-func (dc *dryClient) UpdateUser(u *User) (*User, error) {
+func (dc *dryClient) UpdateUser(u *interfaces.User) (*interfaces.User, error) {
+	log.WithField("user", u.Username).Info("DRY RUN: Would update user")
 	dc.virtualUsers[u.Username] = *u
 	return u, nil
 }

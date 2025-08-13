@@ -149,8 +149,8 @@ func (c *client) GetUsers(query string, filter string) ([]*admin.User, error) {
 	// Identity Store will accept and a 'space' for an empty name but not a 'zero width space'
 	// So we need to replace any 'zero width space' strings with a single 'space' to allow comparison and sync
 	for _, user := range u {
-		user.Name.GivenName = strings.Replace(user.Name.GivenName, string('\u200B'), " ", -1)
-		user.Name.FamilyName = strings.Replace(user.Name.FamilyName, string('\u200B'), " ", -1)
+		user.Name.GivenName = strings.ReplaceAll(user.Name.GivenName, string('\u200B'), " ")
+		user.Name.FamilyName = strings.ReplaceAll(user.Name.FamilyName, string('\u200B'), " ")
 	}
 
 	return u, err
@@ -163,13 +163,14 @@ func (c *client) GetUsers(query string, filter string) ([]*admin.User, error) {
 // * https://developers.google.com/admin-sdk/directory/reference/rest/v1/groups/list
 // * https://developers.google.com/admin-sdk/directory/v1/guides/search-groups
 // query possible values:
-// '' --> empty or not defined
-//  name='contact'
-//  email:admin*
-//  memberKey=user@company.com
-//  name:contact* email:contact*
-//  name:Admin* email:aws-*
-//  email:aws-*
+// ” --> empty or not defined
+//
+//	name='contact'
+//	email:admin*
+//	memberKey=user@company.com
+//	name:contact* email:contact*
+//	name:Admin* email:aws-*
+//	email:aws-*
 func (c *client) GetGroups(query string) ([]*admin.Group, error) {
 	g := make([]*admin.Group, 0)
 	var err error

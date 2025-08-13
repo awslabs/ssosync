@@ -1,38 +1,61 @@
-# .goreleaser.yml
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
 project_name: ssosync
+version: 2
 
 before:
   hooks:
     - go mod download
+gomod:
+  env:
+    - GOPROXY=direct
 builds:
-- env:
-    - CGO_ENABLED=0
-  goos:
-    - linux
-    - darwin
-    - windows
-  goarch:
-    - 386
-    - amd64
-    - arm
-    - arm64
-  ignore:
-    - goos: darwin
-      goarch: 386
-    - goos: windows
-      goarch: 386
-  ldflags:
-     - -s -w -X github.com/awslabs/ssosync/cmd.version={{.Version}} -X github.com/awslabs/ssosync/cmd.commit={{.Commit}} -X github.com/awslabs/ssosync/cmd.date={{.Date}} -X github.com/awslabs/ssosync/cmd.builtBy=goreleaser
+  - id: ssosync
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - "386"
+      - amd64
+      - arm
+      - arm64
+    goarm64:
+      - v8.0
+    goamd64:
+      - v1
+    goarm:
+      - "6"
+    ignore:
+      - goos: darwin
+        goarch: "386"
+      - goos: windows
+        goarch: "386"
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X github.com/awslabs/ssosync/cmd.version={{.Version}} -X github.com/awslabs/ssosync/cmd.commit={{.FullCommit}} -X github.com/awslabs/ssosync/cmd.date={{.Date}} -X github.com/awslabs/ssosync/cmd.builtBy=goreleaser
+
+upx:
+  - enabled: true
+    ids: [ssosync]
+    goos: [linux]
+    goarch: [arm, arm64, amd64]
+    compress: best
+    lzma: true
+    binary: .bin/upx
+
 checksum:
-  name_template: '{{ .ProjectName }}_checksums.txt'
+  name_template: "{{ .ProjectName }}_checksums.txt"
 changelog:
   sort: asc
   filters:
     exclude:
-    - '^docs:'
-    - '^test:'
-    - Merge pull request
-    - Merge branch
+      - "^docs:"
+      - "^test:"
+      - Merge pull request
+      - Merge branch
 archives:
   - name_template: >-
       {{- .ProjectName }}_
@@ -42,6 +65,8 @@ archives:
       {{- else }}{{ .Arch }}{{ end }}
       {{- if .Arm }}v{{ .Arm }}{{ end -}}
     format_overrides:
-    - goos: windows
-      format: zip
-
+      - goos: windows
+        formats:
+          - zip
+snapshot:
+  version_template: "{{ incpatch .Version }}-{{ .ShortCommit }}"

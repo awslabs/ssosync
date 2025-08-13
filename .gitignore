@@ -34,8 +34,6 @@ ssosync
 # Noise from os/editors
 .DS_Store
 *.swp
-*/.DS_Store
-cicd/.DS_Store
 release.yaml
 staging.yaml
 *.orig
@@ -43,3 +41,14 @@ staging.yaml
 cicd/.DS_Store
 *.swo
 cicd/.DS_Store
+mocks_*.go
+.bin/
+out/
+dist/
+bin/
+node_modules/
+coverage/
+coverage.out
+.pnpm-store
+.secrets.json
+google-service-account.json
