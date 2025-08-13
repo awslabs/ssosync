@@ -24,9 +24,11 @@ import (
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/aws/session"
-        "github.com/aws/aws-sdk-go-v2/service/codepipeline"
+	aws_config "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/codepipeline"
+	"github.com/aws/aws-sdk-go-v2/service/codepipeline/types"
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
+	"github.com/aws/aws-secretsmanager-caching-go/v2/secretcache"
 	"github.com/awslabs/ssosync/internal"
 	"github.com/awslabs/ssosync/internal/config"
 	"github.com/pkg/errors"
@@ -43,6 +45,8 @@ var (
 )
 
 var cfg *config.Config
+var awsConfig aws.Config
+var codePipelineClient *codepipeline.Client
 
 var rootCmd = &cobra.Command{
 	Version: "dev",
@@ -67,72 +71,70 @@ Complete documentation is available at https://github.com/awslabs/ssosync`,
 // running inside of AWS Lambda, we use the Lambda
 // execution path.
 func Execute() {
-    if cfg.IsLambda {
-        log.Info("Executing as Lambda")
-      	lambda.Start(Handler) 
-    }
+	if cfg.IsLambda {
+		log.Info("Executing as Lambda")
+		lambda.Start(Handler)
+	}
 
-    if err := rootCmd.Execute(); err != nil {
-	log.Fatal(err)
-    }
+	if err := rootCmd.Execute(); err != nil {
+		log.Fatal(err)
+	}
 }
 
 // Handler for when executing as a lambda
 func Handler(ctx context.Context, event events.CodePipelineEvent) (string, error) {
-    log.Debug(event)
-    err := rootCmd.Execute()
-    s := session.Must(session.NewSession())
-    cpl := codepipeline.New(s)
+	log.Debug(event)
+	err := rootCmd.Execute()
 
-    cfg.IsLambdaRunningInCodePipeline = len(event.CodePipelineJob.ID) > 0
+	cfg.IsLambdaRunningInCodePipeline = len(event.CodePipelineJob.ID) > 0
 
-    if cfg.IsLambdaRunningInCodePipeline {
-        log.Info("Lambda has been invoked by CodePipeline")
+	if cfg.IsLambdaRunningInCodePipeline {
+		log.Info("Lambda has been invoked by CodePipeline")
 
-        if err != nil {
-    	    // notify codepipeline and mark its job execution as Failure
-    	    log.Fatalf(errors.Wrap(err, "Notifying CodePipeline and mark its job execution as Failure").Error())
-    	    jobID := event.CodePipelineJob.ID
-    	    if len(jobID) == 0 {
-    		panic("CodePipeline Job ID is not set")
-    	    }  
-    	    // mark the job as Failure.
-    	    cplFailure := &codepipeline.PutJobFailureResultInput{
-    		JobId: aws.String(jobID),
-    		FailureDetails: &codepipeline.FailureDetails{
-    			Message: aws.String(err.Error()),
-    			Type: aws.String("JobFailed"),
-    		},
-    	    }
-    	    _, cplErr := cpl.PutJobFailureResult(cplFailure)
-    	    if cplErr != nil {
-                log.Fatalf(errors.Wrap(err, "Failed to update CodePipeline jobID status").Error())
-    	    }
-	    return "Failure", err
-        }
+		if err != nil {
+			// notify codepipeline and mark its job execution as Failure
+			log.Fatal(errors.Wrap(err, "Notifying CodePipeline and mark its job execution as Failure").Error())
+			jobID := event.CodePipelineJob.ID
+			if len(jobID) == 0 {
+				panic("CodePipeline Job ID is not set")
+			}
+			// mark the job as Failure.
+			cplFailure := &codepipeline.PutJobFailureResultInput{
+				JobId: aws.String(jobID),
+				FailureDetails: &types.FailureDetails{
+					Message: aws.String(err.Error()),
+					Type:    types.FailureTypeJobFailed,
+				},
+			}
+			_, cplErr := codePipelineClient.PutJobFailureResult(ctx, cplFailure)
+			if cplErr != nil {
+				log.Fatal(errors.Wrap(err, "Failed to update CodePipeline jobID status").Error())
+			}
+			return "Failure", err
+		}
 
-        log.Info("Notifying CodePipeline and mark its job execution as Success")
-        jobID := event.CodePipelineJob.ID
-        if len(jobID) == 0 {
-    	    panic("CodePipeline Job ID is not set")
-        }
-        // mark the job as Success.
-        cplSuccess := &codepipeline.PutJobSuccessResultInput{
-    	    JobId: aws.String(jobID),
-        }
-        _, cplErr := cpl.PutJobSuccessResult(cplSuccess)
-        if cplErr != nil {
-            log.Fatalf(errors.Wrap(err, "Failed to update CodePipeline jobID status").Error())
-        }
-    
+		log.Info("Notifying CodePipeline and mark its job execution as Success")
+		jobID := event.CodePipelineJob.ID
+		if len(jobID) == 0 {
+			panic("CodePipeline Job ID is not set")
+		}
+		// mark the job as Success.
+		cplSuccess := &codepipeline.PutJobSuccessResultInput{
+			JobId: aws.String(jobID),
+		}
+		_, cplErr := codePipelineClient.PutJobSuccessResult(ctx, cplSuccess)
+		if cplErr != nil {
+			log.Fatal(errors.Wrap(err, "Failed to update CodePipeline jobID status").Error())
+		}
+
+		return "Success", nil
+	}
+
+	if err != nil {
+		log.Fatal(errors.Wrap(err, "Notifying Lambda and mark this execution as Failure").Error())
+		return "Failure", err
+	}
 	return "Success", nil
-    }
-        
-    if err != nil {
-        log.Fatalf(errors.Wrap(err, "Notifying Lambda and mark this execution as Failure").Error())
-    	return "Failure", err
-    }
-    return "Success", nil
 }
 
 func init() {
@@ -176,12 +178,12 @@ func initConfig() {
 
 	for _, e := range appEnvVars {
 		if err := viper.BindEnv(e); err != nil {
-			log.Fatalf(errors.Wrap(err, "cannot bind environment variable").Error())
+			log.Fatal(errors.Wrap(err, "cannot bind environment variable").Error())
 		}
 	}
 
 	if err := viper.Unmarshal(&cfg); err != nil {
-		log.Fatalf(errors.Wrap(err, "cannot unmarshal config").Error())
+		log.Fatal(errors.Wrap(err, "cannot unmarshal config").Error())
 	}
 
 	if cfg.IsLambda {
@@ -199,119 +201,92 @@ func initConfig() {
 
 }
 
-func configLambda() {
-        s := session.Must(session.NewSession())
-	svc := secretsmanager.New(s)
-	secrets := config.NewSecrets(svc)
+var secretCache *secretcache.Cache
 
-	unwrap, err := secrets.GoogleAdminEmail(os.Getenv("GOOGLE_ADMIN"))
-	if err != nil {
-		log.Fatalf(errors.Wrap(err, "cannot read config: GOOGLE_ADMIN").Error())
+func getEnv(key string, fallback string) string {
+	if valueStr, ok := os.LookupEnv(key); ok {
+		log.WithField(key, valueStr).Info("EnvVar")
+		return valueStr
 	}
-	cfg.GoogleAdmin = unwrap
-
-	unwrap, err = secrets.GoogleCredentials(os.Getenv("GOOGLE_CREDENTIALS"))
-	if err != nil {
-		log.Fatalf(errors.Wrap(err, "cannot read config: GOOGLE_CREDENTIALS").Error())
-	}
-	cfg.GoogleCredentials = unwrap
-
-	unwrap, err = secrets.SCIMAccessToken(os.Getenv("SCIM_ACCESS_TOKEN"))
-	if err != nil {
-		log.Fatalf(errors.Wrap(err, "cannot read config: SCIM_ACCESS_TOKEN").Error())
-	}
-	cfg.SCIMAccessToken = unwrap
-
-	unwrap, err = secrets.SCIMEndpointURL(os.Getenv("SCIM_ENDPOINT"))
-	if err != nil {
-		log.Fatalf(errors.Wrap(err, "cannot read config: SCIM_ENDPOINT").Error())
-	}
-	cfg.SCIMEndpoint = unwrap
-
-	unwrap, err = secrets.Region(os.Getenv("REGION"))
-	if err != nil {
-		log.Fatalf(errors.Wrap(err, "cannot read config: REGION").Error())
-	}
-	cfg.Region = unwrap
-
-	unwrap, err = secrets.IdentityStoreID(os.Getenv("IDENTITY_STORE_ID"))
-	if err != nil {
-		log.Fatalf(errors.Wrap(err, "cannot read config: IDENTITY_STORE_ID").Error())
-	}
-	cfg.IdentityStoreID = unwrap
-
-        unwrap = os.Getenv("LOG_LEVEL")
-        if len([]rune(unwrap)) != 0 {
-           cfg.LogLevel = unwrap
-	   log.WithField("LogLevel", unwrap).Info("from EnvVar")
-        }
-
-        unwrap = os.Getenv("LOG_FORMAT")
-        if len([]rune(unwrap)) != 0 {
-           cfg.LogFormat = unwrap
-	   log.WithField("LogFormat", unwrap).Info("from EnvVar")
-        }
-
-	unwrap = os.Getenv("SYNC_METHOD")
-        if len([]rune(unwrap)) != 0 {
-           cfg.SyncMethod = unwrap
-	   log.WithField("SyncMethod", unwrap).Info("from EnvVar")
-        }
-
-	unwrap = os.Getenv("USER_MATCH")
-        if len([]rune(unwrap)) != 0 {
-	   cfg.UserMatch = unwrap
-	   log.WithField("UserMatch", unwrap).Info("from EnvVar")
-        }
-
-	unwrap = os.Getenv("GROUP_MATCH")
-        if len([]rune(unwrap)) != 0 {
-           cfg.GroupMatch = unwrap
-	   log.WithField("GroupMatch", unwrap).Info("from EnvVar")
-        }
-
-        unwrap = os.Getenv("IGNORE_GROUPS")
-        if len([]rune(unwrap)) != 0 {
-           cfg.IgnoreGroups = strings.Split(unwrap, ",")
-	   log.WithField("IgnoreGroups", unwrap).Info("from EnvVar")
-        }
-
-        unwrap = os.Getenv("IGNORE_USERS")
-        if len([]rune(unwrap)) != 0 {
-           cfg.IgnoreUsers = strings.Split(unwrap, ",")
-	   log.WithField("IgnoreUsers", unwrap).Info("from EnvVar")
-        }
-
-        unwrap = os.Getenv("INCLUDE_GROUPS")
-        if len([]rune(unwrap)) != 0 {
-           cfg.IncludeGroups = strings.Split(unwrap, ",")
-	   log.WithField("IncludeGroups", unwrap).Info("from EnvVar")
-        }
-
-        unwrap = os.Getenv("PRECACHE_ORG_UNITS")
-        if len([]rune(unwrap)) != 0 {
-           cfg.PrecacheOrgUnits = strings.Split(unwrap, ",")
-           log.WithField("PrecacheOrgUnits", unwrap).Info("from EnvVar")
-	}
-
-	unwrap = os.Getenv("DRY_RUN")
-	log.WithField("DRY_RUN", unwrap).Info("EnvVar")
-	cfg.DryRun = strings.ToLower(unwrap) == "true"
-	log.WithField("DryRun", cfg.DryRun).Info("config")
-
-        unwrap = os.Getenv("SYNC_SUSPENDED")
-        log.WithField("SYNC_SUSPENDED", unwrap).Info("EnvVar")
-        cfg.SyncSuspended = strings.ToLower(unwrap) == "true"
-        log.WithField("SyncSuspended", cfg.SyncSuspended).Info("config")
+        return fallback
 }
 
-func addFlags(cmd *cobra.Command, cfg *config.Config) {
+func getEnv(key string, fallback []string) []string {
+        if valueStr, ok := os.LookupEnv(key); ok {
+                log.WithField(key, valueStr).Info("EnvVar")
+                return strings.Split(valueStr, ",")
+        }
+        return fallback
+}
+
+func getEnv(key string, fallback boolean) boolean {
+        if valueStr, ok := os.LookupEnv(key); ok {
+		log.WithField(key, valueStr).Info("EnvVar")
+                valueBool := strings.ToLower(valueStr) == "true"
+		log.WithField(key, valueBool).Info("config")
+                return strings.ToLower() == "true"
+        }
+        return fallback
+}
+
+func configLambda() {
+	ctx := context.Background()
+
+	// Load AWS SDK configuration once
+	var err error
+	awsConfig, err = aws_config.LoadDefaultConfig(ctx, aws_config.WithRegion(cfg.Region))
+	if err != nil {
+		log.Fatal(errors.Wrap(err, "Failed to load AWS SDK configuration").Error())
+	}
+
+	// Create clients once
+	codePipelineClient = codepipeline.NewFromConfig(awsConfig)
+	secretCache, err = secretcache.New(func(c *secretcache.Cache) {
+		c.Client = secretsmanager.NewFromConfig(awsConfig)
+	})
+	if err != nil {
+		log.Fatal(errors.Wrap(err, "Failed to create secret cache").Error())
+	}
+	
+	// Get sensitive values from Secrets Manager with caching
+	cfg.GoogleAdmin = getSecretFromCache(getEnv("GOOGLE_ADMIN", config.DefaultGoogleCredentials))
+	cfg.SCIMEndpoint = getSecretFromCache(getEnv("SCIM_ENDPOINT", ""))
+	cfg.IdentityStoreID = getSecretFromCache(getEnv("IDENTITY_STORE_ID", ""))
+	cfg.Region = getSecretFromCache(getEnv("REGION", ""))
+	cfg.GoogleCredentials = getSecretFromCache(getEnv("GOOGLE_CREDENTIALS", ""))
+	cfg.SCIMAccessToken = getSecretFromCache(getEnv("SCIM_ACCESS_TOKEN", ""))
+	
+	// Handle environment variables for other settings
+	cfg.LogLevel = getEnv("LOG_LEVEL", config.DefaultLogLevel)
+	cfg.LogFormat = getEnv("LOG_FORMAT", config.DefaultLogFormat)
+	cfg.SyncMethod = getEnv("SYNC_METHOD", config.DefaultLogFormat)
+	cfg.UserMatch = getEnv("USER_MATCH", "")
+	cfg.GroupMatch = getEnv("GROUP_MATCH", "*")
+	cfg.IgnoreGroups = getEnv("IGNORE_GROUPS", []string{})
+	cfg.IgnoreUsers = getEnv("IGNORE_USERS", []string{})
+	cfg.IncludeGroups = getEnv("INCLUDE_GROUPS", []string{})
+	cfg.PrecacheOrgUnits = getEnv("PRECACHE_ORG_UNITS", config.DefaultPrecacheOrgUnits)
+	cfg.DryRun = getEnv("DRY_RUN", false)
+	cfg.SyncSuspended = getEnv("SYNC_SUSPENDED", false)
+
+}
+
+
+func getSecretFromCache(secretName string) string {
+	value, err := secretCache.GetSecretString(secretName)
+	if err != nil {
+		log.Fatal(errors.Wrap(err, fmt.Sprintf("cannot read secret: %s", secretName)).Error())
+	}
+	return value
+}
+
+func addFlags(_ *cobra.Command, cfg *config.Config) {
 	rootCmd.PersistentFlags().StringVarP(&cfg.GoogleCredentials, "google-admin", "a", config.DefaultGoogleCredentials, "path to find credentials file for Google Workspace")
 	rootCmd.PersistentFlags().BoolVarP(&cfg.Debug, "debug", "d", config.DefaultDebug, "enable verbose / debug logging")
 	rootCmd.PersistentFlags().StringVarP(&cfg.LogFormat, "log-format", "", config.DefaultLogFormat, "log format")
 	rootCmd.PersistentFlags().StringVarP(&cfg.LogLevel, "log-level", "", config.DefaultLogLevel, "log level")
 	rootCmd.PersistentFlags().BoolVarP(&cfg.DryRun, "dry-run", "n", false, "Do *not* perform any actions, instead list what would happen")
-        rootCmd.PersistentFlags().BoolVarP(&cfg.SyncSuspended, "suspended", "", config.DefaultSyncSuspended, "included suspended users and their group memberships when syncing")
+        rootCmd.PersistentFlags().BoolVarP(&cfg.SyncSuspended, "suspended", "", false, "included suspended users and their group memberships when syncing")
 	rootCmd.Flags().StringVarP(&cfg.SCIMAccessToken, "access-token", "t", "", "AWS SSO SCIM API Access Token")
 	rootCmd.Flags().StringVarP(&cfg.SCIMEndpoint, "endpoint", "e", "", "AWS SSO SCIM API Endpoint")
 	rootCmd.Flags().StringVarP(&cfg.GoogleCredentials, "google-credentials", "c", config.DefaultGoogleCredentials, "path to Google Workspace credentials file")

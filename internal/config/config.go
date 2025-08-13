@@ -1,28 +1,30 @@
 // Package config ...
 package config
 
+import "errors"
+
 // Config ...
 type Config struct {
-	// Verbose toggles the verbosity
-	Debug bool
-	// LogLevel is the level with with to log for this config
-	LogLevel string `mapstructure:"log_level"`
-	// LogFormat is the format that is used for logging
-	LogFormat string `mapstructure:"log_format"`
-	// GoogleCredentials ...
-	GoogleCredentials string `mapstructure:"google_credentials"`
-	// GoogleAdmin ...
-	GoogleAdmin string `mapstructure:"google_admin"`
-	// UserMatch ...
-	UserMatch string `mapstructure:"user_match"`
-	// GroupFilter ...
-	GroupMatch string `mapstructure:"group_match"`
-	// SCIMEndpoint ....
-	SCIMEndpoint string `mapstructure:"scim_endpoint"`
-	// SCIMAccessToken ...
-	SCIMAccessToken string `mapstructure:"scim_access_token"`
-	// IsLambda ...
-	IsLambda bool
+        // Verbose toggles the verbosity
+        Debug bool
+        // LogLevel is the level with with to log for this config
+        LogLevel string `mapstructure:"log_level"`
+        // LogFormat is the format that is used for logging
+        LogFormat string `mapstructure:"log_format"`
+        // GoogleCredentials ...
+        GoogleCredentials string `mapstructure:"google_credentials"`
+        // GoogleAdmin ...
+        GoogleAdmin string `mapstructure:"google_admin"`
+        // UserMatch ...
+        UserMatch string `mapstructure:"user_match"`
+        // GroupFilter ...
+        GroupMatch string `mapstructure:"group_match"`
+        // SCIMEndpoint ....
+        SCIMEndpoint string `mapstructure:"scim_endpoint"`
+        // SCIMAccessToken ...
+        SCIMAccessToken string `mapstructure:"scim_access_token"`
+        // IsLambda ...
+        IsLambda bool
         // IsLambdaRunningInCodePipeline ...
 	IsLambdaRunningInCodePipeline bool
 	// Ignore users ...
@@ -60,17 +62,45 @@ const (
 	DefaultSyncMethod = "groups"
 	// DefaultPrecacheOrgUnits
 	DefaultPrecacheOrgUnits = "/"
-	// DefaultSyncSuspended
-	DefaultSyncSuspended = false
 )
 
 // New returns a new Config
 func New() *Config {
-	return &Config{
-		Debug:             DefaultDebug,
-		LogLevel:          DefaultLogLevel,
-		LogFormat:         DefaultLogFormat,
-		SyncMethod:        DefaultSyncMethod,
-		GoogleCredentials: DefaultGoogleCredentials,
-	}
+        return &Config{
+                Debug:             DefaultDebug,
+                LogLevel:          DefaultLogLevel,
+                LogFormat:         DefaultLogFormat,
+                SyncMethod:        DefaultSyncMethod,
+                GoogleCredentials: DefaultGoogleCredentials,
+                PrecacheQueries:   DefaultPrecacheQueries,
+        }
+}
+
+// Validate checks if the configuration is valid
+func (c *Config) Validate() error {
+        if c.GoogleAdmin == "" {
+                return errors.New("google admin email is required")
+        }
+
+        if c.SCIMEndpoint == "" {
+                return errors.New("SCIM endpoint is required")
+        }
+
+        if c.SCIMAccessToken == "" {
+                return errors.New("SCIM access token is required")
+        }
+
+        if c.Region == "" {
+                return errors.New("AWS region is required")
+        }
+
+        if c.IdentityStoreID == "" {
+                return errors.New("identity store ID is required")
+        }
+
+        if c.SyncMethod != "groups" && c.SyncMethod != "users_groups" {
+                return errors.New("sync method must be either 'groups' or 'users_groups'")
+        }
+
+        return nil
 }
