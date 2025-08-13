@@ -577,7 +577,7 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 
 		precacheQueries :=""
  		log.WithField("Precache OrgUnitPaths", s.cfg.PrecacheQueries).Info("to be converted to queries")
-		for _, orgUnitPath := range strings.Split(s.cfg.PrecacheQueries, ",") {
+		for _, orgUnitPath := range s.cfg.PrecacheQueries {
 			log.WithField("orgUnitPath", orgUnitPath).Debug("format into query string")
 			orgUnitPath = strings.TrimSpace(orgUnitPath)
 			orgUnitPath = strings.TrimSuffix(orgUnitPath, "/")
