@@ -191,6 +191,12 @@ func initConfig() {
 	// config logger
 	logConfig(cfg)
 
+        if cfg.SyncSuspended {
+                cfg.UserFilter = " isArchived=false"
+        } else {
+                cfg.UserFilter = " isSuspended=false isArchived=false"
+        }
+
 }
 
 func configLambda() {
@@ -237,62 +243,66 @@ func configLambda() {
         unwrap = os.Getenv("LOG_LEVEL")
         if len([]rune(unwrap)) != 0 {
            cfg.LogLevel = unwrap
-	   log.WithField("LogLevel", unwrap).Debug("from EnvVar")
+	   log.WithField("LogLevel", unwrap).Info("from EnvVar")
         }
 
         unwrap = os.Getenv("LOG_FORMAT")
         if len([]rune(unwrap)) != 0 {
            cfg.LogFormat = unwrap
-	   log.WithField("LogFormay", unwrap).Debug("from EnvVar")
+	   log.WithField("LogFormat", unwrap).Info("from EnvVar")
         }
 
 	unwrap = os.Getenv("SYNC_METHOD")
         if len([]rune(unwrap)) != 0 {
            cfg.SyncMethod = unwrap
-	   log.WithField("SyncMethod", unwrap).Debug("from EnvVar")
+	   log.WithField("SyncMethod", unwrap).Info("from EnvVar")
         }
 
 	unwrap = os.Getenv("USER_MATCH")
         if len([]rune(unwrap)) != 0 {
 	   cfg.UserMatch = unwrap
-	   log.WithField("UserMatch", unwrap).Debug("from EnvVar")
+	   log.WithField("UserMatch", unwrap).Info("from EnvVar")
         }
 
 	unwrap = os.Getenv("GROUP_MATCH")
         if len([]rune(unwrap)) != 0 {
            cfg.GroupMatch = unwrap
-	   log.WithField("GroupMatch", unwrap).Debug("from EnvVar")
+	   log.WithField("GroupMatch", unwrap).Info("from EnvVar")
         }
 
         unwrap = os.Getenv("IGNORE_GROUPS")
         if len([]rune(unwrap)) != 0 {
            cfg.IgnoreGroups = strings.Split(unwrap, ",")
-	   log.WithField("IgnoreGroups", unwrap).Debug("from EnvVar")
+	   log.WithField("IgnoreGroups", unwrap).Info("from EnvVar")
         }
 
         unwrap = os.Getenv("IGNORE_USERS")
         if len([]rune(unwrap)) != 0 {
            cfg.IgnoreUsers = strings.Split(unwrap, ",")
-	   log.WithField("IgnoreUsers", unwrap).Debug("from EnvVar")
+	   log.WithField("IgnoreUsers", unwrap).Info("from EnvVar")
         }
 
         unwrap = os.Getenv("INCLUDE_GROUPS")
         if len([]rune(unwrap)) != 0 {
            cfg.IncludeGroups = strings.Split(unwrap, ",")
-	   log.WithField("IncludeGroups", unwrap).Debug("from EnvVar")
+	   log.WithField("IncludeGroups", unwrap).Info("from EnvVar")
         }
 
-        unwrap = os.Getenv("PRECACHE_QUERIES")
+        unwrap = os.Getenv("PRECACHE_ORG_UNITS")
         if len([]rune(unwrap)) != 0 {
-           cfg.PrecacheQueries = unwrap
-           log.WithField("PrecacheQueries", unwrap).Debug("from EnvVar")
-        }
+           cfg.PrecacheOrgUnits = strings.Split(unwrap, ",")
+           log.WithField("PrecacheOrgUnits", unwrap).Info("from EnvVar")
+	}
 
 	unwrap = os.Getenv("DRY_RUN")
-        if len([]rune(unwrap)) != 0 {
-	   cfg.DryRun = strings.ToLower(unwrap) == "true"
-	   log.WithField("DryRun", unwrap).Debug("from EnvVar")
-	}
+	log.WithField("DRY_RUN", unwrap).Info("EnvVar")
+	cfg.DryRun = strings.ToLower(unwrap) == "true"
+	log.WithField("DryRun", cfg.DryRun).Info("config")
+
+        unwrap = os.Getenv("SYNC_SUSPENDED")
+        log.WithField("SYNC_SUSPENDED", unwrap).Info("EnvVar")
+        cfg.SyncSuspended = strings.ToLower(unwrap) == "true"
+        log.WithField("SyncSuspended", cfg.SyncSuspended).Info("config")
 }
 
 func addFlags(cmd *cobra.Command, cfg *config.Config) {
@@ -301,6 +311,7 @@ func addFlags(cmd *cobra.Command, cfg *config.Config) {
 	rootCmd.PersistentFlags().StringVarP(&cfg.LogFormat, "log-format", "", config.DefaultLogFormat, "log format")
 	rootCmd.PersistentFlags().StringVarP(&cfg.LogLevel, "log-level", "", config.DefaultLogLevel, "log level")
 	rootCmd.PersistentFlags().BoolVarP(&cfg.DryRun, "dry-run", "n", false, "Do *not* perform any actions, instead list what would happen")
+        rootCmd.PersistentFlags().BoolVarP(&cfg.SyncSuspended, "suspended", "", config.DefaultSyncSuspended, "included suspended users and their group memberships when syncing")
 	rootCmd.Flags().StringVarP(&cfg.SCIMAccessToken, "access-token", "t", "", "AWS SSO SCIM API Access Token")
 	rootCmd.Flags().StringVarP(&cfg.SCIMEndpoint, "endpoint", "e", "", "AWS SSO SCIM API Endpoint")
 	rootCmd.Flags().StringVarP(&cfg.GoogleCredentials, "google-credentials", "c", config.DefaultGoogleCredentials, "path to Google Workspace credentials file")
@@ -309,11 +320,12 @@ func addFlags(cmd *cobra.Command, cfg *config.Config) {
 	rootCmd.Flags().StringSliceVar(&cfg.IgnoreGroups, "ignore-groups", []string{}, "ignores these Google Workspace groups")
 	rootCmd.Flags().StringSliceVar(&cfg.IncludeGroups, "include-groups", []string{}, "include only these Google Workspace groups, NOTE: only works when --sync-method 'users_groups'")
 	rootCmd.Flags().StringVarP(&cfg.UserMatch, "user-match", "m", "", "Google Workspace Users filter query parameter, example: 'name:John*' 'name=John Doe,email:admin*', to sync all users in the directory specify '*'. For query syntax and more examples see: https://developers.google.com/admin-sdk/directory/v1/guides/search-users")
-	rootCmd.Flags().StringVarP(&cfg.GroupMatch, "group-match", "g", "*", "Google Workspace Groups filter query parameter, example: 'name:Admin*' 'name=Admins,email:aws-*', to sync all groups (and their member users) specify '*'. For query syntax and more examples see: https://developers.google.com/admin-sdk/directory/v1/guides/search-groups")
+	rootCmd.Flags().StringVarP(&cfg.GroupMatch, "group-match", "g", "*", "Google Workspace Groups filter query parameter, example: 'name:Admin*' 'name=AWS-Admins,email:aws*', to sync all groups (and their member users) specify '*'. For query syntax and more examples see: https://developers.google.com/admin-sdk/directory/v1/guides/search-groups")
 	rootCmd.Flags().StringVarP(&cfg.SyncMethod, "sync-method", "s", config.DefaultSyncMethod, "Sync method to use (users_groups|groups)")
 	rootCmd.Flags().StringVarP(&cfg.Region, "region", "r", "", "AWS Region where AWS SSO is enabled")
 	rootCmd.Flags().StringVarP(&cfg.IdentityStoreID, "identity-store-id", "i", "", "Identifier of Identity Store in AWS SSO")
-	rootCmd.Flags().StringVarP(&cfg.PrecacheQueries, "precache-queries", "p", config.DefaultPrecacheQueries, "Google Workspace Users filter queries parameter, example: 'OrgUnitPath=/ isSuspend=false isArchived=false', to precache all users within that Org Unit Path. For query syntax and more examples see: https://developers.google.com/admin-sdk/directory/v1/guides/search-users. To disable and use caching on the fly, 'DISABLED'.")
+	rootCmd.Flags().StringSliceVar(&cfg.PrecacheOrgUnits, "precache-ous", strings.Split(config.DefaultPrecacheOrgUnits, ","), "A common separated list of Google Workspace OrgUnitPathis e.g.'/', to precache all users within the organization or '/OU_1/OU 2,/OU3'. To disable and use caching on the fly, 'DISABLED'.")
+
 }
 
 func logConfig(cfg *config.Config) {

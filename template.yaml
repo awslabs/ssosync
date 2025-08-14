@@ -40,6 +40,9 @@ Metadata:
           - LogFormat
           - TimeOut
           - ScheduleExpression
+          - SyncSuspended
+          - DryRun
+          - PrecacheOrgUnits
 
   AWS::ServerlessRepo::Application:
     Name: ssosync
@@ -77,7 +80,7 @@ Parameters:
     Type: String
     Description: |
       [App for cross-account] this is the AppConfig from the ouputs of the Secrets for cross-account stack.
-      [Secrets for cross-account] this is the AWS account id into which you will be deplying the SSOSync app?
+      [Secrets for cross-account] this is the AWS account id into which you will be deploying the SSOSync app?
     Default: ""
     AllowedPattern: '(?!.*\s)|(\d{12})|(arn:aws:secretsmanager:((us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-\d):[0-9]{8,12}:secret:[a-zA-Z0-9/_+=.@-]{1,512})(,arn:aws:secretsmanager:((us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-\d):[0-9]{8,12}:secret:[a-zA-Z0-9/_+=.@-]{1,512}){5}(,arn:aws:kms:((us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-\d):[0-9]{12}:key/[a-zA-Z0-9/_+=.@-]{1,512})?'
 
@@ -133,6 +136,31 @@ Parameters:
     Default: 300
     MinValue: 1
     MaxValue: 900
+
+  SyncSuspended:
+    Type: String
+    Description: |
+      If enabled suspended users that match either the GoogleUserMatch or GoogleGroupMatch criteria they will be replicated.
+    Default: ignore
+    AllowedValues:
+      - ignore
+      - sync
+      
+  DryRun:
+    Type: String
+    Description: | 
+      Enabled Dry Run, means the lambda will execute highlighting the changes it would make to the Identity Store, will not making any changes.
+    Default: live
+    AllowedValues:
+      - live
+      - dry-run
+
+  PrecacheOrgUnits:
+    Type: String
+    Description: | 
+       To reduce the volume of apis, ssosync precaches the users and groups from the Google directory. If you directory is large >10,000 users, you may wish to limit the organizational units that are precached. The default is the whole directory '/'. The parameter accpets a comma separate list of OrgUnitPaths, /OU1,/OU2/OU 3 in this example all users within the tree of /OU1 and /OU2/OU 3 would be precached but not from /OU2 itself. Precaching can be disable by leaving the field empty.
+    Default: "/"
+    AllowedPattern: '(?!.*\s)|(^\/$)|(\/[a-zA-Z0-9_\/\- ]{1,50})(?:(,\/[a-zA-Z0-9_\/\- ]{1,50}))*'
 
 # Secrets
   GoogleCredentials:
@@ -260,6 +288,12 @@ Conditions:
     - !Equals
         - !Ref SyncMethod
         - "users_groups"
+  SetDryRun: !Equals
+    - !Ref DryRun
+    - "dry-run"
+  SetSyncSuspended: !Equals
+    - !Ref SyncSuspended
+    - "sync"
   OnSchedule: !Not
     - !Equals
         - !Ref ScheduleExpression
@@ -310,6 +344,9 @@ Conditions:
   OutputSecrets: !Equals
     - !Ref DeployPattern
     - "Secrets only"
+  DisablePrecaching: !Equals
+    - !Ref PrecacheOrgUnits
+    - ""
 
 Rules:
   SecretValues:
@@ -567,6 +604,10 @@ Resources:
           IGNORE_GROUPS: !If [SetIgnoreGroups, !Ref IgnoreGroups, !Ref AWS::NoValue]
           IGNORE_USERS: !If [SetIgnoreUsers, !Ref IgnoreUsers, !Ref AWS::NoValue]
           INCLUDE_GROUPS: !If [SetIncludeGroups, !Ref IncludeGroups, !Ref AWS::NoValue]
+          DRY_RUN: !If [SetDryRun, 'True', 'False']
+          SYNC_SUSPENDED: !If [SetSyncSuspended, 'True', 'False']
+          PRECACHE_ORG_UNITS: !If [DisablePrecaching, "DISABLED", !Ref PrecacheOrgUnits]
+
       Events:
         SyncScheduledEvent:
           Type: Schedule

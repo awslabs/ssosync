@@ -38,9 +38,13 @@ type Config struct {
 	// IdentityStoreID is the ID of the identity store
 	IdentityStoreID string `mapstructure:"identity_store_id"`
 	// Precaching queries as a comma separated list of query strings
-	PrecacheQueries string
+	PrecacheOrgUnits []string
 	// DryRun flag, when set to true, no change will be made in the Identity Store
 	DryRun bool
+	// sync suspended user, if true suspended user and their group memberships are sync'd into IAM Identity Center
+	SyncSuspended bool
+	// User filter string
+	UserFilter string
 }
 
 const (
@@ -54,8 +58,10 @@ const (
 	DefaultGoogleCredentials = "credentials.json"
 	// DefaultSyncMethod is the default sync method to use.
 	DefaultSyncMethod = "groups"
-	// DefaultPrecacheQueries
-	DefaultPrecacheQueries = "OrgUnitPath=/ isSuspended=false isArchived=false"
+	// DefaultPrecacheOrgUnits
+	DefaultPrecacheOrgUnits = "/"
+	// DefaultSyncSuspended
+	DefaultSyncSuspended = false
 )
 
 // New returns a new Config

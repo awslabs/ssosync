@@ -73,5 +73,7 @@ Resources:
             - '}}'
         SyncMethod: groups
         GoogleGroupMatch: !Ref GroupMatch
-        LogLevel: info
+        SyncSuspended: sync
+        PrecacheOrgUnits: '/Catering/,/Maintenance/Vending Machines'
+        LogLevel: debug
         LogFormat: json
