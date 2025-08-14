@@ -606,7 +606,7 @@ Resources:
           INCLUDE_GROUPS: !If [SetIncludeGroups, !Ref IncludeGroups, !Ref AWS::NoValue]
           DRY_RUN: !If [SetDryRun, 'True', 'False']
           SYNC_SUSPENDED: !If [SetSyncSuspended, 'True', 'False']
-          PRECACHE_ORG UNITS: !If [DisablePrecaching, "DISABLED", !Ref PrecacheOrgUnits]
+          PRECACHE_ORG_UNITS: !If [DisablePrecaching, "DISABLED", !Ref PrecacheOrgUnits]
 
       Events:
         SyncScheduledEvent:
