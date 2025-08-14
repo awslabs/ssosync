@@ -295,16 +295,12 @@ func configLambda() {
 	}
 
 	unwrap = os.Getenv("DRY_RUN")
-        if len([]rune(unwrap)) != 0 {
-	   cfg.DryRun = strings.ToLower(unwrap) == "true"
-	   log.WithField("DryRun", unwrap).Info("from EnvVar")
-	}
+	cfg.DryRun = strings.ToLower(unwrap) == "true"
+	log.WithField("DryRun", unwrap).Info("from EnvVar")
 
         unwrap = os.Getenv("SYNC_SUSPENDED")
-        if len([]rune(unwrap)) != 0 {
-           cfg.SyncSuspended = strings.ToLower(unwrap) == "true"
-           log.WithField("SyncSuspended", unwrap).Info("from EnvVar")
-        }
+        cfg.SyncSuspended = strings.ToLower(unwrap) == "true"
+        log.WithField("SyncSuspended", unwrap).Info("from EnvVar")
 }
 
 func addFlags(cmd *cobra.Command, cfg *config.Config) {
