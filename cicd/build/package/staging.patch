@@ -1,7 +1,7 @@
---- template.yaml	2023-10-30 14:21:20
-+++ staging.yaml	2023-10-30 14:21:59
-@@ -38,7 +38,7 @@
-           - ScheduleExpression
+--- ../../../template.yaml	2025-08-14 14:37:47
++++ staging.yaml	2025-08-14 15:04:41
+@@ -45,7 +45,7 @@
+           - PrecacheOrgUnits
  
    AWS::ServerlessRepo::Application:
 -    Name: ssosync
