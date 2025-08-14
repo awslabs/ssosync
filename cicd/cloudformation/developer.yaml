@@ -612,6 +612,7 @@ Resources:
               - 'cloudformation:DeleteChangeSet'
               - 'cloudformation:DescribeChangeSet'
               - 'cloudformation:SetStackPolicy'
+              - 'cloudformation:DescribeStackEvents'
               Resource:
               - '*'
               Effect: Allow

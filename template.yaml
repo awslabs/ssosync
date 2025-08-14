@@ -288,7 +288,7 @@ Conditions:
     - !Equals
         - !Ref SyncMethod
         - "users_groups"
-  SetDryRunFlag: !Equals
+  SetDryRun: !Equals
     - !Ref DryRun
     - "dry-run"
   SetSyncSuspended: !Equals
