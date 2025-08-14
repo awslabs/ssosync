@@ -601,7 +601,7 @@ Resources:
           IGNORE_GROUPS: !If [SetIgnoreGroups, !Ref IgnoreGroups, !Ref AWS::NoValue]
           IGNORE_USERS: !If [SetIgnoreUsers, !Ref IgnoreUsers, !Ref AWS::NoValue]
           INCLUDE_GROUPS: !If [SetIncludeGroups, !Ref IncludeGroups, !Ref AWS::NoValue]
-          DRY_RUN: !If [SetDryRun, 'True', !Ref AWS::NoValue]
+          DRY_RUN: !If [SetDryRun, 'True', 'False']
           SYNC_SUSPENDED: !If [SetSyncSuspended, 'True', 'False']
           PRECACHE_QUERIES: !Ref PrecacheQueries
 

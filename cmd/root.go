@@ -144,12 +144,6 @@ func init() {
 	cobra.OnInitialize(initConfig)
 	addFlags(rootCmd, cfg)
 
-	if cfg.SyncSuspended {
-		cfg.UserFilter = " isArchived=false"
-	} else {
-		cfg.UserFilter = " isSuspended=false isArchived=false"
-	}
-
 	rootCmd.SetVersionTemplate(fmt.Sprintf("%s, commit %s, built at %s by %s\n", version, commit, date, builtBy))
 
 	// silence on the root cmd
@@ -196,6 +190,12 @@ func initConfig() {
 
 	// config logger
 	logConfig(cfg)
+
+        if cfg.SyncSuspended {
+                cfg.UserFilter = " isArchived=false"
+        } else {
+                cfg.UserFilter = " isSuspended=false isArchived=false"
+        }
 
 }
 
