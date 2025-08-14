@@ -42,7 +42,7 @@ Metadata:
           - ScheduleExpression
           - SyncSuspended
           - DryRun
-          - PrecacheQueries
+          - PrecacheOrgUnits
 
   AWS::ServerlessRepo::Application:
     Name: ssosync
@@ -155,10 +155,10 @@ Parameters:
       - live
       - dry-run
 
-  PrecacheQueries:
+  PrecacheOrgUnits:
     Type: String
     Description: | 
-      If running against a very large Google directory, you can precaching only a subset of users based on OrgUnitPaths within the directory. The default is the whole directory. The format is a comma separate list of OrgUnitPaths, /OU1,/OU2/OU 3 in this example all users within the tree of /OU1 and /OU2/OU 3 would be precached but not from /OU2 itself. Leave the field empty to disable precaching.
+       To reduce the volume of apis, ssosync precaches the users and groups from the Google directory. If you directory is large >10,000 users, you may wish to limit the organizational units that are precached. The default is the whole directory '/'. The parameter accpets a comma separate list of OrgUnitPaths, /OU1,/OU2/OU 3 in this example all users within the tree of /OU1 and /OU2/OU 3 would be precached but not from /OU2 itself. Precaching can be disable by leaving the field empty.
     Default: "/"
     AllowedPattern: '(?!.*\s)|(^\/$)|(\/[a-zA-Z0-9_\/\- ]{1,50})(?:(,\/[a-zA-Z0-9_\/\- ]{1,50}))*'
 
@@ -345,7 +345,7 @@ Conditions:
     - !Ref DeployPattern
     - "Secrets only"
   DisablePrecaching: !Equals
-    - !Ref PrecacheQueries
+    - !Ref PrecacheOrgUnits
     - ""
 
 Rules:
@@ -606,7 +606,7 @@ Resources:
           INCLUDE_GROUPS: !If [SetIncludeGroups, !Ref IncludeGroups, !Ref AWS::NoValue]
           DRY_RUN: !If [SetDryRun, 'True', 'False']
           SYNC_SUSPENDED: !If [SetSyncSuspended, 'True', 'False']
-          PRECACHE_QUERIES: !If [DisablePrecaching, "DISABLED", !Ref PrecacheQueries]
+          PRECACHE_ORG UNITS: !If [DisablePrecaching, "DISABLED", !Ref PrecacheOrgUnits]
 
       Events:
         SyncScheduledEvent:

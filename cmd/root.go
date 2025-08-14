@@ -288,10 +288,10 @@ func configLambda() {
 	   log.WithField("IncludeGroups", unwrap).Info("from EnvVar")
         }
 
-        unwrap = os.Getenv("PRECACHE_QUERIES")
+        unwrap = os.Getenv("PRECACHE_ORG_UNITS")
         if len([]rune(unwrap)) != 0 {
-           cfg.PrecacheQueries = strings.Split(unwrap, ",")
-           log.WithField("PrecacheQueries", unwrap).Info("from EnvVar")
+           cfg.PrecacheOrgUnits = strings.Split(unwrap, ",")
+           log.WithField("PrecacheOrgUnits", unwrap).Info("from EnvVar")
 	}
 
 	unwrap = os.Getenv("DRY_RUN")
@@ -324,7 +324,7 @@ func addFlags(cmd *cobra.Command, cfg *config.Config) {
 	rootCmd.Flags().StringVarP(&cfg.SyncMethod, "sync-method", "s", config.DefaultSyncMethod, "Sync method to use (users_groups|groups)")
 	rootCmd.Flags().StringVarP(&cfg.Region, "region", "r", "", "AWS Region where AWS SSO is enabled")
 	rootCmd.Flags().StringVarP(&cfg.IdentityStoreID, "identity-store-id", "i", "", "Identifier of Identity Store in AWS SSO")
-	rootCmd.Flags().StringSliceVar(&cfg.PrecacheQueries, "precache-queries", strings.Split(config.DefaultPrecacheQueries, ","), "A common separated list of Google Workspace OrgUnitPathis e.g.'/', to precache all users within the organization or '/OU_1/OU 2,/OU3'. To disable and use caching on the fly, 'DISABLED'.")
+	rootCmd.Flags().StringSliceVar(&cfg.PrecacheOrgUnits, "precache-ous", strings.Split(config.DefaultPrecacheOrgUnits, ","), "A common separated list of Google Workspace OrgUnitPathis e.g.'/', to precache all users within the organization or '/OU_1/OU 2,/OU3'. To disable and use caching on the fly, 'DISABLED'.")
 
 }
 

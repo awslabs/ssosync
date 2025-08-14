@@ -573,11 +573,11 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
         // For larger directories this will reduce execution time and avoid throttling limits
         // however if you have directory with 10s of 1000s of users you may want to down scope 
         // this to a specific OU path or disable by leaving empty.
-        if s.cfg.PrecacheQueries[0] != "DISABLED" {
+        if s.cfg.PrecacheOrgUnits[0] != "DISABLED" {
 
 		precacheQueries := ""
- 		log.WithField("Precache OrgUnitPaths", s.cfg.PrecacheQueries).Info("to be converted to queries")
-		for _, orgUnitPath := range s.cfg.PrecacheQueries {
+ 		log.WithField("Precache OrgUnitPaths", s.cfg.PrecacheOrgUnits).Info("to be converted to queries")
+		for _, orgUnitPath := range s.cfg.PrecacheOrgUnits {
 			log.WithField("orgUnitPath", orgUnitPath).Debug("format into query string")
 			orgUnitPath = strings.TrimSpace(orgUnitPath)
 			orgUnitPath = strings.TrimSuffix(orgUnitPath, "/")
@@ -588,7 +588,7 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 			}
 		}
 
- 		log.WithField("PrecacheQueries", precacheQueries).WithField("queryFilters", s.cfg.UserFilter).Info("google.GetUsers() Precaching users from Google")
+ 		log.WithField("PrecacheOrgUnits", precacheQueries).WithField("queryFilters", s.cfg.UserFilter).Info("google.GetUsers() Precaching users from Google")
 
         	googleUsers, err = s.google.GetUsers(precacheQueries, s.cfg.UserFilter) 
 		if err != nil {
