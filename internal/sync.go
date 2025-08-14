@@ -652,7 +652,6 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 				log.WithField("email", m.PrimaryEmail).Debug("user already in group")
                                 gUniqMembers[m.PrimaryEmail] = gUserDetailCache[m.PrimaryEmail]
                         }
-			log.WithField("email", m).Warn("unhandled member of group")
 		}
 
 	        gMembers := make([]*admin.User, 0)

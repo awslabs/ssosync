@@ -243,67 +243,67 @@ func configLambda() {
         unwrap = os.Getenv("LOG_LEVEL")
         if len([]rune(unwrap)) != 0 {
            cfg.LogLevel = unwrap
-	   log.WithField("LogLevel", unwrap).Debug("from EnvVar")
+	   log.WithField("LogLevel", unwrap).Info("from EnvVar")
         }
 
         unwrap = os.Getenv("LOG_FORMAT")
         if len([]rune(unwrap)) != 0 {
            cfg.LogFormat = unwrap
-	   log.WithField("LogFormat", unwrap).Debug("from EnvVar")
+	   log.WithField("LogFormat", unwrap).Info("from EnvVar")
         }
 
 	unwrap = os.Getenv("SYNC_METHOD")
         if len([]rune(unwrap)) != 0 {
            cfg.SyncMethod = unwrap
-	   log.WithField("SyncMethod", unwrap).Debug("from EnvVar")
+	   log.WithField("SyncMethod", unwrap).Info("from EnvVar")
         }
 
 	unwrap = os.Getenv("USER_MATCH")
         if len([]rune(unwrap)) != 0 {
 	   cfg.UserMatch = unwrap
-	   log.WithField("UserMatch", unwrap).Debug("from EnvVar")
+	   log.WithField("UserMatch", unwrap).Info("from EnvVar")
         }
 
 	unwrap = os.Getenv("GROUP_MATCH")
         if len([]rune(unwrap)) != 0 {
            cfg.GroupMatch = unwrap
-	   log.WithField("GroupMatch", unwrap).Debug("from EnvVar")
+	   log.WithField("GroupMatch", unwrap).Info("from EnvVar")
         }
 
         unwrap = os.Getenv("IGNORE_GROUPS")
         if len([]rune(unwrap)) != 0 {
            cfg.IgnoreGroups = strings.Split(unwrap, ",")
-	   log.WithField("IgnoreGroups", unwrap).Debug("from EnvVar")
+	   log.WithField("IgnoreGroups", unwrap).Info("from EnvVar")
         }
 
         unwrap = os.Getenv("IGNORE_USERS")
         if len([]rune(unwrap)) != 0 {
            cfg.IgnoreUsers = strings.Split(unwrap, ",")
-	   log.WithField("IgnoreUsers", unwrap).Debug("from EnvVar")
+	   log.WithField("IgnoreUsers", unwrap).Info("from EnvVar")
         }
 
         unwrap = os.Getenv("INCLUDE_GROUPS")
         if len([]rune(unwrap)) != 0 {
            cfg.IncludeGroups = strings.Split(unwrap, ",")
-	   log.WithField("IncludeGroups", unwrap).Debug("from EnvVar")
+	   log.WithField("IncludeGroups", unwrap).Info("from EnvVar")
         }
 
         unwrap = os.Getenv("PRECACHE_QUERIES")
         if len([]rune(unwrap)) != 0 {
            cfg.PrecacheQueries = strings.Split(unwrap, ",")
-           log.WithField("PrecacheQueries", unwrap).Debug("from EnvVar")
+           log.WithField("PrecacheQueries", unwrap).Info("from EnvVar")
 	}
 
 	unwrap = os.Getenv("DRY_RUN")
         if len([]rune(unwrap)) != 0 {
 	   cfg.DryRun = strings.ToLower(unwrap) == "true"
-	   log.WithField("DryRun", unwrap).Debug("from EnvVar")
+	   log.WithField("DryRun", unwrap).Info("from EnvVar")
 	}
 
         unwrap = os.Getenv("SYNC_SUSPENDED")
         if len([]rune(unwrap)) != 0 {
            cfg.SyncSuspended = strings.ToLower(unwrap) == "true"
-           log.WithField("SyncSuspendedDry", unwrap).Debug("from EnvVar")
+           log.WithField("SyncSuspended", unwrap).Info("from EnvVar")
         }
 }
 
