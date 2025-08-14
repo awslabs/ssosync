@@ -80,7 +80,7 @@ Parameters:
     Type: String
     Description: |
       [App for cross-account] this is the AppConfig from the ouputs of the Secrets for cross-account stack.
-      [Secrets for cross-account] this is the AWS account id into which you will be deplying the SSOSync app?
+      [Secrets for cross-account] this is the AWS account id into which you will be deploying the SSOSync app?
     Default: ""
     AllowedPattern: '(?!.*\s)|(\d{12})|(arn:aws:secretsmanager:((us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-\d):[0-9]{8,12}:secret:[a-zA-Z0-9/_+=.@-]{1,512})(,arn:aws:secretsmanager:((us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-\d):[0-9]{8,12}:secret:[a-zA-Z0-9/_+=.@-]{1,512}){5}(,arn:aws:kms:((us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-\d):[0-9]{12}:key/[a-zA-Z0-9/_+=.@-]{1,512})?'
 
@@ -140,7 +140,7 @@ Parameters:
   SyncSuspended:
     Type: String
     Description: |
-      If enabled suspended users that match either the UserMatch of GroupMatch criteria they will be replicated.
+      If enabled suspended users that match either the GoogleUserMatch or GoogleGroupMatch criteria they will be replicated.
     Default: ignore
     AllowedValues:
       - ignore
@@ -158,9 +158,9 @@ Parameters:
   PrecacheQueries:
     Type: String
     Description: | 
-      If running against a very large Google directory, you can precaching only a subset of users based on OrgUnitPaths within the directory. The default is the whole directory. The format is a comma separate list of OrgUnitPaths, /OU1,/OU2/OU 3 in this example all users within the tree of /OU1 and /OU2/OU 3 would be precached but not from /OU2 itself. Specifying DISABLED, disables precaching.
+      If running against a very large Google directory, you can precaching only a subset of users based on OrgUnitPaths within the directory. The default is the whole directory. The format is a comma separate list of OrgUnitPaths, /OU1,/OU2/OU 3 in this example all users within the tree of /OU1 and /OU2/OU 3 would be precached but not from /OU2 itself. Leave the field empty to disable precaching.
     Default: "/"
-    AllowedPattern: '(DISABLED)|(^\/$)|(\/[a-zA-Z0-9_\/\- ]{1,50})(?:(,\/[a-zA-Z0-9_\/\- ]{1,50}))*'
+    AllowedPattern: '(?!.*\s)|(^\/$)|(\/[a-zA-Z0-9_\/\- ]{1,50})(?:(,\/[a-zA-Z0-9_\/\- ]{1,50}))*'
 
 # Secrets
   GoogleCredentials:
@@ -344,6 +344,9 @@ Conditions:
   OutputSecrets: !Equals
     - !Ref DeployPattern
     - "Secrets only"
+  DisablePrecaching: !Equals
+    - !Ref PrecacheQueries
+    - ""
 
 Rules:
   SecretValues:
@@ -603,7 +606,7 @@ Resources:
           INCLUDE_GROUPS: !If [SetIncludeGroups, !Ref IncludeGroups, !Ref AWS::NoValue]
           DRY_RUN: !If [SetDryRun, 'True', 'False']
           SYNC_SUSPENDED: !If [SetSyncSuspended, 'True', 'False']
-          PRECACHE_QUERIES: !Ref PrecacheQueries
+          PRECACHE_QUERIES: !If [DisablePrecaching, "DISABLED", !Ref PrecacheQueries]
 
       Events:
         SyncScheduledEvent:
