@@ -15,14 +15,10 @@
 package main
 
 import (
-	"math/rand"
-	"time"
-
 	"github.com/awslabs/ssosync/cmd"
 )
 
 func init() {
-	rand.Seed(time.Now().UnixNano())
 }
 
 func main() {

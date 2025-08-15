@@ -1,6 +1,8 @@
 // Package config ...
 package config
 
+import "errors"
+
 // Config ...
 type Config struct {
 	// Verbose toggles the verbosity
@@ -23,7 +25,7 @@ type Config struct {
 	SCIMAccessToken string `mapstructure:"scim_access_token"`
 	// IsLambda ...
 	IsLambda bool
-        // IsLambdaRunningInCodePipeline ...
+	// IsLambdaRunningInCodePipeline ...
 	IsLambdaRunningInCodePipeline bool
 	// Ignore users ...
 	IgnoreUsers []string `mapstructure:"ignore_users"`
@@ -60,8 +62,6 @@ const (
 	DefaultSyncMethod = "groups"
 	// DefaultPrecacheOrgUnits
 	DefaultPrecacheOrgUnits = "/"
-	// DefaultSyncSuspended
-	DefaultSyncSuspended = false
 )
 
 // New returns a new Config
@@ -73,4 +73,33 @@ func New() *Config {
 		SyncMethod:        DefaultSyncMethod,
 		GoogleCredentials: DefaultGoogleCredentials,
 	}
+}
+
+// Validate checks if the configuration is valid
+func (c *Config) Validate() error {
+	if c.GoogleAdmin == "" {
+		return errors.New("google admin email is required")
+	}
+
+	if c.SCIMEndpoint == "" {
+		return errors.New("SCIM endpoint is required")
+	}
+
+	if c.SCIMAccessToken == "" {
+		return errors.New("SCIM access token is required")
+	}
+
+	if c.Region == "" {
+		return errors.New("AWS region is required")
+	}
+
+	if c.IdentityStoreID == "" {
+		return errors.New("identity store ID is required")
+	}
+
+	if c.SyncMethod != "groups" && c.SyncMethod != "users_groups" {
+		return errors.New("sync method must be either 'groups' or 'users_groups'")
+	}
+
+        return nil
 }

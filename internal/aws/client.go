@@ -15,25 +15,28 @@
 package aws
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
-	"net/url"
-	"path"
+	net_url "net/url"
+	"strings"
 
+	"github.com/awslabs/ssosync/internal/constants"
+
+	internal_http "github.com/awslabs/ssosync/internal/http"
+	"github.com/awslabs/ssosync/internal/interfaces"
 	log "github.com/sirupsen/logrus"
 )
 
 var (
 	// ErrUserNotFound
-	ErrUserNotFound      = errors.New("user not found")
+	ErrUserNotFound = errors.New("user not found")
 	// ErrGroupNotFound
-	ErrGroupNotFound     = errors.New("group not found")
+	ErrGroupNotFound = errors.New("group not found")
 	// ErrUserNotSpecified
-	ErrUserNotSpecified  = errors.New("user not specified")
+	ErrUserNotSpecified = errors.New("user not specified")
 )
 
 // ErrHTTPNotOK
@@ -59,225 +62,292 @@ const (
 // Client represents an interface of methods used
 // to communicate with AWS SSO
 type Client interface {
-	CreateUser(*User) (*User, error)
-	FindGroupByDisplayName(string) (*Group, error)
-	FindUserByEmail(string) (*User, error)
-	UpdateUser(*User) (*User, error)
+	CreateUser(*interfaces.User) (*interfaces.User, error)
+	FindGroupByDisplayName(string) (*interfaces.Group, error)
+	FindUserByEmail(string) (*interfaces.User, error)
+	UpdateUser(*interfaces.User) (*interfaces.User, error)
 }
 
 type client struct {
-	httpClient  HTTPClient
-	endpointURL *url.URL
+	httpClient  internal_http.Client
+	baseURL     string
 	bearerToken string
 }
+
+type QueryTransformer = func(u *http.Request)
 
 // NewClient creates a new client to talk with AWS SSO's SCIM endpoint. It
 // requires a http.Client{} as well as the URL and bearer token from the
 // console. If the URL is not parsable, an error will be thrown.
-func NewClient(c HTTPClient, config *Config) (Client, error) {
-	u, err := url.Parse(config.Endpoint)
-	if err != nil {
-		return nil, err
+func NewClient(c internal_http.Client, config *Config) (Client, error) {
+	u, err := net_url.Parse(config.Endpoint)
+
+	if err != nil || !strings.HasPrefix(u.Scheme, "https") {
+		return nil, fmt.Errorf("invalid URL: %v", err)
 	}
 	return &client{
 		httpClient:  c,
-		endpointURL: u,
+		baseURL:     u.String(),
 		bearerToken: config.Token,
 	}, nil
 }
 
-// sendRequestWithBody will send the body given to the url/method combination
-// with the right Bearer token as well as the correct content type for SCIM.
-func (c *client) sendRequestWithBody(method string, url string, body interface{}) (response []byte, err error) {
-	// Convert the body to JSON
-	d, err := json.Marshal(body)
-	if err != nil {
-		return
+func (c *client) prepareRequest(method string, path string, body any) (req *http.Request, err error) {
+	if body == nil {
+		req, err = http.NewRequest(method, c.baseURL+path, nil)
+
+		if err != nil {
+			return nil, err
+		}
+
+	} else {
+		d, err := json.Marshal(body)
+		if err != nil {
+			return nil, err
+		}
+		req, err = http.NewRequest(method, c.baseURL+path, strings.NewReader(string(d)))
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	// Create a request with our body of JSON
-	r, err := http.NewRequest(method, url, bytes.NewBuffer(d))
-	if err != nil {
-		return
-	}
-
-	log.WithFields(log.Fields{"url": url, "method": method})
+	log.WithFields(log.Fields{"url": c.baseURL, "path": path, "method": method}).Debug("Preparing request")
 
 	// Set the content-type and authorization headers
-	r.Header.Set("Content-Type", "application/scim+json")
-	r.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.bearerToken))
+	req.Header.Set("Content-Type", constants.ContentTypeSCIM)
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.bearerToken))
+	return req, nil
+}
 
-	// Call the URL
-	resp, err := c.httpClient.Do(r)
+func close(body io.ReadCloser) {
+	if err := body.Close(); err != nil {
+		log.WithError(err).Warn("Failed to close response body")
+	}
+}
+
+func (c *client) get(path string, beforeSend QueryTransformer) (response []byte, err error) {
+	log.Debug("Sending GET request to ", path)
+	// Validate URL
+	req, err := c.prepareRequest(http.MethodGet, path, nil)
+
 	if err != nil {
+		return nil, err
+	}
+	if beforeSend != nil {
+		beforeSend(req)
+		log.WithFields(log.Fields{"query": req.URL.RawQuery}).Debug("Sending GET request to ", path)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		log.Debugf("HTTP error for GET %s: %v", path, err)
 		return
 	}
-	defer resp.Body.Close()
 
-	// Read the body back from the response
-	response, err = ioutil.ReadAll(resp.Body)
+	log.Debugf("GET %s returned status: %d", path, resp.StatusCode)
+	if resp.Body == nil {
+		return nil, &ErrHTTPNotOK{resp.StatusCode}
+	}
+	defer close(resp.Body)
+
+	response, err = io.ReadAll(resp.Body)
 	if err != nil {
+		log.Debugf("Error reading response body for GET %s: %v", path, err)
 		return
 	}
 
-	// If we get a non-2xx status code, raise that via an error
 	if resp.StatusCode < http.StatusOK || resp.StatusCode > http.StatusNoContent {
+		log.Debugf("Non-2xx status code %d for GET %s", resp.StatusCode, path)
 		err = &ErrHTTPNotOK{resp.StatusCode}
 	}
 
 	return
 }
 
-func (c *client) sendRequest(method string, url string) (response []byte, err error) {
-	r, err := http.NewRequest(method, url, nil)
+func (c *client) post(path string, body any) (response []byte, err error) {
+	log.Debug("Sending POST request to ", path)
+	// Validate URL
+	req, err := c.prepareRequest(http.MethodPost, path, body)
+
 	if err != nil {
+		return nil, err
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		log.Debugf("HTTP error for POST %s: %v", path, err)
 		return
 	}
 
-	log.WithFields(log.Fields{"url": url, "method": method})
+	log.Debugf("POST %s returned status: %d", path, resp.StatusCode)
+	defer close(resp.Body)
 
-	r.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.bearerToken))
-
-	resp, err := c.httpClient.Do(r)
+	response, err = io.ReadAll(resp.Body)
 	if err != nil {
+		log.Debugf("Error reading response body for POST %s: %v", path, err)
 		return
 	}
 
-	defer resp.Body.Close()
-	response, err = ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return
-	}
-
+	// If we get a non-2xx status code, raise that via an error
 	if resp.StatusCode < http.StatusOK || resp.StatusCode > http.StatusNoContent {
-		err = fmt.Errorf("status of http response was %d", resp.StatusCode)
+		log.Debugf("Non-2xx status code %d for POST %s", resp.StatusCode, path)
+		err = &ErrHTTPNotOK{resp.StatusCode}
+	}
+
+	return
+
+}
+
+func (c *client) put(path string, body any) (response []byte, err error) {
+	log.Debug("Sending PUT request to ", path)
+	// Validate URL
+	req, err := c.prepareRequest(http.MethodPut, path, body)
+
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		log.Debugf("HTTP error for PUT %s: %v", path, err)
+		return
+	}
+
+	log.Debugf("PUT %s returned status: %d", path, resp.StatusCode)
+	defer close(resp.Body)
+
+	response, err = io.ReadAll(resp.Body)
+	if err != nil {
+		log.Debugf("Error reading response body for PUT %s: %v", path, err)
+		return
+	}
+
+	// If we get a non-2xx status code, raise that via an error
+	if resp.StatusCode < http.StatusOK || resp.StatusCode > http.StatusNoContent {
+		log.Debugf("Non-2xx status code %d for PUT %s", resp.StatusCode, path)
+		err = &ErrHTTPNotOK{resp.StatusCode}
 	}
 
 	return
 }
 
-// FindUserByEmail will find the user by the email address specified
-func (c *client) FindUserByEmail(email string) (*User, error) {
-	startURL, err := url.Parse(c.endpointURL.String())
-	if err != nil {
-		return nil, err
+func beforeSendAddFilter(filter string) QueryTransformer {
+	return func(r *http.Request) {
+		q := r.URL.Query()
+		q.Add("filter", filter)
+		r.URL.RawQuery = q.Encode()
 	}
+}
 
+// FindUserByEmail will find the user by the email address specified
+func (c *client) FindUserByEmail(email string) (*interfaces.User, error) {
+	log.Debugf("Finding user by email: %s", email)
 	filter := fmt.Sprintf("userName eq \"%s\"", email)
 
-	startURL.Path = path.Join(startURL.Path, "/Users")
-	q := startURL.Query()
-	q.Add("filter", filter)
+	//do a get to /Users and add filter=userName eq "email"
+	resp, err := c.get("/Users", beforeSendAddFilter(filter))
 
-	startURL.RawQuery = q.Encode()
-
-	resp, err := c.sendRequest(http.MethodGet, startURL.String())
 	if err != nil {
+		log.Debugf("Error finding user %s: %v", email, err)
 		return nil, err
 	}
 
-	var r UserFilterResults
+	var r interfaces.UserFilterResults
 	err = json.Unmarshal(resp, &r)
 	if err != nil {
+		log.Debugf("Error unmarshaling user response for %s: %v", email, err)
 		return nil, err
 	}
 
+	log.Debugf("User search for %s returned %d results", email, r.TotalResults)
 	if r.TotalResults != 1 {
 		return nil, ErrUserNotFound
 	}
 
+	log.Debugf("Found user: %s (ID: %s)", email, r.Resources[0].ID)
 	return &r.Resources[0], nil
 }
 
-// FindGroupByDisplayName will find the group by its displayname.
-func (c *client) FindGroupByDisplayName(name string) (*Group, error) {
-	startURL, err := url.Parse(c.endpointURL.String())
-	if err != nil {
-		return nil, err
-	}
-
+func (c *client) FindGroupByDisplayName(name string) (*interfaces.Group, error) {
+	log.Debugf("Finding group by display name: %s", name)
 	filter := fmt.Sprintf("displayName eq \"%s\"", name)
 
-	startURL.Path = path.Join(startURL.Path, "/Groups")
-	q := startURL.Query()
-	q.Add("filter", filter)
+	//do a get to /Groups and add filter=displayName eq "name"
+	resp, err := c.get("/Groups", beforeSendAddFilter(filter))
 
-	startURL.RawQuery = q.Encode()
-
-	resp, err := c.sendRequest(http.MethodGet, startURL.String())
 	if err != nil {
+		log.Debugf("Error finding group %s: %v", name, err)
 		return nil, err
 	}
 
-	var r GroupFilterResults
+	var r interfaces.GroupFilterResults
 	err = json.Unmarshal(resp, &r)
 	if err != nil {
+		log.Debugf("Error unmarshaling group response for %s: %v", name, err)
 		return nil, err
 	}
 
+	log.Debugf("Group search for %s returned %d results", name, r.TotalResults)
 	if r.TotalResults != 1 {
 		return nil, ErrGroupNotFound
 	}
 
+	log.Debugf("Found group: %s (ID: %s)", name, r.Resources[0].ID)
 	return &r.Resources[0], nil
 }
 
 // CreateUser will create the user specified
-func (c *client) CreateUser(u *User) (*User, error) {
-	startURL, err := url.Parse(c.endpointURL.String())
-	if err != nil {
-		return nil, err
-	}
-
+func (c *client) CreateUser(u *interfaces.User) (*interfaces.User, error) {
 	if u == nil {
-		err = ErrUserNotSpecified
-		return nil, err
+		return nil, ErrUserNotSpecified
 	}
 
-	startURL.Path = path.Join(startURL.Path, "/Users")
-	resp, err := c.sendRequestWithBody(http.MethodPost, startURL.String(), *u)
+	log.Debugf("Creating user: %s", u.Username)
+	resp, err := c.post("/Users", *u)
 	if err != nil {
+		log.Debugf("Error creating user %s: %v", u.Username, err)
 		return nil, err
 	}
 
-	var newUser User
+	var newUser interfaces.User
 	err = json.Unmarshal(resp, &newUser)
 	if err != nil {
+		log.Debugf("Error unmarshaling create user response for %s: %v", u.Username, err)
 		return nil, err
 	}
 	if newUser.ID == "" {
+		log.Debugf("User %s created but no ID returned, finding by email", u.Username)
 		return c.FindUserByEmail(u.Username)
 	}
 
+	log.Debugf("Successfully created user: %s (ID: %s)", u.Username, newUser.ID)
 	return &newUser, nil
 }
 
 // UpdateUser will update/replace the user specified
-func (c *client) UpdateUser(u *User) (*User, error) {
-	startURL, err := url.Parse(c.endpointURL.String())
-	if err != nil {
-		return nil, err
-	}
-
+func (c *client) UpdateUser(u *interfaces.User) (*interfaces.User, error) {
 	if u == nil {
-		err = ErrUserNotFound
-		return nil, err
+		return nil, ErrUserNotFound
 	}
 
-	startURL.Path = path.Join(startURL.Path, fmt.Sprintf("/Users/%s", u.ID))
-	resp, err := c.sendRequestWithBody(http.MethodPut, startURL.String(), *u)
+	log.Debugf("Updating user: %s (ID: %s)", u.Username, u.ID)
+	resp, err := c.put(fmt.Sprintf("/Users/%s", u.ID), *u)
 	if err != nil {
+		log.Debugf("Error updating user %s: %v", u.Username, err)
 		return nil, err
 	}
 
-	var newUser User
+	var newUser interfaces.User
 	err = json.Unmarshal(resp, &newUser)
 	if err != nil {
+		log.Debugf("Error unmarshaling update user response for %s: %v", u.Username, err)
 		return nil, err
 	}
 	if newUser.ID == "" {
+		log.Debugf("User %s updated but no ID returned, finding by email", u.Username)
 		return c.FindUserByEmail(u.Username)
 	}
 
+	log.Debugf("Successfully updated user: %s (ID: %s)", u.Username, newUser.ID)
 	return &newUser, nil
 }

@@ -12,12 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package aws
-
-import "github.com/awslabs/ssosync/internal/interfaces"
+package interfaces
 
 // Group represents a Group in AWS SSO
-type Group = interfaces.Group
+type Group struct {
+	ID          string   `json:"id,omitempty"`
+	Schemas     []string `json:"schemas"`
+	DisplayName string   `json:"displayName"`
+	Members     []string `json:"members"`
+}
 
 // GroupFilterResults represents filtered results when we search for
 // groups or List all groups
@@ -50,13 +53,31 @@ type GroupMemberChange struct {
 }
 
 // UserEmail represents a user email address
-type UserEmail = interfaces.UserEmail
+type UserEmail struct {
+	Value   string `json:"value"`
+	Type    string `json:"type"`
+	Primary bool   `json:"primary"`
+}
 
 // UserAddress represents address values of users
-type UserAddress = interfaces.UserAddress
+type UserAddress struct {
+	Type string `json:"type"`
+}
 
 // User represents a User in AWS SSO
-type User = interfaces.User
+type User struct {
+	ID       string   `json:"id,omitempty"`
+	Schemas  []string `json:"schemas"`
+	Username string   `json:"userName"`
+	Name     struct {
+		FamilyName string `json:"familyName"`
+		GivenName  string `json:"givenName"`
+	} `json:"name"`
+	DisplayName string        `json:"displayName"`
+	Active      bool          `json:"active"`
+	Emails      []UserEmail   `json:"emails"`
+	Addresses   []UserAddress `json:"addresses"`
+}
 
 // UserFilterResults represents filtered results when we search for
 // users or List all users

@@ -484,6 +484,7 @@ Resources:
                 Effect: Allow
                 Action:
                   - "secretsmanager:Get*"
+                  - "secretsmanager:DescribeSecret"
                 Resource:
                   - !If [CreateSecrets, !Ref SecretGoogleCredentials, !Select [0, !Split [',', !Ref CrossStackConfig]]]
                   - !If [CreateSecrets, !Ref SecretGoogleAdminEmail, !Select [1, !Split [',', !Ref CrossStackConfig]]]
@@ -491,6 +492,13 @@ Resources:
                   - !If [CreateSecrets, !Ref SecretSCIMAccessToken, !Select [3, !Split [',', !Ref CrossStackConfig]]]
                   - !If [CreateSecrets, !Ref SecretRegion, !Select [4, !Split [',', !Ref CrossStackConfig]]]
                   - !If [CreateSecrets, !Ref SecretIdentityStoreID, !Select [5, !Split [',', !Ref CrossStackConfig]]]
+              - Sid: CrossRegionSecretsPolicy
+                Effect: Allow
+                Action:
+                  - "secretsmanager:GetSecretValue"
+                  - "secretsmanager:DescribeSecret"
+                Resource:
+                  - !Sub "arn:aws:secretsmanager:*:${AWS::AccountId}:secret:SSOSync*"
               - Sid: IdentityStoreAccesPolicy
                 Effect: Allow
                 Action:
@@ -539,6 +547,7 @@ Resources:
                 Effect: Allow
                 Action:
                   - "secretsmanager:Get*"
+                  - "secretsmanager:DescribeSecret"
                 Resource:
                   - !Select [0, !Split [',', !Ref CrossStackConfig]] # GoogleCredentials
                   - !Select [1, !Split [',', !Ref CrossStackConfig]] # GoogleAdminEmail
@@ -546,6 +555,13 @@ Resources:
                   - !Select [3, !Split [',', !Ref CrossStackConfig]] # SCIMEndpointAccessToken
                   - !Select [4, !Split [',', !Ref CrossStackConfig]] # Region
                   - !Select [5, !Split [',', !Ref CrossStackConfig]] # IdentityStoreID
+              - Sid: CrossRegionSecretsPolicy
+                Effect: Allow
+                Action:
+                  - "secretsmanager:GetSecretValue"
+                  - "secretsmanager:DescribeSecret"
+                Resource:
+                  - !Sub "arn:aws:secretsmanager:*:${AWS::AccountId}:secret:SSOSync*"
               - Sid: KMSDecryptPolicy
                 Effect: Allow
                 Action:
