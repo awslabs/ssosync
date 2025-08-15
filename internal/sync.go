@@ -18,7 +18,6 @@ package internal
 import (
 	"context"
 	"errors"
-	"io/ioutil"
 	"strings"
 	"os"
 	"time"
