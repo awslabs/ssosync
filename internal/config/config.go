@@ -72,7 +72,6 @@ func New() *Config {
 		LogFormat:         DefaultLogFormat,
 		SyncMethod:        DefaultSyncMethod,
 		GoogleCredentials: DefaultGoogleCredentials,
-		PrecacheQueries:   DefaultPrecacheQueries,
 	}
 }
 
