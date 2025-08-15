@@ -250,7 +250,7 @@ setup: install-deps config
 	@echo "Development environment setup complete"
 
 .PHONY: ci
-ci: fmt vet test
+ci: vet test
 	@echo "CI pipeline completed successfully"
 
 .PHONY: help
