@@ -219,12 +219,12 @@ func getEnvStrs (key string, fallback []string) []string {
         return fallback
 }
 
-func getEnvBool (key string, fallback boolean) boolean {
+func getEnvBool (key string, fallback bool) bool {
         if valueStr, ok := os.LookupEnv(key); ok {
 		log.WithField(key, valueStr).Info("EnvVar")
                 valueBool := strings.ToLower(valueStr) == "true"
 		log.WithField(key, valueBool).Info("config")
-                return strings.ToLower() == "true"
+                return valueBool
         }
         return fallback
 }
@@ -265,7 +265,7 @@ func configLambda() {
 	cfg.IgnoreGroups = getEnvStrs("IGNORE_GROUPS", []string{})
 	cfg.IgnoreUsers = getEnvStrs("IGNORE_USERS", []string{})
 	cfg.IncludeGroups = getEnvStrs("INCLUDE_GROUPS", []string{})
-	cfg.PrecacheOrgUnits = getEnvStrs("PRECACHE_ORG_UNITS", config.DefaultPrecacheOrgUnits)
+	cfg.PrecacheOrgUnits = getEnvStrs("PRECACHE_ORG_UNITS", strings.Split(config.DefaultPrecacheOrgUnits, ","))
 	cfg.DryRun = getEnvBool("DRY_RUN", false)
 	cfg.SyncSuspended = getEnvBool("SYNC_SUSPENDED", false)
 
