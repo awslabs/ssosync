@@ -203,7 +203,7 @@ func initConfig() {
 
 var secretCache *secretcache.Cache
 
-func getEnv(key string, fallback string) string {
+func getEnvStr(key string, fallback string) string {
 	if valueStr, ok := os.LookupEnv(key); ok {
 		log.WithField(key, valueStr).Info("EnvVar")
 		return valueStr
@@ -211,7 +211,7 @@ func getEnv(key string, fallback string) string {
         return fallback
 }
 
-func getEnv(key string, fallback []string) []string {
+func getEnvStrs (key string, fallback []string) []string {
         if valueStr, ok := os.LookupEnv(key); ok {
                 log.WithField(key, valueStr).Info("EnvVar")
                 return strings.Split(valueStr, ",")
@@ -219,7 +219,7 @@ func getEnv(key string, fallback []string) []string {
         return fallback
 }
 
-func getEnv(key string, fallback boolean) boolean {
+func getEnvBool (key string, fallback boolean) boolean {
         if valueStr, ok := os.LookupEnv(key); ok {
 		log.WithField(key, valueStr).Info("EnvVar")
                 valueBool := strings.ToLower(valueStr) == "true"
@@ -249,25 +249,25 @@ func configLambda() {
 	}
 
 	// Get sensitive values from Secrets Manager with caching
-	cfg.GoogleAdmin = getSecretFromCache(getEnv("GOOGLE_ADMIN", config.DefaultGoogleCredentials))
-	cfg.SCIMEndpoint = getSecretFromCache(getEnv("SCIM_ENDPOINT", ""))
-	cfg.IdentityStoreID = getSecretFromCache(getEnv("IDENTITY_STORE_ID", ""))
-	cfg.Region = getSecretFromCache(getEnv("REGION", ""))
-	cfg.GoogleCredentials = getSecretFromCache(getEnv("GOOGLE_CREDENTIALS", ""))
-	cfg.SCIMAccessToken = getSecretFromCache(getEnv("SCIM_ACCESS_TOKEN", ""))
+	cfg.GoogleAdmin = getSecretFromCache(getEnvStr("GOOGLE_ADMIN", config.DefaultGoogleCredentials))
+	cfg.SCIMEndpoint = getSecretFromCache(getEnvStr("SCIM_ENDPOINT", ""))
+	cfg.IdentityStoreID = getSecretFromCache(getEnvStr("IDENTITY_STORE_ID", ""))
+	cfg.Region = getSecretFromCache(getEnvStr("REGION", ""))
+	cfg.GoogleCredentials = getSecretFromCache(getEnvStr("GOOGLE_CREDENTIALS", ""))
+	cfg.SCIMAccessToken = getSecretFromCache(getEnvStr("SCIM_ACCESS_TOKEN", ""))
 	
 	// Handle environment variables for other settings
-	cfg.LogLevel = getEnv("LOG_LEVEL", config.DefaultLogLevel)
-	cfg.LogFormat = getEnv("LOG_FORMAT", config.DefaultLogFormat)
-	cfg.SyncMethod = getEnv("SYNC_METHOD", config.DefaultLogFormat)
-	cfg.UserMatch = getEnv("USER_MATCH", "")
-	cfg.GroupMatch = getEnv("GROUP_MATCH", "*")
-	cfg.IgnoreGroups = getEnv("IGNORE_GROUPS", []string{})
-	cfg.IgnoreUsers = getEnv("IGNORE_USERS", []string{})
-	cfg.IncludeGroups = getEnv("INCLUDE_GROUPS", []string{})
-	cfg.PrecacheOrgUnits = getEnv("PRECACHE_ORG_UNITS", config.DefaultPrecacheOrgUnits)
-	cfg.DryRun = getEnv("DRY_RUN", false)
-	cfg.SyncSuspended = getEnv("SYNC_SUSPENDED", false)
+	cfg.LogLevel = getEnvStr("LOG_LEVEL", config.DefaultLogLevel)
+	cfg.LogFormat = getEnvStr("LOG_FORMAT", config.DefaultLogFormat)
+	cfg.SyncMethod = getEnvStr("SYNC_METHOD", config.DefaultLogFormat)
+	cfg.UserMatch = getEnvStr("USER_MATCH", "")
+	cfg.GroupMatch = getEnvStr("GROUP_MATCH", "*")
+	cfg.IgnoreGroups = getEnvStrs("IGNORE_GROUPS", []string{})
+	cfg.IgnoreUsers = getEnvStrs("IGNORE_USERS", []string{})
+	cfg.IncludeGroups = getEnvStrs("INCLUDE_GROUPS", []string{})
+	cfg.PrecacheOrgUnits = getEnvStrs("PRECACHE_ORG_UNITS", config.DefaultPrecacheOrgUnits)
+	cfg.DryRun = getEnvBool("DRY_RUN", false)
+	cfg.SyncSuspended = getEnvBool("SYNC_SUSPENDED", false)
 
 }
 
