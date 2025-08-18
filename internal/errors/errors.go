@@ -38,7 +38,7 @@ type LoggingConfig struct {
 var (
 	// Global logging configuration
 	loggingConfig = &LoggingConfig{
-		LogSuggestions: true,
+		LogSuggestions: false,
 		LogLevel:       log.ErrorLevel,
 	}
 	configMutex sync.RWMutex

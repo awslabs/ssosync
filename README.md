@@ -189,6 +189,12 @@ SSO Sync requires configuration from both Google Workspace and AWS sides.
   --group-match "*" \
   --ignore-users "service@company.com,bot@company.com" \
   --ignore-groups "temp-group@company.com"
+
+# Enable detailed error suggestions for troubleshooting
+./ssosync \
+  --group-match "*" \
+  --log-error-suggestions=true \
+  --log-level=debug
 ```
 
 ### Environment Variables
@@ -225,6 +231,7 @@ export SSOSYNC_DRY_RUN="true"
 | `--dry-run` | `SSOSYNC_DRY_RUN` | Enable dry-run mode | `false` |
 | `--log-level` | `SSOSYNC_LOG_LEVEL` | Log level (debug, info, warn, error) | `info` |
 | `--log-format` | `SSOSYNC_LOG_FORMAT` | Log format (text, json) | `text` |
+| `--log-error-suggestions` | `SSOSYNC_LOG_ERROR_SUGGESTIONS` | Enable logging of troubleshooting suggestions for API errors | `false` |
 
 ### Filtering Examples
 
@@ -372,6 +379,7 @@ IDENTITY_STORE_ID=<secret-arn>
 # Optional environment variables
 LOG_LEVEL=info
 LOG_FORMAT=json
+LOG_ERROR_SUGGESTIONS=false
 SYNC_METHOD=groups
 GROUP_MATCH=*
 USER_MATCH=
@@ -381,6 +389,40 @@ DRY_RUN=false
 ```
 
 ## 📊 Monitoring & Troubleshooting
+
+### Enhanced Error Handling
+
+SSO Sync provides enhanced error handling with user-friendly messages and actionable troubleshooting guidance:
+
+**Before:**
+```
+Error: status of http response was 401
+```
+
+**After:**
+```
+AWS SSO SCIM CreateUser failed: Authentication failed - the SCIM access token is invalid or expired
+
+Troubleshooting suggestions:
+  1. Check that the SCIM access token is correct
+  2. Verify the token hasn't expired (tokens expire after a period of inactivity)
+  3. Generate a new SCIM access token in the AWS SSO console
+  4. Ensure the token has the necessary permissions for SCIM operations
+```
+
+#### Enhanced Error Logging
+
+By default, SSO Sync uses cost-conscious logging (suggestions disabled). To enable detailed troubleshooting suggestions:
+
+```bash
+# Enable suggestions via CLI
+./ssosync --log-error-suggestions=true
+
+# Or via environment variable
+export SSOSYNC_LOG_ERROR_SUGGESTIONS=true
+```
+
+This provides detailed guidance but increases log volume. Use in development or when troubleshooting issues.
 
 ### CloudWatch Logs
 

@@ -86,14 +86,14 @@ You can control error logging behavior to reduce log volume and costs:
 ```go
 import "github.com/awslabs/ssosync/internal/errors"
 
-// Disable troubleshooting suggestions to reduce log volume
+// Enable troubleshooting suggestions for detailed guidance
 errors.SetLoggingConfig(&errors.LoggingConfig{
-    LogSuggestions: false,
+    LogSuggestions: true,
     LogLevel:       log.ErrorLevel,
 })
 
 // Or configure via command line flag
-// --log-error-suggestions=false
+// --log-error-suggestions=true
 ```
 
 ## Error Structure
@@ -139,11 +139,12 @@ Troubleshooting suggestions:
 
 ### Command Line Options
 
-- `--log-error-suggestions`: Enable/disable logging of troubleshooting suggestions (default: true)
+- `--log-error-suggestions`: Enable/disable logging of troubleshooting suggestions (default: false)
 
 ### Environment Variables
 
-- `LOG_ERROR_SUGGESTIONS`: Set to "false" to disable suggestion logging
+- `SSOSYNC_LOG_ERROR_SUGGESTIONS`: Set to "true" to enable suggestion logging (default: false)
+- `LOG_ERROR_SUGGESTIONS`: Alternative environment variable name
 
 ### Programmatic Configuration
 
@@ -158,6 +159,26 @@ errors.SetLoggingConfig(&errors.LoggingConfig{
 config := errors.GetLoggingConfig()
 ```
 
+## When to Use Each Approach
+
+### Use HandleXXXError() Functions When:
+- You want simple, one-call error handling
+- You're okay with default logging behavior
+- You want consistent error handling across your application
+- You're building new features
+
+### Use InterpretXXXError() + LogEnhancedError() When:
+- You need custom logging logic
+- You want to conditionally log based on error type
+- You need to modify the error before logging
+- You're integrating with existing error handling patterns
+
+### Use WrapXXXError() Functions When:
+- You want enhanced error messages without logging
+- You're handling errors at a higher level
+- You need to preserve error chains
+- You're building libraries or reusable components
+
 ## Testing
 
 The package includes comprehensive tests for all error interpretation functions:
@@ -171,3 +192,22 @@ Example tests demonstrate the enhanced error handling in action and can be run w
 ```bash
 go test ./internal/errors/... -run Example
 ```
+
+## Performance Considerations
+
+### Log Volume Management
+- **Suggestions Logging**: Disabled by default for cost optimization. Enable with `--log-error-suggestions=true` when troubleshooting (increases log volume by ~70%)
+- **Log Level**: Set appropriate log levels to control what gets logged
+- **Structured Logging**: Use JSON format for better log parsing and filtering
+
+### Memory Usage
+- Enhanced errors maintain references to original errors for debugging
+- Error interpretation is done lazily and cached where possible
+- Suggestion strings are pre-allocated to minimize allocations
+
+### Best Practices
+- Use HandleXXXError() functions for most cases (simplest and most efficient)
+- Keep suggestion logging disabled in production for cost optimization
+- Enable suggestions temporarily when troubleshooting issues
+- Use structured logging (JSON) in production environments
+- Monitor log costs and adjust logging levels as needed

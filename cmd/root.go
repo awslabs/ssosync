@@ -300,7 +300,7 @@ func addFlags(_ *cobra.Command, cfg *config.Config) {
 	rootCmd.Flags().StringVarP(&cfg.Region, "region", "r", "", "AWS Region where AWS SSO is enabled")
 	rootCmd.Flags().StringVarP(&cfg.IdentityStoreID, "identity-store-id", "i", "", "Identifier of Identity Store in AWS SSO")
 	rootCmd.Flags().StringSliceVar(&cfg.PrecacheOrgUnits, "precache-ous", strings.Split(config.DefaultPrecacheOrgUnits, ","), "A common separated list of Google Workspace OrgUnitPathis e.g.'/', to precache all users within the organization or '/OU_1/OU 2,/OU3'. To disable and use caching on the fly, 'DISABLED'.")
-	rootCmd.Flags().BoolVar(&cfg.LogErrorSuggestions, "log-error-suggestions", config.DefaultLogErrorSuggestions, "Enable logging of troubleshooting suggestions for API errors")
+	rootCmd.Flags().BoolVar(&cfg.LogErrorSuggestions, "log-error-suggestions", config.DefaultLogErrorSuggestions, "Enable logging of troubleshooting suggestions for API errors (increases log volume)")
 
 }
 

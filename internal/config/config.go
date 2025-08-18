@@ -47,7 +47,7 @@ type Config struct {
 	SyncSuspended bool
 	// User filter string
 	UserFilter string
-	// LogErrorSuggestions controls whether troubleshooting suggestions are logged (default: true)
+	// LogErrorSuggestions controls whether troubleshooting suggestions are logged (default: false for cost optimization)
 	LogErrorSuggestions bool `mapstructure:"log_error_suggestions"`
 }
 

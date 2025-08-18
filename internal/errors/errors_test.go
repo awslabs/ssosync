@@ -265,8 +265,8 @@ func TestAPIErrorError(t *testing.T) {
 func TestLoggingConfig(t *testing.T) {
 	// Test default config
 	defaultConfig := GetLoggingConfig()
-	if !defaultConfig.LogSuggestions {
-		t.Error("Expected default LogSuggestions to be true")
+	if defaultConfig.LogSuggestions {
+		t.Error("Expected default LogSuggestions to be false (cost-conscious default)")
 	}
 
 	// Test setting config
@@ -286,7 +286,7 @@ func TestLoggingConfig(t *testing.T) {
 
 	// Reset to default
 	SetLoggingConfig(&LoggingConfig{
-		LogSuggestions: true,
+		LogSuggestions: false,
 		LogLevel:       log.ErrorLevel,
 	})
 }
