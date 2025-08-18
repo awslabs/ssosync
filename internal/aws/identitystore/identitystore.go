@@ -6,42 +6,59 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/identitystore"
 	"github.com/aws/aws-sdk-go-v2/service/identitystore/types"
+	ssosync_errors "github.com/awslabs/ssosync/internal/errors"
 	"github.com/awslabs/ssosync/internal/interfaces"
 )
 
 // CreateGroup creates a group in the identity store
 func CreateGroup(ctx context.Context, client interfaces.IdentityStoreAPI, identityStoreID *string, displayName *string) (*identitystore.CreateGroupOutput, error) {
-	return client.CreateGroup(ctx, &identitystore.CreateGroupInput{
+	result, err := client.CreateGroup(ctx, &identitystore.CreateGroupInput{
 		IdentityStoreId: identityStoreID,
 		DisplayName:     displayName,
 	})
+	if err != nil {
+		return nil, ssosync_errors.HandleIdentityStoreError("CreateGroup", err)
+	}
+	return result, nil
 }
 
 // CreateGroupMembership creates a group membership
 func CreateGroupMembership(ctx context.Context, client interfaces.IdentityStoreAPI, identityStoreID *string, groupID *string, userID *string) (*identitystore.CreateGroupMembershipOutput, error) {
-	return client.CreateGroupMembership(ctx, &identitystore.CreateGroupMembershipInput{
+	result, err := client.CreateGroupMembership(ctx, &identitystore.CreateGroupMembershipInput{
 		IdentityStoreId: identityStoreID,
 		GroupId:         groupID,
 		MemberId: &types.MemberIdMemberUserId{
 			Value: *userID,
 		},
 	})
+	if err != nil {
+		return nil, ssosync_errors.HandleIdentityStoreError("CreateGroupMembership", err)
+	}
+	return result, nil
 }
 
 // DeleteGroup deletes a group from the identity store
 func DeleteGroup(ctx context.Context, client interfaces.IdentityStoreAPI, identityStoreID *string, groupID *string) (*identitystore.DeleteGroupOutput, error) {
-	return client.DeleteGroup(ctx, &identitystore.DeleteGroupInput{
+	result, err := client.DeleteGroup(ctx, &identitystore.DeleteGroupInput{
 		IdentityStoreId: identityStoreID,
 		GroupId:         groupID,
 	})
+	if err != nil {
+		return nil, ssosync_errors.HandleIdentityStoreError("DeleteGroup", err)
+	}
+	return result, nil
 }
 
 // DeleteUser deletes a user from the identity store
 func DeleteUser(ctx context.Context, client interfaces.IdentityStoreAPI, identityStoreID *string, userID *string) (*identitystore.DeleteUserOutput, error) {
-	return client.DeleteUser(ctx, &identitystore.DeleteUserInput{
+	result, err := client.DeleteUser(ctx, &identitystore.DeleteUserInput{
 		IdentityStoreId: identityStoreID,
 		UserId:          userID,
 	})
+	if err != nil {
+		return nil, ssosync_errors.HandleIdentityStoreError("DeleteUser", err)
+	}
+	return result, nil
 }
 
 // IsMemberInGroups checks if a user is a member of specified groups
@@ -54,7 +71,7 @@ func IsMemberInGroups(ctx context.Context, client interfaces.IdentityStoreAPI, i
 		GroupIds: groupIDs,
 	})
 	if err != nil {
-		return nil, err
+		return nil, ssosync_errors.HandleIdentityStoreError("IsMemberInGroups", err)
 	}
 
 	// Check if user is member of any of the groups
@@ -77,7 +94,7 @@ func ListGroups(ctx context.Context, client interfaces.IdentityStoreAPI, identit
 	for paginator.HasMorePages() {
 		page, err := paginator.NextPage(ctx)
 		if err != nil {
-			return nil, err
+			return nil, ssosync_errors.HandleIdentityStoreError("ListGroups", err)
 		}
 
 		for _, group := range page.Groups {
@@ -97,7 +114,7 @@ func ListGroupsPager(ctx context.Context, paginator *identitystore.ListGroupsPag
 	for paginator.HasMorePages() {
 		page, err := paginator.NextPage(ctx)
 		if err != nil {
-			return nil, err
+			return nil, ssosync_errors.HandleIdentityStoreError("ListGroups", err)
 		}
 
 		for _, group := range page.Groups {
@@ -117,7 +134,7 @@ func ListUsersPager(ctx context.Context, paginator *identitystore.ListUsersPagin
 	for paginator.HasMorePages() {
 		page, err := paginator.NextPage(ctx)
 		if err != nil {
-			return nil, err
+			return nil, ssosync_errors.HandleIdentityStoreError("ListUsers", err)
 		}
 
 		for _, user := range page.Users {
@@ -137,7 +154,7 @@ func ListGroupMembershipsPager(ctx context.Context, paginator *identitystore.Lis
 	for paginator.HasMorePages() {
 		page, err := paginator.NextPage(ctx)
 		if err != nil {
-			return nil, err
+			return nil, ssosync_errors.HandleIdentityStoreError("ListGroupMemberships", err)
 		}
 
 		for _, membership := range page.GroupMemberships {
@@ -152,19 +169,27 @@ func ListGroupMembershipsPager(ctx context.Context, paginator *identitystore.Lis
 
 // GetGroupMembershipId gets the membership ID for a user in a group
 func GetGroupMembershipId(ctx context.Context, client interfaces.IdentityStoreAPI, identityStoreID *string, groupID *string, userID *string) (*identitystore.GetGroupMembershipIdOutput, error) {
-	return client.GetGroupMembershipId(ctx, &identitystore.GetGroupMembershipIdInput{
+	result, err := client.GetGroupMembershipId(ctx, &identitystore.GetGroupMembershipIdInput{
 		IdentityStoreId: identityStoreID,
 		GroupId:         groupID,
 		MemberId: &types.MemberIdMemberUserId{
 			Value: *userID,
 		},
 	})
+	if err != nil {
+		return nil, ssosync_errors.HandleIdentityStoreError("GetGroupMembershipId", err)
+	}
+	return result, nil
 }
 
 // DeleteGroupMembership deletes a group membership
 func DeleteGroupMembership(ctx context.Context, client interfaces.IdentityStoreAPI, identityStoreID *string, membershipID *string) (*identitystore.DeleteGroupMembershipOutput, error) {
-	return client.DeleteGroupMembership(ctx, &identitystore.DeleteGroupMembershipInput{
+	result, err := client.DeleteGroupMembership(ctx, &identitystore.DeleteGroupMembershipInput{
 		IdentityStoreId: identityStoreID,
 		MembershipId:    membershipID,
 	})
+	if err != nil {
+		return nil, ssosync_errors.HandleIdentityStoreError("DeleteGroupMembership", err)
+	}
+	return result, nil
 }

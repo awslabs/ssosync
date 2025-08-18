@@ -24,6 +24,7 @@ import (
 	"strings"
 
 	"github.com/awslabs/ssosync/internal/constants"
+	ssosync_errors "github.com/awslabs/ssosync/internal/errors"
 
 	internal_http "github.com/awslabs/ssosync/internal/http"
 	"github.com/awslabs/ssosync/internal/interfaces"
@@ -158,7 +159,7 @@ func (c *client) get(path string, beforeSend QueryTransformer) (response []byte,
 
 	if resp.StatusCode < http.StatusOK || resp.StatusCode > http.StatusNoContent {
 		log.Debugf("Non-2xx status code %d for GET %s", resp.StatusCode, path)
-		err = &ErrHTTPNotOK{resp.StatusCode}
+		err = ssosync_errors.HandleSCIMError(fmt.Sprintf("GET %s", path), resp.StatusCode, &ErrHTTPNotOK{resp.StatusCode})
 	}
 
 	return
@@ -191,7 +192,7 @@ func (c *client) post(path string, body any) (response []byte, err error) {
 	// If we get a non-2xx status code, raise that via an error
 	if resp.StatusCode < http.StatusOK || resp.StatusCode > http.StatusNoContent {
 		log.Debugf("Non-2xx status code %d for POST %s", resp.StatusCode, path)
-		err = &ErrHTTPNotOK{resp.StatusCode}
+		err = ssosync_errors.HandleSCIMError(fmt.Sprintf("POST %s", path), resp.StatusCode, &ErrHTTPNotOK{resp.StatusCode})
 	}
 
 	return
@@ -225,7 +226,7 @@ func (c *client) put(path string, body any) (response []byte, err error) {
 	// If we get a non-2xx status code, raise that via an error
 	if resp.StatusCode < http.StatusOK || resp.StatusCode > http.StatusNoContent {
 		log.Debugf("Non-2xx status code %d for PUT %s", resp.StatusCode, path)
-		err = &ErrHTTPNotOK{resp.StatusCode}
+		err = ssosync_errors.HandleSCIMError(fmt.Sprintf("PUT %s", path), resp.StatusCode, &ErrHTTPNotOK{resp.StatusCode})
 	}
 
 	return

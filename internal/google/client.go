@@ -20,6 +20,7 @@ import (
 	"errors"
 	"strings"
 
+	ssosync_errors "github.com/awslabs/ssosync/internal/errors"
 	"golang.org/x/oauth2/google"
 	admin "google.golang.org/api/admin/directory/v1"
 	"google.golang.org/api/option"
@@ -76,6 +77,10 @@ func (c *client) GetDeletedUsers() ([]*admin.User, error) {
 		return nil
 	})
 
+	if err != nil {
+		return u, ssosync_errors.HandleGoogleAPIError("GetDeletedUsers", err)
+	}
+
 	return u, err
 }
 
@@ -92,6 +97,10 @@ func (c *client) GetGroupMembers(g *admin.Group) ([]*admin.Member, error) {
 		return nil
 	})
 
+	if err != nil {
+		return m, ssosync_errors.HandleGoogleAPIError("GetGroupMembers", err)
+	}
+
 	return m, err
 }
 
@@ -101,13 +110,14 @@ func (c *client) GetGroupMembers(g *admin.Group) ([]*admin.Member, error) {
 // * https://developers.google.com/admin-sdk/directory/reference/rest/v1/users/list
 // * https://developers.google.com/admin-sdk/directory/v1/guides/search-users
 // query possible values:
-// '' --> empty or not defined
-//  name:'Jane'
-//  email:admin*
-//  isAdmin=true
-//  manager='janesmith@example.com'
-//  orgName=Engineering orgTitle:Manager
-//  EmploymentData.projects:'GeneGnomes'
+// ” --> empty or not defined
+//
+//	name:'Jane'
+//	email:admin*
+//	isAdmin=true
+//	manager='janesmith@example.com'
+//	orgName=Engineering orgTitle:Manager
+//	EmploymentData.projects:'GeneGnomes'
 func (c *client) GetUsers(query string, filter string) ([]*admin.User, error) {
 	u := make([]*admin.User, 0)
 	var err error
@@ -126,6 +136,9 @@ func (c *client) GetUsers(query string, filter string) ([]*admin.User, error) {
 			u = append(u, users.Users...)
 			return nil
 		})
+		if err != nil {
+			return u, ssosync_errors.HandleGoogleAPIError("GetUsers", err)
+		}
 	} else {
 
 		// The Google api doesn't support multi-part queries, but we do so we need to split into an array of query strings
@@ -133,13 +146,16 @@ func (c *client) GetUsers(query string, filter string) ([]*admin.User, error) {
 
 		// Then call the api one query at a time, appending to our list
 		for _, subQuery := range queries {
-			err = c.service.Users.List().Query(subQuery + filter).Customer("my_customer").Pages(c.ctx, func(users *admin.Users) error {
+			err = c.service.Users.List().Query(subQuery+filter).Customer("my_customer").Pages(c.ctx, func(users *admin.Users) error {
 				if err != nil {
 					return err
 				}
 				u = append(u, users.Users...)
 				return nil
 			})
+			if err != nil {
+				return u, ssosync_errors.HandleGoogleAPIError("GetUsers", err)
+			}
 		}
 	}
 
@@ -189,6 +205,9 @@ func (c *client) GetGroups(query string) ([]*admin.Group, error) {
 			g = append(g, groups.Groups...)
 			return nil
 		})
+		if err != nil {
+			return g, ssosync_errors.HandleGoogleAPIError("GetGroups", err)
+		}
 		return g, err
 	}
 
@@ -204,6 +223,9 @@ func (c *client) GetGroups(query string) ([]*admin.Group, error) {
 			g = append(g, groups.Groups...)
 			return nil
 		})
+		if err != nil {
+			return g, ssosync_errors.HandleGoogleAPIError("GetGroups", err)
+		}
 	}
 
 	// Check we've got some users otherwise something is wrong.

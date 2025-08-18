@@ -47,6 +47,8 @@ type Config struct {
 	SyncSuspended bool
 	// User filter string
 	UserFilter string
+	// LogErrorSuggestions controls whether troubleshooting suggestions are logged (default: true)
+	LogErrorSuggestions bool `mapstructure:"log_error_suggestions"`
 }
 
 const (
@@ -62,16 +64,19 @@ const (
 	DefaultSyncMethod = "groups"
 	// DefaultPrecacheOrgUnits
 	DefaultPrecacheOrgUnits = "/"
+	// DefaultLogErrorSuggestions is the default for logging error suggestions
+	DefaultLogErrorSuggestions = false
 )
 
 // New returns a new Config
 func New() *Config {
 	return &Config{
-		Debug:             DefaultDebug,
-		LogLevel:          DefaultLogLevel,
-		LogFormat:         DefaultLogFormat,
-		SyncMethod:        DefaultSyncMethod,
-		GoogleCredentials: DefaultGoogleCredentials,
+		Debug:               DefaultDebug,
+		LogLevel:            DefaultLogLevel,
+		LogFormat:           DefaultLogFormat,
+		SyncMethod:          DefaultSyncMethod,
+		GoogleCredentials:   DefaultGoogleCredentials,
+		LogErrorSuggestions: DefaultLogErrorSuggestions,
 	}
 }
 
@@ -101,5 +106,5 @@ func (c *Config) Validate() error {
 		return errors.New("sync method must be either 'groups' or 'users_groups'")
 	}
 
-        return nil
+	return nil
 }
