@@ -62,6 +62,7 @@ const (
 
 // Client represents an interface of methods used
 // to communicate with AWS SSO
+type Client interface {
         AddUserToGroup(*interfaces.User, *interfaces.Group) error
         CreateGroup(*interfaces.Group) (*interfaces.Group, error)
 	CreateUser(*interfaces.User) (*interfaces.User, error)
@@ -241,8 +242,10 @@ func beforeSendAddFilter(filter string) QueryTransformer {
 		q := r.URL.Query()
 		q.Add("filter", filter)
 		r.URL.RawQuery = q.Encode()
+	}
+}
 
-func (c *client) groupChangeOperation(op OperationType, u *User, g *Group) error {
+func (c *client) groupChangeOperation(op OperationType, u *interfaces.User, g *interfaces.Group) error {
         if g == nil {
                 return ErrGroupNotSpecified
         }
@@ -266,13 +269,7 @@ func (c *client) groupChangeOperation(op OperationType, u *User, g *Group) error
                 },
         }
 
-        startURL, err := url.Parse(c.endpointURL.String())
-        if err != nil {
-                return err
-        }
-
-        startURL.Path = path.Join(startURL.Path, fmt.Sprintf("/Groups/%s", g.ID))
-        _, err = c.sendRequestWithBody(http.MethodPatch, startURL.String(), *gc)
+        resp, err = c.put(fmt.Sprintf("/Groups/%s", *gc)
         if err != nil {
                 return err
         }
@@ -281,21 +278,13 @@ func (c *client) groupChangeOperation(op OperationType, u *User, g *Group) error
 }
 
 // AddUserToGroup will add the user specified to the group specified
-func (c *client) AddUserToGroup(u *User, g *Group) error {
+func (c *client) AddUserToGroup(u *interfaces.User, g *interfaces.Group) error {
         return c.groupChangeOperation(OperationAdd, u, g)
 }
 
 // RemoveUserFromGroup will remove the user specified from the group specified
-func (c *client) RemoveUserFromGroup(u *User, g *Group) error {
+func (c *client) RemoveUserFromGroup(u *interfaces.User, g *interfaces.Group) error {
         return c.groupChangeOperation(OperationRemove, u, g)
-}
-
-// FindUserByEmail will find the user by the email address specified
-func (c *client) FindUserByEmail(email string) (*User, error) {
-	startURL, err := url.Parse(c.endpointURL.String())
-	if err != nil {
-		return nil, err
-	}
 }
 
 // FindUserByEmail will find the user by the email address specified
@@ -412,8 +401,8 @@ func (c *client) UpdateUser(u *interfaces.User) (*interfaces.User, error) {
 }
 
 // DeleteUser will remove the current user from the directory
-func (c *client) DeleteUser(u *User) error {
-        startURL, err := url.Parse(c.endpointURL.String())
+func (c *client) DeleteUser(u *interfaces.User) error {
+        startURL, err := net_url.Parse(c.endpointURL.String())
         if err != nil {
                 return err
         }
@@ -432,8 +421,8 @@ func (c *client) DeleteUser(u *User) error {
 }
 
 // CreateGroup will create a group given
-func (c *client) CreateGroup(g *Group) (*Group, error) {
-        startURL, err := url.Parse(c.endpointURL.String())
+func (c *client) CreateGroup(g *interfaces.Group) (*interfaces.Group, error) {
+        startURL, err := net_url.Parse(c.endpointURL.String())
         if err != nil {
                 return nil, err
         }
@@ -459,8 +448,8 @@ func (c *client) CreateGroup(g *Group) (*Group, error) {
 }
 
 // DeleteGroup will delete the group specified
-func (c *client) DeleteGroup(g *Group) error {
-        startURL, err := url.Parse(c.endpointURL.String())
+func (c *client) DeleteGroup(g *interfaces.Group) error {
+        startURL, err := net_url.Parse(c.endpointURL.String())
         if err != nil {
                 return err
         }
