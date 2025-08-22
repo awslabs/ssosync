@@ -64,3 +64,29 @@ func (dc *dryClient) UpdateUser(u *interfaces.User) (*interfaces.User, error) {
 	dc.virtualUsers[u.Username] = *u
 	return u, nil
 }
+
+func (dc *dryClient) AddUserToGroup(u *interfaces.User, g *interfaces.Group) error {
+	log.WithFields(log.Fields{"user": u.Username, "group": g.DisplayName}).Info("DRY RUN: Would add user to group")
+	return nil
+}
+
+func (dc *dryClient) RemoveUserFromGroup(u *interfaces.User, g *interfaces.Group) error {
+	log.WithFields(log.Fields{"user": u.Username, "group": g.DisplayName}).Info("DRY RUN: Would remove user from group")
+	return nil
+}
+
+func (dc *dryClient) CreateGroup(g *interfaces.Group) (*interfaces.Group, error) {
+	log.WithField("group", g.DisplayName).Info("DRY RUN: Would create group")
+	return g, nil
+}
+
+func (dc *dryClient) DeleteGroup(g *interfaces.Group) error {
+	log.WithField("group", g.DisplayName).Info("DRY RUN: Would delete group")
+	return nil
+}
+
+func (dc *dryClient) DeleteUser(u *interfaces.User) error {
+	log.WithField("user", u.Username).Info("DRY RUN: Would delete user")
+	delete(dc.virtualUsers, u.Username)
+	return nil
+}

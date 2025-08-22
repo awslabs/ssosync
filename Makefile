@@ -123,11 +123,11 @@ generate-mock: install-mockery
 
 .PHONY: test
 test: generate-mock
-	$(Q)go test $(VERBOSE_TEST_FLAG) ./... -coverprofile=coverage.out
+	$(Q)go test $(VERBOSE_TEST_FLAG) `go list ./... | grep -v ./internal/mocks` -coverprofile=coverage.out
 
 .PHONY: test-verbose
 test-verbose: generate-mock
-	$(Q)go test -v ./... -coverprofile=coverage.out
+	$(Q)go test -v `go list ./... | grep -v ./internal/mocks` -coverprofile=coverage.out
 
 .PHONY: test-coverage
 test-coverage: test

@@ -24,7 +24,6 @@ import (
 	"strings"
 
 	"github.com/awslabs/ssosync/internal/constants"
-
 	internal_http "github.com/awslabs/ssosync/internal/http"
 	"github.com/awslabs/ssosync/internal/interfaces"
 	log "github.com/sirupsen/logrus"
@@ -36,8 +35,9 @@ var (
 	// ErrGroupNotFound
 	ErrGroupNotFound = errors.New("group not found")
 	// ErrUserNotSpecified
-	ErrUserNotSpecified  = errors.New("user not specified")
-        ErrGroupNotSpecified = errors.New("group not specified")
+	ErrUserNotSpecified = errors.New("user not specified")
+	// ErrGroupNotSpecified
+	ErrGroupNotSpecified = errors.New("group not specified")
 )
 
 // ErrHTTPNotOK
@@ -63,11 +63,11 @@ const (
 // Client represents an interface of methods used
 // to communicate with AWS SSO
 type Client interface {
-        AddUserToGroup(*interfaces.User, *interfaces.Group) error
-        CreateGroup(*interfaces.Group) (*interfaces.Group, error)
+	AddUserToGroup(*interfaces.User, *interfaces.Group) error
+	CreateGroup(*interfaces.Group) (*interfaces.Group, error)
 	CreateUser(*interfaces.User) (*interfaces.User, error)
 	DeleteGroup(*interfaces.Group) error
-        DeleteUser(*interfaces.User) error
+	DeleteUser(*interfaces.User) error
 	FindGroupByDisplayName(string) (*interfaces.Group, error)
 	FindUserByEmail(string) (*interfaces.User, error)
 	UpdateUser(*interfaces.User) (*interfaces.User, error)
@@ -237,6 +237,72 @@ func (c *client) put(path string, body any) (response []byte, err error) {
 	return
 }
 
+func (c *client) patch(path string, body any) (response []byte, err error) {
+	log.Debug("Sending PATCH request to ", path)
+	// Validate URL
+	req, err := c.prepareRequest(http.MethodPatch, path, body)
+
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		log.Debugf("HTTP error for PATCH %s: %v", path, err)
+		return
+	}
+
+	log.Debugf("PATCH %s returned status: %d", path, resp.StatusCode)
+	defer close(resp.Body)
+
+	response, err = io.ReadAll(resp.Body)
+	if err != nil {
+		log.Debugf("Error reading response body for PATCH %s: %v", path, err)
+		return
+	}
+
+	// If we get a non-2xx status code, raise that via an error
+	if resp.StatusCode < http.StatusOK || resp.StatusCode > http.StatusNoContent {
+		log.Debugf("Non-2xx status code %d for PATCH %s", resp.StatusCode, path)
+		err = &ErrHTTPNotOK{resp.StatusCode}
+	}
+
+	return
+}
+
+func (c *client) delete(path string) (response []byte, err error) {
+	log.Debug("Sending DELETE request to ", path)
+	// Validate URL
+	req, err := c.prepareRequest(http.MethodDelete, path, nil)
+
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		log.Debugf("HTTP error for DELETE %s: %v", path, err)
+		return
+	}
+
+	log.Debugf("DELETE %s returned status: %d", path, resp.StatusCode)
+	defer close(resp.Body)
+
+	response, err = io.ReadAll(resp.Body)
+	if err != nil {
+		log.Debugf("Error reading response body for DELETE %s: %v", path, err)
+		return
+	}
+
+	// If we get a non-2xx status code, raise that via an error
+	if resp.StatusCode < http.StatusOK || resp.StatusCode > http.StatusNoContent {
+		log.Debugf("Non-2xx status code %d for DELETE %s", resp.StatusCode, path)
+		err = &ErrHTTPNotOK{resp.StatusCode}
+	}
+
+	return
+}
+
 func beforeSendAddFilter(filter string) QueryTransformer {
 	return func(r *http.Request) {
 		q := r.URL.Query()
@@ -246,45 +312,45 @@ func beforeSendAddFilter(filter string) QueryTransformer {
 }
 
 func (c *client) groupChangeOperation(op OperationType, u *interfaces.User, g *interfaces.Group) error {
-        if g == nil {
-                return ErrGroupNotSpecified
-        }
+	if g == nil {
+		return ErrGroupNotSpecified
+	}
 
-        if u == nil {
-                return ErrUserNotSpecified
-        }
+	if u == nil {
+		return ErrUserNotSpecified
+	}
 
-        log.WithFields(log.Fields{"operations": op, "user": u.Username, "group": g.DisplayName}).Debug("Group Change")
+	log.WithFields(log.Fields{"operation": op, "user": u.Username, "group": g.DisplayName}).Debug("Group Change")
 
-        gc := &GroupMemberChange{
-                Schemas: []string{"urn:ietf:params:scim:api:messages:2.0:PatchOp"},
-                Operations: []GroupMemberChangeOperation{
-                        {
-                                Operation: string(op),
-                                Path:      "members",
-                                Members: []GroupMemberChangeMember{
-                                        {Value: u.ID},
-                                },
-                        },
-                },
-        }
+	gc := &interfaces.GroupMemberChange{
+		Schemas: []string{"urn:ietf:params:scim:api:messages:2.0:PatchOp"},
+		Operations: []interfaces.GroupMemberChangeOperation{
+			{
+				Operation: string(op),
+				Path:      "members",
+				Members: []interfaces.GroupMemberChangeMember{
+					{Value: u.ID},
+				},
+			},
+		},
+	}
 
-        resp, err = c.put(fmt.Sprintf("/Groups/%s", *gc)
-        if err != nil {
-                return err
-        }
+	_, err := c.patch(fmt.Sprintf("/Groups/%s", g.ID), gc)
+	if err != nil {
+		return err
+	}
 
-        return nil
+	return nil
 }
 
 // AddUserToGroup will add the user specified to the group specified
 func (c *client) AddUserToGroup(u *interfaces.User, g *interfaces.Group) error {
-        return c.groupChangeOperation(OperationAdd, u, g)
+	return c.groupChangeOperation(OperationAdd, u, g)
 }
 
 // RemoveUserFromGroup will remove the user specified from the group specified
 func (c *client) RemoveUserFromGroup(u *interfaces.User, g *interfaces.Group) error {
-        return c.groupChangeOperation(OperationRemove, u, g)
+	return c.groupChangeOperation(OperationRemove, u, g)
 }
 
 // FindUserByEmail will find the user by the email address specified
@@ -402,68 +468,62 @@ func (c *client) UpdateUser(u *interfaces.User) (*interfaces.User, error) {
 
 // DeleteUser will remove the current user from the directory
 func (c *client) DeleteUser(u *interfaces.User) error {
-        startURL, err := net_url.Parse(c.endpointURL.String())
-        if err != nil {
-                return err
-        }
+	if u == nil {
+		return ErrUserNotSpecified
+	}
 
-        if u == nil {
-                return ErrUserNotSpecified
-        }
+	log.Debugf("Deleting user: %s (ID: %s)", u.Username, u.ID)
+	_, err := c.delete(fmt.Sprintf("/Users/%s", u.ID))
+	if err != nil {
+		log.Debugf("Error deleting user %s: %v", u.Username, err)
+		return err
+	}
 
-        startURL.Path = path.Join(startURL.Path, fmt.Sprintf("/Users/%s", u.ID))
-        _, err = c.sendRequest(http.MethodDelete, startURL.String())
-        if err != nil {
-                return err
-        }
-
-        return nil
+	log.Debugf("Successfully deleted user: %s", u.Username)
+	return nil
 }
 
 // CreateGroup will create a group given
 func (c *client) CreateGroup(g *interfaces.Group) (*interfaces.Group, error) {
-        startURL, err := net_url.Parse(c.endpointURL.String())
-        if err != nil {
-                return nil, err
-        }
+	if g == nil {
+		return nil, ErrGroupNotSpecified
+	}
 
-        if g == nil {
-                err = ErrGroupNotSpecified
-                return nil, err
-        }
+	log.Debugf("Creating group: %s", g.DisplayName)
+	resp, err := c.post("/Groups", *g)
+	if err != nil {
+		log.Debugf("Error creating group %s: %v", g.DisplayName, err)
+		return nil, err
+	}
 
-        startURL.Path = path.Join(startURL.Path, "/Groups")
-        resp, err := c.sendRequestWithBody(http.MethodPost, startURL.String(), *g)
-        if err != nil {
-                return nil, err
-        }
+	var newGroup interfaces.Group
+	err = json.Unmarshal(resp, &newGroup)
+	if err != nil {
+		log.Debugf("Error unmarshaling create group response for %s: %v", g.DisplayName, err)
+		return nil, err
+	}
+	if newGroup.ID == "" {
+		log.Debugf("Group %s created but no ID returned, finding by display name", g.DisplayName)
+		return c.FindGroupByDisplayName(g.DisplayName)
+	}
 
-        var newGroup Group
-        err = json.Unmarshal(resp, &newGroup)
-        if err != nil {
-                return nil, err
-        }
-
-        return &newGroup, nil
+	log.Debugf("Successfully created group: %s (ID: %s)", g.DisplayName, newGroup.ID)
+	return &newGroup, nil
 }
 
 // DeleteGroup will delete the group specified
 func (c *client) DeleteGroup(g *interfaces.Group) error {
-        startURL, err := net_url.Parse(c.endpointURL.String())
-        if err != nil {
-                return err
-        }
+	if g == nil {
+		return ErrGroupNotSpecified
+	}
 
-        if g == nil {
-                return ErrGroupNotSpecified
-        }
+	log.Debugf("Deleting group: %s (ID: %s)", g.DisplayName, g.ID)
+	_, err := c.delete(fmt.Sprintf("/Groups/%s", g.ID))
+	if err != nil {
+		log.Debugf("Error deleting group %s: %v", g.DisplayName, err)
+		return err
+	}
 
-        startURL.Path = path.Join(startURL.Path, fmt.Sprintf("/Groups/%s", g.ID))
-        _, err = c.sendRequest(http.MethodDelete, startURL.String())
-        if err != nil {
-                return err
-        }
-
-        return nil
+	log.Debugf("Successfully deleted group: %s", g.DisplayName)
+	return nil
 }
-

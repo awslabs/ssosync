@@ -14,11 +14,9 @@
 
 package http
 
-import (
-	"net/http"
-)
+import "net/http"
 
-// Client defines the interface for HTTP clients
+// Client represents an HTTP client interface
 type Client interface {
 	Do(req *http.Request) (*http.Response, error)
 }
