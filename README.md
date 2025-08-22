@@ -1,7 +1,7 @@
 # SSO Sync
 
 ![Github Action](https://github.com/awslabs/ssosync/workflows/main/badge.svg)
-<a href='https://github.com/jpoles1/gopherbadger' target='_blank'>![gopherbadger-tag-do-not-edit](https://img.shields.io/badge/Go%20Coverage-61%25-brightgreen.svg?longCache=true&style=flat)</a>
+<a href='https://github.com/jpoles1/gopherbadger' target='_blank'>![gopherbadger-tag-do-not-edit](https://img.shields.io/badge/Go%20Coverage-15%25-brightgreen.svg?longCache=true&style=flat)</a>
 [![Go Report Card](https://goreportcard.com/badge/github.com/awslabs/ssosync)](https://goreportcard.com/report/github.com/awslabs/ssosync)
 [![License Apache 2](https://img.shields.io/badge/License-Apache2-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 [![AWS SDK v2](https://img.shields.io/badge/AWS%20SDK-v2-orange.svg)](https://aws.github.io/aws-sdk-go-v2/)

@@ -30,7 +30,7 @@ import (
 	"github.com/awslabs/ssosync/internal/interfaces"
 	retryablehttp "github.com/hashicorp/go-retryablehttp"
 
-	aws_sdk "github.com/aws/aws-sdk-go-v2/aws"
+
 	aws_config "github.com/aws/aws-sdk-go-v2/config"
 	aws_identitystore "github.com/aws/aws-sdk-go-v2/service/identitystore"
 	identitystore_types "github.com/aws/aws-sdk-go-v2/service/identitystore/types"
@@ -82,7 +82,6 @@ func New(cfg *config.Config, a aws.Client, g google.Client, ids interfaces.Ident
 //	orgName=Engineering orgTitle:Manager
 //	EmploymentData.projects:'GeneGnomes'
 func (s *syncGSuite) SyncUsers(query string) error {
-	ctx := context.Background()
 	log.Debug("get deleted users")
 	deletedUsers, err := s.google.GetDeletedUsers()
 	if err != nil {
@@ -183,7 +182,6 @@ func (s *syncGSuite) SyncUsers(query string) error {
 //	name:Admin* email:aws-*
 //	email:aws-*
 func (s *syncGSuite) SyncGroups(query string) error {
-	ctx := context.Background()
 	log.WithField("query", query).Debug("get google groups")
 	googleGroups, err := s.google.GetGroups(query)
 	if err != nil {
@@ -1072,11 +1070,14 @@ func (s *syncGSuite) GetGroupMembershipsLists(awsGroups []*interfaces.Group, aws
 }
 
 func (s *syncGSuite) IsUserInGroup(user *aws.User, group *aws.Group) (*bool, error) {
-	isUserInGroupOutput, err := s.identityStoreClient.IsMemberInGroups(
-		&identitystore.IsMemberInGroupsInput{
+	isUserInGroupOutput, err := s.identityStore.IsMemberInGroups(
+		context.Background(),
+		&aws_identitystore.IsMemberInGroupsInput{
 			IdentityStoreId: &s.cfg.IdentityStoreID,
-			GroupIds:        []*string{&group.ID},
-			MemberId:        &identitystore.MemberId{UserId: &user.ID},
+			GroupIds:        []string{group.ID},
+			MemberId: &identitystore_types.MemberIdMemberUserId{
+				Value: user.ID,
+			},
 		},
 	)
 
@@ -1084,9 +1085,12 @@ func (s *syncGSuite) IsUserInGroup(user *aws.User, group *aws.Group) (*bool, err
 		return nil, err
 	}
 
-	isUserInGroup := isUserInGroupOutput.Results[0].MembershipExists
+	if len(isUserInGroupOutput.Results) > 0 {
+		return &isUserInGroupOutput.Results[0].MembershipExists, nil
+	}
 
-	return isUserInGroup, nil
+	falseValue := false
+	return &falseValue, nil
 }
 
 func (s *syncGSuite) getGoogleUsersInGroup(group *admin.Group, userCache map[string]*admin.User, groupCache map[string]*admin.Group) []*admin.User {

@@ -1,7 +1,7 @@
 # Technology Stack
 
 ## Language & Runtime
-- **Go 1.17+** - Primary programming language
+- **Go 1.24+** - Primary programming language
 - **AWS Lambda Runtime**: `provided.al2` on ARM64 architecture
 - Cross-platform support (Linux, macOS, Windows)
 
@@ -11,7 +11,8 @@
 - **Cobra** - CLI framework and command handling
 - **Viper** - Configuration management
 - **Logrus** - Structured logging
-- **GoMock** - Testing and mocking
+- **stretchr/testify** - Testing
+- **mockery** - Mocking
 
 ## AWS Services
 - **IAM Identity Center** (Identity Store API) - User/group management

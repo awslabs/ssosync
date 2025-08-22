@@ -20,4 +20,17 @@ packages:
     config:
       all: true
       dir: "internal/mocks"
-      filename: "mocks_{{.InterfaceName}}.go"
+      filename: "mocks_Http{{.InterfaceName}}.go"
+      structname: "MockHttp{{.InterfaceName}}"
+  github.com/awslabs/ssosync/internal/aws:
+    config:
+      all: true
+      dir: "internal/mocks"
+      filename: "mocks_Aws{{.InterfaceName}}.go"
+      structname: "MockAws{{.InterfaceName}}"
+  github.com/awslabs/ssosync/internal/google:
+    config:
+      all: true
+      dir: "internal/mocks"
+      filename: "mocks_Google{{.InterfaceName}}.go"
+      structname: "MockGoogle{{.InterfaceName}}"
