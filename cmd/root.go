@@ -193,11 +193,11 @@ func initConfig() {
 	// config logger
 	logConfig(cfg)
 
-        if cfg.SyncSuspended {
-                cfg.UserFilter = " isArchived=false"
-        } else {
-                cfg.UserFilter = " isSuspended=false isArchived=false"
-        }
+	if cfg.SyncSuspended {
+		cfg.UserFilter = " isArchived=false"
+	} else {
+		cfg.UserFilter = " isSuspended=false isArchived=false"
+	}
 
 }
 
@@ -208,25 +208,25 @@ func getEnvStr(key string, fallback string) string {
 		log.WithField(key, valueStr).Info("EnvVar")
 		return valueStr
 	}
-        return fallback
+	return fallback
 }
 
-func getEnvStrs (key string, fallback []string) []string {
-        if valueStr, ok := os.LookupEnv(key); ok {
-                log.WithField(key, valueStr).Info("EnvVar")
-                return strings.Split(valueStr, ",")
-        }
-        return fallback
-}
-
-func getEnvBool (key string, fallback bool) bool {
-        if valueStr, ok := os.LookupEnv(key); ok {
+func getEnvStrs(key string, fallback []string) []string {
+	if valueStr, ok := os.LookupEnv(key); ok {
 		log.WithField(key, valueStr).Info("EnvVar")
-                valueBool := strings.ToLower(valueStr) == "true"
+		return strings.Split(valueStr, ",")
+	}
+	return fallback
+}
+
+func getEnvBool(key string, fallback bool) bool {
+	if valueStr, ok := os.LookupEnv(key); ok {
+		log.WithField(key, valueStr).Info("EnvVar")
+		valueBool := strings.ToLower(valueStr) == "true"
 		log.WithField(key, valueBool).Info("config")
-                return valueBool
-        }
-        return fallback
+		return valueBool
+	}
+	return fallback
 }
 
 func configLambda() {
@@ -255,7 +255,7 @@ func configLambda() {
 	cfg.Region = getSecretFromCache(getEnvStr("REGION", ""))
 	cfg.GoogleCredentials = getSecretFromCache(getEnvStr("GOOGLE_CREDENTIALS", ""))
 	cfg.SCIMAccessToken = getSecretFromCache(getEnvStr("SCIM_ACCESS_TOKEN", ""))
-	
+
 	// Handle environment variables for other settings
 	cfg.LogLevel = getEnvStr("LOG_LEVEL", config.DefaultLogLevel)
 	cfg.LogFormat = getEnvStr("LOG_FORMAT", config.DefaultLogFormat)
@@ -285,7 +285,7 @@ func addFlags(_ *cobra.Command, cfg *config.Config) {
 	rootCmd.PersistentFlags().StringVarP(&cfg.LogFormat, "log-format", "", config.DefaultLogFormat, "log format")
 	rootCmd.PersistentFlags().StringVarP(&cfg.LogLevel, "log-level", "", config.DefaultLogLevel, "log level")
 	rootCmd.PersistentFlags().BoolVarP(&cfg.DryRun, "dry-run", "n", false, "Do *not* perform any actions, instead list what would happen")
-        rootCmd.PersistentFlags().BoolVarP(&cfg.SyncSuspended, "suspended", "", false, "included suspended users and their group memberships when syncing")
+	rootCmd.PersistentFlags().BoolVarP(&cfg.SyncSuspended, "suspended", "", false, "included suspended users and their group memberships when syncing")
 	rootCmd.Flags().StringVarP(&cfg.SCIMAccessToken, "access-token", "t", "", "AWS SSO SCIM API Access Token")
 	rootCmd.Flags().StringVarP(&cfg.SCIMEndpoint, "endpoint", "e", "", "AWS SSO SCIM API Endpoint")
 	rootCmd.Flags().StringVarP(&cfg.GoogleCredentials, "google-credentials", "c", config.DefaultGoogleCredentials, "path to Google Workspace credentials file")

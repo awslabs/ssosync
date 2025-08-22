@@ -101,5 +101,5 @@ func (c *Config) Validate() error {
 		return errors.New("sync method must be either 'groups' or 'users_groups'")
 	}
 
-        return nil
+	return nil
 }

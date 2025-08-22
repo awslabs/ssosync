@@ -30,7 +30,6 @@ import (
 	"github.com/awslabs/ssosync/internal/interfaces"
 	retryablehttp "github.com/hashicorp/go-retryablehttp"
 
-
 	aws_config "github.com/aws/aws-sdk-go-v2/config"
 	aws_identitystore "github.com/aws/aws-sdk-go-v2/service/identitystore"
 	identitystore_types "github.com/aws/aws-sdk-go-v2/service/identitystore/types"
