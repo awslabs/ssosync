@@ -1,7 +1,7 @@
 # SSO Sync
 
 ![Github Action](https://github.com/awslabs/ssosync/workflows/main/badge.svg)
-<a href='https://github.com/jpoles1/gopherbadger' target='_blank'>![gopherbadger-tag-do-not-edit](https://img.shields.io/badge/Go%20Coverage-15%25-brightgreen.svg?longCache=true&style=flat)</a>
+<a href='https://github.com/jpoles1/gopherbadger' target='_blank'>![gopherbadger-tag-do-not-edit](https://img.shields.io/badge/Go%20Coverage-43%25-brightgreen.svg?longCache=true&style=flat)</a>
 [![Go Report Card](https://goreportcard.com/badge/github.com/awslabs/ssosync)](https://goreportcard.com/report/github.com/awslabs/ssosync)
 [![License Apache 2](https://img.shields.io/badge/License-Apache2-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 [![AWS SDK v2](https://img.shields.io/badge/AWS%20SDK-v2-orange.svg)](https://aws.github.io/aws-sdk-go-v2/)
@@ -20,7 +20,6 @@ SSO Sync is a powerful CLI tool and AWS Lambda function that enables automatic p
 - **⚡ High Performance**: Built with AWS SDK v2 for improved performance and reliability
 - **🔧 Multiple Deployment Options**: CLI, AWS Lambda, or AWS SAM deployment
 - **📊 Comprehensive Logging**: Structured logging with configurable levels and formats
-- **🧪 Extensive Testing**: 61%+ test coverage with comprehensive test suite
 - **🔐 Secure**: AWS Secrets Manager integration for credential management
 - **📈 Scalable**: Supports large directories with user caching and pagination
 

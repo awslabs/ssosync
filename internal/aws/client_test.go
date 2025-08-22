@@ -1487,6 +1487,7 @@ func TestNewDryClient(t *testing.T) {
 	assert.NotNil(t, client)
 
 	// Verify it implements the Client interface
+	//nolint:staticcheck // QF1011: ignore unnecessary type declaration
 	var _ Client = client
 }
 
