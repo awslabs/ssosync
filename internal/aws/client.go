@@ -320,7 +320,7 @@ func (c *client) groupChangeOperation(op OperationType, u *interfaces.User, g *i
 		return ErrUserNotSpecified
 	}
 
-	log.WithFields(log.Fields{"operation": op, "user": u.Username, "group": g.DisplayName}).Debug("Group Change")
+	log.WithFields(log.Fields{"operation": op, "user": u, "group": g}).Debug("Group Change")
 
 	gc := &interfaces.GroupMemberChange{
 		Schemas: []string{"urn:ietf:params:scim:api:messages:2.0:PatchOp"},
