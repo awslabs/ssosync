@@ -411,10 +411,11 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 	log.Debug("creating aws groups added in google")
 	for _, awsGroup := range addAWSGroups {
 
-		log := log.WithFields(log.Fields{"group": awsGroup.DisplayName})
+		log := log.WithFields(log.Fields{"group to create": awsGroup})
 
 		log.Info("creating group")
 		awsGroup, err := s.aws.CreateGroup(awsGroup)
+		log := log.WithFields(log.Fields{"group created": awsGroup})
 		if err != nil {
 			log.Error("creating group")
 			return err
