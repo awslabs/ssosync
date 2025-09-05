@@ -19,6 +19,7 @@ type Group struct {
 	ID          string   `json:"id,omitempty"`
 	Schemas     []string `json:"schemas"`
 	DisplayName string   `json:"displayName"`
+	ExternalId string `json:"externalId"`
 	Members     []string `json:"members"`
 }
 
@@ -68,6 +69,7 @@ type UserAddress struct {
 type User struct {
 	ID       string   `json:"id,omitempty"`
 	Schemas  []string `json:"schemas"`
+	ExternalId string `json:"externalId"`
 	Username string   `json:"userName"`
 	Name     struct {
 		FamilyName string `json:"familyName"`

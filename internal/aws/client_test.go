@@ -372,7 +372,7 @@ func TestClient_DeleteUser(t *testing.T) {
 }
 
 func TestClient_CreateUser(t *testing.T) {
-	nu := NewUser("Lee", "Packham", "test@example.com", true)
+	nu := NewUser("Lee", "Packham", "test@example.com", true, "google_id")
 	nuResult := *nu
 	nuResult.ID = "userId"
 	// trick to ensure after marshalling we have the correct string
@@ -411,7 +411,7 @@ func TestClient_CreateUser(t *testing.T) {
 }
 
 func TestClient_UpdateUser(t *testing.T) {
-	nu := UpdateUser("userId", "Lee", "Packham", "test@example.com", true)
+	nu := UpdateUser("userId", "Lee", "Packham", "test@example.com", true, "google_id")
 	nuResult := *nu
 	nuResult.ID = "userId"
 	requestJSON, err := json.Marshal(nu)
@@ -450,7 +450,7 @@ func TestClient_UpdateUser(t *testing.T) {
 }
 
 func TestClient_CreateGroup(t *testing.T) {
-	ng := NewGroup("test_group@example.com")
+	ng := NewGroup("test_group@example.com", "google_id")
 	ngResult := *ng
 	ngResult.ID = "groupId"
 
@@ -843,7 +843,7 @@ func TestClient_CreateUser_NilUser(t *testing.T) {
 }
 
 func TestClient_CreateUser_UnmarshalError(t *testing.T) {
-	nu := NewUser("Lee", "Packham", "test@example.com", true)
+	nu := NewUser("Lee", "Packham", "test@example.com", true, "google_id")
 	requestJSON, _ := json.Marshal(nu)
 	invalidJSON := "invalid json"
 
@@ -866,7 +866,7 @@ func TestClient_CreateUser_UnmarshalError(t *testing.T) {
 }
 
 func TestClient_CreateUser_NoIDReturned(t *testing.T) {
-	nu := NewUser("Lee", "Packham", "test@example.com", true)
+	nu := NewUser("Lee", "Packham", "test@example.com", true, "google_id")
 
 	// Response without ID
 	responseUser := interfaces.User{
@@ -932,7 +932,7 @@ func TestClient_UpdateUser_NilUser(t *testing.T) {
 }
 
 func TestClient_UpdateUser_UnmarshalError(t *testing.T) {
-	nu := UpdateUser("userId", "Lee", "Packham", "test@example.com", true)
+	nu := UpdateUser("userId", "Lee", "Packham", "test@example.com", true, "google_id")
 	requestJSON, _ := json.Marshal(nu)
 	invalidJSON := "invalid json"
 
@@ -955,7 +955,7 @@ func TestClient_UpdateUser_UnmarshalError(t *testing.T) {
 }
 
 func TestClient_UpdateUser_NoIDReturned(t *testing.T) {
-	nu := UpdateUser("userId", "Lee", "Packham", "test@example.com", true)
+	nu := UpdateUser("userId", "Lee", "Packham", "test@example.com", true, "google_id")
 
 	// Response without ID
 	responseUser := interfaces.User{
@@ -1021,7 +1021,7 @@ func TestClient_CreateGroup_NilGroup(t *testing.T) {
 }
 
 func TestClient_CreateGroup_UnmarshalError(t *testing.T) {
-	ng := NewGroup("test_group@example.com")
+	ng := NewGroup("test_group@example.com", "google_id")
 	requestJSON, _ := json.Marshal(ng)
 	invalidJSON := "invalid json"
 
@@ -1044,7 +1044,7 @@ func TestClient_CreateGroup_UnmarshalError(t *testing.T) {
 }
 
 func TestClient_CreateGroup_NoIDReturned(t *testing.T) {
-	ng := NewGroup("test_group@example.com")
+	ng := NewGroup("test_group@example.com", "google_id")
 
 	// Response without ID
 	responseGroup := interfaces.Group{
@@ -1274,7 +1274,7 @@ func TestClient_FindGroupByDisplayName_NetworkError(t *testing.T) {
 }
 
 func TestClient_CreateUser_NetworkError(t *testing.T) {
-	nu := NewUser("Lee", "Packham", "test@example.com", true)
+	nu := NewUser("Lee", "Packham", "test@example.com", true, "google_id")
 	x := mocks.NewMockHttpClient(t)
 	x.EXPECT().Do(mock.Anything).Return(nil, errors.New("network error")).Once()
 
@@ -1291,7 +1291,7 @@ func TestClient_CreateUser_NetworkError(t *testing.T) {
 }
 
 func TestClient_UpdateUser_NetworkError(t *testing.T) {
-	nu := UpdateUser("userId", "Lee", "Packham", "test@example.com", true)
+	nu := UpdateUser("userId", "Lee", "Packham", "test@example.com", true, "google_id")
 	x := mocks.NewMockHttpClient(t)
 	x.EXPECT().Do(mock.Anything).Return(nil, errors.New("network error")).Once()
 
@@ -1308,7 +1308,7 @@ func TestClient_UpdateUser_NetworkError(t *testing.T) {
 }
 
 func TestClient_CreateGroup_NetworkError(t *testing.T) {
-	ng := NewGroup("test_group@example.com")
+	ng := NewGroup("test_group@example.com", "google_id")
 	x := mocks.NewMockHttpClient(t)
 	x.EXPECT().Do(mock.Anything).Return(nil, errors.New("network error")).Once()
 
@@ -1511,7 +1511,7 @@ func TestDryClient_CreateUser(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	user := NewUser("John", "Doe", "john@example.com", true)
+	user := NewUser("John", "Doe", "john@example.com", true, "google_id")
 
 	result, err := client.CreateUser(user)
 	assert.NoError(t, err)
@@ -1591,7 +1591,7 @@ func TestDryClient_FindUserByEmail_VirtualUser(t *testing.T) {
 	require.NoError(t, err)
 
 	// First create a virtual user
-	user := NewUser("John", "Doe", "john@example.com", true)
+	user := NewUser("John", "Doe", "john@example.com", true, "google_id")
 	_, err = client.CreateUser(user)
 	require.NoError(t, err)
 
@@ -1610,7 +1610,7 @@ func TestDryClient_UpdateUser(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	user := UpdateUser("userId", "John", "Doe", "john@example.com", true)
+	user := UpdateUser("userId", "John", "Doe", "john@example.com", true, "google_id")
 
 	result, err := client.UpdateUser(user)
 	assert.NoError(t, err)
@@ -1655,7 +1655,7 @@ func TestDryClient_CreateGroup(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	group := NewGroup("testGroup")
+	group := NewGroup("testGroup", "google_id")
 
 	result, err := client.CreateGroup(group)
 	assert.NoError(t, err)

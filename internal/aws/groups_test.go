@@ -23,7 +23,7 @@ import (
 
 func TestNewGroup(t *testing.T) {
 	displayName := "Test Group"
-	group := NewGroup(displayName)
+	group := NewGroup(displayName, "google_id")
 
 	assert.NotNil(t, group)
 	assert.Equal(t, displayName, group.DisplayName)
@@ -33,7 +33,7 @@ func TestNewGroup(t *testing.T) {
 }
 
 func TestNewGroupWithEmptyName(t *testing.T) {
-	group := NewGroup("")
+	group := NewGroup("", "google_id")
 
 	assert.NotNil(t, group)
 	assert.Equal(t, "", group.DisplayName)
@@ -41,14 +41,14 @@ func TestNewGroupWithEmptyName(t *testing.T) {
 }
 
 func TestNewGroupSchemas(t *testing.T) {
-	group := NewGroup("Test Group")
+	group := NewGroup("Test Group", "google_id")
 
 	assert.Len(t, group.Schemas, 1)
 	assert.Equal(t, constants.SCIMSchemaGroup, group.Schemas[0])
 }
 
 func TestNewGroupMembers(t *testing.T) {
-	group := NewGroup("Test Group")
+	group := NewGroup("Test Group", "google_id")
 
 	// New groups should have empty members slice
 	assert.NotNil(t, group.Members)
