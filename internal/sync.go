@@ -144,7 +144,8 @@ func (s *syncGSuite) SyncUsers(query string) error {
 					u.Name.GivenName,
 					u.Name.FamilyName,
 					u.PrimaryEmail,
-					!u.Suspended))
+					!u.Suspended,
+					u.Id))
 				if err != nil {
 					return err
 				}
@@ -157,7 +158,8 @@ func (s *syncGSuite) SyncUsers(query string) error {
 			u.Name.GivenName,
 			u.Name.FamilyName,
 			u.PrimaryEmail,
-			!u.Suspended))
+			!u.Suspended,
+			u.Id))
 		if err != nil {
 			return err
 		}
@@ -212,7 +214,7 @@ func (s *syncGSuite) SyncGroups(query string) error {
 			group = gg
 		} else {
 			log.Info("Creating group in AWS")
-			newGroup := aws.NewGroup(g.Email)
+			newGroup := aws.NewGroup(g.Email, g.Id)
 			_, err := s.aws.CreateGroup(newGroup)
 			if err != nil {
 				return err
@@ -378,7 +380,8 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 			awsUser.Name.GivenName,
 			awsUser.Name.FamilyName,
 			awsUser.Username,
-			awsUser.Active))
+			awsUser.Active,
+			awsUser.ExternalId))
 		if err != nil {
 			log.WithField("user", awsUser).Error("error updating user")
 			return err
@@ -668,7 +671,7 @@ func getGroupOperations(awsGroups []*interfaces.Group, googleGroups []*admin.Gro
 			equals = append(equals, awsMap[gGroup.Name])
 		} else {
 			log.WithField("gGroup", gGroup).Debug("add")
-			add = append(add, aws.NewGroup(gGroup.Name))
+			add = append(add, aws.NewGroup(gGroup.Name, gGroup.Id))
 		}
 	}
 
@@ -676,7 +679,7 @@ func getGroupOperations(awsGroups []*interfaces.Group, googleGroups []*admin.Gro
 	for _, awsGroup := range awsGroups {
 		if _, found := googleMap[awsGroup.DisplayName]; !found {
 			log.WithField("awsGroup", awsGroup).Debug("delete")
-			delete = append(delete, aws.NewGroup(awsGroup.DisplayName))
+			delete = append(delete, aws.NewGroup(awsGroup.DisplayName, ""))
 		}
 	}
 
@@ -706,7 +709,7 @@ func getUserOperations(awsUsers []*interfaces.User, googleUsers []*admin.User) (
 				awsUser.Name.FamilyName != gUser.Name.FamilyName {
 				log.WithField("gUser", gUser).Debug("update")
 				log.WithField("awsUser", awsUser).Debug("update")
-				update = append(update, aws.NewUser(gUser.Name.GivenName, gUser.Name.FamilyName, gUser.PrimaryEmail, !gUser.Suspended))
+				update = append(update, aws.NewUser(gUser.Name.GivenName, gUser.Name.FamilyName, gUser.PrimaryEmail, !gUser.Suspended, gUser.Id))
 
 			} else {
 				log.WithField("awsUser", awsUser).Debug("equals")
@@ -714,7 +717,7 @@ func getUserOperations(awsUsers []*interfaces.User, googleUsers []*admin.User) (
 			}
 		} else {
 			log.WithField("gUser", gUser).Debug("add")
-			add = append(add, aws.NewUser(gUser.Name.GivenName, gUser.Name.FamilyName, gUser.PrimaryEmail, !gUser.Suspended))
+			add = append(add, aws.NewUser(gUser.Name.GivenName, gUser.Name.FamilyName, gUser.PrimaryEmail, !gUser.Suspended, gUser.Id))
 		}
 	}
 
@@ -722,7 +725,7 @@ func getUserOperations(awsUsers []*interfaces.User, googleUsers []*admin.User) (
 	for _, awsUser := range awsUsers {
 		if _, found := googleMap[awsUser.Username]; !found {
 			log.WithField("awsUser", awsUser).Debug("delete")
-			delete = append(delete, aws.NewUser(awsUser.Name.GivenName, awsUser.Name.FamilyName, awsUser.Username, awsUser.Active))
+			delete = append(delete, aws.NewUser(awsUser.Name.GivenName, awsUser.Name.FamilyName, awsUser.Username, awsUser.Active, awsUser.ExternalId))
 		}
 	}
 

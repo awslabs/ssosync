@@ -20,7 +20,7 @@ import (
 
 // NewUser creates a user object representing a user with the given
 // details.
-func NewUser(firstName string, lastName string, email string, active bool) *User {
+func NewUser(firstName string, lastName string, email string, active bool, externalId string) *User {
 	e := make([]UserEmail, 0)
 	e = append(e, UserEmail{
 		Value:   email,
@@ -36,6 +36,7 @@ func NewUser(firstName string, lastName string, email string, active bool) *User
 	return &User{
 		Schemas:  []string{"urn:ietf:params:scim:schemas:core:2.0:User"},
 		Username: email,
+		ExternalId: externalId,
 		Name: struct {
 			FamilyName string `json:"familyName"`
 			GivenName  string `json:"givenName"`
@@ -52,7 +53,7 @@ func NewUser(firstName string, lastName string, email string, active bool) *User
 
 // UpdateUser updates a user object representing a user with the given
 // details.
-func UpdateUser(id string, firstName string, lastName string, email string, active bool) *User {
+func UpdateUser(id string, firstName string, lastName string, email string, active bool, externalId string) *User {
 	e := make([]UserEmail, 0)
 	e = append(e, UserEmail{
 		Value:   email,
@@ -69,6 +70,7 @@ func UpdateUser(id string, firstName string, lastName string, email string, acti
 		Schemas:  []string{"urn:ietf:params:scim:schemas:core:2.0:User"},
 		ID:       id,
 		Username: email,
+		ExternalId: externalId,
 		Name: struct {
 			FamilyName string `json:"familyName"`
 			GivenName  string `json:"givenName"`

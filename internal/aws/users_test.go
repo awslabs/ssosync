@@ -21,7 +21,7 @@ import (
 )
 
 func TestNewUser(t *testing.T) {
-	u := NewUser("Lee", "Packham", "test@email.com", true)
+	u := NewUser("Lee", "Packham", "test@email.com", true, "google_id")
 	assert.Equal(t, u.Name.GivenName, "Lee")
 	assert.Equal(t, u.Name.FamilyName, "Packham")
 	assert.Equal(t, u.DisplayName, "Lee Packham")
@@ -37,7 +37,7 @@ func TestNewUser(t *testing.T) {
 }
 
 func TestUpdateUser(t *testing.T) {
-	u := UpdateUser("111", "Lee", "Packham", "test@email.com", false)
+	u := UpdateUser("111", "Lee", "Packham", "test@email.com", false, "google_id")
 	assert.Equal(t, u.Name.GivenName, "Lee")
 	assert.Equal(t, u.Name.FamilyName, "Packham")
 	assert.Equal(t, u.DisplayName, "Lee Packham")
