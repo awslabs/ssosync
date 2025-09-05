@@ -413,9 +413,8 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 
 		log.WithFields(log.Fields{"group": awsGroup}).Debug("Creating")
 
-		log.Info("creating group")
+		log.WithFields(log.Fields{"Name:: awsGroup.DisplayName}).Info("creating group")
 		awsGroup, err := s.aws.CreateGroup(awsGroup)
-		log.WithFields(log.Fields{"group": awsGroup}).Debug("created")
 		if err != nil {
 			log.Error("creating group")
 			return err

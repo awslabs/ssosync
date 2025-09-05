@@ -624,7 +624,7 @@ Resources:
           Type: Schedule
           Name: AWSSyncSchedule
           Properties:
-            Enabled: !If [OnSchedule, false, true]
+            Enabled: !If [OnSchedule, true, false]
             Schedule: !If [OnSchedule, !Ref ScheduleExpression, "rate(15 minutes)"]
 
 
