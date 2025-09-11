@@ -21,6 +21,9 @@ import (
 	"os"
 	"strings"
 
+	"ssosync/internal"
+	"ssosync/internal/config"
+
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -29,8 +32,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/codepipeline/types"
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 	"github.com/aws/aws-secretsmanager-caching-go/v2/secretcache"
-	"github.com/awslabs/ssosync/internal"
-	"github.com/awslabs/ssosync/internal/config"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
