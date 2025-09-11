@@ -15,7 +15,7 @@
 package main
 
 import (
-	"github.com/awslabs/ssosync/cmd"
+	"ssosync/cmd"
 )
 
 func init() {
