@@ -3,7 +3,7 @@ package config_test
 import (
 	"testing"
 
-	. "github.com/awslabs/ssosync/internal/config"
+	. "ssosync/internal/config"
 
 	"github.com/stretchr/testify/assert"
 )

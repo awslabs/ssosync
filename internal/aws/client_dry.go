@@ -1,8 +1,9 @@
 package aws
 
 import (
-	internal_http "github.com/awslabs/ssosync/internal/http"
-	"github.com/awslabs/ssosync/internal/interfaces"
+	internal_http "ssosync/internal/http"
+	"ssosync/internal/interfaces"
+
 	log "github.com/sirupsen/logrus"
 )
 
@@ -77,6 +78,11 @@ func (dc *dryClient) RemoveUserFromGroup(u *interfaces.User, g *interfaces.Group
 
 func (dc *dryClient) CreateGroup(g *interfaces.Group) (*interfaces.Group, error) {
 	log.WithField("group", g.DisplayName).Info("DRY RUN: Would create group")
+	return g, nil
+}
+
+func (dc *dryClient) UpdateGroup(g *interfaces.Group) (*interfaces.Group, error) {
+	log.WithField("group", g.DisplayName).Info("DRY RUN: Would update group")
 	return g, nil
 }
 

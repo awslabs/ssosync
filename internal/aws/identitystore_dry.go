@@ -3,9 +3,10 @@ package aws
 import (
 	"context"
 
+	"ssosync/internal/interfaces"
+
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/identitystore"
-	"github.com/awslabs/ssosync/internal/interfaces"
 	log "github.com/sirupsen/logrus"
 )
 

@@ -25,9 +25,10 @@ import (
 	"net/url"
 	"testing"
 
+	"ssosync/internal/interfaces"
+	"ssosync/internal/mocks"
+
 	"github.com/aws/aws-sdk-go-v2/service/identitystore"
-	"github.com/awslabs/ssosync/internal/interfaces"
-	"github.com/awslabs/ssosync/internal/mocks"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"

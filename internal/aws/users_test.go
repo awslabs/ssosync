@@ -29,6 +29,7 @@ func TestNewUser(t *testing.T) {
 
 	assert.Equal(t, u.Emails[0].Value, "test@email.com")
 	assert.Equal(t, u.Emails[0].Primary, true)
+	assert.Equal(t, u.ExternalId, "google_id")
 
 	assert.Equal(t, u.Active, true)
 
@@ -45,6 +46,7 @@ func TestUpdateUser(t *testing.T) {
 
 	assert.Equal(t, u.Emails[0].Value, "test@email.com")
 	assert.Equal(t, u.Emails[0].Primary, true)
+	assert.Equal(t, u.ExternalId, "google_id")
 
 	assert.Equal(t, u.Active, false)
 

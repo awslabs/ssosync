@@ -23,9 +23,10 @@ import (
 	net_url "net/url"
 	"strings"
 
-	"github.com/awslabs/ssosync/internal/constants"
-	internal_http "github.com/awslabs/ssosync/internal/http"
-	"github.com/awslabs/ssosync/internal/interfaces"
+	"ssosync/internal/constants"
+	internal_http "ssosync/internal/http"
+	"ssosync/internal/interfaces"
+
 	log "github.com/sirupsen/logrus"
 )
 
@@ -65,6 +66,7 @@ const (
 type Client interface {
 	AddUserToGroup(*interfaces.User, *interfaces.Group) error
 	CreateGroup(*interfaces.Group) (*interfaces.Group, error)
+	UpdateGroup(*interfaces.Group) (*interfaces.Group, error)
 	CreateUser(*interfaces.User) (*interfaces.User, error)
 	DeleteGroup(*interfaces.Group) error
 	DeleteUser(*interfaces.User) error
@@ -508,6 +510,34 @@ func (c *client) CreateGroup(g *interfaces.Group) (*interfaces.Group, error) {
 	}
 
 	log.Debugf("Successfully created group: %s (ID: %s)", g.DisplayName, newGroup.ID)
+	return &newGroup, nil
+}
+
+// UpdateUser will update/replace the user specified
+func (c *client) UpdateGroup(g *interfaces.Group) (*interfaces.Group, error) {
+	if g == nil {
+		return nil, ErrUserNotFound
+	}
+
+	log.Debugf("Updating group: %s (ID: %s)", g.DisplayName, g.ID)
+	resp, err := c.put(fmt.Sprintf("/Groups/%s", g.ID), *g)
+	if err != nil {
+		log.Debugf("Error updating group %s: %v", g.DisplayName, err)
+		return nil, err
+	}
+
+	var newGroup interfaces.Group
+	err = json.Unmarshal(resp, &newGroup)
+	if err != nil {
+		log.Debugf("Error unmarshaling update group response for %s: %v", g.DisplayName, err)
+		return nil, err
+	}
+	if newGroup.ID == "" {
+		log.Debugf("Group %s updated but no ID returned, finding by display name", g.DisplayName)
+		return c.FindGroupByDisplayName(g.DisplayName)
+	}
+
+	log.Debugf("Successfully updated group: %s (ID: %s)", g.DisplayName, newGroup.ID)
 	return &newGroup, nil
 }
 

@@ -14,7 +14,7 @@
 
 package aws
 
-import "github.com/awslabs/ssosync/internal/interfaces"
+import "ssosync/internal/interfaces"
 
 // Group represents a Group in AWS SSO
 type Group = interfaces.Group
