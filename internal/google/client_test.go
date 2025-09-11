@@ -4,7 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/awslabs/ssosync/internal/mocks"
+	"ssosync/internal/mocks"
+
 	"github.com/stretchr/testify/assert"
 	admin "google.golang.org/api/admin/directory/v1"
 )

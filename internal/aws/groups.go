@@ -15,7 +15,7 @@
 package aws
 
 import (
-	"github.com/awslabs/ssosync/internal/constants"
+	"ssosync/internal/constants"
 )
 
 // NewGroup creates an object representing a group with the given name
@@ -23,18 +23,18 @@ func NewGroup(groupName string, externalId string) *Group {
 	return &Group{
 		Schemas:     []string{constants.SCIMSchemaGroup},
 		DisplayName: groupName,
-		ExternalId: externalId,
+		ExternalId:  externalId,
 		Members:     []string{}, // Initialize as empty slice, not nil
 	}
 }
 
 // NewGroup creates an object representing a group with the given name
 func UpdateGroup(id string, groupName string, externalId string) *Group {
-    return &Group{
-        Schemas:     []string{constants.SCIMSchemaGroup},
-		ID:       id,
-        DisplayName: groupName,
-        ExternalId: externalId,
-        Members:     []string{}, // Initialize as empty slice, not nil
-    }
+	return &Group{
+		Schemas:     []string{constants.SCIMSchemaGroup},
+		ID:          id,
+		DisplayName: groupName,
+		ExternalId:  externalId,
+		Members:     []string{}, // Initialize as empty slice, not nil
+	}
 }

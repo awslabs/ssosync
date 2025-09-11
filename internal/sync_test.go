@@ -4,10 +4,11 @@ import (
 	"context"
 	"testing"
 
+	"ssosync/internal/config"
+	"ssosync/internal/interfaces"
+	"ssosync/internal/mocks"
+
 	"github.com/aws/aws-sdk-go-v2/service/identitystore/types"
-	"github.com/awslabs/ssosync/internal/config"
-	"github.com/awslabs/ssosync/internal/interfaces"
-	"github.com/awslabs/ssosync/internal/mocks"
 	"github.com/stretchr/testify/assert"
 	admin "google.golang.org/api/admin/directory/v1"
 )
@@ -77,38 +78,140 @@ func TestIncludeGroup_EmptyList(t *testing.T) {
 	assert.False(t, sync.includeGroup("any-group@example.com"))
 }
 
-func TestGetGroupOperations(t *testing.T) {
+func TestGetGroupOperations_NoChange(t *testing.T) {
 	awsGroups := []*interfaces.Group{
-		{ID: "1", DisplayName: "group1@example.com"},
-		{ID: "2", DisplayName: "group2@example.com"},
-		{ID: "3", DisplayName: "group3@example.com"},
+		{
+			ID:          "1",
+			DisplayName: "Group 1",
+			ExternalId:  "G1",
+		},
 	}
 
 	googleGroups := []*admin.Group{
-		{Id: "g1", Name: "group1@example.com", Email: "group1@example.com"},
-		{Id: "g2", Name: "group2@example.com", Email: "group2@example.com"},
-		{Id: "g4", Name: "group4@example.com", Email: "group4@example.com"},
+		{
+			Id:    "G1",
+			Name:  "Group 1",
+			Email: "group1@example.com",
+		},
 	}
 
-	add, delete, equals := getGroupOperations(awsGroups, googleGroups)
+	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups)
 
-	// Should add group4 (exists in Google but not AWS)
-	assert.Len(t, add, 1)
-	assert.Equal(t, "group4@example.com", add[0].DisplayName)
-
-	// Should delete group3 (exists in AWS but not Google)
-	assert.Len(t, delete, 1)
-	assert.Equal(t, "group3@example.com", delete[0].DisplayName)
-
-	// Should have group1 and group2 as equals
-	assert.Len(t, equals, 2)
+	assert.Len(t, add, 0)
+	assert.Len(t, delete, 0)
+	assert.Len(t, update, 0)
+	assert.Len(t, equals, 1)
+	assert.Equal(t, "Group 1", equals[0].DisplayName)
+	assert.Equal(t, "G1", equals[0].ExternalId)
 }
 
-func TestGetUserOperations(t *testing.T) {
+func TestGetGroupOperations_Add(t *testing.T) {
+	awsGroups := []*interfaces.Group{}
+
+	googleGroups := []*admin.Group{
+		{
+			Id:    "G2",
+			Name:  "Group 2",
+			Email: "group2@example.com",
+		},
+	}
+
+	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups)
+
+	assert.Len(t, add, 1)
+	assert.Len(t, delete, 0)
+	assert.Len(t, update, 0)
+	assert.Len(t, equals, 0)
+	assert.Equal(t, "Group 2", add[0].DisplayName)
+	assert.Equal(t, "G2", add[0].ExternalId)
+}
+
+func TestGetGroupOperations_UpdateExternalId(t *testing.T) {
+	awsGroups := []*interfaces.Group{
+		{
+			ID:          "3",
+			DisplayName: "Group 3",
+		},
+	}
+
+	googleGroups := []*admin.Group{
+		{
+			Id:    "G3",
+			Name:  "Group 3",
+			Email: "group3@example.com",
+		},
+	}
+
+	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups)
+
+	assert.Len(t, add, 0)
+	assert.Len(t, delete, 0)
+	assert.Len(t, update, 1)
+	assert.Len(t, equals, 0)
+	assert.Equal(t, "Group 3", update[0].DisplayName)
+	assert.Equal(t, "G3", update[0].ExternalId)
+}
+
+func TestGetGroupOperations_UpdateDisplayName(t *testing.T) {
+	awsGroups := []*interfaces.Group{
+		{
+			ID:          "4",
+			ExternalId:  "G4",
+			DisplayName: "Group 4",
+		},
+	}
+
+	googleGroups := []*admin.Group{
+		{
+			Id:    "G4",
+			Name:  "Different Group Name",
+			Email: "group4@example.com",
+		},
+	}
+
+	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups)
+
+	assert.Len(t, add, 0)
+	assert.Len(t, delete, 0)
+	assert.Len(t, update, 1)
+	assert.Len(t, equals, 0)
+	assert.Equal(t, "Different Group Name", update[0].DisplayName)
+	assert.Equal(t, "G4", update[0].ExternalId)
+}
+
+func TestGetGroupOperations_UpdateDeleteRecreate(t *testing.T) {
+	awsGroups := []*interfaces.Group{
+		{
+			ID:          "5",
+			ExternalId:  "G5",
+			DisplayName: "Group 5",
+		},
+	}
+
+	googleGroups := []*admin.Group{
+		{
+			Id:    "G50",
+			Name:  "Group 5",
+			Email: "group5@example.com",
+		},
+	}
+
+	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups)
+
+	assert.Len(t, add, 0)
+	assert.Len(t, delete, 0)
+	assert.Len(t, update, 1)
+	assert.Len(t, equals, 0)
+	assert.Equal(t, "Group 5", update[0].DisplayName)
+	assert.Equal(t, "G50", update[0].ExternalId)
+}
+
+func TestGetUserOperations_NoChange(t *testing.T) {
 	awsUsers := []*interfaces.User{
 		{
-			ID:       "1",
-			Username: "user1@example.com",
+			ID:         "A1",
+			Username:   "user1@example.com",
+			ExternalId: "G1",
 			Name: struct {
 				FamilyName string `json:"familyName"`
 				GivenName  string `json:"givenName"`
@@ -118,9 +221,65 @@ func TestGetUserOperations(t *testing.T) {
 			},
 			Active: true,
 		},
+	}
+
+	googleUsers := []*admin.User{
 		{
-			ID:       "2",
-			Username: "user2@example.com",
+			Id:           "G1",
+			PrimaryEmail: "user1@example.com",
+			Name: &admin.UserName{
+				GivenName:  "John",
+				FamilyName: "Doe",
+			},
+			Suspended: false,
+		},
+	}
+
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers)
+
+	assert.Len(t, add, 0)
+	assert.Len(t, delete, 0)
+	assert.Len(t, update, 0)
+	assert.Len(t, equals, 1)
+	assert.Equal(t, equals[0].ExternalId, "G1")
+	assert.Equal(t, equals[0].Username, "user1@example.com")
+	assert.Equal(t, equals[0].Name.GivenName, "John")
+	assert.Equal(t, equals[0].Name.FamilyName, "Doe")
+}
+
+func TestGetUserOperations_Add(t *testing.T) {
+	awsUsers := []*interfaces.User{}
+
+	googleUsers := []*admin.User{
+		{
+			Id:           "G7",
+			PrimaryEmail: "user7@example.com",
+			Name: &admin.UserName{
+				GivenName:  "Bob",
+				FamilyName: "Smith",
+			},
+			Suspended: false,
+		},
+	}
+
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers)
+
+	assert.Len(t, add, 1)
+	assert.Len(t, delete, 0)
+	assert.Len(t, update, 0)
+	assert.Len(t, equals, 0)
+	assert.Equal(t, add[0].ExternalId, "G7")
+	assert.Equal(t, add[0].Username, "user7@example.com")
+	assert.Equal(t, add[0].Name.GivenName, "Bob")
+	assert.Equal(t, add[0].Name.FamilyName, "Smith")
+}
+
+func TestGetUserOperations_UpdateAttribute(t *testing.T) {
+	awsUsers := []*interfaces.User{
+		{
+			ID:         "A2",
+			Username:   "user2@example.com",
+			ExternalId: "G2",
 			Name: struct {
 				FamilyName string `json:"familyName"`
 				GivenName  string `json:"givenName"`
@@ -130,8 +289,158 @@ func TestGetUserOperations(t *testing.T) {
 			},
 			Active: true,
 		},
+	}
+
+	googleUsers := []*admin.User{
 		{
-			ID:       "3",
+			Id:           "G2",
+			PrimaryEmail: "user2@example.com",
+			Name: &admin.UserName{
+				GivenName:  "Jane",
+				FamilyName: "Updated", // Name changed
+			},
+			Suspended: false,
+		},
+	}
+
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers)
+
+	assert.Len(t, add, 0)
+	assert.Len(t, delete, 0)
+	assert.Len(t, update, 1)
+	assert.Len(t, equals, 0)
+	assert.Equal(t, update[0].ExternalId, "G2")
+	assert.Equal(t, update[0].Username, "user2@example.com")
+	assert.Equal(t, update[0].Name.GivenName, "Jane")
+	assert.Equal(t, update[0].Name.FamilyName, "Updated")
+}
+
+func TestGetUserOperations_UpdateMissingExternalId(t *testing.T) {
+	awsUsers := []*interfaces.User{
+		{
+			ID:       "A5",
+			Username: "user5@example.com",
+			Name: struct {
+				FamilyName string `json:"familyName"`
+				GivenName  string `json:"givenName"`
+			}{
+				GivenName:  "Jane",
+				FamilyName: "Doe",
+			},
+			Active: true,
+		},
+	}
+
+	googleUsers := []*admin.User{
+		{
+			Id:           "G5",
+			PrimaryEmail: "user5@example.com",
+			Name: &admin.UserName{
+				GivenName:  "Jane",
+				FamilyName: "Doe",
+			},
+			Suspended: false,
+		},
+	}
+
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers)
+
+	assert.Len(t, add, 0)
+	assert.Len(t, delete, 0)
+	assert.Len(t, update, 1)
+	assert.Len(t, equals, 0)
+	assert.Equal(t, update[0].ExternalId, "G5")
+	assert.Equal(t, update[0].Username, "user5@example.com")
+	assert.Equal(t, update[0].Name.GivenName, "Jane")
+	assert.Equal(t, update[0].Name.FamilyName, "Doe")
+}
+
+func TestGetUserOperations_UpdatePrimaryEmail(t *testing.T) {
+	awsUsers := []*interfaces.User{
+		{
+			ID:         "A2",
+			Username:   "user2@example.com",
+			ExternalId: "G2",
+			Name: struct {
+				FamilyName string `json:"familyName"`
+				GivenName  string `json:"givenName"`
+			}{
+				GivenName:  "Jane",
+				FamilyName: "Smith",
+			},
+			Active: true,
+		},
+	}
+
+	googleUsers := []*admin.User{
+		{
+			Id:           "G2",
+			PrimaryEmail: "user20@example.com",
+			Name: &admin.UserName{
+				GivenName:  "Jane",
+				FamilyName: "Smith",
+			},
+			Suspended: false,
+		},
+	}
+
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers)
+
+	assert.Len(t, add, 0)
+	assert.Len(t, delete, 0)
+	assert.Len(t, update, 1)
+	assert.Len(t, equals, 0)
+	assert.Equal(t, update[0].ExternalId, "G2")
+	assert.Equal(t, update[0].Username, "user20@example.com")
+	assert.Equal(t, update[0].Name.GivenName, "Jane")
+	assert.Equal(t, update[0].Name.FamilyName, "Smith")
+}
+
+func TestGetUserOperations_UpdateDeleteRecreate(t *testing.T) {
+	awsUsers := []*interfaces.User{
+		{
+			ID:         "A6",
+			ExternalId: "GX",
+			Username:   "user6@example.com",
+			Name: struct {
+				FamilyName string `json:"familyName"`
+				GivenName  string `json:"givenName"`
+			}{
+				GivenName:  "Alan",
+				FamilyName: "Brown",
+			},
+			Active: true,
+		},
+	}
+
+	googleUsers := []*admin.User{
+		{
+			Id:           "G6",
+			PrimaryEmail: "user6@example.com",
+			Name: &admin.UserName{
+				GivenName:  "Alan",
+				FamilyName: "Brown",
+			},
+			Suspended: false,
+		},
+	}
+
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers)
+
+	assert.Len(t, add, 0)
+	assert.Len(t, delete, 0)
+	assert.Len(t, update, 1)
+	assert.Len(t, equals, 0)
+	assert.Equal(t, update[0].ExternalId, "G6")
+	assert.Equal(t, update[0].Username, "user6@example.com")
+	assert.Equal(t, update[0].Name.GivenName, "Alan")
+	assert.Equal(t, update[0].Name.FamilyName, "Brown")
+}
+
+func TestGetUserOperations_DeleteNoExternalId(t *testing.T) {
+	awsUsers := []*interfaces.User{
+		{
+			ID:       "A3",
 			Username: "user3@example.com",
 			Name: struct {
 				FamilyName string `json:"familyName"`
@@ -144,51 +453,48 @@ func TestGetUserOperations(t *testing.T) {
 		},
 	}
 
-	googleUsers := []*admin.User{
-		{
-			PrimaryEmail: "user1@example.com",
-			Name: &admin.UserName{
-				GivenName:  "John",
-				FamilyName: "Doe",
-			},
-			Suspended: false,
-		},
-		{
-			PrimaryEmail: "user2@example.com",
-			Name: &admin.UserName{
-				GivenName:  "Jane",
-				FamilyName: "Updated", // Name changed
-			},
-			Suspended: false,
-		},
-		{
-			PrimaryEmail: "user4@example.com",
-			Name: &admin.UserName{
-				GivenName:  "Alice",
-				FamilyName: "Brown",
-			},
-			Suspended: false,
-		},
-	}
+	googleUsers := []*admin.User{}
 
 	add, delete, update, equals := getUserOperations(awsUsers, googleUsers)
 
-	// Should add user4 (exists in Google but not AWS)
-	assert.Len(t, add, 1)
-	assert.Equal(t, "user4@example.com", add[0].Username)
-
-	// Should delete user3 (exists in AWS but not Google)
+	assert.Len(t, add, 0)
 	assert.Len(t, delete, 1)
-	assert.Equal(t, "user3@example.com", delete[0].Username)
+	assert.Len(t, update, 0)
+	assert.Len(t, equals, 0)
+	assert.Equal(t, delete[0].Username, "user3@example.com")
+	assert.Equal(t, delete[0].Name.GivenName, "Bob")
+	assert.Equal(t, delete[0].Name.FamilyName, "Johnson")
+}
 
-	// Should update user2 (name changed)
-	assert.Len(t, update, 1)
-	assert.Equal(t, "user2@example.com", update[0].Username)
-	assert.Equal(t, "Updated", update[0].Name.FamilyName)
+func TestGetUserOperations_DeleteExternalId(t *testing.T) {
+	awsUsers := []*interfaces.User{
+		{
+			ID:         "A4",
+			Username:   "user4@example.com",
+			ExternalId: "G4",
+			Name: struct {
+				FamilyName string `json:"familyName"`
+				GivenName  string `json:"givenName"`
+			}{
+				GivenName:  "Belinda",
+				FamilyName: "Johnson",
+			},
+			Active: true,
+		},
+	}
 
-	// Should have user1 as equals
-	assert.Len(t, equals, 1)
-	assert.Equal(t, "user1@example.com", equals[0].Username)
+	googleUsers := []*admin.User{}
+
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers)
+
+	assert.Len(t, add, 0)
+	assert.Len(t, delete, 1)
+	assert.Len(t, update, 0)
+	assert.Len(t, equals, 0)
+	assert.Equal(t, delete[0].ExternalId, "G4")
+	assert.Equal(t, delete[0].Username, "user4@example.com")
+	assert.Equal(t, delete[0].Name.GivenName, "Belinda")
+	assert.Equal(t, delete[0].Name.FamilyName, "Johnson")
 }
 
 func TestGetUserOperations_SuspendedStateChange(t *testing.T) {
