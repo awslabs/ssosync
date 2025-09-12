@@ -674,6 +674,7 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 		log.WithField("group", g.Name).Debug("Processing group membership")
 		gUniqMembers := make(map[string]*admin.User)
 		for _, m := range membersUsers {
+			log.WithField("user", m).Debug("processing member")
 			if _, found := gUniqUsers[m.PrimaryEmail]; !found {
 				log.WithField("email", m.PrimaryEmail).Debug("adding user to UniqueUsers")
 				gUniqUsers[m.PrimaryEmail] = gUserDetailCache[m.PrimaryEmail]
@@ -1186,22 +1187,29 @@ func (s *syncGSuite) getGoogleUsersInGroup(group *admin.Group, userCache map[str
 		}
 
 		// Remove any users that should be ignored
-		if s.ignoreUser(m.Email) {
+		if m.Type == "USER" && s.ignoreUser(m.Email) {
 			log.WithField("email", m.Email).Debug("skipping member: ignore list")
 			continue
 		}
 
-		// Find the group member in the cache of UserDetails
-		if _, found := userCache[m.Email]; !found {
-			log.WithField("email", m.Email).Warn("not found in cache, fetching user")
-			googleUsers, err := s.google.GetUsers("email="+m.Email, s.cfg.UserFilter)
-			if err != nil {
-				log.WithField("error:", err).Error("Fetching user")
-				continue
-			}
-			for _, u := range googleUsers {
-				log.WithField("email", u.PrimaryEmail).Debug("caching user")
-				userCache[u.PrimaryEmail] = u
+		if m.Type == "USER" {
+			// Find the group member in the cache of UserDetails
+			if _, found := userCache[m.Email]; !found {
+				log.WithField("email", m.Email).Warn("not found in cache, fetching user")
+				googleUsers, err := s.google.GetUsers("email="+m.Email, s.cfg.UserFilter)
+				if err != nil {
+					log.WithField("error:", err).Error("Fetching user")
+					continue
+				}
+				for _, u := range googleUsers {
+					log.WithField("email", u.PrimaryEmail).Debug("caching user")
+					userCache[u.PrimaryEmail] = u
+				}
+				log.WithField("email", m.Email).Debug("adding member")
+				membersUsers = append(membersUsers, userCache[m.Email])
+			} else {
+				log.WithField("email", m.Email).Debug("adding member")
+				membersUsers = append(membersUsers, userCache[m.Email])
 			}
 		}
 		log.WithField("email", m.Email).Debug("adding member")
