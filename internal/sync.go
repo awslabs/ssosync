@@ -1187,29 +1187,22 @@ func (s *syncGSuite) getGoogleUsersInGroup(group *admin.Group, userCache map[str
 		}
 
 		// Remove any users that should be ignored
-		if m.Type == "USER" && s.ignoreUser(m.Email) {
+		if s.ignoreUser(m.Email) {
 			log.WithField("email", m.Email).Debug("skipping member: ignore list")
 			continue
 		}
 
-		if m.Type == "USER" {
-			// Find the group member in the cache of UserDetails
-			if _, found := userCache[m.Email]; !found {
-				log.WithField("email", m.Email).Warn("not found in cache, fetching user")
-				googleUsers, err := s.google.GetUsers("email="+m.Email, s.cfg.UserFilter)
-				if err != nil {
-					log.WithField("error:", err).Error("Fetching user")
-					continue
-				}
-				for _, u := range googleUsers {
-					log.WithField("email", u.PrimaryEmail).Debug("caching user")
-					userCache[u.PrimaryEmail] = u
-				}
-				log.WithField("email", m.Email).Debug("adding member")
-				membersUsers = append(membersUsers, userCache[m.Email])
-			} else {
-				log.WithField("email", m.Email).Debug("adding member")
-				membersUsers = append(membersUsers, userCache[m.Email])
+		// Find the group member in the cache of UserDetails
+		if _, found := userCache[m.Email]; !found {
+			log.WithField("email", m.Email).Warn("not found in cache, fetching user")
+			googleUsers, err := s.google.GetUsers("email="+m.Email, s.cfg.UserFilter)
+			if err != nil {
+				log.WithField("error:", err).Error("Fetching user")
+				continue
+			}
+			for _, u := range googleUsers {
+				log.WithField("email", u.PrimaryEmail).Debug("caching user")
+				userCache[u.PrimaryEmail] = u
 			}
 		}
 		log.WithField("email", m.Email).Debug("adding member")
