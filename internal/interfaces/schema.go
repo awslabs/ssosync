@@ -33,6 +33,26 @@ type GroupFilterResults struct {
 	Resources    []Group  `json:"Resources"`
 }
 
+// GroupAttributes is the values to update the group
+type GroupAttributes struct {
+	Id          string `json:"id"`
+	DisplayName string `json:"displayName"`
+	ExternalId  string `json:"externalId"`
+}
+
+// GroupChangeOperation details the operation to take place on a group
+type GroupChangeOperation struct {
+	Operation  string          `json:"op"`
+	Attributes GroupAttributes `json:"value"`
+}
+
+// GroupChange represents a change operation
+// for a group
+type GroupChange struct {
+	Schemas    []string               `json:"schemas"`
+	Operations []GroupChangeOperation `json:"Operations"`
+}
+
 // GroupMemberChangeMember is a value needed for the ID of the member
 // to add/remove
 type GroupMemberChangeMember struct {
