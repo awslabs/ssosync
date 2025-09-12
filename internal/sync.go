@@ -1212,6 +1212,6 @@ func (s *syncGSuite) getGoogleUsersInGroup(group *admin.Group, userCache map[str
 		}
 
 	}
-
+	log.WithField("memberUsers", memberUsers).Debug("Return group membership")
 	return membersUsers
 }

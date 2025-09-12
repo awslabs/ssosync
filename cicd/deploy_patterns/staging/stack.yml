@@ -73,5 +73,6 @@ Resources:
             - '}}'
         SyncMethod: groups
         GoogleGroupMatch: !Ref GroupMatch
+        ScheduleExpression: ''
         LogLevel: warn
         LogFormat: json
