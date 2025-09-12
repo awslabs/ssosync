@@ -535,9 +535,8 @@ func (c *client) UpdateGroup(g *interfaces.Group) (*interfaces.Group, error) {
 		Operations: []interfaces.GroupChangeOperation{
 			{
 				Operation: OperationReplace,
-				Attributes: interfaces.GroupAttributes{
-					DisplayName: string(g.DisplayName),
-				},
+				Path:      "displayName",
+				Value:     string(g.DisplayName),
 			},
 		},
 	}
