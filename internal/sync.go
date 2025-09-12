@@ -674,7 +674,6 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 		log.WithField("group", g.Name).Debug("Processing group membership")
 		gUniqMembers := make(map[string]*admin.User)
 		for _, m := range membersUsers {
-			log.WithField("user", m).Debug("processing member")
 			if _, found := gUniqUsers[m.PrimaryEmail]; !found {
 				log.WithField("email", m.PrimaryEmail).Debug("adding user to UniqueUsers")
 				gUniqUsers[m.PrimaryEmail] = gUserDetailCache[m.PrimaryEmail]
