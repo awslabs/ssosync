@@ -59,6 +59,9 @@ const (
 
 	// OperationRemove is the remove operation for a patch
 	OperationRemove = "remove"
+
+	// OperationReplace is the update operation for a patch
+	OperationReplace = "replace"
 )
 
 // Client represents an interface of methods used
@@ -113,6 +116,7 @@ func (c *client) prepareRequest(method string, path string, body any) (req *http
 		if err != nil {
 			return nil, err
 		}
+		log.Debugf("prepareRequest: Path %s JSON Body %s", path, string(d))
 		req, err = http.NewRequest(method, c.baseURL+path, strings.NewReader(string(d)))
 		if err != nil {
 			return nil, err
@@ -530,7 +534,7 @@ func (c *client) UpdateGroup(g *interfaces.Group) (*interfaces.Group, error) {
 		Schemas: []string{"urn:ietf:params:scim:api:messages:2.0:PatchOp"},
 		Operations: []interfaces.GroupChangeOperation{
 			{
-				Operation: "replace",
+				Operation: OperationReplace,
 				Attributes: interfaces.GroupAttributes{
 					Id:          string(g.ID),
 					DisplayName: string(g.DisplayName),
