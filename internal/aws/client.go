@@ -545,8 +545,6 @@ func (c *client) UpdateGroup(g *interfaces.Group) (*interfaces.Group, error) {
 		return nil, err
 	}
 
-	return g, nil
-
 	log.Debugf("Successfully updated group: %s (ID: %s)", g.DisplayName, g.ID)
 	return g, nil
 }
