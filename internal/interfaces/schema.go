@@ -35,9 +35,9 @@ type GroupFilterResults struct {
 
 // GroupAttributes is the values to update the group
 type GroupAttributes struct {
-	Id          string `json:"id"`
+	Id          string `json:"id,omitempty"`
 	DisplayName string `json:"displayName"`
-	ExternalId  string `json:"externalId"`
+	ExternalId  string `json:"externalId,omitempty"`
 }
 
 // GroupChangeOperation details the operation to take place on a group
