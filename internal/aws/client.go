@@ -538,6 +538,11 @@ func (c *client) UpdateGroup(g *interfaces.Group) (*interfaces.Group, error) {
 				Path:      "displayName",
 				Value:     string(g.DisplayName),
 			},
+			{
+				Operation: OperationReplace,
+				Path:      "externalId",
+				Value:     string(g.ExternalId),
+			},
 		},
 	}
 
