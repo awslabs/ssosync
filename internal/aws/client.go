@@ -181,6 +181,8 @@ func (c *client) post(path string, body any) (response []byte, err error) {
 		return nil, err
 	}
 
+	log.Debugf("HTTP Request for POST %s: %v", path, req)
+
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		log.Debugf("HTTP error for POST %s: %v", path, err)
@@ -214,6 +216,8 @@ func (c *client) put(path string, body any) (response []byte, err error) {
 	if err != nil {
 		return nil, err
 	}
+
+	log.Debugf("HTTP Request for PUT %s: %v", path, req)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -515,30 +519,36 @@ func (c *client) CreateGroup(g *interfaces.Group) (*interfaces.Group, error) {
 
 // UpdateUser will update/replace the user specified
 func (c *client) UpdateGroup(g *interfaces.Group) (*interfaces.Group, error) {
+
 	if g == nil {
-		return nil, ErrUserNotFound
+		return nil, ErrGroupNotSpecified
 	}
 
 	log.Debugf("Updating group: %s (ID: %s)", g.DisplayName, g.ID)
-	resp, err := c.put(fmt.Sprintf("/Groups/%s", g.ID), *g)
+
+	gc := &interfaces.GroupChange{
+		Schemas: []string{"urn:ietf:params:scim:api:messages:2.0:PatchOp"},
+		Operations: []interfaces.GroupChangeOperation{
+			{
+				Operation: "replace",
+				Attributes: interfaces.GroupAttributes{
+					Id:          string(g.ID),
+					DisplayName: string(g.DisplayName),
+					ExternalId:  string(g.ExternalId),
+				},
+			},
+		},
+	}
+
+	_, err := c.patch(fmt.Sprintf("/Groups/%s", g.ID), gc)
 	if err != nil {
-		log.Debugf("Error updating group %s: %v", g.DisplayName, err)
 		return nil, err
 	}
 
-	var newGroup interfaces.Group
-	err = json.Unmarshal(resp, &newGroup)
-	if err != nil {
-		log.Debugf("Error unmarshaling update group response for %s: %v", g.DisplayName, err)
-		return nil, err
-	}
-	if newGroup.ID == "" {
-		log.Debugf("Group %s updated but no ID returned, finding by display name", g.DisplayName)
-		return c.FindGroupByDisplayName(g.DisplayName)
-	}
+	return g, nil
 
-	log.Debugf("Successfully updated group: %s (ID: %s)", g.DisplayName, newGroup.ID)
-	return &newGroup, nil
+	log.Debugf("Successfully updated group: %s (ID: %s)", g.DisplayName, g.ID)
+	return g, nil
 }
 
 // DeleteGroup will delete the group specified
