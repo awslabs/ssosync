@@ -56,12 +56,13 @@ type OperationType string
 const (
 	// OperationAdd is the add operation for a patch
 	OperationAdd OperationType = "add"
-
 	// OperationRemove is the remove operation for a patch
 	OperationRemove = "remove"
-
 	// OperationReplace is the update operation for a patch
 	OperationReplace = "replace"
+	// MaxMemberChanges is the maximum number of userids that
+	// can be provided in a group PATCH request
+	MaxMemberChanges = 100
 )
 
 // Client represents an interface of methods used
@@ -77,6 +78,14 @@ type Client interface {
 	FindUserByEmail(string) (*interfaces.User, error)
 	UpdateUser(*interfaces.User) (*interfaces.User, error)
 	RemoveUserFromGroup(*interfaces.User, *interfaces.Group) error
+	CreateUsers([]*interfaces.User, []*interfaces.User) ([]*interfaces.User, error)
+	UpdateUsers([]*interfaces.User, []*interfaces.User) ([]*interfaces.User, error)
+	DeleteUsers([]*interfaces.User) error
+	CreateGroups([]*interfaces.Group, []*interfaces.Group) ([]*interfaces.Group, error)
+	UpdateGroups([]*interfaces.Group, []*interfaces.Group) ([]*interfaces.Group, error)
+	DeleteGroups([]*interfaces.Group) error
+	AddMembers(map[string][]string, map[string][]string) (map[string][]string, error)
+	RemoveMembers(map[string][]string) error
 }
 
 type client struct {
@@ -321,33 +330,52 @@ func beforeSendAddFilter(filter string) QueryTransformer {
 	}
 }
 
-func (c *client) groupChangeOperation(op OperationType, u *interfaces.User, g *interfaces.Group) error {
-	if g == nil {
+func (c *client) groupChangeOperation(op OperationType, users []string, groupId string) error {
+	if groupId == "" {
 		return ErrGroupNotSpecified
 	}
 
-	if u == nil {
+	if users == nil {
 		return ErrUserNotSpecified
 	}
 
-	log.WithFields(log.Fields{"operation": op, "user": u, "group": g}).Debug("Group Change")
+	var memberList []interfaces.GroupMemberChangeMember
+	for index, userId := range users {
+		memberList = append(memberList, interfaces.GroupMemberChangeMember{Value: userId})
 
-	gc := &interfaces.GroupMemberChange{
-		Schemas: []string{"urn:ietf:params:scim:api:messages:2.0:PatchOp"},
-		Operations: []interfaces.GroupMemberChangeOperation{
-			{
-				Operation: string(op),
-				Path:      "members",
-				Members: []interfaces.GroupMemberChangeMember{
-					{Value: u.ID},
+		if ((index + 1) % MaxMemberChanges) == 0 {
+			gc := &interfaces.GroupMemberChange{
+				Schemas: []string{"urn:ietf:params:scim:api:messages:2.0:PatchOp"},
+				Operations: []interfaces.GroupMemberChangeOperation{
+					{
+						Operation: string(op),
+						Path:      "members",
+						Members:   memberList,
+					},
+				},
+			}
+			_, err := c.patch(fmt.Sprintf("/Groups/%s", groupId), gc)
+			if err != nil {
+				return err
+			}
+			memberList = nil
+		}
+	}
+	if memberList != nil {
+		gc := &interfaces.GroupMemberChange{
+			Schemas: []string{"urn:ietf:params:scim:api:messages:2.0:PatchOp"},
+			Operations: []interfaces.GroupMemberChangeOperation{
+				{
+					Operation: string(op),
+					Path:      "members",
+					Members:   memberList,
 				},
 			},
-		},
-	}
-
-	_, err := c.patch(fmt.Sprintf("/Groups/%s", g.ID), gc)
-	if err != nil {
-		return err
+		}
+		_, err := c.patch(fmt.Sprintf("/Groups/%s", groupId), gc)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -355,12 +383,12 @@ func (c *client) groupChangeOperation(op OperationType, u *interfaces.User, g *i
 
 // AddUserToGroup will add the user specified to the group specified
 func (c *client) AddUserToGroup(u *interfaces.User, g *interfaces.Group) error {
-	return c.groupChangeOperation(OperationAdd, u, g)
+	return c.groupChangeOperation(OperationAdd, []string{u.ID}, g.ID)
 }
 
 // RemoveUserFromGroup will remove the user specified from the group specified
 func (c *client) RemoveUserFromGroup(u *interfaces.User, g *interfaces.Group) error {
-	return c.groupChangeOperation(OperationRemove, u, g)
+	return c.groupChangeOperation(OperationRemove, []string{u.ID}, g.ID)
 }
 
 // FindUserByEmail will find the user by the email address specified
@@ -569,5 +597,135 @@ func (c *client) DeleteGroup(g *interfaces.Group) error {
 	}
 
 	log.Debugf("Successfully deleted group: %s", g.DisplayName)
+	return nil
+}
+
+// add Groups in AWS
+func (c *client) CreateGroups(awsGroups []*interfaces.Group, addGroups []*interfaces.Group) ([]*interfaces.Group, error) {
+	log.Debug("CreateGroups()")
+	awsGroupsUpdated := awsGroups
+
+	for _, group := range addGroups {
+		log.Debugf("Add group: %s (ID: %s)", group.DisplayName, group.ID)
+
+		updatedGroup, err := c.CreateGroup(group)
+		if err != nil {
+			log.Error("error creating group")
+			return nil, err
+		}
+		awsGroupsUpdated = append(awsGroupsUpdated, updatedGroup)
+	}
+	return awsGroupsUpdated, nil
+}
+
+// update Groups in AWS
+func (c *client) UpdateGroups(awsGroups []*interfaces.Group, updateGroups []*interfaces.Group) ([]*interfaces.Group, error) {
+	log.Debug("updateGroups()")
+	awsGroupsUpdated := awsGroups
+
+	for _, group := range updateGroups {
+		log.Debugf("Update group: %s (ID: %s)", group.DisplayName, group.ID)
+
+		updatedGroup, err := c.UpdateGroup(group)
+		if err != nil {
+			log.Error("error updating group")
+			return nil, err
+		}
+		awsGroupsUpdated = append(awsGroupsUpdated, updatedGroup)
+	}
+	return awsGroupsUpdated, nil
+}
+
+// remove Groups from AWS via SCIM
+func (c *client) DeleteGroups(delGroups []*interfaces.Group) error {
+	log.Debug("DeleteGroups()")
+	for _, group := range delGroups {
+		log.Debugf("Delete group: %s (ID: %s)", group.DisplayName, group.ID)
+		err := c.DeleteGroup(group)
+		if err != nil {
+			log.WithField("group", group).Error("error deleting user")
+			return err
+		}
+	}
+	return nil
+}
+
+// add Users in AWS
+func (c *client) CreateUsers(awsUsers []*interfaces.User, addUsers []*interfaces.User) ([]*interfaces.User, error) {
+	log.Debug("CreateUsers()")
+	awsUsersUpdated := awsUsers
+
+	for _, user := range addUsers {
+		log.Debugf("Create user: %s (ID: %s)", user.DisplayName, user.ID)
+
+		addedUser, err := c.CreateUser(user)
+		if err != nil {
+			log.WithField("user", user).Error("error creating user")
+			return nil, err
+		}
+		awsUsersUpdated = append(awsUsersUpdated, addedUser)
+	}
+	return awsUsersUpdated, nil
+}
+
+// update Users in AWS
+func (c *client) UpdateUsers(awsUsers []*interfaces.User, updateUsers []*interfaces.User) ([]*interfaces.User, error) {
+	log.Debug("updateUsers()")
+	awsUsersUpdated := awsUsers
+
+	for _, user := range updateUsers {
+		log.Debugf("Update user: %s (ID: %s)", user.DisplayName, user.ID)
+
+		updatedUser, err := c.UpdateUser(user)
+		if err != nil {
+			log.WithField("user", user).Error("error updating user")
+			return nil, err
+		}
+		awsUsersUpdated = append(awsUsersUpdated, updatedUser)
+	}
+	return awsUsersUpdated, nil
+}
+
+// delete Users returns nothing
+func (c *client) DeleteUsers(delUsers []*interfaces.User) error {
+	log.Debug("DeleteUsers()")
+	for _, user := range delUsers {
+		log.Debugf("Delete user: %s (ID: %s)", user.DisplayName, user.ID)
+		err := c.DeleteUser(user)
+		if err != nil {
+			log.WithField("user", user).Error("error deleting user")
+			return err
+		}
+	}
+	return nil
+}
+
+func (c *client) AddMembers(members map[string][]string, addMembers map[string][]string) (map[string][]string, error) {
+	log.Debug("AddMembers()")
+	updatedMembers := members
+
+	for groupId, memberList := range addMembers {
+		log.Debugf("Adding members to group (ID: %s)", groupId)
+		err := c.groupChangeOperation(OperationAdd, memberList, groupId)
+		if err != nil {
+			return nil, err
+		}
+		updatedMembers[groupId] = addMembers[groupId]
+	}
+
+	return updatedMembers, nil
+}
+
+func (c *client) RemoveMembers(removeMembers map[string][]string) error {
+	log.Debug("RemoveMembers()")
+
+	for groupId, memberList := range removeMembers {
+		log.Debugf("Removing members from group (ID: %s)", groupId)
+		err := c.groupChangeOperation(OperationRemove, memberList, groupId)
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
