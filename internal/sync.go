@@ -348,7 +348,7 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 
 	// Process Group Members
 	log.Debug("Group Members: Retrieve information.")
-	googleMembers, err := s.google.GetMembers()
+	googleMembers, err := s.google.GetGroupMembers()
 	if err != nil {
 		return err
 	}
