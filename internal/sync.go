@@ -1211,6 +1211,11 @@ func (s *syncGSuite) getGoogleUsersInGroup(group *admin.Group, userCache map[str
 			continue
 		}
 
+		if m.Status != "ACTIVE" {
+			log.WithField("Member#", memberIndex).Info("getGoogleUsersInGroup() skip: !ACTIVE")
+			continue
+		}
+
 		log.WithField("Member#", memberIndex).Debug("getGoogleUsersInGroup() valid member")
 		// Find the group member in the cache of UserDetails
 		if _, found := userCache[m.Email]; !found {
