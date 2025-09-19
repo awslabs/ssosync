@@ -117,7 +117,8 @@ func NewClient(ctx context.Context, adminEmail string, serviceAccountKey []byte,
 //
 
 func (c *client) getUserGlobalFilter() string {
-	log.Debug("google.getUserGlobalFilter()")
+	funcName := "getUserGlobalFilter"
+	log.WithField("module", ModuleName).WithField("func", funcName).Debug(funcName + "()")
 
 	globalFilter := ""
 	if c.includeArchived {
@@ -130,7 +131,8 @@ func (c *client) getUserGlobalFilter() string {
 }
 
 func (c *client) getPrecacheQueries() []string {
-	log.Debug("google.getPrecacheQueries()")
+	funcName := "getPrecacheQueries"
+	log.WithField("module", ModuleName).WithField("func", funcName).Debug(funcName + "()")
 
 	// No OrgUnits have been so nothing to return
 	if len(c.precacheOrgUnits) == 0 {
@@ -160,7 +162,8 @@ func (c *client) getPrecacheQueries() []string {
 }
 
 func (c *client) getGroupQueries() []string {
-	log.Debug("google.getGroupQueries()")
+	funcName := "getGroupQueries"
+	log.WithField("module", ModuleName).WithField("func", funcName).Debug(funcName + "()")
 
 	// No group queries have been passed so nothing to return
 	if len(c.groupQueries) == 0 {
@@ -180,7 +183,8 @@ func (c *client) getGroupQueries() []string {
 }
 
 func (c *client) getUserQueries() []string {
-	log.Debug("google.getUserQueries()")
+	funcName := "getUserQueries"
+	log.WithField("module", ModuleName).WithField("func", funcName).Debug(funcName + "()")
 
 	// No group queries have been passed so nothing to return
 	if len(c.userQueries) == 0 {
@@ -205,7 +209,8 @@ func (c *client) getUserQueries() []string {
 //
 
 func (c *client) fetchUsers(query string) ([]*admin.User, error) {
-	log.WithField("query", query).Debug("google.fetchUsers()")
+	funcName := "fetchUsers"
+	log.WithField("module", ModuleName).WithField("func", funcName).WithField("query", query).Debug(funcName + "()")
 	var err error
 
 	u := []*admin.User{}
@@ -215,7 +220,7 @@ func (c *client) fetchUsers(query string) ([]*admin.User, error) {
 			u = append(u, users.Users...)
 			return nil
 		}); err != nil {
-			log.WithField("error", err).WithField("query", query).Error("google.fetchUsers() failed")
+			log.WithField("module", ModuleName).WithField("func", funcName).WithField("error", err).WithField("query", query).Error("failed")
 			return nil, err
 		}
 	} else {
@@ -223,7 +228,7 @@ func (c *client) fetchUsers(query string) ([]*admin.User, error) {
 			u = append(u, users.Users...)
 			return nil
 		}); err != nil {
-			log.WithField("error", err).WithField("query", query).Error("google.fetchUsers() failed")
+			log.WithField("module", ModuleName).WithField("func", funcName).WithField("error", err).WithField("query", query).Error("failed")
 			return nil, err
 		}
 	}
@@ -241,11 +246,12 @@ func (c *client) fetchUsers(query string) ([]*admin.User, error) {
 }
 
 func (c *client) fetchUser(uniqueId string) (*admin.User, error) {
-	log.WithField("uniqueId", uniqueId).Debug("google.fetchUser()")
+	funcName := "fetchUser"
+	log.WithField("module", ModuleName).WithField("func", funcName).WithField("uniqueId", uniqueId).Debug(funcName + "()")
 
 	user, err := c.service.Users.Get(uniqueId).Do()
 	if err != nil {
-		log.WithField("error", err).WithField("uniqueId", uniqueId).Error("google.fetchUser() failed")
+		log.WithField("module", ModuleName).WithField("func", funcName).WithField("error", err).WithField("uniqueId", uniqueId).Error("failed")
 		return nil, err
 	}
 
@@ -262,7 +268,9 @@ func (c *client) fetchUser(uniqueId string) (*admin.User, error) {
 }
 
 func (c *client) fetchGroups(query string) ([]*admin.Group, error) {
-	log.WithField("query", query).Debug("google.fetchGroups()")
+	funcName := "fetchGroupMembers"
+	log.WithField("module", ModuleName).WithField("func", funcName).WithField("query", query).Debug(funcName + "()")
+
 	var err error
 	var g []*admin.Group
 
@@ -270,14 +278,16 @@ func (c *client) fetchGroups(query string) ([]*admin.Group, error) {
 		g = append(g, groups.Groups...)
 		return nil
 	}); err != nil {
-		log.WithField("error", err).WithField("query", query).Error("google.fetchGroups() failed")
+		log.WithField("module", ModuleName).WithField("func", funcName).WithField("error", err).WithField("query", query).Error("failed")
 		return nil, err
 	}
 	return g, nil
 }
 
 func (c *client) fetchMembers(groupId string) ([]*admin.Member, error) {
-	log.Debug("google.fetchGroupMembers()")
+	funcName := "fetchGroupMembers"
+	log.WithField("module", ModuleName).WithField("func", funcName).WithField("GroupId", groupId).Debug(funcName + "()")
+
 	var err error
 	var m []*admin.Member
 
@@ -285,7 +295,7 @@ func (c *client) fetchMembers(groupId string) ([]*admin.Member, error) {
 		m = append(m, members.Members...)
 		return nil
 	}); err != nil {
-		log.WithField("error", err).WithField("GroupId", groupId).Error("google.fetchGroupMembers() failed")
+		log.WithField("module", ModuleName).WithField("func", funcName).WithField("error", err).WithField("GroupId", groupId).Error("failed")
 		return nil, err
 	}
 
@@ -297,7 +307,8 @@ func (c *client) fetchMembers(groupId string) ([]*admin.Member, error) {
 //
 
 func (c *client) refreshUserCache() error {
-	log.Debug("google.refreshUserCache()")
+	funcName := "refreshUserCache"
+	log.WithField("module", ModuleName).WithField("func", funcName).Debug(funcName + "()")
 
 	// Check whether the users have already been populated.
 	if c.userCacheId != nil || c.userCacheEmail != nil {
@@ -306,26 +317,27 @@ func (c *client) refreshUserCache() error {
 
 	// No precache queries are available initialize an empty cache
 	if c.getPrecacheQueries() == nil {
-		log.Debug("Precaching disabled, initializing empty caches")
+		log.WithField("module", ModuleName).WithField("func", funcName).Info("Precaching disabled, initializing empty caches")
 		c.userCacheId = make(map[string]*admin.User, 0)
 		c.userCacheEmail = make(map[string]*admin.User, 0)
 		return nil
 	}
 
 	for _, query := range c.getPrecacheQueries() {
-		log.WithField("query", query).Debug("Precaching users")
+		log.WithField("module", ModuleName).WithField("func", funcName).WithField("query", query).Debug("Precaching users")
 		users, err := c.fetchUsers(query)
 		if err != nil {
-			log.WithField("query", query).Error("google.refreshUserCache() failed")
+			log.WithField("module", ModuleName).WithField("func", funcName).WithField("query", query).Error("google.refreshUserCache() failed")
 			continue
 		}
 		for _, user := range users {
+			log.WithField("module", ModuleName).WithField("func", funcName).WithField("user", user).Debug("processing")
 			if _, found := c.ignoreUsers[user.PrimaryEmail]; found {
-				log.WithField("email", user.PrimaryEmail).Info("Ignore user")
+				log.WithField("module", ModuleName).WithField("func", funcName).WithField("user.Id", user.Id).Info("Ignore user")
 				continue
 			}
 			if err := c.cacheUser(user); err != nil {
-				log.WithField("user", user).Error("unable to cache user")
+				log.WithField("module", ModuleName).WithField("func", funcName).WithField("user.Id", user.Id).WithField("error", err).Error("failed to cache")
 				continue
 			}
 		}
