@@ -1214,7 +1214,7 @@ func (s *syncGSuite) getGoogleUsersInGroup(group *admin.Group, userCache map[str
 			}
 		}
 		log.WithField("Member#", memberIndex).Debug("getGoogleUsersInGroup() adding member")
-		if userCache[m.Email] != nil {
+		if userCache[m.Email] == nil {
 			log.WithField("Member#", memberIndex).WithField("Member", m).Error("getGoogleUsersInGroup() can't retrieve user")
 			continue
 		}
