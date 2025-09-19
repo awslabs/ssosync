@@ -666,7 +666,6 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 			continue
 		}
 
-		log.WithField("group", g.Name).Debug("getGoogleUsersInGroup()")
 		membersUsers := s.getGoogleUsersInGroup(g, gUserDetailCache, gGroupDetailCache)
 
 		// If we've not seen the user email address before add it to the list of unique users
@@ -972,15 +971,16 @@ func (s *syncGSuite) includeGroup(name string) bool {
 }
 
 func ConvertIdentityStoreGroupToAWSGroup(group identitystore_types.Group) *interfaces.Group {
+	log.Debug("ConvertIdentityStoreGroupToAWSGroup()")
 	if group.GroupId == nil {
-		log.WithField("group", group).Warn("Group has no GroupId")
+		log.WithField("group", group).Warn("ConvertIdentityStoreGroupToAWSGroup() Group has no GroupId")
 		return nil
 	}
 	if group.DisplayName == nil {
-		log.WithField("group", group).Warn("Group has no DisplayName")
+		log.WithField("group", group).Warn("ConvertIdentityStoreGroupToAWSGroup() Group has no DisplayName")
 		return nil
 	}
-	log.WithField("groupId", group.GroupId).WithField("displayName", group.DisplayName).Debug("Group converted")
+	log.WithField("groupId", group.GroupId).WithField("displayName", group.DisplayName).Debug("ConvertIdentityStoreGroupToAWSGroup() Group converted")
 	return &interfaces.Group{
 		ID:          *group.GroupId,
 		Schemas:     []string{constants.SCIMSchemaGroup},
@@ -990,7 +990,7 @@ func ConvertIdentityStoreGroupToAWSGroup(group identitystore_types.Group) *inter
 }
 
 func (s *syncGSuite) GetGroups() ([]*interfaces.Group, error) {
-
+	log.Debug("GetGroups()")
 	awsGroups, err := identitystore.ListGroupsPager(context.Background(),
 		aws_identitystore.NewListGroupsPaginator(
 			s.identityStore,
@@ -1008,6 +1008,7 @@ func (s *syncGSuite) GetGroups() ([]*interfaces.Group, error) {
 }
 
 func (s *syncGSuite) GetUsers() ([]*interfaces.User, error) {
+	log.Debug("GetUsers()")
 	awsUsers, err := identitystore.ListUsersPager(
 		context.Background(),
 		aws_identitystore.NewListUsersPaginator(
@@ -1029,6 +1030,7 @@ func (s *syncGSuite) GetUsers() ([]*interfaces.User, error) {
 // ConvertSdkUserObjToNative
 // Convert SDK user to native user object
 func ConvertSdkUserObjToNative(user identitystore_types.User) *interfaces.User {
+	log.Debug("ConvertSdkUserObjToNative()")
 	// Convert emails into native Email object
 	userEmails := make([]interfaces.UserEmail, 0)
 
@@ -1075,6 +1077,7 @@ func ConvertSdkUserObjToNative(user identitystore_types.User) *interfaces.User {
 // CreateUserIDtoUserObjMap
 // Create User ID for user object map
 func CreateUserIDtoUserObjMap(awsUsers []*interfaces.User) map[string]*interfaces.User {
+	log.Debug("CreateUserIDtoUserObjMap()")
 	awsUsersMap := make(map[string]*interfaces.User)
 
 	for _, awsUser := range awsUsers {
@@ -1087,6 +1090,7 @@ func CreateUserIDtoUserObjMap(awsUsers []*interfaces.User) map[string]*interface
 // ListGroupMembershipPagesCallbackFn
 // Handler for Paginated Group Membership List
 func (s *syncGSuite) GetGroupMembershipsLists(awsGroups []*interfaces.Group, awsUsersMap map[string]*interfaces.User) (map[string][]*interfaces.User, error) {
+	log.Debug("GetGroupMembershipsLists()")
 	awsGroupsUsers := make(map[string][]*interfaces.User)
 	curGroup := &interfaces.Group{}
 
@@ -1126,11 +1130,12 @@ func (s *syncGSuite) GetGroupMembershipsLists(awsGroups []*interfaces.Group, aws
 		}
 
 	}
-
+	log.Debug("GetGroupMembershipsLists() Return")
 	return awsGroupsUsers, nil
 }
 
 func (s *syncGSuite) RemoveUserFromGroup(userID *string, groupID *string) error {
+	log.WithField("GroupID", groupID).WithField("userID", userID).Debug("RemoveUserFromGroup()")
 	memberIDOutput, err := identitystore.GetGroupMembershipId(
 		context.Background(),
 		s.identityStore,
@@ -1155,16 +1160,18 @@ func (s *syncGSuite) RemoveUserFromGroup(userID *string, groupID *string) error 
 	if err != nil {
 		return err
 	}
+	log.Debug("RemoveUserFromGroup() Return")
 
 	return nil
 }
 
 func (s *syncGSuite) getGoogleUsersInGroup(group *admin.Group, userCache map[string]*admin.User, groupCache map[string]*admin.Group) []*admin.User {
-	log.WithField("Group Email:", group.Email).Debug("getGoogleUsersInGroup()")
+	log.WithField("Group:", group).Debug("getGoogleUsersInGroup()")
 
 	// retrieve the members of the group
 	groupMembers, err := s.google.GetGroupMembers(group)
 	if err != nil {
+		log.WithField("Group:", group).Error("getGoogleUsersInGroup() failed retrieving membership")
 		return nil
 	}
 	membersUsers := make([]*admin.User, 0)
@@ -1172,7 +1179,12 @@ func (s *syncGSuite) getGoogleUsersInGroup(group *admin.Group, userCache map[str
 	log.WithField("# Members", len(groupMembers)).Debug("getGoogleUsersInGroup()")
 	// process the members of the group
 	for memberIndex, m := range groupMembers {
-		log.WithField("Member#", memberIndex).WithField("Member.Email", m.Email).Debug("getGoogleUsersInGroup()")
+		log.WithField("Member#", memberIndex).WithField("Member", m).Debug("getGoogleUsersInGroup()")
+
+		if len(m.Email) == 0 {
+			log.WithField("Member#", memberIndex).Info("getGoogleUsersInGroup() skip: no email address")
+			continue
+		}
 
 		if m.Type != "USER" {
 			log.WithField("Member#", memberIndex).Info("getGoogleUsersInGroup() skip: non-USER member")
@@ -1202,7 +1214,7 @@ func (s *syncGSuite) getGoogleUsersInGroup(group *admin.Group, userCache map[str
 		log.WithField("Member#", memberIndex).Debug("getGoogleUsersInGroup() valid member")
 		// Find the group member in the cache of UserDetails
 		if _, found := userCache[m.Email]; !found {
-			log.WithField("Member#", memberIndex).Warn("getGoogleUsersInGroup() not found in cache, fetching user")
+			log.WithField("Member#", memberIndex).Debug("getGoogleUsersInGroup() not found in cache, fetching user")
 			googleUsers, err := s.google.GetUsers("email="+m.Email, s.cfg.UserFilter)
 			if err != nil {
 				log.WithField("error:", err).WithField("Member.Email", m.Email).Error("getGoogleUsersInGroup() Fetching user")
@@ -1221,6 +1233,6 @@ func (s *syncGSuite) getGoogleUsersInGroup(group *admin.Group, userCache map[str
 		membersUsers = append(membersUsers, userCache[m.Email])
 
 	}
-	log.WithField("membersUsers", membersUsers).Debug("getGoogleUsersInGroup() Return group membership")
+	log.WithField("membersUsers", membersUsers).Debug("getGoogleUsersInGroup() Return")
 	return membersUsers
 }
