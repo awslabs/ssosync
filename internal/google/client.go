@@ -25,6 +25,10 @@ import (
 	"google.golang.org/api/option"
 )
 
+const (
+	ModuleName = "google"
+)
+
 // Client is the Interface for the Client
 type Client interface {
 	GetUsers() ([]*admin.User, error)
@@ -330,7 +334,8 @@ func (c *client) refreshUserCache() error {
 }
 
 func (c *client) refreshUsers() error {
-	log.Debug("google.refreshUsers()")
+	funcName := "refreshUsers"
+	log.WithField("module", ModuleName).WithField("func", funcName).Debug(funcName + "()")
 
 	// Check whether the users have already been populated.
 	if c.users != nil {
@@ -343,14 +348,15 @@ func (c *client) refreshUsers() error {
 	}
 
 	for _, query := range c.getUserQueries() {
+		log.WithField("module", ModuleName).WithField("func", funcName).WithField("query", query).Debug("fetchUsers")
 		users, err := c.fetchUsers(query)
 		if err != nil {
-			log.WithField("query", query).Error("google.refreshUsers() failed")
+			log.WithField("module", ModuleName).WithField("func", funcName).WithField("query", query).WithField("error", err).Error("failed")
 			return err
 		}
 		for _, user := range users {
 			if err := c.addUser(user); err != nil {
-				log.WithField("user", user).Warn("error adding group")
+				log.WithField("module", ModuleName).WithField("func", funcName).WithField("user", user).WithField("error", err).Error("failed")
 				continue
 			}
 		}
@@ -359,7 +365,8 @@ func (c *client) refreshUsers() error {
 }
 
 func (c *client) refreshGroups() error {
-	log.Debug("google.refreshGroups()")
+	funcName := "refreshGroups"
+	log.WithField("module", ModuleName).WithField("func", funcName).Debug(funcName + "()")
 
 	// Check whether the groups have already been populated.
 	if c.groups != nil {
@@ -368,25 +375,27 @@ func (c *client) refreshGroups() error {
 
 	// No precache queries are available initialize an empty cache
 	if c.getGroupQueries() == nil {
-		log.Debug("No group queries provided, initializing empty")
+		log.WithField("module", ModuleName).WithField("func", funcName).Debug("No group queries provided, initializing empty")
 		c.groups = make([]*admin.Group, 0)
 		c.groupsId = make(map[string]*admin.Group, 0)
 		return nil
 	}
 
 	for _, query := range c.getGroupQueries() {
+		log.WithField("module", ModuleName).WithField("func", funcName).WithField("query", query).Debug("fetchGroups")
 		groups, err := c.fetchGroups(query)
 		if err != nil {
-			log.WithField("query", query).Error("google.refreshGroups() failed")
+			log.WithField("module", ModuleName).WithField("func", funcName).WithField("query", query).WithField("error", err).Error("failed")
 			return err
 		}
 		for _, group := range groups {
+			log.WithField("module", ModuleName).WithField("func", funcName).WithField("group", group).Debug("processing")
 			if _, found := c.ignoreGroups[group.Email]; found {
-				log.WithField("group.Email", group.Email).Info("Ignore group")
+				log.WithField("module", ModuleName).WithField("func", funcName).WithField("group", group).Info("Ignore group")
 				continue
 			}
 			if err := c.addGroup(group); err != nil {
-				log.WithField("group", group).Warn("error adding group")
+				log.WithField("module", ModuleName).WithField("func", funcName).WithField("groupi.Id", group.Id).WithField("error", err).Error("error adding group")
 				continue
 			}
 		}
@@ -395,7 +404,8 @@ func (c *client) refreshGroups() error {
 }
 
 func (c *client) refreshMembers() error {
-	log.Debug("google.refreshMembers()")
+	funcName := "refreshMembers"
+	log.WithField("module", ModuleName).WithField("func", funcName).Debug(funcName + "()")
 
 	// Check whether the groupMembers have already been populated.
 	if c.groupMembers != nil && c.usersInGroup != nil && c.members != nil {
@@ -412,55 +422,15 @@ func (c *client) refreshMembers() error {
 
 	for groupId, _ := range c.groupsId {
 		members, err := c.fetchMembers(groupId)
+
 		if err != nil {
-			log.WithField("groupId", groupId).Error("google.refreshMembers() failed")
+			log.WithField("module", ModuleName).WithField("func", funcName).WithField("groupId", groupId).Error("google.refreshMembers() failed")
 			return err
 		}
 
-		memberList := make([]*admin.Member, 0)
-		groupMemberList := make([]string, 0)
-		userList := make([]*admin.User, 0)
-
-		for _, member := range members {
-			if member.Type != "USER" {
-				log.WithField("email", member.Email).Info("skipping member: not a USER")
-				continue
-			}
-
-			// Ignore any external members, since they don't have users
-			// that can be synced
-			if member.Status != "ACTIVE" && member.Status != "SUSPENDED" {
-				log.WithField("email", member.Email).Info("skipping member: external user")
-				continue
-			}
-
-			// Ignore any external members, since they don't have users
-			// that can be synced
-			if member.Status == "SUSPENDED" && !c.includeSuspended {
-				log.WithField("email", member.Email).Info("skipping member: suspended user")
-				continue
-			}
-
-			// Remove any users that should be ignored
-			if _, found := c.ignoreUsers[member.Email]; found {
-				log.WithField("email", member.Email).Info("skipping member: ignore list")
-				continue
-			}
-
-			// Find the group member in the cache of UserDetails
-			user, err := c.getUser(member.Email)
-			if err != nil {
-				log.WithField("error:", err).Error("Fetching user")
-				continue
-			}
-
-			if user == nil {
-				continue
-			}
-
-			memberList = append(memberList, member)
-			groupMemberList = append(groupMemberList, user.Id)
-			userList = append(userList, user)
+		memberList, groupMemberList, userList, err := c.processMembership(members)
+		if err != nil {
+			log.WithField("groupId", groupId).Error("failed processing members")
 		}
 
 		c.members[groupId] = memberList
@@ -471,8 +441,61 @@ func (c *client) refreshMembers() error {
 }
 
 // internal helper methods
+func (c *client) processMembership([]*admin.Member) ([]*admin.Member, []string, []*admin.User, error) {
+	funcName := "processMembership"
+	log.WithField("module", ModuleName).WithField("func", funcName).Debug(funcName + "()")
+
+	memberList := make([]*admin.Member, 0)
+	groupMemberList := make([]string, 0)
+	userList := make([]*admin.User, 0)
+
+	for _, member := range members {
+		log.WithField("module", ModuleName).WithField("func", funcName).WithField("member", member).Debug("processing")
+		if member.Type != "USER" {
+			log.WithField("module", ModuleName).WithField("func", funcName).WithField("member.Id", member.Id).Info("skipping member: not a USER")
+			continue
+		}
+
+		// Ignore any external members, since they don't have users
+		// that can be synced
+		if member.Status != "ACTIVE" && member.Status != "SUSPENDED" {
+			log.WithField("module", ModuleName).WithField("func", funcName).WithField("member.Id", member.Id).Info("skipping member: external user")
+			continue
+		}
+
+		// Ignore any external members, since they don't have users
+		// that can be synced
+		if member.Status == "SUSPENDED" && !c.includeSuspended {
+			log.WithField("module", ModuleName).WithField("func", funcName).WithField("member.Id", member.Id).Info("skipping member: suspended user")
+			continue
+		}
+
+		// Remove any users that should be ignored
+		if _, found := c.ignoreUsers[member.Email]; found {
+			log.WithField("module", ModuleName).WithField("func", funcName).WithField("member.Id", member.Id).Info("skipping member: ignore list")
+			continue
+		}
+
+		// Find the group member in the cache of UserDetails
+		user, err := c.getUser(member.Email)
+		if err != nil {
+			log.WithField("module", ModuleName).WithField("func", funcName).WithField("member.Id", member.Id).WithField("error:", err).Error("Fetching user")
+			continue
+		}
+		if user == nil {
+			continue
+		}
+		memberList = append(memberList, member)
+		groupMemberList = append(groupMemberList, user.Id)
+		userList = append(userList, user)
+	}
+	log.WithField("module", ModuleName).WithField("func", funcName).Debug("return")
+	return memberList, groupMemberList, userList, nil
+}
+
 func (c *client) getUser(uniqueId string) (*admin.User, error) {
-	log.Debug("google.getUser()")
+	funcName := "getUser"
+	log.WithField("module", ModuleName).WithField("func", funcName).Debug(funcName + "()")
 
 	if _, found := c.ignoreUsers[uniqueId]; found {
 		log.WithField("email", uniqueId).Info("Ignore user")
