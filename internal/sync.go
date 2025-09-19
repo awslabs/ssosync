@@ -671,34 +671,40 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 
 		// If we've not seen the user email address before add it to the list of unique users
 		// also, we need to deduplicate the list of members.
-		log.WithField("group", g.Name).Debug("Processing group membership")
+		log.WithField("group", g.Name).Debug("getGoogleGroupsAndUsers() - Process group membership")
 		gUniqMembers := make(map[string]*admin.User)
-		for _, m := range membersUsers {
-			log.WithField("user", m).Debug("processing member")
+		for membercount, m := range membersUsers {
+			log.WithField("user", m).Debug("getGoogleGroupsAndUsers() - processing member")
+			if m == nil {
+				log.WithField("member #", membercount).Error("getGoogleGroupsAndUsers() - nil user")
+				continue
+			}
 			if _, found := gUniqUsers[m.PrimaryEmail]; !found {
-				log.WithField("email", m.PrimaryEmail).Debug("adding user to UniqueUsers")
+				log.WithField("email", m.PrimaryEmail).Debug("getGoogleGroupsAndUsers() - adding user to UniqueUsers")
 				gUniqUsers[m.PrimaryEmail] = gUserDetailCache[m.PrimaryEmail]
 			}
 
 			if _, found := gUniqMembers[m.PrimaryEmail]; !found {
-				log.WithField("email", m.PrimaryEmail).Debug("adding user to group")
+				log.WithField("email", m.PrimaryEmail).Debug("getGoogleGroupsAndUsers() - adding user to group")
 				gUniqMembers[m.PrimaryEmail] = gUserDetailCache[m.PrimaryEmail]
 			}
 		}
 
+		log.Debug("getGoogleGroupsAndUsers() - create gMembers")
 		gMembers := make([]*admin.User, 0)
 		for _, member := range gUniqMembers {
+			log.WithField("member", member).Debug("getGoogleGroupsAndUsers() - gMember map")
 			gMembers = append(gMembers, member)
 		}
 		gGroupsUsers[g.Name] = gMembers
-		log.WithField("group name:", g.Name).Debug("Finished processing membership")
 	}
 
-	log.Debug("returning group memberships and additional unique users")
+	log.Debug("getGoogleGroupsAndUsers() - create gUsers")
 	for _, user := range gUniqUsers {
 		gUsers = append(gUsers, user)
 	}
 
+	log.Debug("getGoogleGroupsAndUsers() - Return")
 	return gGroups, gUsers, gGroupsUsers, nil
 }
 
@@ -1154,7 +1160,7 @@ func (s *syncGSuite) RemoveUserFromGroup(userID *string, groupID *string) error 
 }
 
 func (s *syncGSuite) getGoogleUsersInGroup(group *admin.Group, userCache map[string]*admin.User, groupCache map[string]*admin.Group) []*admin.User {
-	log.WithField("Email:", group.Email).Debug("getGoogleUsersInGroup()")
+	log.WithField("Group Email:", group.Email).Debug("getGoogleUsersInGroup()")
 
 	// retrieve the members of the group
 	groupMembers, err := s.google.GetGroupMembers(group)
@@ -1163,52 +1169,58 @@ func (s *syncGSuite) getGoogleUsersInGroup(group *admin.Group, userCache map[str
 	}
 	membersUsers := make([]*admin.User, 0)
 
+	log.WithField("# Members", len(groupMembers)).Debug("getGoogleUsersInGroup()")
 	// process the members of the group
-	for _, m := range groupMembers {
-		log.WithField("member", m).Debug("processing group member")
+	for memberIndex, m := range groupMembers {
+		log.WithField("Member#", memberIndex).WithField("Member.Email", m.Email).Debug("getGoogleUsersInGroup()")
 
 		if m.Type != "USER" {
-			log.WithField("id", m).Warn("skipping USER member")
+			log.WithField("Member#", memberIndex).Info("getGoogleUsersInGroup() skip: non-USER member")
 			continue
 		}
 
 		// Ignore any external members, since they don't have users
 		// that can be synced
-		if m.Status != "ACTIVE" && m.Status != "SUSPENDED" {
-			log.WithField("id", m.Email).Warn("skipping member: external user")
+		if len(m.Status) == 0 {
+			log.WithField("Member#", memberIndex).Info("getGoogleUsersInGroup() skip: external user")
 			continue
 		}
 
 		// Ignore any external members, since they don't have users
 		// that can be synced
 		if m.Status == "SUSPENDED" && !s.cfg.SyncSuspended {
-			log.WithField("id", m.Email).Warn("skipping member: suspended user")
+			log.WithField("Member#", memberIndex).Info("getGoogleUsersInGroup() skip: suspended user")
 			continue
 		}
 
 		// Remove any users that should be ignored
 		if s.ignoreUser(m.Email) {
-			log.WithField("email", m.Email).Debug("skipping member: ignore list")
+			log.WithField("Member#", memberIndex).Info("getGoogleUsersInGroup() skip: ignore list")
 			continue
 		}
 
+		log.WithField("Member#", memberIndex).Debug("getGoogleUsersInGroup() valid member")
 		// Find the group member in the cache of UserDetails
 		if _, found := userCache[m.Email]; !found {
-			log.WithField("email", m.Email).Warn("not found in cache, fetching user")
+			log.WithField("Member#", memberIndex).Warn("getGoogleUsersInGroup() not found in cache, fetching user")
 			googleUsers, err := s.google.GetUsers("email="+m.Email, s.cfg.UserFilter)
 			if err != nil {
-				log.WithField("error:", err).Error("Fetching user")
+				log.WithField("error:", err).WithField("Member.Email", m.Email).Error("getGoogleUsersInGroup() Fetching user")
 				continue
 			}
 			for _, u := range googleUsers {
-				log.WithField("email", u.PrimaryEmail).Debug("caching user")
+				log.WithField("Member#", memberIndex).Debug("getGoogleUsersInGroup() caching user")
 				userCache[u.PrimaryEmail] = u
 			}
 		}
-		log.WithField("email", m.Email).Debug("adding member")
+		log.WithField("Member#", memberIndex).Debug("getGoogleUsersInGroup() adding member")
+		if userCache[m.Email] != nil {
+			log.WithField("Member#", memberIndex).WithField("Member", m).Error("getGoogleUsersInGroup() can't retrieve user")
+			continue
+		}
 		membersUsers = append(membersUsers, userCache[m.Email])
 
 	}
-	log.WithField("membersUsers", membersUsers).Debug("Return group membership")
+	log.WithField("membersUsers", membersUsers).Debug("getGoogleUsersInGroup() Return group membership")
 	return membersUsers
 }
