@@ -1219,7 +1219,8 @@ func (s *syncGSuite) getGoogleUsersInGroup(group *admin.Group, userCache map[str
 			continue
 		}
 
-		if m.Status != "ACTIVE" {
+		allowedStatus := map[string]bool{"ACTIVE": true, "SUSPENDED": true}
+		if !allowedStatus[m.Status] {
 			log.WithField("func", funcName).WithField("GroupId", group.Id).Info("skip: !ACTIVE")
 			continue
 		}
