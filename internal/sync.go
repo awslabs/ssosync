@@ -34,7 +34,6 @@ import (
 	aws_config "github.com/aws/aws-sdk-go-v2/config"
 	aws_identitystore "github.com/aws/aws-sdk-go-v2/service/identitystore"
 	identitystore_types "github.com/aws/aws-sdk-go-v2/service/identitystore/types"
-	"github.com/aws/aws-sdk-go/aws/awserr"
 	log "github.com/sirupsen/logrus"
 	admin "google.golang.org/api/admin/directory/v1"
 )
@@ -1153,18 +1152,8 @@ func (s *syncGSuite) RemoveUserFromGroup(userID *string, groupID *string) error 
 	)
 
 	if err != nil {
-		var awsErr awserr.Error
-		if errors.As(err, &awsErr) {
-			switch awsErr.Code() {
-			case identitystore.ErrCodeResourceNotFoundException:
-				log.WithField("groupID", groupID).Debug("No operation: User not a member of the group")
-				return nil
-			default:
-				return err
-			}
-		}
-
-		return err
+		log.WithField("func", funcName).WithField("groupID", groupID).WithField("userID", userID).WithField("error", err).Error("operation failed")
+		return nil
 	}
 
 	memberID := memberIDOutput.MembershipId
