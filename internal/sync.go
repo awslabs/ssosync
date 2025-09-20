@@ -357,30 +357,6 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 	addAWSGroups, delAWSGroups, equalAWSGroups := getGroupOperations(awsGroups, googleGroups)
 
 	log.Info("syncing changes")
-	// delete aws users (deleted in google)
-	log.Debug("deleting aws users deleted in google")
-	for _, awsUser := range delAWSUsers {
-
-		log := log.WithFields(log.Fields{"user": awsUser.Username})
-
-		log.Debug("finding user")
-		awsUserFull, err := s.aws.FindUserByEmail(awsUser.Username)
-		if err != nil {
-			return err
-		}
-
-		log.Warn("deleting user")
-		_, err = identitystore.DeleteUser(
-			context.Background(),
-			s.identityStore,
-			&s.cfg.IdentityStoreID,
-			&awsUserFull.ID,
-		)
-		if err != nil {
-			log.WithField("user", awsUser).Error("error deleting user")
-			return err
-		}
-	}
 
 	// update aws users (updated in google)
 	log.Debug("updating aws users updated in google")
@@ -541,6 +517,31 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 		)
 		if err != nil {
 			log.Error("deleting group")
+			return err
+		}
+	}
+
+	// delete aws users (deleted in google)
+	log.Debug("deleting aws users deleted in google")
+	for _, awsUser := range delAWSUsers {
+
+		log := log.WithFields(log.Fields{"user": awsUser.Username})
+
+		log.Debug("finding user")
+		awsUserFull, err := s.aws.FindUserByEmail(awsUser.Username)
+		if err != nil {
+			return err
+		}
+
+		log.Warn("deleting user")
+		_, err = identitystore.DeleteUser(
+			context.Background(),
+			s.identityStore,
+			&s.cfg.IdentityStoreID,
+			&awsUserFull.ID,
+		)
+		if err != nil {
+			log.WithField("user", awsUser).Error("error deleting user")
 			return err
 		}
 	}
