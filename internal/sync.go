@@ -653,7 +653,9 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 			}).Debug("format into query string")
 
 			orgUnitPath = strings.TrimSpace(orgUnitPath)
-			orgUnitPath = strings.TrimSuffix(orgUnitPath, "/")
+			if orgUnitPath != "/" {
+				orgUnitPath = strings.TrimSuffix(orgUnitPath, "/")
+			}
 			if strings.ContainsRune(orgUnitPath, ' ') {
 				precacheQueries = precacheQueries + ",OrgUnitPath='" + orgUnitPath + "'"
 			} else {
