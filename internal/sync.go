@@ -1433,13 +1433,15 @@ func (s *syncGSuite) getGoogleUsersInGroup(group *admin.Group, userCache map[str
 			}
 			// Add user to the cache
 			for _, u := range googleUsers {
-				log.WithFields(log.Fields{
-					"func":    funcName,
-					"GroupId": group.Id,
-					"Member#": memberIndex,
-				}).Debug("Cache user")
+				if _, found := userCache[u.PrimaryEmail]; !found {
+					log.WithFields(log.Fields{
+						"func":    funcName,
+						"GroupId": group.Id,
+						"Member#": memberIndex,
+					}).Debug("Cache user")
+					userCache[u.PrimaryEmail] = u
+				}
 				memberEmail = u.PrimaryEmail
-				userCache[memberEmail] = u
 			}
 			// Check whether the member was based on an alias
 			if memberEmail != m.Email {
