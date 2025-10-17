@@ -767,8 +767,9 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 		// If we've not seen the user email address before add it to the list of unique users
 		// also, we need to deduplicate the list of members.
 		log.WithFields(log.Fields{
-			"func":     funcName,
-			"group.Id": g.Id,
+			"func":         funcName,
+			"group.Id":     g.Id,
+			"membersUsers": membersUsers,
 		}).Debug("Process group membership")
 
 		gUniqMembers := make(map[string]*admin.User)
@@ -1390,6 +1391,7 @@ func (s *syncGSuite) getGoogleUsersInGroup(group *admin.Group, userCache map[str
 			continue
 		}
 
+		// Ignore any users that don't have a valid status
 		allowedStatus := map[string]bool{"ACTIVE": true, "SUSPENDED": true}
 		if !allowedStatus[m.Status] {
 			log.WithFields(log.Fields{
@@ -1399,10 +1401,12 @@ func (s *syncGSuite) getGoogleUsersInGroup(group *admin.Group, userCache map[str
 			continue
 		}
 
+		// This is a member that should be synced to AWS
 		log.WithFields(log.Fields{
 			"func":    funcName,
 			"GroupId": group.Id,
 		}).Debug("valid member")
+		var memberEmail string
 		// Find the group member in the cache of UserDetails
 		if _, found := userCache[m.Email]; !found {
 			log.WithFields(log.Fields{
@@ -1425,22 +1429,25 @@ func (s *syncGSuite) getGoogleUsersInGroup(group *admin.Group, userCache map[str
 					"GroupId": group.Id,
 					"Member#": memberIndex,
 				}).Debug("Cache user")
-				userCache[u.PrimaryEmail] = u
+				memberEmail = u.PrimaryEmail
+				userCache[memberEmail] = u
 			}
-		}
-		log.WithFields(log.Fields{
-			"func":    funcName,
-			"GroupId": group.Id,
-			"Member#": memberIndex,
-		}).Debug("Add member")
-		if userCache[m.Email] == nil {
+		} else {
 			log.WithFields(log.Fields{
-				"func":   funcName,
-				"Member": m,
+				"func":    funcName,
+				"GroupId": group.Id,
+				"Member#": memberIndex,
+			}).Debug("Add member")
+			memberEmail = m.Email
+		}
+		if userCache[memberEmail] == nil {
+			log.WithFields(log.Fields{
+				"func":        funcName,
+				"memberEmail": memberEmail,
 			}).Error("Can't retrieve user")
 			continue
 		}
-		membersUsers = append(membersUsers, userCache[m.Email])
+		membersUsers = append(membersUsers, userCache[memberEmail])
 
 	}
 	log.WithFields(log.Fields{
