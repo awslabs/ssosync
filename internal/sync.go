@@ -767,8 +767,9 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 		// If we've not seen the user email address before add it to the list of unique users
 		// also, we need to deduplicate the list of members.
 		log.WithFields(log.Fields{
-			"func":     funcName,
-			"group.Id": g.Id,
+			"func":         funcName,
+			"group.Id":     g.Id,
+			"membersUsers": membersUsers,
 		}).Debug("Process group membership")
 
 		gUniqMembers := make(map[string]*admin.User)
@@ -1333,7 +1334,8 @@ func (s *syncGSuite) getGoogleUsersInGroup(group *admin.Group, userCache map[str
 		"func":      funcName,
 		"GroupId":   group.Id,
 		"# Members": len(groupMembers),
-	}).Debug("processing membership")
+		"Members":   groupMembers,
+	}).Debug("Group membership")
 
 	// process the members of the group
 	for memberIndex, m := range groupMembers {
@@ -1341,7 +1343,7 @@ func (s *syncGSuite) getGoogleUsersInGroup(group *admin.Group, userCache map[str
 			"func":    funcName,
 			"GroupId": group.Id,
 			"Member#": memberIndex,
-		}).WithField("Member", m)
+		}).Debug("Parsing member")
 
 		if len(m.Email) == 0 {
 			log.WithFields(log.Fields{
@@ -1367,6 +1369,7 @@ func (s *syncGSuite) getGoogleUsersInGroup(group *admin.Group, userCache map[str
 			log.WithFields(log.Fields{
 				"func":    funcName,
 				"GroupId": group.Id,
+				"Member#": memberIndex,
 			}).Info("skip: external user")
 			continue
 		}
@@ -1377,6 +1380,7 @@ func (s *syncGSuite) getGoogleUsersInGroup(group *admin.Group, userCache map[str
 			log.WithFields(log.Fields{
 				"func":    funcName,
 				"GroupId": group.Id,
+				"Member#": memberIndex,
 			}).Info("skip: suspended user")
 			continue
 		}
@@ -1386,30 +1390,38 @@ func (s *syncGSuite) getGoogleUsersInGroup(group *admin.Group, userCache map[str
 			log.WithFields(log.Fields{
 				"func":    funcName,
 				"GroupId": group.Id,
+				"Member#": memberIndex,
 			}).Info("skip: ignore list")
 			continue
 		}
 
+		// Ignore any users that don't have a valid status
 		allowedStatus := map[string]bool{"ACTIVE": true, "SUSPENDED": true}
 		if !allowedStatus[m.Status] {
 			log.WithFields(log.Fields{
 				"func":    funcName,
 				"GroupId": group.Id,
+				"Member#": memberIndex,
 			}).Info("skip: !ACTIVE")
 			continue
 		}
 
+		// This is a member that should be synced to AWS
 		log.WithFields(log.Fields{
 			"func":    funcName,
 			"GroupId": group.Id,
+			"Member#": memberIndex,
 		}).Debug("valid member")
+		var memberEmail string
 		// Find the group member in the cache of UserDetails
 		if _, found := userCache[m.Email]; !found {
 			log.WithFields(log.Fields{
 				"func":    funcName,
 				"GroupId": group.Id,
+				"Member#": memberIndex,
 			}).Debug("Cache: user not found")
-
+			// Looking up the user based on the member email address,
+			// it might be an alias
 			googleUsers, err := s.google.GetUsers("email="+m.Email, s.cfg.UserFilter)
 			if err != nil {
 				log.WithFields(log.Fields{
@@ -1419,33 +1431,52 @@ func (s *syncGSuite) getGoogleUsersInGroup(group *admin.Group, userCache map[str
 				}).Error("Fetching user")
 				continue
 			}
+			// Add user to the cache
 			for _, u := range googleUsers {
+				if _, found := userCache[u.PrimaryEmail]; !found {
+					log.WithFields(log.Fields{
+						"func":    funcName,
+						"GroupId": group.Id,
+						"Member#": memberIndex,
+					}).Debug("Cache user")
+					userCache[u.PrimaryEmail] = u
+				}
+				memberEmail = u.PrimaryEmail
+			}
+			// Check whether the member was based on an alias
+			if memberEmail != m.Email {
 				log.WithFields(log.Fields{
 					"func":    funcName,
 					"GroupId": group.Id,
 					"Member#": memberIndex,
-				}).Debug("Cache user")
-				userCache[u.PrimaryEmail] = u
+				}).Debug("Member listed using an alias")
 			}
+		} else {
+			// member (email address) found in user cache
+			memberEmail = m.Email
 		}
-		log.WithFields(log.Fields{
-			"func":    funcName,
-			"GroupId": group.Id,
-			"Member#": memberIndex,
-		}).Debug("Add member")
-		if userCache[m.Email] == nil {
+
+		// Add user based on user cache
+		if userCache[memberEmail] == nil {
 			log.WithFields(log.Fields{
-				"func":   funcName,
-				"Member": m,
+				"func":        funcName,
+				"memberEmail": memberEmail,
 			}).Error("Can't retrieve user")
 			continue
+		} else {
+			log.WithFields(log.Fields{
+				"func":    funcName,
+				"GroupId": group.Id,
+				"Member#": memberIndex,
+			}).Debug("Add member")
 		}
-		membersUsers = append(membersUsers, userCache[m.Email])
+		membersUsers = append(membersUsers, userCache[memberEmail])
 
 	}
 	log.WithFields(log.Fields{
 		"func":         funcName,
 		"GroupId":      group.Id,
+		"# Members":    len(membersUsers),
 		"membersUsers": membersUsers,
 	}).Debug("Return")
 	return membersUsers
