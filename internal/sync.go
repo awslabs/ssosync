@@ -762,7 +762,10 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 		}
 
 		log.WithField("func", funcName).Debug("fetch membership")
-		membersUsers := s.getGoogleUsersInGroup(g, gUserDetailCache, gGroupDetailCache)
+		membersUsers, err := s.getGoogleUsersInGroup(g, gUserDetailCache, gGroupDetailCache)
+		if err != nil {
+			return nil, nil, nil, err
+		}
 
 		// If we've not seen the user email address before add it to the list of unique users
 		// also, we need to deduplicate the list of members.
@@ -1311,7 +1314,7 @@ func (s *syncGSuite) RemoveUserFromGroup(userID *string, groupID *string) error 
 	return nil
 }
 
-func (s *syncGSuite) getGoogleUsersInGroup(group *admin.Group, userCache map[string]*admin.User, groupCache map[string]*admin.Group) []*admin.User {
+func (s *syncGSuite) getGoogleUsersInGroup(group *admin.Group, userCache map[string]*admin.User, groupCache map[string]*admin.Group) ([]*admin.User, error) {
 	funcName := "getGoogleUsersInGroup"
 	log.WithFields(log.Fields{
 		"func":  funcName,
@@ -1326,7 +1329,7 @@ func (s *syncGSuite) getGoogleUsersInGroup(group *admin.Group, userCache map[str
 			"GroupId": group.Id,
 			"Error":   err,
 		}).Error("failed retrieving membership")
-		return nil
+		return nil, err
 	}
 	membersUsers := make([]*admin.User, 0)
 
@@ -1429,7 +1432,7 @@ func (s *syncGSuite) getGoogleUsersInGroup(group *admin.Group, userCache map[str
 					"error":        err,
 					"Member.Email": m.Email,
 				}).Error("Fetching user")
-				continue
+				return nil, err
 			}
 			// Add user to the cache
 			for _, u := range googleUsers {
@@ -1479,5 +1482,5 @@ func (s *syncGSuite) getGoogleUsersInGroup(group *admin.Group, userCache map[str
 		"# Members":    len(membersUsers),
 		"membersUsers": membersUsers,
 	}).Debug("Return")
-	return membersUsers
+	return membersUsers, nil
 }

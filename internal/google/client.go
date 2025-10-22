@@ -108,12 +108,25 @@ func (c *client) GetGroupMembers(g *admin.Group) ([]*admin.Member, error) {
 //	orgName=Engineering orgTitle:Manager
 //	EmploymentData.projects:'GeneGnomes'
 func (c *client) GetUsers(query string, filter string) ([]*admin.User, error) {
+	var err error
+	users := make([]*admin.User, 0)
+
+	for iteration := 1; iteration < 5; iteration++ {
+		users, err = c.getUsers(query, filter)
+		if err == nil {
+			return users, nil
+		}
+	}
+	return nil, err
+}
+
+func (c *client) getUsers(query string, filter string) ([]*admin.User, error) {
 	u := make([]*admin.User, 0)
 	var err error
 
 	// If we have an empty query, return nothing.
 	if query == "" {
-		return u, err
+		return nil, nil
 	}
 
 	// If we have wildcard then fetch all users
