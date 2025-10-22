@@ -109,7 +109,7 @@ func (c *client) GetGroupMembers(g *admin.Group) ([]*admin.Member, error) {
 //	EmploymentData.projects:'GeneGnomes'
 func (c *client) GetUsers(query string, filter string) ([]*admin.User, error) {
 	var err error
-	users := make([]*admin.User, 0)
+	var users []*admin.User
 
 	for iteration := 1; iteration < 5; iteration++ {
 		users, err = c.getUsers(query, filter)
