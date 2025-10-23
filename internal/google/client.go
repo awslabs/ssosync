@@ -27,14 +27,16 @@ import (
 
 const (
 	ModuleName = "google"
+	// Maximum number of retries for admin api
+	MaxRetries = 5
 )
 
 // Client is the Interface for the Client
 type Client interface {
 	GetUsers() ([]*admin.User, error)
 	GetGroups() ([]*admin.Group, error)
-	GetGroupMembers() ([]*admin.Member, error)
-	GetGroupMembersById(*admin.Group) ([]*admin.Member, error)
+	GetGroupMembers() (map[string][]*admin.Member, error)
+	GetGroupMembersBy(*admin.Group) ([]*admin.Member, error)
 }
 
 type client struct {
@@ -205,9 +207,6 @@ func (c *client) getUserQueries() []string {
 }
 
 // Google Admin API helper methods
-//
-//
-
 func (c *client) fetchUsers(query string) ([]*admin.User, error) {
 	funcName := "fetchUsers"
 	log.WithField("module", ModuleName).WithField("func", funcName).WithField("query", query).Debug(funcName + "()")
@@ -324,11 +323,20 @@ func (c *client) refreshUserCache() error {
 	}
 
 	for _, query := range c.getPrecacheQueries() {
-		log.WithField("module", ModuleName).WithField("func", funcName).WithField("query", query).Debug("Precaching users")
-		users, err := c.fetchUsers(query)
+		var users []*admin.User
+		var err error
+
+		for iteration := 1; iteration < MaxRetries; iteration++ {
+			log.WithField("module", ModuleName).WithField("func", funcName).WithField("query", query).Debug("Precaching users")
+			users, err = c.fetchUsers(query)
+			if err == nil {
+				break
+			} else {
+				log.WithField("module", ModuleName).WithField("func", funcName).WithField("query", query).Error("google.refreshUserCache() failed")
+			}
+		}
 		if err != nil {
-			log.WithField("module", ModuleName).WithField("func", funcName).WithField("query", query).Error("google.refreshUserCache() failed")
-			continue
+			return err
 		}
 		for _, user := range users {
 			log.WithField("module", ModuleName).WithField("func", funcName).WithField("user", user).Debug("processing")
@@ -360,10 +368,20 @@ func (c *client) refreshUsers() error {
 	}
 
 	for _, query := range c.getUserQueries() {
-		log.WithField("module", ModuleName).WithField("func", funcName).WithField("query", query).Debug("fetchUsers")
-		users, err := c.fetchUsers(query)
+		var users []*admin.User
+		var err error
+
+		for iteration := 1; iteration < MaxRetries; iteration++ {
+			log.WithField("module", ModuleName).WithField("func", funcName).WithField("query", query).Debug("fetchUsers")
+
+			users, err = c.fetchUsers(query)
+			if err == nil {
+				break
+			} else {
+				log.WithField("module", ModuleName).WithField("func", funcName).WithField("query", query).WithField("error", err).Error("failed")
+			}
+		}
 		if err != nil {
-			log.WithField("module", ModuleName).WithField("func", funcName).WithField("query", query).WithField("error", err).Error("failed")
 			return err
 		}
 		for _, user := range users {
@@ -394,10 +412,19 @@ func (c *client) refreshGroups() error {
 	}
 
 	for _, query := range c.getGroupQueries() {
-		log.WithField("module", ModuleName).WithField("func", funcName).WithField("query", query).Debug("fetchGroups")
-		groups, err := c.fetchGroups(query)
+		var groups []*admin.Group
+		var err error
+
+		for iteration := 1; iteration < MaxRetries; iteration++ {
+			log.WithField("module", ModuleName).WithField("func", funcName).WithField("query", query).Debug("fetchGroups")
+			groups, err = c.fetchGroups(query)
+			if err == nil {
+				break
+			} else {
+				log.WithField("module", ModuleName).WithField("func", funcName).WithField("query", query).WithField("error", err).Error("failed")
+			}
+		}
 		if err != nil {
-			log.WithField("module", ModuleName).WithField("func", funcName).WithField("query", query).WithField("error", err).Error("failed")
 			return err
 		}
 		for _, group := range groups {
@@ -407,7 +434,7 @@ func (c *client) refreshGroups() error {
 				continue
 			}
 			if err := c.addGroup(group); err != nil {
-				log.WithField("module", ModuleName).WithField("func", funcName).WithField("groupi.Id", group.Id).WithField("error", err).Error("error adding group")
+				log.WithField("module", ModuleName).WithField("func", funcName).WithField("group.Id", group.Id).WithField("error", err).Error("error adding group")
 				continue
 			}
 		}
@@ -433,10 +460,19 @@ func (c *client) refreshMembers() error {
 	}
 
 	for groupId, _ := range c.groupsId {
-		members, err := c.fetchMembers(groupId)
+		var members []*admin.Member
+		var err error
 
+		for iteration := 1; iteration < MaxRetries; iteration++ {
+			log.WithField("module", ModuleName).WithField("func", funcName).WithField("groupId", groupId).Debug("fetchMembers")
+			members, err = c.fetchMembers(groupId)
+			if err == nil {
+				break
+			} else {
+				log.WithField("module", ModuleName).WithField("func", funcName).WithField("groupId", groupId).WithField("error", err).Error("failed")
+			}
+		}
 		if err != nil {
-			log.WithField("module", ModuleName).WithField("func", funcName).WithField("groupId", groupId).Error("google.refreshMembers() failed")
 			return err
 		}
 		memberList := make([]*admin.Member, 0)
