@@ -38,6 +38,11 @@ type client struct {
 	service *admin.Service
 }
 
+const (
+	// Maximum number of retries for admin api
+	MaxRetries = 5
+)
+
 // NewClient creates a new client for Google's Admin API
 func NewClient(ctx context.Context, adminEmail string, serviceAccountKey []byte) (Client, error) {
 	config, err := google.JWTConfigFromJSON(serviceAccountKey, admin.AdminDirectoryGroupReadonlyScope,
@@ -65,6 +70,19 @@ func NewClient(ctx context.Context, adminEmail string, serviceAccountKey []byte)
 
 // GetDeletedUsers will get the deleted users from the Google's Admin API.
 func (c *client) GetDeletedUsers() ([]*admin.User, error) {
+	var err error
+	var members []*admin.User
+
+	for iteration := 1; iteration < MaxRetries; iteration++ {
+		members, err = c.getDeletedUsers()
+		if err == nil {
+			return members, nil
+		}
+	}
+	return nil, err
+}
+
+func (c *client) getDeletedUsers() ([]*admin.User, error) {
 	u := make([]*admin.User, 0)
 	var err error
 
@@ -80,6 +98,19 @@ func (c *client) GetDeletedUsers() ([]*admin.User, error) {
 
 // GetGroupMembers will get the members of the group specified
 func (c *client) GetGroupMembers(g *admin.Group) ([]*admin.Member, error) {
+	var err error
+	var members []*admin.Member
+
+	for iteration := 1; iteration < MaxRetries; iteration++ {
+		members, err = c.getGroupMembers(g)
+		if err == nil {
+			return members, nil
+		}
+	}
+	return nil, err
+}
+
+func (c *client) getGroupMembers(g *admin.Group) ([]*admin.Member, error) {
 	m := make([]*admin.Member, 0)
 	var err error
 
@@ -111,7 +142,7 @@ func (c *client) GetUsers(query string, filter string) ([]*admin.User, error) {
 	var err error
 	var users []*admin.User
 
-	for iteration := 1; iteration < 5; iteration++ {
+	for iteration := 1; iteration < MaxRetries; iteration++ {
 		users, err = c.getUsers(query, filter)
 		if err == nil {
 			return users, nil
@@ -183,6 +214,19 @@ func (c *client) getUsers(query string, filter string) ([]*admin.User, error) {
 //	name:Admin* email:aws-*
 //	email:aws-*
 func (c *client) GetGroups(query string) ([]*admin.Group, error) {
+	var err error
+	var groups []*admin.Group
+
+	for iteration := 1; iteration < MaxRetries; iteration++ {
+		groups, err = c.getGroups(query)
+		if err == nil {
+			return groups, nil
+		}
+	}
+	return nil, err
+}
+
+func (c *client) getGroups(query string) ([]*admin.Group, error) {
 	g := make([]*admin.Group, 0)
 	var err error
 
