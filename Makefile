@@ -16,13 +16,15 @@ test:
 go-build:
 	go build -o $(APP_NAME) main.go
 
-build-SSOSyncFunction:
+build-SSOSyncV2Function:
 	GOOS=linux GOARCH=arm64 go build -o bootstrap main.go
 	cp ./bootstrap $(ARTIFACTS_DIR)/.
 
 .PHONY: clean
 clean:
 	rm -f $(OUTPUT) $(PACKAGED_TEMPLATE)
+	rm -rf .aws-sam/
+
 
 .PHONY: install
 install:
@@ -54,3 +56,4 @@ package: build
 .PHONY: deploy
 deploy: package
 	sam deploy --stack-name $(STACK_NAME) --template-file $(PACKAGED_TEMPLATE) --capabilities CAPABILITY_IAM
+

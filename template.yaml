@@ -124,7 +124,7 @@ Resources:
   SSOSyncV2Function:
     Type: AWS::Serverless::Function
     Properties:
-      Runtime: provided.al2
+      Runtime: provided.al2023
       Handler: bootstrap
       Architectures:
         - arm64
