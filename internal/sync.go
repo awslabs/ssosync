@@ -823,7 +823,7 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 			"group.Id": g.Id,
 			"gMembers": gMembers,
 		}).Debug("Finished group membership")
-		gGroupsUsers[g.Name] = gMembers
+		gGroupsUsers[g.Email] = gMembers
 	}
 
 	log.WithField("func", funcName).Debug("create gUsers")
@@ -847,17 +847,17 @@ func getGroupOperations(awsGroups []*interfaces.Group, googleGroups []*admin.Gro
 	}
 
 	for _, gGroup := range googleGroups {
-		googleMap[gGroup.Name] = struct{}{}
+		googleMap[gGroup.Email] = struct{}{}
 	}
 
 	// Google Groups found and not found in AWS
 	for _, gGroup := range googleGroups {
-		if _, found := awsMap[gGroup.Name]; found {
+		if _, found := awsMap[gGroup.Email]; found {
 			log.WithField("gGroup", gGroup).Debug("equals")
-			equals = append(equals, awsMap[gGroup.Name])
+			equals = append(equals, awsMap[gGroup.Email])
 		} else {
 			log.WithField("gGroup", gGroup).Debug("add")
-			add = append(add, aws.NewGroup(gGroup.Name))
+			add = append(add, aws.NewGroup(gGroup.Email))
 		}
 	}
 
