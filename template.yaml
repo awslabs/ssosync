@@ -597,7 +597,7 @@ Resources:
       FunctionName: !If [SetFunctionName, !Ref FunctionName, !Ref AWS::NoValue]
       Description: "An instance of ssosync deplyed from the Serverless Application Repository, for details see http://https://github.com/awslabs/ssosync"
       Role: !If [RemoteSecrets, !GetAtt SSOSyncRoleRemote.Arn, !GetAtt SSOSyncRoleLocal.Arn]
-      Runtime: provided.al2
+      Runtime: provided.al2023
       Handler: bootstrap
       Architectures:
         - arm64
