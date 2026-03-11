@@ -96,9 +96,8 @@ func (s *syncGSuite) SyncUsers(query string) error {
 	}
 
 	var newDeletedUsers = make([]*admin.User, 0)
-	var isDeletedUserActive = false
 	for _, deleteUser := range deletedUsers {
-		isDeletedUserActive = false
+		isDeletedUserActive := false
 		log.WithFields(log.Fields{
 			"email": deleteUser.PrimaryEmail,
 		}).Debug("Inspecting deleted user email")
@@ -106,7 +105,7 @@ func (s *syncGSuite) SyncUsers(query string) error {
 			if deleteUser.PrimaryEmail == activeGoogleUser.PrimaryEmail {
 				isDeletedUserActive = true
 				log.WithFields(log.Fields{
-				    "email": deleteUser.PrimaryEmail,
+					"email": deleteUser.PrimaryEmail,
 				}).Debug("User is active again! Breaking loop...")
 				break
 			}
