@@ -19,6 +19,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path"
 	"strings"
 	"time"
 
@@ -381,8 +382,8 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 	}
 
 	// create list of changes by operations
-	addAWSUsers, delAWSUsers, updateAWSUsers, _ := getUserOperations(awsUsers, googleUsers)
-	addAWSGroups, delAWSGroups, equalAWSGroups := getGroupOperations(awsGroups, googleGroups)
+	addAWSUsers, delAWSUsers, updateAWSUsers, _ := getUserOperations(awsUsers, googleUsers, s.ignoreUser)
+	addAWSGroups, delAWSGroups, equalAWSGroups := getGroupOperations(awsGroups, googleGroups, s.ignoreGroup)
 
 	log.Info("syncing changes")
 
@@ -864,7 +865,7 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 }
 
 // getGroupOperations returns the groups of AWS that must be added, deleted and are equals
-func getGroupOperations(awsGroups []*interfaces.Group, googleGroups []*admin.Group) (add []*interfaces.Group, delete []*interfaces.Group, equals []*interfaces.Group) {
+func getGroupOperations(awsGroups []*interfaces.Group, googleGroups []*admin.Group, ignoreGroup func(string) bool) (add []*interfaces.Group, delete []*interfaces.Group, equals []*interfaces.Group) {
 
 	log.Debug("getGroupOperations()")
 	awsMap := make(map[string]*interfaces.Group)
@@ -892,6 +893,9 @@ func getGroupOperations(awsGroups []*interfaces.Group, googleGroups []*admin.Gro
 	// AWS Groups not found in Google
 	for _, awsGroup := range awsGroups {
 		if _, found := googleMap[awsGroup.DisplayName]; !found {
+			if ignoreGroup(awsGroup.DisplayName) {
+				continue
+			}
 			log.WithField("awsGroup", awsGroup).Debug("delete")
 			delete = append(delete, aws.NewGroup(awsGroup.DisplayName))
 		}
@@ -901,7 +905,7 @@ func getGroupOperations(awsGroups []*interfaces.Group, googleGroups []*admin.Gro
 }
 
 // getUserOperations returns the users of AWS that must be added, deleted, updated and are equals
-func getUserOperations(awsUsers []*interfaces.User, googleUsers []*admin.User) (add []*interfaces.User, delete []*interfaces.User, update []*interfaces.User, equals []*interfaces.User) {
+func getUserOperations(awsUsers []*interfaces.User, googleUsers []*admin.User, ignoreUser func(string) bool) (add []*interfaces.User, delete []*interfaces.User, update []*interfaces.User, equals []*interfaces.User) {
 
 	log.Debug("getUserOperations()")
 	awsMap := make(map[string]*interfaces.User)
@@ -945,6 +949,9 @@ func getUserOperations(awsUsers []*interfaces.User, googleUsers []*admin.User) (
 	// Google Users founds and not in aws
 	for _, awsUser := range awsUsers {
 		if _, found := googleMap[awsUser.Username]; !found {
+			if ignoreUser(awsUser.Username) {
+				continue
+			}
 			log.WithFields(log.Fields{
 				"awsUser": awsUser,
 			}).Debug("delete")
@@ -1109,8 +1116,15 @@ func (s *syncGSuite) ignoreUser(name string) bool {
 			s.ignoreUsersSet[u] = struct{}{}
 		}
 	}
-	_, exists := s.ignoreUsersSet[name]
-	return exists
+	if _, exists := s.ignoreUsersSet[name]; exists {
+		return true
+	}
+	for _, pattern := range s.cfg.IgnoreUsers {
+		if matched, _ := path.Match(pattern, name); matched {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *syncGSuite) ignoreGroup(name string) bool {
@@ -1120,8 +1134,15 @@ func (s *syncGSuite) ignoreGroup(name string) bool {
 			s.ignoreGroupsSet[g] = struct{}{}
 		}
 	}
-	_, exists := s.ignoreGroupsSet[name]
-	return exists
+	if _, exists := s.ignoreGroupsSet[name]; exists {
+		return true
+	}
+	for _, pattern := range s.cfg.IgnoreGroups {
+		if matched, _ := path.Match(pattern, name); matched {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *syncGSuite) includeGroup(name string) bool {
