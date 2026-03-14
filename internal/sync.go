@@ -19,6 +19,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path"
 	"strings"
 	"time"
 
@@ -381,8 +382,8 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 	}
 
 	// create list of changes by operations
-	addAWSUsers, delAWSUsers, updateAWSUsers, _ := getUserOperations(awsUsers, googleUsers)
-	addAWSGroups, delAWSGroups, equalAWSGroups := getGroupOperations(awsGroups, googleGroups)
+	addAWSUsers, delAWSUsers, updateAWSUsers, _ := getUserOperations(awsUsers, googleUsers, s.ignoreUser)
+	addAWSGroups, delAWSGroups, equalAWSGroups := getGroupOperations(awsGroups, googleGroups, s.ignoreGroup)
 
 	log.Info("syncing changes")
 
@@ -525,8 +526,13 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 	}
 
 	// delete aws groups (deleted in google)
-	log.Debug("delete aws groups deleted in google")
+	log.WithField("count", len(delAWSGroups)).Debug("Starting deletion loop for aws groups deleted in google")
 	for _, awsGroup := range delAWSGroups {
+		// Double check ignore list here as a safety measure
+		if s.ignoreGroup(awsGroup.DisplayName) {
+			log.WithField("group", awsGroup.DisplayName).Debug("Skipping group deletion (on ignore list)")
+			continue
+		}
 
 		log := log.WithFields(log.Fields{"group": awsGroup.DisplayName})
 
@@ -550,8 +556,13 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 	}
 
 	// delete aws users (deleted in google)
-	log.Debug("deleting aws users deleted in google")
+	log.WithField("count", len(delAWSUsers)).Debug("Starting deletion loop for aws users deleted in google")
 	for _, awsUser := range delAWSUsers {
+		// Double check ignore list here as a safety measure
+		if s.ignoreUser(awsUser.Username) {
+			log.WithField("user", awsUser.Username).Debug("Skipping user deletion (on ignore list)")
+			continue
+		}
 
 		log := log.WithFields(log.Fields{"user": awsUser.Username})
 
@@ -864,7 +875,7 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 }
 
 // getGroupOperations returns the groups of AWS that must be added, deleted and are equals
-func getGroupOperations(awsGroups []*interfaces.Group, googleGroups []*admin.Group) (add []*interfaces.Group, delete []*interfaces.Group, equals []*interfaces.Group) {
+func getGroupOperations(awsGroups []*interfaces.Group, googleGroups []*admin.Group, ignoreGroup func(string) bool) (add []*interfaces.Group, delete []*interfaces.Group, equals []*interfaces.Group) {
 
 	log.Debug("getGroupOperations()")
 	awsMap := make(map[string]*interfaces.Group)
@@ -892,7 +903,12 @@ func getGroupOperations(awsGroups []*interfaces.Group, googleGroups []*admin.Gro
 	// AWS Groups not found in Google
 	for _, awsGroup := range awsGroups {
 		if _, found := googleMap[awsGroup.DisplayName]; !found {
-			log.WithField("awsGroup", awsGroup).Debug("delete")
+			log.WithField("group", awsGroup.DisplayName).Debug("Group found in AWS but NOT in Google")
+			if ignoreGroup(awsGroup.DisplayName) {
+				log.WithField("group", awsGroup.DisplayName).Debug("Skipping group deletion (on ignore list)")
+				continue
+			}
+			log.WithField("awsGroup", awsGroup.DisplayName).Debug("Adding group to delete list")
 			delete = append(delete, aws.NewGroup(awsGroup.DisplayName))
 		}
 	}
@@ -901,7 +917,7 @@ func getGroupOperations(awsGroups []*interfaces.Group, googleGroups []*admin.Gro
 }
 
 // getUserOperations returns the users of AWS that must be added, deleted, updated and are equals
-func getUserOperations(awsUsers []*interfaces.User, googleUsers []*admin.User) (add []*interfaces.User, delete []*interfaces.User, update []*interfaces.User, equals []*interfaces.User) {
+func getUserOperations(awsUsers []*interfaces.User, googleUsers []*admin.User, ignoreUser func(string) bool) (add []*interfaces.User, delete []*interfaces.User, update []*interfaces.User, equals []*interfaces.User) {
 
 	log.Debug("getUserOperations()")
 	awsMap := make(map[string]*interfaces.User)
@@ -945,9 +961,14 @@ func getUserOperations(awsUsers []*interfaces.User, googleUsers []*admin.User) (
 	// Google Users founds and not in aws
 	for _, awsUser := range awsUsers {
 		if _, found := googleMap[awsUser.Username]; !found {
+			log.WithField("user", awsUser.Username).Debug("User found in AWS but NOT in Google")
+			if ignoreUser(awsUser.Username) {
+				log.WithField("user", awsUser.Username).Info("Skipping user deletion (on ignore list)")
+				continue
+			}
 			log.WithFields(log.Fields{
-				"awsUser": awsUser,
-			}).Debug("delete")
+				"awsUser": awsUser.Username,
+			}).Debug("Adding user to delete list")
 			delete = append(delete, aws.NewUser(awsUser.Name.GivenName, awsUser.Name.FamilyName, awsUser.Username, awsUser.Active))
 		}
 	}
@@ -1103,25 +1124,51 @@ func DoSync(ctx context.Context, cfg *config.Config) error {
 }
 
 func (s *syncGSuite) ignoreUser(name string) bool {
+	name = strings.TrimSpace(name)
 	if s.ignoreUsersSet == nil {
 		s.ignoreUsersSet = make(map[string]struct{}, len(s.cfg.IgnoreUsers))
 		for _, u := range s.cfg.IgnoreUsers {
-			s.ignoreUsersSet[u] = struct{}{}
+			s.ignoreUsersSet[strings.TrimSpace(u)] = struct{}{}
 		}
 	}
-	_, exists := s.ignoreUsersSet[name]
-	return exists
+	if _, exists := s.ignoreUsersSet[name]; exists {
+		log.WithField("user", name).Debug("User ignored (exact match)")
+		return true
+	}
+	for _, pattern := range s.cfg.IgnoreUsers {
+		p := strings.TrimSpace(pattern)
+		log.WithFields(log.Fields{"user": name, "pattern": p}).Debug("Checking wildcard pattern")
+		if matched, _ := path.Match(p, name); matched {
+			log.WithFields(log.Fields{"user": name, "pattern": p}).Debug("User ignored (wildcard match)")
+			return true
+		}
+	}
+	log.WithField("user", name).Debug("User NOT ignored")
+	return false
 }
 
 func (s *syncGSuite) ignoreGroup(name string) bool {
+	name = strings.TrimSpace(name)
+	log.WithField("group", name).Debug("Checking if group should be ignored")
 	if s.ignoreGroupsSet == nil {
 		s.ignoreGroupsSet = make(map[string]struct{}, len(s.cfg.IgnoreGroups))
 		for _, g := range s.cfg.IgnoreGroups {
-			s.ignoreGroupsSet[g] = struct{}{}
+			s.ignoreGroupsSet[strings.TrimSpace(g)] = struct{}{}
 		}
 	}
-	_, exists := s.ignoreGroupsSet[name]
-	return exists
+	if _, exists := s.ignoreGroupsSet[name]; exists {
+		return true
+	}
+	for _, pattern := range s.cfg.IgnoreGroups {
+		p := strings.TrimSpace(pattern)
+		log.WithFields(log.Fields{"group": name, "pattern": p}).Debug("Checking wildcard pattern")
+		if matched, _ := path.Match(p, name); matched {
+			log.WithFields(log.Fields{"group": name, "pattern": p}).Debug("Group ignored (wildcard match)")
+			return true
+		}
+	}
+	log.WithField("group", name).Debug("Group NOT ignored")
+	return false
 }
 
 func (s *syncGSuite) includeGroup(name string) bool {
@@ -1145,7 +1192,7 @@ func ConvertIdentityStoreGroupToAWSGroup(group identitystore_types.Group) *inter
 		log.WithField("group", group).Warn("ConvertIdentityStoreGroupToAWSGroup() Group has no DisplayName")
 		return nil
 	}
-	log.WithField("groupId", group.GroupId).WithField("displayName", group.DisplayName).Debug("ConvertIdentityStoreGroupToAWSGroup() Group converted")
+	log.WithField("groupId", *group.GroupId).WithField("displayName", *group.DisplayName).Debug("ConvertIdentityStoreGroupToAWSGroup() Group converted")
 	return &interfaces.Group{
 		ID:          *group.GroupId,
 		Schemas:     []string{constants.SCIMSchemaGroup},

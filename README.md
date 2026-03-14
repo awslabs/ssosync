@@ -81,12 +81,15 @@ what it is going to do.
 > `>= 2.1.0` switched to using `provided.al2` powered by ARM64 instances.
 
 > [!IMPORTANT]
-> As of `v2.2.0` multiple query patterns are supported for both Group and User matching, simply separate each query with a `,`. For full sync of groups and/or users specify '*' in the relevant match field. 
+> As of `v2.2.0` multiple query patterns are supported for both Group and User matching, simply separate each query with a `,`. For full sync of groups and/or users specify '*' in the relevant match field.
 > User match and group match can now be used in combination with the sync method of groups.
 > Nested groups will now be flattened into the top level groups.
 > External users are ignored.
 > Group owners are treated as regular group members.
 > User details are now cached to reduce the number of api calls and improve execution times on large directories.
+
+|> [!IMPORTANT]
+|> **Wildcard support in ignore lists**: You can now use `*` wildcards in `--ignore-users` and `--ignore-groups`. For example, `--ignore-users "*@example.com"` acts as a **Global Safety Net**, preventing the deletion of any user matching that pattern even if they are not in the current sync list.
 
 ### References
 
@@ -184,11 +187,11 @@ SSO Sync requires configuration from both Google Workspace and AWS sides.
   --group-match "*" \
   --sync-method users_groups
 
-# Ignore specific users/groups
+# Ignore specific users/groups (supports wildcards)
 ./ssosync \
   --group-match "*" \
-  --ignore-users "service@company.com,bot@company.com" \
-  --ignore-groups "temp-group@company.com"
+  --ignore-users "service@company.com,bot@company.com,*@company-2.com" \
+  --ignore-groups "temp-group@company.com,temp-*,internal-*"
 ```
 
 ### Environment Variables
@@ -219,8 +222,8 @@ export SSOSYNC_DRY_RUN="true"
 | `--sync-method` | `SSOSYNC_SYNC_METHOD` | Sync method (`groups` or `users_groups`) | `groups` |
 | `--group-match` | `SSOSYNC_GROUP_MATCH` | Google Groups filter query | `*` |
 | `--user-match` | `SSOSYNC_USER_MATCH` | Google Users filter query | `""` |
-| `--ignore-users` | `SSOSYNC_IGNORE_USERS` | Comma-separated list of users to ignore | `[]` |
-| `--ignore-groups` | `SSOSYNC_IGNORE_GROUPS` | Comma-separated list of groups to ignore | `[]` |
+| `--ignore-users` | `SSOSYNC_IGNORE_USERS` | Comma-separated list of users to ignore (supports `*` wildcards) | `[]` |
+| `--ignore-groups` | `SSOSYNC_IGNORE_GROUPS` | Comma-separated list of groups to ignore (supports `*` wildcards) | `[]` |
 | `--include-groups` | `SSOSYNC_INCLUDE_GROUPS` | Include only these groups (users_groups method only) | `[]` |
 | `--dry-run` | `SSOSYNC_DRY_RUN` | Enable dry-run mode | `false` |
 | `--log-level` | `SSOSYNC_LOG_LEVEL` | Log level (debug, info, warn, error) | `info` |
