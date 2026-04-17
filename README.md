@@ -72,7 +72,7 @@ what it is going to do.
 > [!WARNING]
 > `>= 2.0.0` this makes use of the **Identity Store API** which means:
 > * if deploying the lambda from the [AWS Serverless Application Repository](https://console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync) then it needs to be deployed into the [IAM Identity Center delegated administration](https://docs.aws.amazon.com/singlesignon/latest/userguide/delegated-admin.html) account. Technically you could deploy in the management account but we would recommend against this.
-> * if you are running the project as a cli tool, then the environment will need to be using credentials of a user in the [IAM Identity Center delegated administration](https://docs.aws.amazon.com/singlesignon/latest/userguide/delegated-admin.html) account, with appropriate permissions.
+> * if you are running the project as a cli tool, then the environment will need to be using credentials of a user in the [IAM Identity Center delegated administration](https://docs.aws.amazon.com/singlesignon/latest/userguide/delegated-admin.html) account, with appropriate permissions, or credentials that can assume a role in that account via `--assume-role-arn` / `SSOSYNC_ASSUME_ROLE_ARN`.
 
 > [!WARNING]
 > `>= 2.1.0` make use of named IAM resources, so if deploying via CICD or IaC template will require **CAPABILITY_NAMED_IAM** to be specified.
@@ -146,6 +146,7 @@ SSO Sync requires configuration from both Google Workspace and AWS sides.
      - AWS credentials file (`~/.aws/credentials`)
      - Environment variables (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`)
      - IAM roles (for Lambda deployment)
+   - If `ssosync` runs outside the delegated admin or management account, provide base credentials that can assume a role in the target account and set `--assume-role-arn` or `SSOSYNC_ASSUME_ROLE_ARN` so Identity Store API calls use that role.
 
 ## 🚀 Usage
 
@@ -165,6 +166,19 @@ SSO Sync requires configuration from both Google Workspace and AWS sides.
   --scim-access-token AQoDYXdzE... \
   --region us-east-1 \
   --identity-store-id d-1234567890 \
+  --group-match "name:AWS*"
+```
+
+```bash
+# Run outside the delegated admin / management account by assuming a target role
+./ssosync \
+  --google-admin admin@company.com \
+  --google-credentials ./credentials.json \
+  --scim-endpoint https://scim.us-east-1.amazonaws.com/... \
+  --scim-access-token AQoDYXdzE... \
+  --region us-east-1 \
+  --identity-store-id d-1234567890 \
+  --assume-role-arn arn:aws:iam::123456789012:role/SSOSyncIdentityCenterAccess \
   --group-match "name:AWS*"
 ```
 
@@ -202,6 +216,7 @@ export SSOSYNC_SCIM_ENDPOINT="https://scim.us-east-1.amazonaws.com/..."
 export SSOSYNC_SCIM_ACCESS_TOKEN="AQoDYXdzE..."
 export SSOSYNC_REGION="us-east-1"
 export SSOSYNC_IDENTITY_STORE_ID="d-1234567890"
+export SSOSYNC_ASSUME_ROLE_ARN="arn:aws:iam::123456789012:role/SSOSyncIdentityCenterAccess"
 export SSOSYNC_GROUP_MATCH="name:AWS*"
 export SSOSYNC_DRY_RUN="true"
 ```
@@ -216,6 +231,7 @@ export SSOSYNC_DRY_RUN="true"
 | `--scim-access-token` | `SSOSYNC_SCIM_ACCESS_TOKEN` | AWS SCIM access token | Required |
 | `--region` | `SSOSYNC_REGION` | AWS region | Required |
 | `--identity-store-id` | `SSOSYNC_IDENTITY_STORE_ID` | AWS Identity Store ID | Required |
+| `--assume-role-arn` | `SSOSYNC_ASSUME_ROLE_ARN` | Optional IAM role ARN to assume for Identity Store AWS API calls when running outside the delegated admin / management account | `""` |
 | `--sync-method` | `SSOSYNC_SYNC_METHOD` | Sync method (`groups` or `users_groups`) | `groups` |
 | `--group-match` | `SSOSYNC_GROUP_MATCH` | Google Groups filter query | `*` |
 | `--user-match` | `SSOSYNC_USER_MATCH` | Google Users filter query | `""` |
@@ -370,6 +386,7 @@ REGION=<secret-arn>
 IDENTITY_STORE_ID=<secret-arn>
 
 # Optional environment variables
+ASSUME_ROLE_ARN=arn:aws:iam::123456789012:role/SSOSyncIdentityCenterAccess
 LOG_LEVEL=info
 LOG_FORMAT=json
 SYNC_METHOD=groups
@@ -379,6 +396,8 @@ IGNORE_USERS=
 IGNORE_GROUPS=
 DRY_RUN=false
 ```
+
+`ASSUME_ROLE_ARN` is optional. `SSOSYNC_ASSUME_ROLE_ARN` also works via the normal CLI-style config flow. Set either when the Lambda function runs outside the delegated admin or management account and must assume a target role before making Identity Store API calls.
 
 ## 📊 Monitoring & Troubleshooting
 
