@@ -193,11 +193,11 @@ func initConfig() {
 	// config logger
 	logConfig(cfg)
 
-        if cfg.SyncSuspended {
-                cfg.UserFilter = " isArchived=false"
-        } else {
-                cfg.UserFilter = " isSuspended=false isArchived=false"
-        }
+	if cfg.SyncSuspended {
+		cfg.UserFilter = " isArchived=false"
+	} else {
+		cfg.UserFilter = " isSuspended=false isArchived=false"
+	}
 
 }
 
@@ -208,25 +208,25 @@ func getEnvStr(key string, fallback string) string {
 		log.WithField(key, valueStr).Info("EnvVar")
 		return valueStr
 	}
-        return fallback
+	return fallback
 }
 
-func getEnvStrs (key string, fallback []string) []string {
-        if valueStr, ok := os.LookupEnv(key); ok {
-                log.WithField(key, valueStr).Info("EnvVar")
-                return strings.Split(valueStr, ",")
-        }
-        return fallback
-}
-
-func getEnvBool (key string, fallback bool) bool {
-        if valueStr, ok := os.LookupEnv(key); ok {
+func getEnvStrs(key string, fallback []string) []string {
+	if valueStr, ok := os.LookupEnv(key); ok {
 		log.WithField(key, valueStr).Info("EnvVar")
-                valueBool := strings.ToLower(valueStr) == "true"
+		return strings.Split(valueStr, ",")
+	}
+	return fallback
+}
+
+func getEnvBool(key string, fallback bool) bool {
+	if valueStr, ok := os.LookupEnv(key); ok {
+		log.WithField(key, valueStr).Info("EnvVar")
+		valueBool := strings.ToLower(valueStr) == "true"
 		log.WithField(key, valueBool).Info("config")
-                return valueBool
-        }
-        return fallback
+		return valueBool
+	}
+	return fallback
 }
 
 func configLambda() {
@@ -255,7 +255,7 @@ func configLambda() {
 	cfg.Region = getSecretFromCache(getEnvStr("REGION", ""))
 	cfg.GoogleCredentials = getSecretFromCache(getEnvStr("GOOGLE_CREDENTIALS", ""))
 	cfg.SCIMAccessToken = getSecretFromCache(getEnvStr("SCIM_ACCESS_TOKEN", ""))
-	
+
 	// Handle environment variables for other settings
 	cfg.LogLevel = getEnvStr("LOG_LEVEL", config.DefaultLogLevel)
 	cfg.LogFormat = getEnvStr("LOG_FORMAT", config.DefaultLogFormat)
@@ -265,7 +265,7 @@ func configLambda() {
 	cfg.IgnoreGroups = getEnvStrs("IGNORE_GROUPS", []string{})
 	cfg.IgnoreUsers = getEnvStrs("IGNORE_USERS", []string{})
 	cfg.IncludeGroups = getEnvStrs("INCLUDE_GROUPS", []string{})
-	cfg.PrecacheOrgUnits = getEnvStrs("PRECACHE_ORG_UNITS", strings.Split(config.DefaultPrecacheOrgUnits, ","))
+	cfg.PrecacheOrgUnits = getEnvStrs("PRECACHE_ORG_UNITS", []string{})
 	cfg.DryRun = getEnvBool("DRY_RUN", false)
 	cfg.SyncSuspended = getEnvBool("SYNC_SUSPENDED", false)
 
@@ -285,7 +285,7 @@ func addFlags(_ *cobra.Command, cfg *config.Config) {
 	rootCmd.PersistentFlags().StringVarP(&cfg.LogFormat, "log-format", "", config.DefaultLogFormat, "log format")
 	rootCmd.PersistentFlags().StringVarP(&cfg.LogLevel, "log-level", "", config.DefaultLogLevel, "log level")
 	rootCmd.PersistentFlags().BoolVarP(&cfg.DryRun, "dry-run", "n", false, "Do *not* perform any actions, instead list what would happen")
-        rootCmd.PersistentFlags().BoolVarP(&cfg.SyncSuspended, "suspended", "", false, "included suspended users and their group memberships when syncing")
+	rootCmd.PersistentFlags().BoolVarP(&cfg.SyncSuspended, "suspended", "", false, "included suspended users and their group memberships when syncing")
 	rootCmd.Flags().StringVarP(&cfg.SCIMAccessToken, "access-token", "t", "", "AWS SSO SCIM API Access Token")
 	rootCmd.Flags().StringVarP(&cfg.SCIMEndpoint, "endpoint", "e", "", "AWS SSO SCIM API Endpoint")
 	rootCmd.Flags().StringVarP(&cfg.GoogleCredentials, "google-credentials", "c", config.DefaultGoogleCredentials, "path to Google Workspace credentials file")
@@ -298,7 +298,7 @@ func addFlags(_ *cobra.Command, cfg *config.Config) {
 	rootCmd.Flags().StringVarP(&cfg.SyncMethod, "sync-method", "s", config.DefaultSyncMethod, "Sync method to use (users_groups|groups)")
 	rootCmd.Flags().StringVarP(&cfg.Region, "region", "r", "", "AWS Region where AWS SSO is enabled")
 	rootCmd.Flags().StringVarP(&cfg.IdentityStoreID, "identity-store-id", "i", "", "Identifier of Identity Store in AWS SSO")
-	rootCmd.Flags().StringSliceVar(&cfg.PrecacheOrgUnits, "precache-ous", strings.Split(config.DefaultPrecacheOrgUnits, ","), "A common separated list of Google Workspace OrgUnitPathis e.g.'/', to precache all users within the organization or '/OU_1/OU 2,/OU3'. To disable and use caching on the fly, 'DISABLED'.")
+	rootCmd.Flags().StringSliceVar(&cfg.PrecacheOrgUnits, "precache-ous", []string{}, "A common separated list of Google Workspace OrgUnitPathis e.g.'/', to precache all users within the organization or '/OU_1/OU 2,/OU3'. Precaching is disabled by default.")
 
 }
 
