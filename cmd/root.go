@@ -215,7 +215,9 @@ func getEnvStr(key string, fallback string) string {
 func getEnvStrs(key string, fallback []string) []string {
 	if valueStr, ok := os.LookupEnv(key); ok {
 		log.WithField(key, valueStr).Info("EnvVar")
-		return strings.Split(valueStr, ",")
+		if valueStr != "" {
+			return strings.Split(valueStr, ",")
+		}
 	}
 	return fallback
 }
