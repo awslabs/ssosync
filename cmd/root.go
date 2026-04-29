@@ -215,9 +215,10 @@ func getEnvStr(key string, fallback string) string {
 func getEnvStrs(key string, fallback []string) []string {
 	if valueStr, ok := os.LookupEnv(key); ok {
 		log.WithField(key, valueStr).Info("EnvVar")
-		if valueStr != "" {
-			return strings.Split(valueStr, ",")
+		if valueStr == "" {
+			return nil
 		}
+		return strings.Split(valueStr, ",")
 	}
 	return fallback
 }
@@ -263,11 +264,11 @@ func configLambda() {
 	cfg.LogLevel = getEnvStr("LOG_LEVEL", config.DefaultLogLevel)
 	cfg.LogFormat = getEnvStr("LOG_FORMAT", config.DefaultLogFormat)
 	cfg.SyncMethod = getEnvStr("SYNC_METHOD", config.DefaultSyncMethod)
-	cfg.UserMatch = getEnvStr("USER_MATCH", "")
+	cfg.UserMatch = getEnvStr("USER_MATCH", nil)
 	cfg.GroupMatch = getEnvStr("GROUP_MATCH", "*")
-	cfg.IgnoreGroups = getEnvStrs("IGNORE_GROUPS", []string{})
-	cfg.IgnoreUsers = getEnvStrs("IGNORE_USERS", []string{})
-	cfg.IncludeGroups = getEnvStrs("INCLUDE_GROUPS", []string{})
+	cfg.IgnoreGroups = getEnvStrs("IGNORE_GROUPS", nil)
+	cfg.IgnoreUsers = getEnvStrs("IGNORE_USERS", nil)
+	cfg.IncludeGroups = getEnvStrs("INCLUDE_GROUPS", nil)
 	cfg.PrecacheOrgUnits = getEnvStrs("PRECACHE_ORG_UNITS", nil)
 	cfg.DryRun = getEnvBool("DRY_RUN", false)
 	cfg.SyncSuspended = getEnvBool("SYNC_SUSPENDED", false)
@@ -293,15 +294,15 @@ func addFlags(_ *cobra.Command, cfg *config.Config) {
 	rootCmd.Flags().StringVarP(&cfg.SCIMEndpoint, "endpoint", "e", "", "AWS SSO SCIM API Endpoint")
 	rootCmd.Flags().StringVarP(&cfg.GoogleCredentials, "google-credentials", "c", config.DefaultGoogleCredentials, "path to Google Workspace credentials file")
 	rootCmd.Flags().StringVarP(&cfg.GoogleAdmin, "google-admin", "u", "", "Google Workspace admin user email")
-	rootCmd.Flags().StringSliceVar(&cfg.IgnoreUsers, "ignore-users", []string{}, "ignores these Google Workspace users")
-	rootCmd.Flags().StringSliceVar(&cfg.IgnoreGroups, "ignore-groups", []string{}, "ignores these Google Workspace groups")
-	rootCmd.Flags().StringSliceVar(&cfg.IncludeGroups, "include-groups", []string{}, "include only these Google Workspace groups, NOTE: only works when --sync-method 'users_groups'")
-	rootCmd.Flags().StringVarP(&cfg.UserMatch, "user-match", "m", "", "Google Workspace Users filter query parameter, example: 'name:John*' 'name=John Doe,email:admin*', to sync all users in the directory specify '*'. For query syntax and more examples see: https://developers.google.com/admin-sdk/directory/v1/guides/search-users")
+	rootCmd.Flags().StringSliceVar(&cfg.IgnoreUsers, "ignore-users", nil, "ignores these Google Workspace users")
+	rootCmd.Flags().StringSliceVar(&cfg.IgnoreGroups, "ignore-groups", nil, "ignores these Google Workspace groups")
+	rootCmd.Flags().StringSliceVar(&cfg.IncludeGroups, "include-groups", nil, "include only these Google Workspace groups, NOTE: only works when --sync-method 'users_groups'")
+	rootCmd.Flags().StringVarP(&cfg.UserMatch, "user-match", "m", nil, "Google Workspace Users filter query parameter, example: 'name:John*' 'name=John Doe,email:admin*', to sync all users in the directory specify '*'. For query syntax and more examples see: https://developers.google.com/admin-sdk/directory/v1/guides/search-users")
 	rootCmd.Flags().StringVarP(&cfg.GroupMatch, "group-match", "g", "*", "Google Workspace Groups filter query parameter, example: 'name:Admin*' 'name=AWS-Admins,email:aws*', to sync all groups (and their member users) specify '*'. For query syntax and more examples see: https://developers.google.com/admin-sdk/directory/v1/guides/search-groups")
 	rootCmd.Flags().StringVarP(&cfg.SyncMethod, "sync-method", "s", config.DefaultSyncMethod, "Sync method to use (users_groups|groups)")
 	rootCmd.Flags().StringVarP(&cfg.Region, "region", "r", "", "AWS Region where AWS SSO is enabled")
 	rootCmd.Flags().StringVarP(&cfg.IdentityStoreID, "identity-store-id", "i", "", "Identifier of Identity Store in AWS SSO")
-	rootCmd.Flags().StringSliceVar(&cfg.PrecacheOrgUnits, "precache-ous", []string{}, "A common separated list of Google Workspace OrgUnitPathis e.g.'/', to precache all users within the organization or '/OU_1/OU 2,/OU3'. Precaching is disabled by default.")
+	rootCmd.Flags().StringSliceVar(&cfg.PrecacheOrgUnits, "precache-ous", nil, "A common separated list of Google Workspace OrgUnitPathis e.g.'/', to precache all users within the organization or '/OU_1/OU 2,/OU3'. Precaching is disabled by default.")
 
 }
 
