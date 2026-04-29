@@ -174,6 +174,7 @@ func initConfig() {
 		"sync_method",
 		"region",
 		"identity_store_id",
+		"dry_run",
 	}
 
 	for _, e := range appEnvVars {
@@ -265,7 +266,7 @@ func configLambda() {
 	cfg.IgnoreGroups = getEnvStrs("IGNORE_GROUPS", []string{})
 	cfg.IgnoreUsers = getEnvStrs("IGNORE_USERS", []string{})
 	cfg.IncludeGroups = getEnvStrs("INCLUDE_GROUPS", []string{})
-	cfg.PrecacheOrgUnits = getEnvStrs("PRECACHE_ORG_UNITS", []string{})
+	cfg.PrecacheOrgUnits = getEnvStrs("PRECACHE_ORG_UNITS", nil)
 	cfg.DryRun = getEnvBool("DRY_RUN", false)
 	cfg.SyncSuspended = getEnvBool("SYNC_SUSPENDED", false)
 
