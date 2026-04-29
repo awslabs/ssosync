@@ -667,17 +667,12 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 	// For larger directories this will reduce execution time and avoid throttling limits
 	// however if you have directory with 10,000+ users you may want to down scope
 	// this to a specific OU path or disable by leaving empty.
-	log.WithFields(log.Fields{
-		"func":         funcName,
-		"OrgUnitPaths": s.cfg.PrecacheOrgUnits,
-	}).Info("Precaching")
-	if len(s.cfg.PrecacheOrgUnits) == 0 {
+	if s.cfg.PrecacheOrgUnits == nil {
 		log.WithFields(log.Fields{
 			"func":         funcName,
 			"OrgUnitPaths": s.cfg.PrecacheOrgUnits,
-		}).Info("Precaching disabled")
-	}
-	if len(s.cfg.PrecacheOrgUnits[0]) > 0 {
+		}).Info("Precaching DISABLED, caching on the fly")
+	} else {
 		precacheQueries := ""
 		log.WithFields(log.Fields{
 			"func":         funcName,
@@ -742,10 +737,6 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 				}
 			}
 		}
-	} else {
-		log.WithFields(log.Fields{
-			"func": funcName,
-		}).Info("Precaching DISABLED, caching on the fly")
 	}
 
 	log.WithFields(log.Fields{
