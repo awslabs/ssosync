@@ -174,6 +174,7 @@ func initConfig() {
 		"sync_method",
 		"region",
 		"identity_store_id",
+		"assume_role_arn",
 	}
 
 	for _, e := range appEnvVars {
@@ -255,7 +256,8 @@ func configLambda() {
 	cfg.Region = getSecretFromCache(getEnvStr("REGION", ""))
 	cfg.GoogleCredentials = getSecretFromCache(getEnvStr("GOOGLE_CREDENTIALS", ""))
 	cfg.SCIMAccessToken = getSecretFromCache(getEnvStr("SCIM_ACCESS_TOKEN", ""))
-	
+	cfg.AssumeRoleArn = getEnvStr("ASSUME_ROLE_ARN", cfg.AssumeRoleArn)
+
 	// Handle environment variables for other settings
 	cfg.LogLevel = getEnvStr("LOG_LEVEL", config.DefaultLogLevel)
 	cfg.LogFormat = getEnvStr("LOG_FORMAT", config.DefaultLogFormat)
@@ -298,6 +300,7 @@ func addFlags(_ *cobra.Command, cfg *config.Config) {
 	rootCmd.Flags().StringVarP(&cfg.SyncMethod, "sync-method", "s", config.DefaultSyncMethod, "Sync method to use (users_groups|groups)")
 	rootCmd.Flags().StringVarP(&cfg.Region, "region", "r", "", "AWS Region where AWS SSO is enabled")
 	rootCmd.Flags().StringVarP(&cfg.IdentityStoreID, "identity-store-id", "i", "", "Identifier of Identity Store in AWS SSO")
+	rootCmd.Flags().StringVar(&cfg.AssumeRoleArn, "assume-role-arn", "", "Optional IAM role ARN to assume before calling Identity Center AWS APIs")
 	rootCmd.Flags().StringSliceVar(&cfg.PrecacheOrgUnits, "precache-ous", strings.Split(config.DefaultPrecacheOrgUnits, ","), "A common separated list of Google Workspace OrgUnitPathis e.g.'/', to precache all users within the organization or '/OU_1/OU 2,/OU3'. To disable and use caching on the fly, 'DISABLED'.")
 
 }

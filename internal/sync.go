@@ -31,7 +31,6 @@ import (
 	retryablehttp "github.com/hashicorp/go-retryablehttp"
 
 	aws_sdk "github.com/aws/aws-sdk-go-v2/aws"
-	aws_config "github.com/aws/aws-sdk-go-v2/config"
 	aws_identitystore "github.com/aws/aws-sdk-go-v2/service/identitystore"
 	identitystore_types "github.com/aws/aws-sdk-go-v2/service/identitystore/types"
 	log "github.com/sirupsen/logrus"
@@ -1040,15 +1039,13 @@ func DoSync(ctx context.Context, cfg *config.Config) error {
 		return err
 	}
 
-	aws_cfg, err := aws_config.LoadDefaultConfig(context.Background())
+	identityStoreAWSConfig, err := aws.LoadIdentityStoreConfig(ctx, cfg.Region, cfg.AssumeRoleArn)
 	if err != nil {
 		return err
 	}
 
 	// Initialize AWS Identity Store Public API Client with session
-	identityStoreClient := aws_identitystore.NewFromConfig(aws_cfg, func(o *aws_identitystore.Options) {
-		o.Region = cfg.Region
-	})
+	identityStoreClient := aws_identitystore.NewFromConfig(identityStoreAWSConfig)
 
 	// Wrap with dry run client if in dry run mode
 	var finalIdentityStoreClient interfaces.IdentityStoreAPI = identityStoreClient

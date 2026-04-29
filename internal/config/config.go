@@ -39,6 +39,8 @@ type Config struct {
 	Region string `mapstructure:"region"`
 	// IdentityStoreID is the ID of the identity store
 	IdentityStoreID string `mapstructure:"identity_store_id"`
+	// AssumeRoleArn is the optional IAM role ARN to assume for Identity Center AWS API calls
+	AssumeRoleArn string `mapstructure:"assume_role_arn"`
 	// Precaching queries as a comma separated list of query strings
 	PrecacheOrgUnits []string
 	// DryRun flag, when set to true, no change will be made in the Identity Store
