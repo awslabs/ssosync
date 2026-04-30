@@ -584,6 +584,7 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers string) ([]*admin.Group, []*admin.User, map[string][]*admin.User, error) {
 	funcName := "getGoogleGroupsAndUsers"
 	gUsers := make([]*admin.User, 0)
+	googleUsers := make([]*admin.User, 0)
 	gGroupsUsers := make(map[string][]*admin.User)
 	gUserDetailCache := make(map[string]*admin.User)
 	gGroupDetailCache := make(map[string]*admin.Group)
@@ -613,7 +614,7 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 	}
 
 	// Fetch Users
-	if queryUsers == nil {
+	if queryUsers == "" {
 		log.WithFields(log.Fields{
 			"func": funcName,
 		}).Info("Skipping fetch for userMatch")
@@ -624,7 +625,7 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 			"queryFilters": s.cfg.UserFilter,
 		}).Info("fetching userMatch")
 
-		googleUsers, err := s.google.GetUsers(queryUsers, s.cfg.UserFilter)
+		googleUsers, err = s.google.GetUsers(queryUsers, s.cfg.UserFilter)
 		if err != nil {
 			log.WithFields(log.Fields{
 				"func":  funcName,
@@ -746,7 +747,7 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 	}
 
 	// Fetch Users
-	if queryGroups == nil {
+	if queryGroups == "" {
 		log.WithFields(log.Fields{
 			"func": funcName,
 		}).Info("Skipping fetch for groupMatch")
@@ -1102,14 +1103,14 @@ func DoSync(ctx context.Context, cfg *config.Config) error {
 			return err
 		}
 	} else {
-		if cfg.UserMatch != nil {
+		if cfg.UserMatch != "" {
 			err = c.SyncUsers(cfg.UserMatch)
 			if err != nil {
 				return err
 			}
 		}
 
-		if cfg.GroupMatch != nil {
+		if cfg.GroupMatch != "" {
 			err = c.SyncGroups(cfg.GroupMatch)
 			if err != nil {
 				return err
