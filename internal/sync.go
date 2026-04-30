@@ -584,7 +584,6 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers string) ([]*admin.Group, []*admin.User, map[string][]*admin.User, error) {
 	funcName := "getGoogleGroupsAndUsers"
 	gUsers := make([]*admin.User, 0)
-	googleUsers := make([]*admin.User, 0)
 	gGroupsUsers := make(map[string][]*admin.User)
 	gUserDetailCache := make(map[string]*admin.User)
 	gGroupDetailCache := make(map[string]*admin.Group)
@@ -626,7 +625,7 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 			"queryFilters": s.cfg.UserFilter,
 		}).Info("fetching userMatch")
 
-		googleUsers, err = s.google.GetUsers(queryUsers, s.cfg.UserFilter)
+		googleUsers, err := s.google.GetUsers(queryUsers, s.cfg.UserFilter)
 		if err != nil {
 			log.WithFields(log.Fields{
 				"func":  funcName,
@@ -709,7 +708,7 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 			"queryFilters":    s.cfg.UserFilter,
 		}).Info("Precaching users")
 
-		googleUsers, err = s.google.GetUsers(precacheQueries, s.cfg.UserFilter)
+		googleUsers, err := s.google.GetUsers(precacheQueries, s.cfg.UserFilter)
 		if err != nil {
 			log.WithFields(log.Fields{
 				"func":  funcName,
