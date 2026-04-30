@@ -589,6 +589,7 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 	gUserDetailCache := make(map[string]*admin.User)
 	gGroupDetailCache := make(map[string]*admin.Group)
 	gUniqUsers := make(map[string]*admin.User)
+	gGroups := make([]*admin.Group, 0)
 
 	log.WithFields(log.Fields{
 		"func":        funcName,
@@ -757,7 +758,7 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 			"queryGroups": queryGroups,
 		}).Info("fetching groups")
 
-		gGroups, err := s.google.GetGroups(queryGroups)
+		gGroups, err = s.google.GetGroups(queryGroups)
 		if err != nil {
 			log.WithFields(log.Fields{
 				"func":  funcName,
