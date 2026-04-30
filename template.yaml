@@ -620,16 +620,16 @@ Resources:
           IGNORE_GROUPS: !If [SetIgnoreGroups, !Ref IgnoreGroups, !Ref AWS::NoValue]
           IGNORE_USERS: !If [SetIgnoreUsers, !Ref IgnoreUsers, !Ref AWS::NoValue]
           INCLUDE_GROUPS: !If [SetIncludeGroups, !Ref IncludeGroups, !Ref AWS::NoValue]
-          DRY_RUN: !If [SetDryRun, 'True', 'False']
-          SYNC_SUSPENDED: !If [SetSyncSuspended, 'True', 'False']
-          PRECACHE_ORG_UNITS: !If [DisablePrecaching, "DISABLED", !Ref PrecacheOrgUnits]
+          DRY_RUN: !If [SetDryRun, 'True', !Ref AWS::NoValue]
+          SYNC_SUSPENDED: !If [SetSyncSuspended, 'True', !Ref AWS::NoValue]
+          PRECACHE_ORG_UNITS: !If [DisablePrecaching, !Ref AWS::NoValue, !Ref PrecacheOrgUnits]
 
       Events:
         SyncScheduledEvent:
           Type: Schedule
           Name: AWSSyncSchedule
           Properties:
-            Enabled: !If [OnSchedule, true, true]
+            Enabled: !If [OnSchedule, true, false]
             Schedule: !If [OnSchedule, !Ref ScheduleExpression, AWS::NoValue]
 
 
