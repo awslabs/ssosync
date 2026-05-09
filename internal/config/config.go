@@ -60,8 +60,6 @@ const (
 	DefaultGoogleCredentials = "credentials.json"
 	// DefaultSyncMethod is the default sync method to use.
 	DefaultSyncMethod = "groups"
-	// DefaultPrecacheOrgUnits
-	DefaultPrecacheOrgUnits = "/"
 )
 
 // New returns a new Config
@@ -101,5 +99,5 @@ func (c *Config) Validate() error {
 		return errors.New("sync method must be either 'groups' or 'users_groups'")
 	}
 
-        return nil
+	return nil
 }

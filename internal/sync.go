@@ -588,6 +588,7 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 	gUserDetailCache := make(map[string]*admin.User)
 	gGroupDetailCache := make(map[string]*admin.Group)
 	gUniqUsers := make(map[string]*admin.User)
+	gGroups := make([]*admin.Group, 0)
 
 	log.WithFields(log.Fields{
 		"func":        funcName,
@@ -613,66 +614,77 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 	}
 
 	// Fetch Users
-	log.WithFields(log.Fields{
-		"func":         funcName,
-		"queryUsers":   queryUsers,
-		"queryFilters": s.cfg.UserFilter,
-	}).Info("fetching userMatch")
-
-	googleUsers, err := s.google.GetUsers(queryUsers, s.cfg.UserFilter)
-	if err != nil {
-		log.WithFields(log.Fields{
-			"func":  funcName,
-			"error": err,
-		}).Error("failed fetching userMatch from Google")
-		return nil, nil, nil, err
-	}
-
-	log.WithFields(log.Fields{
-		"func": funcName,
-	}).Debug("process users from google, filtering as required")
-
-	for _, u := range googleUsers {
+	if queryUsers == "" {
 		log.WithFields(log.Fields{
 			"func": funcName,
-			"user": u,
-		}).Debug("process user")
+		}).Info("Skipping fetch for userMatch")
+	} else {
+		log.WithFields(log.Fields{
+			"func":         funcName,
+			"queryUsers":   queryUsers,
+			"queryFilters": s.cfg.UserFilter,
+		}).Info("fetching userMatch")
 
-		// Remove any users that should be ignored
-		if s.ignoreUser(u.PrimaryEmail) {
+		googleUsers, err := s.google.GetUsers(queryUsers, s.cfg.UserFilter)
+		if err != nil {
 			log.WithFields(log.Fields{
-				"func":    funcName,
-				"user.Id": u.Id,
-			}).Info("ignoring user")
-			continue
+				"func":  funcName,
+				"error": err,
+			}).Error("failed fetching userMatch from Google")
+			return nil, nil, nil, err
 		}
 
-		if _, found := gUniqUsers[u.PrimaryEmail]; !found {
+		log.WithFields(log.Fields{
+			"func": funcName,
+		}).Debug("process users from google, filtering as required")
+
+		for _, u := range googleUsers {
 			log.WithFields(log.Fields{
-				"func":    funcName,
-				"user.Id": u.Id,
-			}).Debug("adding user")
-			gUserDetailCache[u.PrimaryEmail] = u
-			gUniqUsers[u.PrimaryEmail] = gUserDetailCache[u.PrimaryEmail]
-			continue
-		} else {
-			log.WithFields(log.Fields{
-				"func":    funcName,
-				"user.Id": u.Id,
-			}).Debug("already existing")
-			continue
+				"func": funcName,
+				"user": u,
+			}).Debug("process user")
+
+			// Remove any users that should be ignored
+			if s.ignoreUser(u.PrimaryEmail) {
+				log.WithFields(log.Fields{
+					"func":    funcName,
+					"user.Id": u.Id,
+				}).Info("ignoring user")
+				continue
+			}
+
+			if _, found := gUniqUsers[u.PrimaryEmail]; !found {
+				log.WithFields(log.Fields{
+					"func":    funcName,
+					"user.Id": u.Id,
+				}).Debug("adding user")
+				gUserDetailCache[u.PrimaryEmail] = u
+				gUniqUsers[u.PrimaryEmail] = gUserDetailCache[u.PrimaryEmail]
+				continue
+			} else {
+				log.WithFields(log.Fields{
+					"func":    funcName,
+					"user.Id": u.Id,
+				}).Debug("already existing")
+				continue
+			}
 		}
 	}
 
 	// For larger directories this will reduce execution time and avoid throttling limits
-	// however if you have directory with 10s of 1000s of users you may want to down scope
+	// however if you have directory with 10,000+ users you may want to down scope
 	// this to a specific OU path or disable by leaving empty.
-	if s.cfg.PrecacheOrgUnits[0] != "DISABLED" {
+	if s.cfg.PrecacheOrgUnits == nil {
+		log.WithFields(log.Fields{
+			"func":         funcName,
+			"OrgUnitPaths": s.cfg.PrecacheOrgUnits,
+		}).Info("Precaching DISABLED, caching on the fly")
+	} else {
 		precacheQueries := ""
 		log.WithFields(log.Fields{
 			"func":         funcName,
 			"OrgUnitPaths": s.cfg.PrecacheOrgUnits,
-		}).Info("Prechache users from these paths")
+		}).Info("Precache users from these paths")
 
 		for _, orgUnitPath := range s.cfg.PrecacheOrgUnits {
 			log.WithFields(log.Fields{
@@ -696,7 +708,7 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 			"queryFilters":    s.cfg.UserFilter,
 		}).Info("Precaching users")
 
-		googleUsers, err = s.google.GetUsers(precacheQueries, s.cfg.UserFilter)
+		googleUsers, err := s.google.GetUsers(precacheQueries, s.cfg.UserFilter)
 		if err != nil {
 			log.WithFields(log.Fields{
 				"func":  funcName,
@@ -732,126 +744,129 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 				}
 			}
 		}
-	} else {
+	}
+
+	// Fetch Users
+	if queryGroups == "" {
 		log.WithFields(log.Fields{
 			"func": funcName,
-		}).Info("Precaching DISABLED, caching on the fly")
-	}
-
-	log.WithFields(log.Fields{
-		"func":        funcName,
-		"queryGroups": queryGroups,
-	}).Info("fetching groups")
-
-	gGroups, err := s.google.GetGroups(queryGroups)
-	if err != nil {
+		}).Info("Skipping fetch for groupMatch")
+	} else {
 		log.WithFields(log.Fields{
-			"func":  funcName,
-			"error": err,
-		}).Error("failed fetching groups")
-		return nil, nil, nil, err
-	}
+			"func":        funcName,
+			"queryGroups": queryGroups,
+		}).Info("fetching groups")
 
-	filteredGoogleGroups := []*admin.Group{}
-	log.WithFields(log.Fields{
-		"func": funcName,
-	}).Info("filter groups by ignoreList")
-
-	for _, g := range gGroups {
-		log.WithFields(log.Fields{
-			"func":  funcName,
-			"group": g,
-		}).Debug("processing group")
-
-		if s.ignoreGroup(g.Email) {
-			log.WithFields(log.Fields{
-				"func":     funcName,
-				"group.Id": g.Id,
-			}).Info("ignoring group")
-			continue
-		}
-		filteredGoogleGroups = append(filteredGoogleGroups, g)
-	}
-	gGroups = filteredGoogleGroups
-
-	log.WithField("func", funcName).Info("fetch group memberships")
-	for _, g := range gGroups {
-		log.WithFields(log.Fields{
-			"func":  funcName,
-			"group": g,
-		}).Debug("processing group")
-
-		if s.ignoreGroup(g.Email) {
-			log.WithFields(log.Fields{
-				"func":     funcName,
-				"group.Id": g.Id,
-			}).Info("skipping group")
-			continue
-		}
-
-		log.WithField("func", funcName).Debug("fetch membership")
-		membersUsers, err := s.getGoogleUsersInGroup(g, gUserDetailCache, gGroupDetailCache)
+		gGroups, err = s.google.GetGroups(queryGroups)
 		if err != nil {
+			log.WithFields(log.Fields{
+				"func":  funcName,
+				"error": err,
+			}).Error("failed fetching groups")
 			return nil, nil, nil, err
 		}
 
-		// If we've not seen the user email address before add it to the list of unique users
-		// also, we need to deduplicate the list of members.
+		filteredGoogleGroups := []*admin.Group{}
 		log.WithFields(log.Fields{
-			"func":         funcName,
-			"group.Id":     g.Id,
-			"membersUsers": membersUsers,
-		}).Debug("Process group membership")
+			"func": funcName,
+		}).Info("filter groups by ignoreList")
 
-		gUniqMembers := make(map[string]*admin.User)
-		for _, m := range membersUsers {
+		for _, g := range gGroups {
+			log.WithFields(log.Fields{
+				"func":  funcName,
+				"group": g,
+			}).Debug("processing group")
+
+			if s.ignoreGroup(g.Email) {
+				log.WithFields(log.Fields{
+					"func":     funcName,
+					"group.Id": g.Id,
+				}).Info("ignoring group")
+				continue
+			}
+			filteredGoogleGroups = append(filteredGoogleGroups, g)
+		}
+		gGroups = filteredGoogleGroups
+
+		log.WithField("func", funcName).Info("fetch group memberships")
+		for _, g := range gGroups {
+			log.WithFields(log.Fields{
+				"func":  funcName,
+				"group": g,
+			}).Debug("processing group")
+
+			if s.ignoreGroup(g.Email) {
+				log.WithFields(log.Fields{
+					"func":     funcName,
+					"group.Id": g.Id,
+				}).Info("skipping group")
+				continue
+			}
+
+			log.WithField("func", funcName).Debug("fetch membership")
+			membersUsers, err := s.getGoogleUsersInGroup(g, gUserDetailCache, gGroupDetailCache)
+			if err != nil {
+				return nil, nil, nil, err
+			}
+
+			// If we've not seen the user email address before add it to the list of unique users
+			// also, we need to deduplicate the list of members.
+			log.WithFields(log.Fields{
+				"func":         funcName,
+				"group.Id":     g.Id,
+				"membersUsers": membersUsers,
+			}).Debug("Process group membership")
+
+			gUniqMembers := make(map[string]*admin.User)
+			for _, m := range membersUsers {
+				log.WithFields(log.Fields{
+					"func":     funcName,
+					"group.Id": g.Id,
+					"member":   m,
+				}).Debug("Processing member")
+
+				if m == nil {
+					log.WithFields(log.Fields{
+						"func":      funcName,
+						"group.Id":  g.Id,
+						"member.Id": m.Id,
+					}).Error("nil user")
+					continue
+				}
+				if _, found := gUniqUsers[m.PrimaryEmail]; !found {
+					log.WithFields(log.Fields{
+						"func":     funcName,
+						"group.Id": g.Id,
+						"member":   m.Id,
+					}).Debug("adding user to UniqueUsers")
+					gUniqUsers[m.PrimaryEmail] = gUserDetailCache[m.PrimaryEmail]
+				}
+
+				if _, found := gUniqMembers[m.PrimaryEmail]; !found {
+					log.WithFields(log.Fields{
+						"func":     funcName,
+						"group.Id": g.Id,
+						"member":   m.Id,
+					}).Debug("adding user to group")
+					gUniqMembers[m.PrimaryEmail] = gUserDetailCache[m.PrimaryEmail]
+				}
+			}
+
 			log.WithFields(log.Fields{
 				"func":     funcName,
 				"group.Id": g.Id,
-				"member":   m,
-			}).Debug("Processing member")
-
-			if m == nil {
-				log.WithFields(log.Fields{
-					"func":      funcName,
-					"group.Id":  g.Id,
-					"member.Id": m.Id,
-				}).Error("nil user")
-				continue
+			}).Debug("create gMembers")
+			gMembers := make([]*admin.User, 0)
+			for _, member := range gUniqMembers {
+				gMembers = append(gMembers, member)
 			}
-			if _, found := gUniqUsers[m.PrimaryEmail]; !found {
-				log.WithFields(log.Fields{
-					"func":     funcName,
-					"group.Id": g.Id,
-					"member":   m.Id,
-				}).Debug("adding user to UniqueUsers")
-				gUniqUsers[m.PrimaryEmail] = gUserDetailCache[m.PrimaryEmail]
-			}
-
-			if _, found := gUniqMembers[m.PrimaryEmail]; !found {
-				log.WithFields(log.Fields{
-					"func":     funcName,
-					"group.Id": g.Id,
-					"member":   m.Id,
-				}).Debug("adding user to group")
-				gUniqMembers[m.PrimaryEmail] = gUserDetailCache[m.PrimaryEmail]
-			}
+			log.WithFields(log.Fields{
+				"func":     funcName,
+				"group.Id": g.Id,
+				"gMembers": gMembers,
+			}).Debug("Finished group membership")
+			gGroupsUsers[g.Name] = gMembers
 		}
-
-		log.WithFields(log.Fields{
-			"func":     funcName,
-			"group.Id": g.Id,
-		}).Debug("create gMembers")
-		gMembers := make([]*admin.User, 0)
-		for _, member := range gUniqMembers {
-			gMembers = append(gMembers, member)
-		}
-		log.WithFields(log.Fields{
-			"func":     funcName,
-			"group.Id": g.Id,
-			"gMembers": gMembers,
-		}).Debug("Finished group membership")
-		gGroupsUsers[g.Name] = gMembers
 	}
 
 	log.WithField("func", funcName).Debug("create gUsers")
@@ -1088,14 +1103,18 @@ func DoSync(ctx context.Context, cfg *config.Config) error {
 			return err
 		}
 	} else {
-		err = c.SyncUsers(cfg.UserMatch)
-		if err != nil {
-			return err
+		if cfg.UserMatch != "" {
+			err = c.SyncUsers(cfg.UserMatch)
+			if err != nil {
+				return err
+			}
 		}
 
-		err = c.SyncGroups(cfg.GroupMatch)
-		if err != nil {
-			return err
+		if cfg.GroupMatch != "" {
+			err = c.SyncGroups(cfg.GroupMatch)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -1103,6 +1122,10 @@ func DoSync(ctx context.Context, cfg *config.Config) error {
 }
 
 func (s *syncGSuite) ignoreUser(name string) bool {
+	if s.cfg.IgnoreUsers == nil {
+		return false
+	}
+
 	if s.ignoreUsersSet == nil {
 		s.ignoreUsersSet = make(map[string]struct{}, len(s.cfg.IgnoreUsers))
 		for _, u := range s.cfg.IgnoreUsers {
@@ -1114,6 +1137,10 @@ func (s *syncGSuite) ignoreUser(name string) bool {
 }
 
 func (s *syncGSuite) ignoreGroup(name string) bool {
+	if s.cfg.IgnoreGroups == nil {
+		return false
+	}
+
 	if s.ignoreGroupsSet == nil {
 		s.ignoreGroupsSet = make(map[string]struct{}, len(s.cfg.IgnoreGroups))
 		for _, g := range s.cfg.IgnoreGroups {
@@ -1125,6 +1152,10 @@ func (s *syncGSuite) ignoreGroup(name string) bool {
 }
 
 func (s *syncGSuite) includeGroup(name string) bool {
+	if s.cfg.IncludeGroups == nil {
+		return false
+	}
+
 	if s.includeGroupsSet == nil {
 		s.includeGroupsSet = make(map[string]struct{}, len(s.cfg.IncludeGroups))
 		for _, g := range s.cfg.IncludeGroups {

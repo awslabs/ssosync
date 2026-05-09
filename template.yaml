@@ -158,9 +158,9 @@ Parameters:
   PrecacheOrgUnits:
     Type: String
     Description: | 
-       To reduce the volume of apis, ssosync precaches the users and groups from the Google directory. If you directory is large >10,000 users, you may wish to limit the organizational units that are precached. The default is the whole directory '/'. The parameter accpets a comma separate list of OrgUnitPaths, /OU1,/OU2/OU 3 in this example all users within the tree of /OU1 and /OU2/OU 3 would be precached but not from /OU2 itself. Precaching can be disable by leaving the field empty.
+       To reduce the volume of apis, ssosync precaches the users and groups from the Google directory. If you directory is large >10,000 users, you may wish to limit the organizational units that are precached. The default is the whole directory '/'. The parameter accpets a comma separate list of OrgUnitPaths, /OU1,/OU2/OU3 in this example all users within the tree of /OU1 and /OU2/OU3 would be precached but not from /OU2 itself. Precaching can be disable by leaving the field empty.
     Default: "/"
-    AllowedPattern: '(?!.*\s)|(^\/$)|(\/[a-zA-Z0-9_\/\- ]{1,50})(?:(,\/[a-zA-Z0-9_\/\- ]{1,50}))*'
+    AllowedPattern: '(?!.*\s)|(^\/$)|(\/[a-zA-Z0-9_\/\- ]{0,50})|(\/[a-zA-Z0-9_\/\- ]{0,50})(?:(,\/[a-zA-Z0-9_\/\- ]{1,50}))'
 
 # Secrets
   GoogleCredentials:
