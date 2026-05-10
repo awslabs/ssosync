@@ -161,8 +161,8 @@ SSO Sync requires configuration from both Google Workspace and AWS sides.
 ./ssosync \
   --google-admin admin@company.com \
   --google-credentials ./credentials.json \
-  --scim-endpoint https://scim.us-east-1.amazonaws.com/... \
-  --scim-access-token AQoDYXdzE... \
+  --endpoint https://scim.us-east-1.amazonaws.com/... \
+  --access-token AQoDYXdzE... \
   --region us-east-1 \
   --identity-store-id d-1234567890 \
   --group-match "name:AWS*"
@@ -212,8 +212,8 @@ export SSOSYNC_DRY_RUN="true"
 |------|---------------------|-------------|---------|
 | `--google-admin` | `SSOSYNC_GOOGLE_ADMIN` | Google Workspace admin email | Required |
 | `--google-credentials` | `SSOSYNC_GOOGLE_CREDENTIALS` | Path to Google credentials JSON | `credentials.json` |
-| `--scim-endpoint` | `SSOSYNC_SCIM_ENDPOINT` | AWS SCIM endpoint URL | Required |
-| `--scim-access-token` | `SSOSYNC_SCIM_ACCESS_TOKEN` | AWS SCIM access token | Required |
+| `--endpoint` | `SSOSYNC_SCIM_ENDPOINT` | AWS SCIM endpoint URL | Required |
+| `--access-token` | `SSOSYNC_SCIM_ACCESS_TOKEN` | AWS SCIM access token | Required |
 | `--region` | `SSOSYNC_REGION` | AWS region | Required |
 | `--identity-store-id` | `SSOSYNC_IDENTITY_STORE_ID` | AWS Identity Store ID | Required |
 | `--sync-method` | `SSOSYNC_SYNC_METHOD` | Sync method (`groups` or `users_groups`) | `groups` |
