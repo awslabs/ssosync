@@ -631,7 +631,7 @@ Resources:
       FunctionName: !Ref SSOSyncFunction
       Action: "lambda:InvokeFunction"
       Principal: "events.amazonaws.com"
-      SourceArn: !GetAttr SyncScheduledEvent.Arn
+      SourceArn: !GetAtt SyncScheduledEvent.Arn
 
   SyncScheduledEvent:
     Type: AWS::Events::Rule
@@ -640,7 +640,7 @@ Resources:
       Name: AWSSyncSchedule
       ScheduleExpression: !Ref ScheduleExpression
       Target:
-        - Arn: !GetAttr SSOSyncFunction.Arn
+        - Arn: !GetAtt SSOSyncFunction.Arn
 
   KeyAlias:
     Type: AWS::KMS::Alias
