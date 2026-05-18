@@ -294,10 +294,22 @@ Conditions:
   SetSyncSuspended: !Equals
     - !Ref SyncSuspended
     - "sync"
-  OnSchedule: !Not
-    - !Equals
+  OnSchedule: !And
+    - !Not
+      - !Equals
         - !Ref ScheduleExpression
         - ""
+    - !Or
+      - !Equals
+        - !Ref DeployPattern
+        - "App for cross-account"
+      - !Equals
+        - !Ref DeployPattern
+        - "App + secrets"
+      - !Equals
+        - !Ref DeployPattern
+        - "App only"
+
   CreateFunction: !Or
     - !Equals
         - !Ref DeployPattern
@@ -641,7 +653,7 @@ Resources:
       ScheduleExpression: !Ref ScheduleExpression
       Targets:
         - Id: SSOSync
-        - Arn: !GetAtt SSOSyncFunction.Arn
+          Arn: !GetAtt SSOSyncFunction.Arn
 
   KeyAlias:
     Type: AWS::KMS::Alias
