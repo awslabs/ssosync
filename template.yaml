@@ -639,7 +639,8 @@ Resources:
     Properties:
       Name: AWSSyncSchedule
       ScheduleExpression: !Ref ScheduleExpression
-      Target:
+      Targets:
+        - Id: SSOSync
         - Arn: !GetAtt SSOSyncFunction.Arn
 
   KeyAlias:
