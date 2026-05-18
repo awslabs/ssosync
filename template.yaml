@@ -624,14 +624,23 @@ Resources:
           SYNC_SUSPENDED: !If [SetSyncSuspended, 'True', !Ref AWS::NoValue]
           PRECACHE_ORG_UNITS: !If [DisablePrecaching, !Ref AWS::NoValue, !Ref PrecacheOrgUnits]
 
-      Events:
-        SyncScheduledEvent:
-          Type: Schedule
-          Name: AWSSyncSchedule
-          Properties:
-            Enabled: !If [OnSchedule, true, false]
-            Schedule: !If [OnSchedule, !Ref ScheduleExpression, rate(1 hour)]
+  PermissionForEventsToInvokeLambda:
+    Type: AWS::Lambda::Permission
+    Condition: OnSchedule
+    Properties:
+      FunctionName: !Ref SSOSyncFunction
+      Action: "lambda:InvokeFunction"
+      Principal: "events.amazonaws.com"
+      SourceArn: !GetAttr SyncScheduledEvent.Arn
 
+  SyncScheduledEvent:
+    Type: AWS::Events::Rule
+    Condition: OnSchedule
+    Name: AWSSyncSchedule
+    Properties:
+      ScheduleExpression: !Ref ScheduleExpression
+      Target:
+        - Arn: !GetAttr SSOSyncFunction.Arn
 
   KeyAlias:
     Type: AWS::KMS::Alias
