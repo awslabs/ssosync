@@ -636,8 +636,8 @@ Resources:
   SyncScheduledEvent:
     Type: AWS::Events::Rule
     Condition: OnSchedule
-    Name: AWSSyncSchedule
     Properties:
+      Name: AWSSyncSchedule
       ScheduleExpression: !Ref ScheduleExpression
       Target:
         - Arn: !GetAttr SSOSyncFunction.Arn
