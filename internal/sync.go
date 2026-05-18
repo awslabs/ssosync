@@ -765,7 +765,7 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 			"queryGroups": queryGroups,
 		}).Info("fetching groups")
 
-		gGroups, err = s.google.GetGroups(queryGroups)
+		gGroups, err := s.google.GetGroups(queryGroups)
 		if err != nil {
 			log.WithFields(log.Fields{
 				"func":  funcName,
