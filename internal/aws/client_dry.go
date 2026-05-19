@@ -27,6 +27,7 @@ func NewDryClient(c internal_http.Client, config *Config) (Client, error) {
 
 func (dc *dryClient) CreateUser(u *interfaces.User) (*interfaces.User, error) {
 	log.WithField("user", u.Username).Info("DRY RUN: Would create user")
+	u.ID = virtualUserID(u.Username)
 	dc.virtualUsers[u.Username] = *u
 	return u, nil
 }
@@ -61,6 +62,9 @@ func (dc *dryClient) FindUserByEmail(email string) (*interfaces.User, error) {
 
 func (dc *dryClient) UpdateUser(u *interfaces.User) (*interfaces.User, error) {
 	log.WithField("user", u.Username).Info("DRY RUN: Would update user")
+	if u.ID == "" {
+		u.ID = virtualUserID(u.Username)
+	}
 	dc.virtualUsers[u.Username] = *u
 	return u, nil
 }
