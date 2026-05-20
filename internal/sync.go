@@ -596,21 +596,29 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 		"queryUsers":  queryUsers,
 	}).Debug("getGoogleGroupsAndUsers()")
 
-	// Precaching group data, this will speed up processing of nested groups, etc...
-	log.WithFields(log.Fields{
-		"func": funcName,
-	}).Info("Precache all Groups from Google")
-
-	googleGroups, err := s.google.GetGroups("*")
-	if err != nil {
+	// For larger directories this will reduce execution time and avoid throttling limits
+	// however if you have directory with 10,000+ users you may want to down scope
+	// this to a specific OU path or disable by leaving empty.
+	if s.cfg.PrecacheOrgUnits == nil {
 		log.WithFields(log.Fields{
-			"func":  funcName,
-			"error": err,
-		}).Error("failed precaching groups from Google")
-		return nil, nil, nil, err
-	}
-	for _, g := range googleGroups {
-		gGroupDetailCache[g.Email] = g
+			"func": funcName,
+		}).Info("Precaching DISABLED, caching on the fly")
+	} else {
+		log.WithFields(log.Fields{
+			"func": funcName,
+		}).Info("Precache all Groups from Google")
+
+		googleGroups, err := s.google.GetGroups("*")
+		if err != nil {
+			log.WithFields(log.Fields{
+				"func":  funcName,
+				"error": err,
+			}).Error("failed precaching groups from Google")
+			return nil, nil, nil, err
+		}
+		for _, g := range googleGroups {
+			gGroupDetailCache[g.Email] = g
+		}
 	}
 
 	// Fetch Users
@@ -757,7 +765,7 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 			"queryGroups": queryGroups,
 		}).Info("fetching groups")
 
-		gGroups, err = s.google.GetGroups(queryGroups)
+		gGroups, err := s.google.GetGroups(queryGroups)
 		if err != nil {
 			log.WithFields(log.Fields{
 				"func":  funcName,
