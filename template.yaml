@@ -8,13 +8,14 @@ Metadata:
           default: Which pattern are we deploying? The app with secrets, the app but using existing secrets, or just the secrets.
         Parameters:
           - DeployPattern
+          - CrossStackConfig
       - Label:
           default: AWS IAM Identity Center (Successor to AWS Single Sign-On)
         Parameters:
           - SCIMEndpointUrl
           - SCIMEndpointAccessToken
-          - Region
           - IdentityStoreID
+          - Region
       - Label:
           default: Google Workspace Credentials 
         Parameters:
@@ -24,6 +25,7 @@ Metadata:
           default: Sync Configuration
         Parameters:
           - SyncMethod
+          - PrecacheOrgUnits
           - GoogleUserMatch
           - GoogleGroupMatch
           - IgnoreUsers
@@ -36,13 +38,18 @@ Metadata:
           default: "Lambda Configuration"
         Parameters:
           - FunctionName
-          - LogLevel
-          - LogFormat
-          - TimeOut
           - ScheduleExpression
           - SyncSuspended
           - DryRun
-          - PrecacheOrgUnits
+          - MemorySize
+          - TimeOut
+      - Label:
+          default: Log Configuration
+        Parameters:
+          - LogLevel
+          - LogFormat
+          - LogRetention
+
 
   AWS::ServerlessRepo::Application:
     Name: ssosync
