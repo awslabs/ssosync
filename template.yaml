@@ -474,7 +474,6 @@ Resources:
     Type: AWS::IAM::Role
     Condition: LocalSecrets
     Properties:
-      RoleName: SSOSyncAppRole
       AssumeRolePolicyDocument:
         Version: 2012-10-17
         Statement:
@@ -537,7 +536,6 @@ Resources:
     Type: AWS::IAM::Role
     Condition: RemoteSecrets
     Properties:
-      RoleName: SSOSyncAppRole
       AssumeRolePolicyDocument:
         Version: 2012-10-17
         Statement:
