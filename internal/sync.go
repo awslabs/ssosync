@@ -602,7 +602,7 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 	if s.cfg.PrecacheOrgUnits == nil {
 		log.WithFields(log.Fields{
 			"func": funcName,
-		}).Info("Precaching DISABLED, caching on the fly")
+		}).Info("Precaching DISABLED, caching groups on the fly")
 	} else {
 		log.WithFields(log.Fields{
 			"func": funcName,
@@ -686,7 +686,7 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 		log.WithFields(log.Fields{
 			"func":         funcName,
 			"OrgUnitPaths": s.cfg.PrecacheOrgUnits,
-		}).Info("Precaching DISABLED, caching on the fly")
+		}).Info("Precaching DISABLED, caching users on the fly")
 	} else {
 		precacheQueries := ""
 		log.WithFields(log.Fields{
@@ -1096,7 +1096,7 @@ func DoSync(ctx context.Context, cfg *config.Config) error {
 		log.WithField("error", err).Warn("Problem performing test query against Identity Store")
 		return err
 	}
-	log.WithField("Groups", response).Info("Test call for groups successful")
+	log.WithField("Groups", response).Info("Test call to Identity Store successful")
 
 	// Initialize sync client with
 	// 1. SCIM API client
