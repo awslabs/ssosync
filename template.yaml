@@ -294,10 +294,22 @@ Conditions:
   SetSyncSuspended: !Equals
     - !Ref SyncSuspended
     - "sync"
-  OnSchedule: !Not
-    - !Equals
+  OnSchedule: !And
+    - !Not
+      - !Equals
         - !Ref ScheduleExpression
         - ""
+    - !Or
+      - !Equals
+        - !Ref DeployPattern
+        - "App for cross-account"
+      - !Equals
+        - !Ref DeployPattern
+        - "App + secrets"
+      - !Equals
+        - !Ref DeployPattern
+        - "App only"
+
   CreateFunction: !Or
     - !Equals
         - !Ref DeployPattern
@@ -620,18 +632,28 @@ Resources:
           IGNORE_GROUPS: !If [SetIgnoreGroups, !Ref IgnoreGroups, !Ref AWS::NoValue]
           IGNORE_USERS: !If [SetIgnoreUsers, !Ref IgnoreUsers, !Ref AWS::NoValue]
           INCLUDE_GROUPS: !If [SetIncludeGroups, !Ref IncludeGroups, !Ref AWS::NoValue]
-          DRY_RUN: !If [SetDryRun, 'True', 'False']
-          SYNC_SUSPENDED: !If [SetSyncSuspended, 'True', 'False']
+          DRY_RUN: !If [SetDryRun, 'True', !Ref AWS::NoValue]
+          SYNC_SUSPENDED: !If [SetSyncSuspended, 'True', !Ref AWS::NoValue]
           PRECACHE_ORG_UNITS: !If [DisablePrecaching, !Ref AWS::NoValue, !Ref PrecacheOrgUnits]
 
-      Events:
-        SyncScheduledEvent:
-          Type: Schedule
-          Name: AWSSyncSchedule
-          Properties:
-            Enabled: !If [OnSchedule, true, true]
-            Schedule: !If [OnSchedule, !Ref ScheduleExpression, AWS::NoValue]
+  PermissionForEventsToInvokeLambda:
+    Type: AWS::Lambda::Permission
+    Condition: OnSchedule
+    Properties:
+      FunctionName: !Ref SSOSyncFunction
+      Action: "lambda:InvokeFunction"
+      Principal: "events.amazonaws.com"
+      SourceArn: !GetAtt SyncScheduledEvent.Arn
 
+  SyncScheduledEvent:
+    Type: AWS::Events::Rule
+    Condition: OnSchedule
+    Properties:
+      Name: AWSSyncSchedule
+      ScheduleExpression: !Ref ScheduleExpression
+      Targets:
+        - Id: SSOSync
+          Arn: !GetAtt SSOSyncFunction.Arn
 
   KeyAlias:
     Type: AWS::KMS::Alias
