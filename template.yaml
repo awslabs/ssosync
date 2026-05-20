@@ -108,7 +108,7 @@ Parameters:
   LogRetention:
     Type: String
     Description: |
-      [optional] leave empty for indefinite retention.
+      How long to retain log for. 
     Default: 365
     AllowedValues:
       - indefinite
