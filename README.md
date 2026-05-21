@@ -25,7 +25,7 @@ SSO Sync is a powerful CLI tool and AWS Lambda function that enables automatic p
 - **📈 Scalable**: Supports large directories with user caching and pagination
 
 ## 🚀 Quick Start
-Use one of the quick start templates to simplify the your deployment. Use these templates, with the **Sync from Git** option, to make updates to your deployment far simpler.
+Use one of the [quick start](/quick-start/) templates to simplify the your deployment. Use these templates, with the **Sync from Git** option, to make updates to your deployment far simpler.
 
 ## 🚀 Step-by-Step Guide
 
