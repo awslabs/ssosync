@@ -1,0 +1,247 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: 'AWS::Serverless-2016-10-31'
+
+Description: 
+  This CloudFormation template will deploy two instances of SSOSync from
+  the AWS Serverless Application Repository (SAR). One holding the Secrets 
+  and the other the app itself.
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: AWS IAM Identity Center (Successor to AWS Single Sign-On)
+        Parameters:
+          - SCIMEndpointUrl
+          - SCIMEndpointAccessToken
+          - IdentityStoreID
+          - Region
+      - Label:
+          default: Google Workspace Credentials 
+        Parameters:
+          - GoogleAdminEmail
+          - GoogleCredentials
+      - Label:
+          default: Sync Configuration
+        Parameters:
+          - PrecacheOrgUnits
+          - GoogleUserMatch
+          - GoogleGroupMatch
+      - Label:
+          default: "Lambda Configuration"
+        Parameters:
+          - ScheduleExpression
+          - SyncSuspended
+          - DryRun
+          - MemorySize
+          - TimeOut
+      - Label:
+          default: Log Configuration
+        Parameters:
+          - LogLevel
+          - LogFormat
+          - LogRetention
+
+
+Parameters:
+  ScheduleExpression:
+    Type: String
+    Description: |
+      [optional] Schedule for trigger the execution of ssosync (see CloudWatch schedule expressions), leave empty if you want to trigger execution by another method such as AWS CodePipeline.
+    Default: rate(15 minutes)
+    AllowedPattern: '(?!.*\s)|rate\((?:(?:(?:\d{2,}+|[2-9]) (?:minutes|hours|days))|(?:1 (?:minute|hour|day)))\)|(cron\((([0-9]|[1-5][0-9]|60)|\d\/([0-9]|[1-5][0-9]|60)|\*) (([0-9]|[1][0-9]|[2][0-3])|(\d\/([0-9]|[1][0-9]|[2][0-3]))|(([0-9]|[1][0-9]|[2][0-3])-([0-9]|[1][0-9]|[2][0-3]))|\*) (([1-9]|[1-2][0-9]|[3][0-1])|\d\/([1-9]|[1-2][0-9]|[3][0-1])|[1-5]W|L|\*|\?) (([1-9]|[1][1-2])|(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)|((JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV)-(FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC))|(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV)(,(FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)){0,11}|\d\/([0-9]|[1][0-2])|\?|\*) ((MON|TUE|WED|THU|FRI|SAT|SUN)|(MON|TUE|WED|THU|FRI|SAT)-(TUE|WED|THU|FRI|SAT|SUN)|(MON|TUE|WED|THU|FRI|SAT)(,(TUE|WED|THU|FRI|SAT|SUN)){0,6}|[1-7]L|[1-7]#[1-5]|\?|\*) ((19[7-9][0-9]|2[0-1]\d\d)|(19[7-9][0-9]|2[0-1]\d\d)-(19[7-9][0-9]|2[0-1]\d\d)|(19[7-9][0-9]|2[0-1]\d\d)(,(19[7-9][0-9]|2[0-1]\d\d))*|\*)\))'
+
+  LogRetention:
+    Type: Number
+    Description: |
+      How long to retain log for, if you want to retain indefinitely, select 0
+    Default: 365
+    AllowedValues:
+      - 0
+      - 1
+      - 3
+      - 5
+      - 7
+      - 14
+      - 30
+      - 60
+      - 90
+      - 120
+      - 150
+      - 180
+      - 365
+      - 400
+      - 545
+      - 731
+      - 1096
+      - 1827
+      - 2192
+      - 2557
+      - 2922
+      - 3288
+      - 3653
+
+  LogLevel:
+    Type: String
+    Description: |
+      [required] Log level for Lambda function logging
+    Default: warn
+    AllowedValues:
+      - panic
+      - fatal
+      - error
+      - warn
+      - info
+      - debug
+      - trace
+
+  LogFormat:
+    Type: String
+    Description: |
+      [required] Log format for Lambda function logging
+    Default: json
+    AllowedValues:
+      - json
+      - text
+
+  MemorySize:
+    Type: Number
+    Description: |
+      [required] the amount of RAM allocated to the function, within range 128-10240MB. default is 128MB.
+    Default: 128
+    MinValue: 128
+    MaxValue: 10240
+     
+  TimeOut:
+    Type: Number
+    Description: |
+      [required] Timeout for the Lambda function
+    Default: 300
+    MinValue: 1
+    MaxValue: 900
+
+  SyncSuspended:
+    Type: String
+    Description: |
+      If enabled suspended users that match either the GoogleUserMatch or GoogleGroupMatch criteria they will be replicated.
+    Default: ignore
+    AllowedValues:
+      - ignore
+      - sync
+      
+  DryRun:
+    Type: String
+    Description: | 
+      Enabled Dry Run, means the lambda will execute highlighting the changes it would make to the Identity Store, will not making any changes.
+    Default: live
+    AllowedValues:
+      - live
+      - dry-run
+
+  PrecacheOrgUnits:
+    Type: String
+    Description: | 
+       To reduce the volume of apis, ssosync precaches the users and groups from the Google directory. If you directory is large >10,000 users, you may wish to limit the organizational units that are precached. The default is the whole directory '/'. The parameter accpets a comma separate list of OrgUnitPaths, /OU1,/OU2/OU3 in this example all users within the tree of /OU1 and /OU2/OU3 would be precached but not from /OU2 itself. Precaching can be disable by leaving the field empty.
+    Default: "/"
+    AllowedPattern: '(?!.*\s)|(^\/$)|(\/[a-zA-Z0-9_\/\- ]{0,50})|(\/[a-zA-Z0-9_\/\- ]{0,50})(?:(,\/[a-zA-Z0-9_\/\- ]{1,50}))'
+
+# Secrets
+  GoogleCredentials:
+    Type: String
+    Description: |
+      Credentials to log into Google (content of credentials.json)
+    Default: ""
+    AllowedPattern: '(?!.*\s)|(\{(\s)*(".*")(\s)*:(\s)*(".*")(\s)*\})'
+    NoEcho: true
+
+  GoogleAdminEmail:
+    Type: String
+    Description: |
+      Google Admin email
+    Default: ""
+    AllowedPattern: '(?!.*\s)|(([a-zA-Z0-9.+=_-]{0,61})@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*)'
+    NoEcho: true
+
+  SCIMEndpointUrl:
+    Type: String
+    Description: |
+      AWS IAM Identity Center - SCIM Endpoint Url
+    Default: ""
+    AllowedPattern: '(?!.*\s)|(https://scim.(us(-gov)?|ap|ca|cn|eu|il|me|mx|sa)-(central|(north|south)?(east|west)?)-([0-9]{1}).amazonaws.com/([A-Za-z0-9]{8,11})-([A-Za-z0-9]{4})-([A-Za-z0-9]{4})-([A-Za-z0-9]{4})-([A-Za-z0-9]{12})/scim/v2/?)'
+
+  SCIMEndpointAccessToken:
+    Type: String
+    Description: |
+      AWS IAM Identity Center - SCIM AccessToken
+    Default: ""
+    AllowedPattern: '(?!.*\s)|([0-9a-zA-Z/=+-\\]{500,620})'
+    NoEcho: true
+
+  Region:
+    Type: String
+    Description: |
+      AWS Region where AWS IAM Identity Center is enabled
+    Default: ""
+    AllowedPattern: '(?!.*\s)|(us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-\d'
+
+  IdentityStoreID:
+    Type: String
+    Description: |
+      Identifier of Identity Store in AWS IAM Identity Center
+    Default: ""
+    AllowedPattern: '(?!.*\s)|d-[1-z0-9]{10}'
+
+  GoogleUserMatch:
+    Type: String
+    Description: |
+      [optional] Google Workspace Users filter query parameter, a simple '*' denotes sync all users in the directory. example: 'name:John*,email:admin*', '*' or name=John Doe,email:admin*' see: https://developers.google.com/admin-sdk/directory/v1/guides/search-users, if left empty no users will be selected but if a pattern has been set for GroupMatch users that are members of the groups it matches will still be selected.
+    Default: ""
+    AllowedPattern: '(?!.*\s)|(\*)|((((name|Name|NAME)((:[a-zA-Z0-9\-_ ]{1,64}\*)|(=[a-zA-Z0-9\-_ ]{1,64})))|((email|Email|EMAIL)((:[a-zA-Z0-9.\-_]{1,64}\*)|(=([a-zA-Z0-9.\-_]{1,64})@([a-zA-Z0-9.\-]{5,260})))))(,(((name|Name|NAME)((:[a-zA-Z0-9\-_ ]{1,64}\*)|(=[a-zA-Z0-9\-_ ]{1,64})))|((email|Email|EMAIL)((:[a-zA-Z0-9.\-_]{1,64}\*)|(=([a-zA-Z0-9.\-_]{1,64})@([a-zA-Z0-9.\-]{5,260}))))))*)'
+
+  GoogleGroupMatch:
+    Type: String
+    Description: |
+      [optional] Google Workspace Groups filter query parameter, a simple '*' denotes sync all groups (and any users that are members of those groups). example: 'name:Admin*,email:aws-*', 'name=Admins' or '*' see: https://developers.google.com/admin-sdk/directory/v1/guides/search-groups, if left empty no groups will be selected.
+    Default: "*"
+    AllowedPattern: '(?!.*\s)|(\*)|((((name|Name|NAME)((:[a-zA-Z0-9\-_ ]{1,64}\*)|(=[a-zA-Z0-9\-_ ]{1,64})))|((email|Email|EMAIL)((:[a-zA-Z0-9.\-_]{1,64}\*)|(=([a-zA-Z0-9.\-_]{1,64})@([a-zA-Z0-9.\-]{5,260})))))(,(((name|Name|NAME)((:[a-zA-Z0-9\-_ ]{1,64}\*)|(=[a-zA-Z0-9\-_ ]{1,64})))|((email|Email|EMAIL)((:[a-zA-Z0-9.\-_]{1,64}\*)|(=([a-zA-Z0-9.\-_]{1,64})@([a-zA-Z0-9.\-]{5,260}))))))*)'
+
+
+Resources:
+
+  Function:
+    Type: AWS::Serverless::Application
+    Properties:
+      Location:
+        ApplicationId: arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync
+        SemanticVersion: 2.3.8
+      Parameters:
+        DeployPattern: App only
+        FunctionName: SSOSync
+        CrossStackConfig: !GetAtt [Secrets, Outputs.AppConfigLocal]
+        PrecacheOrgUnits: !Ref PrecacheOrgUnits
+        GoogleUserMatch: !Ref GoogleUserMatch
+        GoogleGroupMatch: !Ref GoogleGroupMatch
+        SyncMethod: groups
+        ScheduleExpression: !Ref ScheduleExpression
+        SyncSuspended: !Ref SyncSuspended
+        DryRun: !Ref DryRun
+        MemorySize: !Ref MemorySize
+        TimeOut: !Ref TimeOut
+        LogLevel: !Ref LogLevel
+        LogFormat: !Ref LogFormat
+        LogRetention: !Ref LogRetention
+  
+  Secrets:
+    Type: AWS::Serverless::Application
+    Properties:
+      Location:
+        ApplicationId: arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync
+        SemanticVersion: 2.3.8
+      Parameters:
+        DeployPattern: Secrets only
+        SCIMEndpointUrl: !Ref SCIMEndpointUrl
+        SCIMEndpointAccessToken: !Ref SCIMEndpointAccessToken
+        IdentityStoreID: !Ref IdentityStoreID
+        Region: !Ref Region
+        GoogleAdminEmail: !Ref GoogleAdminEmail
+        GoogleCredentials: !Ref GoogleCredentials
