@@ -765,7 +765,7 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 			"queryGroups": queryGroups,
 		}).Info("fetching groups")
 
-		gGroups, err := s.google.GetGroups(queryGroups)
+		googleGroups, err := s.google.GetGroups(queryGroups)
 		if err != nil {
 			log.WithFields(log.Fields{
 				"func":  funcName,
@@ -779,7 +779,7 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 			"func": funcName,
 		}).Info("filter groups by ignoreList")
 
-		for _, g := range gGroups {
+		for _, g := range googleGroups {
 			log.WithFields(log.Fields{
 				"func":  funcName,
 				"group": g,
