@@ -109,7 +109,7 @@ Parameters:
     Type: Number
     Description: |
       How long to retain log for, if you want to retain indefinitely, select 0
-    Default: 365
+    Default: 0
     AllowedValues:
       - 0
       - 1
