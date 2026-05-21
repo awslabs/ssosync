@@ -689,8 +689,7 @@ Resources:
         Type: LINUX_CONTAINER
         EnvironmentVariables:
           - Name: ExpectedExitState
-            #Value: !If [DeployNonDelegated, 1, 0]
-            Value: 0
+            Value: !If [DeployNonDelegated, 1, 0]
       Artifacts:
         Name: SSOSync
         Type: CODEPIPELINE
@@ -721,8 +720,7 @@ Resources:
         Type: LINUX_CONTAINER
         EnvironmentVariables:
           - Name: ExpectedResponse
-            # Value: !If [DeployNonDelegated, "true", "false"]
-            Value: "false"
+            Value: !If [DeployNonDelegated, "true", "false"]
       Artifacts:
         Name: SSOSync
         Type: CODEPIPELINE
