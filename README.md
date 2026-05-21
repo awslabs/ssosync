@@ -14,7 +14,7 @@ SSO Sync is a powerful CLI tool and AWS Lambda function that enables automatic p
 
 ## ✨ Key Features
 
-- **🔄 Bi-directional Sync**: Supports both `groups` and `users_groups` sync methods
+- **🔄 Uni-directional Sync**: Supports both `groups` and `users_groups` sync methods
 - **🎯 Advanced Filtering**: Flexible user and group filtering with Google API query parameters
 - **🛡️ Dry-Run Mode**: Test synchronization without making actual changes
 - **⚡ High Performance**: Built with AWS SDK v2 for improved performance and reliability
@@ -25,6 +25,9 @@ SSO Sync is a powerful CLI tool and AWS Lambda function that enables automatic p
 - **📈 Scalable**: Supports large directories with user caching and pagination
 
 ## 🚀 Quick Start
+Use one of the [quick start](/quick-start/) templates to simplify the your deployment. Use these templates, with the **Sync from Git** option, to make updates to your deployment far simpler.
+
+## 🚀 Step-by-Step Guide
 
 Want to dive straight in? Try this [hands-on lab](https://catalog.workshops.aws/control-tower/en-US/authentication-authorization/google-workspace) from the AWS Control Tower Workshop. The lab guides you through the complete setup process for both AWS and Google Workspace using the recommended Lambda deployment from the [AWS Serverless Application Repository](https://console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync).
 

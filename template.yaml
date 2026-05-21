@@ -696,10 +696,10 @@ Resources:
 
   LogGroup:
     Type: AWS::Logs::LogGroup
-    Condition: CreateFunction
+    Condition: SetLogRetention
     Properties:
       LogGroupName: !Sub /aws/lambda/${SSOSyncFunction}
-      RetentionInDays: !If [SetLogRetention, !Ref LogRetention, !Ref AWS::NoValue]
+      RetentionInDays: !Ref LogRetention
 
   KeyAlias:
     Type: AWS::KMS::Alias

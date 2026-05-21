@@ -24,6 +24,8 @@ phases:
 
       - ./ssosync -t "${SCIMAccessToken}" -e "${SCIMEndpointUrl}" -u "${GoogleAdminEmail}" -i "${IdentityStoreID}" -r "${Region}" -s "groups" -g "name:AWS*"; ExitState=$?
 
+      - echo "${ExitState}"
+      - echo "${ExpectedExitState}"
       - |
         if expr "${ExitState}" : "${ExpectedExitState}" >/dev/null; then
           echo "We got what we expected"
