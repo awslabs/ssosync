@@ -198,6 +198,7 @@ Resources:
     Type: AWS::CodePipeline::Pipeline
     Properties:
       Name: SSOSync-Build
+      PipelineType: V2
       RoleArn: !Sub ${CodePipelineRole.Arn}
       ArtifactStore: 
         Type: S3
