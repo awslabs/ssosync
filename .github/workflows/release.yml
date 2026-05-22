@@ -49,7 +49,7 @@ jobs:
     needs: [ test ]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         
       - name: Unshallow
         run: git fetch --prune --unshallow
@@ -71,3 +71,37 @@ jobs:
         run: make release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  quickstart:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v6
+
+      - name: Set SEMANTIC_VERSION
+        run : |
+          echo "SEMANTIC_VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
+          echo "env.SemanticVersion: ${{ env.SEMANTIC_VERSION }}"
+
+      - name: 'SAR Template'
+        uses: lfreleng-actions/file-sed-regex-action@main
+        with:
+          flags: '-i -E'
+          regex: 's/SemanticVersion: [0-9.]+/SemanticVersion: ${{ env.SEMANTIC_VERSION }}/g'
+          path: 'template.yaml'
+      - name: 'Single Account'
+        uses: lfreleng-actions/file-sed-regex-action@main
+        with:
+          flags: '-i -E'
+          regex: 's/SemanticVersion: [0-9.]+/SemanticVersion: ${{ env.SEMANTIC_VERSION }}/g'
+          path: 'quick-start/single-account.yaml'
+      - name: Show Changes
+        run: |
+          grep SemanticVersion quick-start/*.yaml template.yaml
+
+      - name: Commit updated Quick Start Templates
+        uses: stefanzweifel/git-auto-commit-action@v7
+        with:
+          branch: ${{ github.event.release.target_commitish }}
+          commit_message: Update Quick Start templates
+          file_pattern: ./
