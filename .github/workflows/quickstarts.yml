@@ -1,7 +1,9 @@
 # .github/workflows/quickstarts.yaml
 name: quickstarts
 
-on: release
+on:
+  release:
+    types: [published]
 
 permissions:
   contents: write
