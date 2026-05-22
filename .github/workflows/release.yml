@@ -78,30 +78,23 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v6
 
-      - name: Set SEMANTIC_VERSION
+      - name: Fetch SEMANTIC_VERSION
         run : |
           echo "SEMANTIC_VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
+      - name: Show SemanticVersion
           echo "env.SemanticVersion: ${{ env.SEMANTIC_VERSION }}"
 
-      - name: 'SAR Template'
-        uses: lfreleng-actions/file-sed-regex-action@main
-        with:
-          flags: '-i -E'
-          regex: 's/SemanticVersion: [0-9.]+/SemanticVersion: ${{ env.SEMANTIC_VERSION }}/g'
-          path: 'template.yaml'
-      - name: 'Single Account'
-        uses: lfreleng-actions/file-sed-regex-action@main
-        with:
-          flags: '-i -E'
-          regex: 's/SemanticVersion: [0-9.]+/SemanticVersion: ${{ env.SEMANTIC_VERSION }}/g'
-          path: 'quick-start/single-account.yaml'
-      - name: Show Changes
+      - name: Show current SemanticVersion
+        run: grep SemanticVersion quick-start/*.yaml
+      - name: Update Templates
         run: |
-          grep SemanticVersion quick-start/*.yaml template.yaml
+          git grep -lr -e 'SemanticVersion' -- quick-start | xargs sed -i -E 's/SemanticVersion: [0-9.]+/SemanticVersion: ${{ env.SEMANTIC_VERSION }}/g'
+      - name: Show Templates SemanticVersion
+        run: grep SemanticVersion quick-start/*.yaml
 
       - name: Commit updated Quick Start Templates
         uses: stefanzweifel/git-auto-commit-action@v7
         with:
           branch: ${{ github.event.release.target_commitish }}
           commit_message: Update Quick Start templates
-          file_pattern: ./
+          file_pattern: quick-start
