@@ -82,7 +82,7 @@ jobs:
         run : |
           echo "SEMANTIC_VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
       - name: Show SemanticVersion
-          echo "env.SemanticVersion: ${{ env.SEMANTIC_VERSION }}"
+        run: echo "env.SemanticVersion: ${{ env.SEMANTIC_VERSION }}"
 
       - name: Show current SemanticVersion
         run: grep SemanticVersion quick-start/*.yaml
