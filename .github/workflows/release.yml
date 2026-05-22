@@ -16,11 +16,6 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v6
 
-      - name: Update version strings
-        run: |
-          SemanticVersion="${GITHUB_REF#refs/tags/v}"
-          sed -i '' -E "s/SemanticVersion: [0-9.]+/SemanticVersion: $SemanticVersion/g" quick-start/*.yaml template.yaml
-
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
