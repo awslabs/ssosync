@@ -745,6 +745,61 @@ Resources:
       LogGroupName: !Ref CodePipelineLogGroup
       LogStreamName: "SSOSync-Release"
 
+  GitHubOIDC:
+    Type: AWS::IAM::OIDCProvider
+    Properties:
+      ClientIdList:
+      - 'sts.amazonaws.com'
+      Url: 'https://token.actions.githubusercontent.com'
+
+  GitHubActionsRole:
+    Type: AWS::IAM::Role
+    Properties: 
+      RoleName: SSOSync-GitHubActions
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Action: ['sts:AssumeRoleWithWebIdentity']
+          Effect: Allow
+          Principal: 
+            Federated: !Sub "arn:aws:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com"
+          Condition:
+            StringEquals:
+              "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
+              "token.actions.githubusercontent.com:sub": "repo:awslabs/ssosync:ref:refs/heads/master"
+      Path: /
+      Policies:
+        - PolicyName: !Sub "SSOSync-GitHubActions-${AWS::Region}"
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement: 
+            - Effect: Allow
+              Action:
+              - 'codepipeline:StartPipelineExecution'
+              - 'codepipeline:GetPipeline'
+              - 'codepipeline:GetPipelineExecution'
+              - 'codepipeline:ListPipelineExecutions'
+              Resource: !Sub "arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:${CodePipeline}"
+            - Effect: Allow
+              Action:
+              - 'codebuild:ListBuildsForProject'
+              - 'codebuild:BatchGetBuilds'
+              Resource:
+              - !Sub ${GitMetadata.Arn}
+              - !Sub ${CodeBuildApp.Arn}
+              - !Sub ${CodeBuildPackage.Arn}
+              - !Sub ${CodeBuildStaging.Arn}
+              - !Sub ${CodeBuildTestingManagement.Arn}
+              - !Sub ${CodeBuildTestingDelegated.Arn}
+              - !Sub ${CodeBuildTestingNonDelegated.Arn}
+              - !Sub ${CodeBuildTestingSingleStack.Arn}
+              - !Sub ${CodeBuildApproveRelease.Arn}
+              - !Sub ${CodeBuildRelease.Arn}
+            - Effect: Allow
+              Action:
+              - 'logs:GetLogEvents'
+              Resource:
+                - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:SSOSync-Build:*"
 
   CodePipelineRole:
     Type: AWS::IAM::Role
