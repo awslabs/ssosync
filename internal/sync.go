@@ -932,8 +932,8 @@ func getUserOperations(awsUsers []*interfaces.User, googleUsers []*admin.User) (
 	log.Debug("getUserOperations()")
 	awsMap := make(map[string]*interfaces.User)
 	awsMapExtId := make(map[string]*interfaces.User)
-	googleMap := make(map[string]struct{})
-	googleMapId := make(map[string]struct{})
+	googleMap := make(map[string]*admin.User)
+	googleMapId := make(map[string]*admin.User)
 
 	for _, awsUser := range awsUsers {
 		awsMapExtId[awsUser.ExternalId] = awsUser
@@ -941,18 +941,17 @@ func getUserOperations(awsUsers []*interfaces.User, googleUsers []*admin.User) (
 	}
 
 	for _, gUser := range googleUsers {
-		googleMapId[gUser.Id] = struct{}{}
-		googleMap[gUser.PrimaryEmail] = struct{}{}
+		googleMapId[gUser.Id] = gUser
+		googleMap[gUser.PrimaryEmail] = gUser
 	}
 
-	// AWS Users found and not found in google
+	// Look for Google users in AWS
 	for _, gUser := range googleUsers {
 		if awsUser, found := awsMapExtId[gUser.Id]; found {
 			if awsUser.Active == gUser.Suspended ||
 				awsUser.Username != gUser.PrimaryEmail ||
 				awsUser.Name.GivenName != gUser.Name.GivenName ||
-				awsUser.Name.FamilyName != gUser.Name.FamilyName ||
-				awsUser.ExternalId != gUser.Id {
+				awsUser.Name.FamilyName != gUser.Name.FamilyName {
 				log.WithFields(log.Fields{
 					"gUser":   gUser,
 					"awsUser": awsUser,
@@ -977,9 +976,9 @@ func getUserOperations(awsUsers []*interfaces.User, googleUsers []*admin.User) (
 		}
 	}
 
-	// Google Users founds and not in aws
+	//  Look for AWS users not found in Google
 	for _, awsUser := range awsUsers {
-		if _, found := googleMap[awsUser.Username]; !found {
+		if _, found := googleMapId[awsUser.ExternalId]; !found {
 			if _, found := googleMap[awsUser.Username]; !found {
 				log.WithFields(log.Fields{
 					"awsUser": awsUser,

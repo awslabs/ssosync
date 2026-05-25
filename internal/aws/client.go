@@ -383,11 +383,25 @@ func (c *client) groupChangeOperation(op OperationType, users []string, groupId 
 
 // AddUserToGroup will add the user specified to the group specified
 func (c *client) AddUserToGroup(u *interfaces.User, g *interfaces.Group) error {
+	if g == nil {
+		return ErrGroupNotSpecified
+	}
+
+	if u == nil {
+		return ErrUserNotSpecified
+	}
 	return c.groupChangeOperation(OperationAdd, []string{u.ID}, g.ID)
 }
 
 // RemoveUserFromGroup will remove the user specified from the group specified
 func (c *client) RemoveUserFromGroup(u *interfaces.User, g *interfaces.Group) error {
+	if g == nil {
+		return ErrGroupNotSpecified
+	}
+
+	if u == nil {
+		return ErrUserNotSpecified
+	}
 	return c.groupChangeOperation(OperationRemove, []string{u.ID}, g.ID)
 }
 
