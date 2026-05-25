@@ -11,7 +11,7 @@ Changelog
 
 ## v2.3.8
 - Bump go.opentelemetry.io/otel from 1.39.0 to 1.41.0
-535-18d6 Update template.yaml
+- Update template.yaml
 
 ## v2.3.7
 - 299 scheduleexpression allowedpattern rejects valid singular rate expressions (#303)
