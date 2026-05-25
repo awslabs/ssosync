@@ -12,6 +12,7 @@ import (
 	"github.com/awslabs/ssosync/internal/aws"
 	"github.com/awslabs/ssosync/internal/config"
 	"github.com/awslabs/ssosync/internal/mocks"
+	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	admin "google.golang.org/api/admin/directory/v1"
@@ -45,7 +46,11 @@ func TestSyncGroupsUsers_DryRun_NewUserNotInAWS_DoesNotCrash(t *testing.T) {
 	// dryClient.CreateUser doesn't make HTTP calls, so only GET /Users hits the server.
 	scimServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/scim+json")
-		fmt.Fprintln(w, `{"totalResults":0,"Resources":[]}`)
+		_, err := fmt.Fprintln(w, `{"totalResults":0,"Resources":[]}`)
+		if err != nil {
+			log.Warn("Error Getting Deleted Users")
+			return err
+		}
 	}))
 	defer scimServer.Close()
 
