@@ -1121,15 +1121,9 @@ func TestClient_GroupChangeOperation_HTTPError(t *testing.T) {
 	require.NoError(t, err)
 	cc := c.(*client)
 
-	g := &interfaces.Group{
-		ID:          "groupId",
-		DisplayName: "testGroup",
-	}
+	g := "groupId"
 
-	u := &interfaces.User{
-		ID:       "userId",
-		Username: "test@example.com",
-	}
+	u := []string{"userId"}
 
 	err = cc.groupChangeOperation(OperationAdd, u, g)
 	assert.Error(t, err)

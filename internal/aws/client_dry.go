@@ -99,38 +99,30 @@ func (dc *dryClient) DeleteUser(u *interfaces.User) error {
 
 func (dc *dryClient) CreateUsers(users []*interfaces.User, addUsers []*interfaces.User) ([]*interfaces.User, error) {
 	log.Info("AddUsers(): DRY RUN - Would icreate the users")
-	for _, user := range addUsers {
-		users = append(users, user)
-	}
+	users = append(users, addUsers...)
 	return users, nil
 }
 
 func (dc *dryClient) UpdateUsers(users []*interfaces.User, updateUsers []*interfaces.User) ([]*interfaces.User, error) {
 	log.Info("UpdateUsers(): DRY RUN - Would update the details of the users")
-	for _, user := range updateUsers {
-		users = append(users, user)
-	}
+	users = append(users, updateUsers...)
 	return users, nil
 }
 
 func (dc *dryClient) DeleteUsers(deleteUsers []*interfaces.User) error {
-	log.Info("DeelteUsers(): DRY RUN - Would delete the users")
+	log.Info("DeleteUsers(): DRY RUN - Would delete the users")
 	return nil
 }
 
 func (dc *dryClient) CreateGroups(groups []*interfaces.Group, addGroups []*interfaces.Group) ([]*interfaces.Group, error) {
 	log.Info("CreateGroups(): DRY RUN - Would create the groups")
-	for _, group := range addGroups {
-		groups = append(groups, group)
-	}
+	groups = append(groups, addGroups...)
 	return groups, nil
 }
 
 func (dc *dryClient) UpdateGroups(groups []*interfaces.Group, updateGroups []*interfaces.Group) ([]*interfaces.Group, error) {
 	log.Info("UpdateGroups(): DRY RUN - Would update the details of the groups")
-	for _, group := range updateGroups {
-		groups = append(groups, group)
-	}
+	groups = append(groups, updateGroups...)
 	return groups, nil
 }
 
@@ -141,7 +133,7 @@ func (dc *dryClient) DeleteGroups(groups []*interfaces.Group) error {
 
 func (dc *dryClient) AddMembers(members map[string][]string, addMembers map[string][]string) (map[string][]string, error) {
 	log.Info("AddMembers(): DRY RUN - Would add members to groups")
-	for groupId, _ := range addMembers {
+	for groupId := range addMembers {
 		members[groupId] = addMembers[groupId]
 	}
 	return members, nil

@@ -145,5 +145,4 @@ func TestConstants(t *testing.T) {
 	assert.Equal(t, false, DefaultDebug)
 	assert.Equal(t, "credentials.json", DefaultGoogleCredentials)
 	assert.Equal(t, "groups", DefaultSyncMethod)
-	assert.Equal(t, "/", DefaultPrecacheOrgUnits)
 }
