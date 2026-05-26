@@ -515,6 +515,7 @@ Resources:
     Type: AWS::IAM::Role
     Condition: LocalSecrets
     Properties:
+      RoleName: !Sub ${SSOSyncFunction}-Role
       AssumeRolePolicyDocument:
         Version: 2012-10-17
         Statement:
@@ -577,6 +578,7 @@ Resources:
     Type: AWS::IAM::Role
     Condition: RemoteSecrets
     Properties:
+      RoleName: !Sub ${SSOSyncFunction}-Role
       AssumeRolePolicyDocument:
         Version: 2012-10-17
         Statement:
@@ -646,7 +648,7 @@ Resources:
     Condition: CreateFunction
     Properties:
       FunctionName: !If [SetFunctionName, !Ref FunctionName, !Ref AWS::NoValue]
-      Description: "An instance of ssosync deplyed from the Serverless Application Repository, for details see http://https://github.com/awslabs/ssosync"
+      Description: "An instance of ssosync deployed from the Serverless Application Repository, for details see http://https://github.com/awslabs/ssosync"
       Role: !If [RemoteSecrets, !GetAtt SSOSyncRoleRemote.Arn, !GetAtt SSOSyncRoleLocal.Arn]
       Runtime: provided.al2023
       Handler: bootstrap
@@ -896,3 +898,10 @@ Outputs:
     Value: !Sub ${SecretGoogleCredentials},${SecretGoogleAdminEmail},${SecretSCIMEndpoint},${SecretSCIMAccessToken},${SecretRegion},${SecretIdentityStoreID},arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/${KeyForSecrets}
     Export:
       Name: AppConfig
+
+  IamRole:
+    Condition: OutputFunction
+    Description: "The IAM role that the function will execute under."
+    Value: !Sub ${SSOSyncFunction}-Role
+    Export:
+      Name: IamRole
