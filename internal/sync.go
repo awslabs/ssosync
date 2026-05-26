@@ -546,12 +546,7 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 		}
 
 		log.Warn("deleting user")
-		_, err = identitystore.DeleteUser(
-			context.Background(),
-			s.identityStore,
-			&s.cfg.IdentityStoreID,
-			&awsUserFull.ID,
-		)
+		err = s.aws.DeleteUser(awsUserFull)
 		if err != nil {
 			log.WithField("user", awsUser).Error("error deleting user")
 			return err
