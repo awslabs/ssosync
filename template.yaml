@@ -95,7 +95,7 @@ Parameters:
     Type: String
     Description: |
       [optional] Specify the name you want to us for this deployment, if you want to trigger SSOSync as part of a pipeline or other automation this will ensure a consistent arn to call. leave empty for default behaviour.
-    Default: ""
+    Default: "SSOSync"
     AllowedPattern: '(?!.*\s)|[a-zA-Z0-9-_]{1,140}'
 
   ScheduleExpression:
@@ -515,7 +515,7 @@ Resources:
     Type: AWS::IAM::Role
     Condition: LocalSecrets
     Properties:
-      RoleName: !Sub ${SSOSyncFunction}-Role
+      RoleName: !Sub ${SSOSyncFunction}Role
       AssumeRolePolicyDocument:
         Version: 2012-10-17
         Statement:
@@ -578,7 +578,7 @@ Resources:
     Type: AWS::IAM::Role
     Condition: RemoteSecrets
     Properties:
-      RoleName: !Sub ${SSOSyncFunction}-Role
+      RoleName: !Sub ${SSOSyncFunction}Role
       AssumeRolePolicyDocument:
         Version: 2012-10-17
         Statement:
@@ -902,6 +902,6 @@ Outputs:
   IamRole:
     Condition: OutputFunction
     Description: "The IAM role that the function will execute under."
-    Value: !Sub ${SSOSyncFunction}-Role
+    Value: !Sub ${SSOSyncFunction}Role
     Export:
       Name: IamRole
