@@ -19,6 +19,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/aws/aws-lambda-go/events"
@@ -275,12 +276,23 @@ func configLambda() {
 
 }
 
-func getSecretFromCache(secretName string) string {
-	value, err := secretCache.GetSecretString(secretName)
-	if err != nil {
-		log.Fatal(errors.Wrap(err, fmt.Sprintf("cannot read secret: %s", secretName)).Error())
+// secretsManagerARN matches Secrets Manager ARNs across all AWS partitions
+// (aws, aws-us-gov, aws-cn, and any future partition GovCloud-style suffix).
+var secretsManagerARN = regexp.MustCompile(`^arn:aws[a-z0-9-]*:secretsmanager:`)
+
+// getSecretFromCache resolves a value that may be a Secrets Manager secret ARN
+// to its underlying secret string. Plain values (anything that is not a
+// secretsmanager ARN) are returned unchanged so callers can pass either a
+// literal value or an ARN reference through the same env var.
+func getSecretFromCache(value string) string {
+	if !secretsManagerARN.MatchString(value) {
+		return value
 	}
-	return value
+	resolved, err := secretCache.GetSecretString(value)
+	if err != nil {
+		log.Fatal(errors.Wrap(err, fmt.Sprintf("cannot read secret: %s", value)).Error())
+	}
+	return resolved
 }
 
 func addFlags(_ *cobra.Command, cfg *config.Config) {
