@@ -161,6 +161,7 @@ func initConfig() {
 
 	appEnvVars := []string{
 		"google_admin",
+		"customer_id",
 		"google_credentials",
 		"scim_access_token",
 		"scim_endpoint",
@@ -254,6 +255,9 @@ func configLambda() {
 
 	// Get sensitive values from Secrets Manager with caching
 	cfg.GoogleAdmin = getSecretFromCache(getEnvStr("GOOGLE_ADMIN", config.DefaultGoogleCredentials))
+	// Customer ID is not a secret; read it directly so the lambda doesn't
+	// try to resolve the literal default ("my_customer") as a secret name.
+	cfg.CustomerID = getEnvStr("CUSTOMER_ID", config.DefaultCustomerID)
 	cfg.SCIMEndpoint = getSecretFromCache(getEnvStr("SCIM_ENDPOINT", ""))
 	cfg.IdentityStoreID = getSecretFromCache(getEnvStr("IDENTITY_STORE_ID", ""))
 	cfg.Region = getSecretFromCache(getEnvStr("REGION", ""))
@@ -294,6 +298,7 @@ func addFlags(_ *cobra.Command, cfg *config.Config) {
 	rootCmd.Flags().StringVarP(&cfg.SCIMEndpoint, "endpoint", "e", "", "AWS SSO SCIM API Endpoint")
 	rootCmd.Flags().StringVarP(&cfg.GoogleCredentials, "google-credentials", "c", config.DefaultGoogleCredentials, "path to Google Workspace credentials file")
 	rootCmd.Flags().StringVarP(&cfg.GoogleAdmin, "google-admin", "u", "", "Google Workspace admin user email")
+	rootCmd.Flags().StringVar(&cfg.CustomerID, "customer-id", config.DefaultCustomerID, "Google Workspace customer ID to operate against (defaults to 'my_customer')")
 	rootCmd.Flags().StringSliceVar(&cfg.IgnoreUsers, "ignore-users", nil, "ignores these Google Workspace users")
 	rootCmd.Flags().StringSliceVar(&cfg.IgnoreGroups, "ignore-groups", nil, "ignores these Google Workspace groups")
 	rootCmd.Flags().StringSliceVar(&cfg.IncludeGroups, "include-groups", nil, "include only these Google Workspace groups, NOTE: only works when --sync-method 'users_groups'")
