@@ -298,120 +298,75 @@ Parameters:
 
 Conditions:
   SetFunctionName: !Not 
-    - !Equals
-        - !Ref FunctionName
-        - ""
+    - !Equals [!Ref FunctionName, "" ]
   SetCustomerId: !Not
-    - !Equals
-        - !Ref CustomerId
-        - ""
+    - !Equals [!Ref CustomerId, ""]
+  GroupSync: !Equals [ !Ref SyncMethod, "groups" ]
   SetGoogleUserMatch: !And
+    - !Condition GroupSync
     - !Not
-        - !Equals
-            - !Ref GoogleUserMatch
-            - ""
-    - !Equals
-        - !Ref SyncMethod
-        - "groups"
+      - !Equals [ !Ref GoogleUserMatch, "" ]
   SetGoogleGroupMatch: !And 
+    - !Condition GroupSync
     - !Not
-        - !Equals
-            - !Ref GoogleGroupMatch
-            - ""
-    - !Equals
-        - !Ref SyncMethod
-        - "groups"
+      - !Equals [ !Ref GoogleGroupMatch, "" ]
   SetIgnoreGroups: !Not 
-    - !Equals
-        - !Ref IgnoreGroups
-        - ""
+    - !Equals [ !Ref IgnoreGroups, "" ]
   SetIgnoreUsers: !Not
-    - !Equals
-        - !Ref IgnoreUsers
-        - ""
+    - !Equals [ !Ref IgnoreUsers, "" ]
   SetIncludeGroups: !And
     - !Not
-        - !Equals
-            - !Ref IncludeGroups
-            - ""
-    - !Equals
-        - !Ref SyncMethod
-        - "users_groups"
-  SetLogRetention: !Not
-    - !Equals
-        - !Ref LogRetention
-        - 0
-  SetDryRun: !Equals
-    - !Ref DryRun
-    - "dry-run"
-  SetSyncSuspended: !Equals
-    - !Ref SyncSuspended
-    - "sync"
-  OnSchedule: !And
+      - !Condition GroupSync
     - !Not
-      - !Equals
-        - !Ref ScheduleExpression
-        - ""
-    - !Or
-      - !Equals
-        - !Ref DeployPattern
-        - "App for cross-account"
-      - !Equals
-        - !Ref DeployPattern
-        - "App + secrets"
-      - !Equals
-        - !Ref DeployPattern
-        - "App only"
-
+      - !Equals [!Ref IncludeGroups, ""]
+  SetLogRetention: !Not
+    - !Equals [!Ref LogRetention, 0 ]
+  SetDryRun: !Equals [!Ref DryRun, "dry-run"]
+  SetSyncSuspended: !Equals [!Ref SyncSuspended, "sync"]
+  OnSchedule: !And
+    - !Condition CreateFunction
+    - !Not
+      - !Equals [!Ref ScheduleExpression, ""]
   CreateFunction: !Or
-    - !Equals
-        - !Ref DeployPattern
-        - "App for cross-account"
-    - !Equals
-        - !Ref DeployPattern
-        - "App + secrets"
-    - !Equals
-        - !Ref DeployPattern
-        - "App only"
+    - !Equals [!Ref DeployPattern, "App for cross-account"]
+    - !Equals [!Ref DeployPattern, "App + secrets"]
+    - !Equals [!Ref DeployPattern, "App only"]
   CreateSecrets: !Or
-    - !Equals
-        - !Ref DeployPattern
-        - "App + secrets"
-    - !Equals
-        - !Ref DeployPattern
-        - "Secrets only"
-    - !Equals
-        - !Ref DeployPattern
-        - "Secrets for cross-account"
-  CreateKey: !Equals
-    - !Ref DeployPattern
-    - "Secrets for cross-account"
-  RemoteSecrets: !Equals
-    - !Ref DeployPattern
-    - "App for cross-account"
+    - !Equals [!Ref DeployPattern, "App + secrets"]
+    - !Equals [!Ref DeployPattern, "Secrets only"]
+    - !Equals [!Ref DeployPattern, "Secrets for cross-account"]
+  CreateSecretRegion: !And
+    - !Condition CreateSecrets
+    - !Not
+      - !Equals [!Ref Region, ""]
+  CreateSecretIdentityStoreID: !And
+    - !Condition CreateSecrets
+    - !Not
+      - !Equals [!Ref IdentityStoreID, ""]
+  CreateKey: !Equals [!Ref DeployPattern, "Secrets for cross-account"]
+  CreateKeyRegion: !AND
+    - !Condition CreateKey
+    - !Not
+      - !Equals [!Ref Region, ""]
+  CreateKeyIdentityStoreID: !AND
+    - !Condition CreateKey
+    - !Not
+      - !Equals [!Ref IdentityStoreID, ""]
+  RemoteSecrets: !Equals [!Ref DeployPattern, "App for cross-account"]
+  RemoteSecretRegion: !Equals
+    - !Condition RemoteSecrets
+    - !Not
+      - !Equals [!Select [4, !Split [',', !Ref CrossStackConfig]], ""]
+  RemoteSecretIdentityStoreID: !Equals
+    - !Condition RemoteSecrets
+    - !Not
+      - !Equals [!Select [5, !Split [',', !Ref CrossStackConfig]], ""]
   LocalSecrets: !Or
-    - !Equals
-        - !Ref DeployPattern
-        - "App + secrets"
-    - !Equals
-        - !Ref DeployPattern
-        - "App only"
-  OutputFunction: !Or
-    - !Equals
-        - !Ref DeployPattern
-        - "App + secrets"
-    - !Equals
-        - !Ref DeployPattern
-        - "App only"
-    - !Equals
-        - !Ref DeployPattern
-        - "App for cross-account"
-  OutputSecrets: !Equals
-    - !Ref DeployPattern
-    - "Secrets only"
-  DisablePrecaching: !Equals
-    - !Ref PrecacheOrgUnits
-    - ""
+    - !Equals [!Ref DeployPattern, "App + secrets"]
+    - !Equals [!Ref DeployPattern, "App only"]
+  OutputSecrets: !Equals [!Ref DeployPattern, "Secrets only"]
+  DisablePrecaching: !Equals [!Ref PrecacheOrgUnits, ""]
+  OutputFunction: !Condition CreateFunction
 
 Rules:
   memberKeyQuery:
@@ -456,16 +411,6 @@ Rules:
               - !Ref SCIMEndpointAccessToken
               - ""
         AssertDescription: 'The SCIM Access Token is required for this deployment type.'
-      - Assert: !Not
-          - !Equals
-              - !Ref Region
-              - ""
-        AssertDescription: 'The Region in which IAM Identity Center is deployed is required for this deployment type.'
-      - Assert: !Not
-          - !Equals
-              - !Ref IdentityStoreID
-              - ""
-        AssertDescription: 'The Identity Store Id for IAM Identity Center is required for this deployment type.'
 
   LocalSecrets:
     RuleCondition:  !Or
@@ -564,8 +509,8 @@ Resources:
                   - !If [CreateSecrets, !Ref SecretGoogleAdminEmail, !Select [1, !Split [',', !Ref CrossStackConfig]]]
                   - !If [CreateSecrets, !Ref SecretSCIMEndpoint, !Select [2, !Split [',', !Ref CrossStackConfig]]]
                   - !If [CreateSecrets, !Ref SecretSCIMAccessToken, !Select [3, !Split [',', !Ref CrossStackConfig]]]
-                  - !If [CreateSecrets, !Ref SecretRegion, !Select [4, !Split [',', !Ref CrossStackConfig]]]
-                  - !If [CreateSecrets, !Ref SecretIdentityStoreID, !Select [5, !Split [',', !Ref CrossStackConfig]]]
+                  - !If [CreateSecretRegion, !Ref SecretRegion, !Select [4, !Split [',', !Ref CrossStackConfig]]]
+                  - !If [CreateSecretIdentityStoreID, !Ref SecretIdentityStoreID, !Select [5, !Split [',', !Ref CrossStackConfig]]]
               - Sid: CrossRegionSecretsPolicy
                 Effect: Allow
                 Action:
@@ -621,8 +566,8 @@ Resources:
                   - !Select [1, !Split [',', !Ref CrossStackConfig]] # GoogleAdminEmail
                   - !Select [2, !Split [',', !Ref CrossStackConfig]] # SCIMEndpointUrl
                   - !Select [3, !Split [',', !Ref CrossStackConfig]] # SCIMEndpointAccessToken
-                  - !Select [4, !Split [',', !Ref CrossStackConfig]] # Region
-                  - !Select [5, !Split [',', !Ref CrossStackConfig]] # IdentityStoreID
+                  - !If [ RemoteSecretRegion, !Select [4, !Split [',', !Ref CrossStackConfig]], !Ref AWS::NoValue ] # Region
+                  - !If [ RemoteSecretIdentityStoreID, !Select [5, !Split [',', !Ref CrossStackConfig]], !Ref AWS::NoValue ] # IdentityStoreID
               - Sid: CrossRegionSecretsPolicy
                 Effect: Allow
                 Action:
@@ -676,8 +621,8 @@ Resources:
           CUSTOMER_ID: !If [SetCustomerId, !Ref CustomerId, !Ref AWS::NoValue]
           SCIM_ENDPOINT: !If [CreateSecrets, !Ref SecretSCIMEndpoint, !Select [2, !Split [',', !Ref CrossStackConfig]]]
           SCIM_ACCESS_TOKEN: !If [CreateSecrets, !Ref SecretSCIMAccessToken, !Select [3, !Split [',', !Ref CrossStackConfig]]]
-          REGION: !If [CreateSecrets, !Ref SecretRegion, !Select [4, !Split [',', !Ref CrossStackConfig]]]
-          IDENTITY_STORE_ID: !If [CreateSecrets, !Ref SecretIdentityStoreID, !Select [5, !Split [',', !Ref CrossStackConfig]]]
+          REGION: !If [CreateSecretRegion, !Ref SecretRegion, !If [ RemoteSecretRegion, !Select [4, !Split [',', !Ref CrossStackConfig]], !Ref AWS::NoValue ]]
+          IDENTITY_STORE_ID: !If [CreateSecretIdentityStoreID, !Ref SecretIdentityStoreID, !If [ RemoteSecretIdentityStoreID, !Select [5, !Split [',', !Ref CrossStackConfig]], !Ref AWS::NoValue ]]
           USER_MATCH: !If [SetGoogleUserMatch, !Ref GoogleUserMatch, !Ref AWS::NoValue]
           GROUP_MATCH: !If [SetGoogleGroupMatch, !Ref GoogleGroupMatch, !Ref AWS::NoValue]
           SYNC_METHOD: !Ref SyncMethod
@@ -844,7 +789,7 @@ Resources:
         
   SecretRegion:
     Type: "AWS::SecretsManager::Secret"
-    Condition: CreateSecrets
+    Condition: CreateSecretRegion
     Properties:
       Name: SSOSyncRegion
       SecretString: !Ref Region
@@ -852,7 +797,7 @@ Resources:
 
   SecretRegionPolicy:
     Type: AWS::SecretsManager::ResourcePolicy
-    Condition: CreateKey
+    Condition: CreateKeyRegion
     Properties:
       SecretId: !Ref SecretRegion
       ResourcePolicy:
@@ -867,7 +812,7 @@ Resources:
                 
   SecretIdentityStoreID:
     Type: "AWS::SecretsManager::Secret"
-    Condition: CreateSecrets
+    Condition: CreateSecretIdentityStoreID
     Properties:
       Name: SSOSyncIdentityStoreID
       SecretString: !Ref IdentityStoreID
@@ -875,7 +820,7 @@ Resources:
 
   SecretIdentityStoreIDPolicy:
     Type: AWS::SecretsManager::ResourcePolicy
-    Condition: CreateKey
+    Condition: CreateKeyIdentityStoreID
     Properties:
       SecretId: !Ref SecretIdentityStoreID
       ResourcePolicy:
@@ -899,13 +844,13 @@ Outputs:
   AppConfigLocal:
     Condition: OutputSecrets
     Description: "The Comma Separated list of secrets ARNs to copy and paste into the CrossStackConfig field of the App only stack."
-    Value: !Sub ${SecretGoogleCredentials},${SecretGoogleAdminEmail},${SecretSCIMEndpoint},${SecretSCIMAccessToken},${SecretRegion},${SecretIdentityStoreID}
+    Value: !Sub ${SecretGoogleCredentials},${SecretGoogleAdminEmail},${SecretSCIMEndpoint},${SecretSCIMAccessToken},!If [CreateSecretRegion, ${SecretRegion}, ${AWS::NoValue}],!If [CreateSecretIdentityStoreID, ${SecretIdentityStoreID}, ${AWS::NoValue}]
     Export:
       Name: AppConfig
 
   AppConfigRemote:
     Condition: CreateKey
     Description: "The Comma Separated list of Secrets and KMS Key ARNs to copy and paste into the CrossStackConfig field of the app for cross-account stack."
-    Value: !Sub ${SecretGoogleCredentials},${SecretGoogleAdminEmail},${SecretSCIMEndpoint},${SecretSCIMAccessToken},${SecretRegion},${SecretIdentityStoreID},arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/${KeyForSecrets}
+    Value: !Sub ${SecretGoogleCredentials},${SecretGoogleAdminEmail},${SecretSCIMEndpoint},${SecretSCIMAccessToken},!If [CreateSecretRegion, ${SecretRegion}, ${AWS::NoValue}],!If [CreateSecretIdentityStoreID, ${SecretIdentityStoreID}, ${AWS::NoValue}],arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/${KeyForSecrets}
     Export:
       Name: AppConfig
