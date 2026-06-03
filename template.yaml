@@ -250,7 +250,7 @@ Parameters:
     Description: |
       [optional] Google Workspace Users filter query parameter, a simple '*' denotes sync all users in the directory. example: 'name:John*,email:admin*', '*' or name=John Doe,email:admin*' see: https://developers.google.com/admin-sdk/directory/v1/guides/search-users, if left empty no users will be selected but if a pattern has been set for GroupMatch users that are members of the groups it matches will still be selected.
     Default: ""
-    AllowedPattern: '(?!.*\s)|(\*)|(?:(?:((?:(?i)name)(?:(?::[a-zA-Z0-9\-_]{1,64}\*)|(?:=[a-zA-Z0-9\-_]{1,64})|(?:=\"[a-zA-Z0-9\-_ ]{1,64}\")))|((?:(?i)email)(?:(?:=(?:[a-zA-Z0-9.\-_]{1,64})@(?:[a-zA-Z0-9.\-]{5,260}))|(?::[a-zA-Z0-9.\-_]{1,64}\*))))(([, ]{1,2})(?:((?:(?i)name)(?:(?::[a-zA-Z0-9\-_ ]{1,64}\*)|(?:=[a-zA-Z0-9\-_]{1,64})|(?:=\"[a-zA-Z0-9\-_ ]{1,64}\")))|((?:(?i)email)(?:(?:=(?:[a-zA-Z0-9.\-_]{1,64})@(?:[a-zA-Z0-9.\-]{5,260}))|(?::[a-zA-Z0-9.\-_]{1,64}\*)))))*)'
+    AllowedPattern: '(?!.*\s)|(\*)|(?:(?:((?:(?i)name|managerId|orgName|orgDepartment|orgCostCenter)(?:(?::[a-zA-Z0-9\-_]{1,64}\*)|(?:=[a-zA-Z0-9\-_]{1,64})|(?:=\"[a-zA-Z0-9\-_ ]{1,64}\")))|((?:(?i)email|manager)(?:(?:=(?:[a-zA-Z0-9.\-_]{1,64})@(?:[a-zA-Z0-9.\-]{5,260}))|(?::[a-zA-Z0-9.\-_]{1,64}\*))))(([, ]{1,2})(?:((?:(?i)name|manager|managerId|orgName|orgDepartment|orgCostCenter)(?:(?::[a-zA-Z0-9\-_ ]{1,64}\*)|(?:=[a-zA-Z0-9\-_]{1,64})|(?:=\"[a-zA-Z0-9\-_ ]{1,64}\")))|((?:(?i)email|manager)(?:(?:=(?:[a-zA-Z0-9.\-_]{1,64})@(?:[a-zA-Z0-9.\-]{5,260}))|(?::[a-zA-Z0-9.\-_]{1,64}\*)))))*)'
 
   GoogleGroupMatch:
     Type: String
