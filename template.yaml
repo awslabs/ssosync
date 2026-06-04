@@ -234,14 +234,14 @@ Parameters:
   Region:
     Type: String
     Description: |
-      AWS Region where AWS IAM Identity Center is enabled
+      AWS Region where AWS IAM Identity Center is enabled, NOT USED only present for backward compatability.
     Default: ""
     AllowedPattern: '(?!.*\s)|(us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-\d'
 
   IdentityStoreID:
     Type: String
     Description: |
-      Identifier of Identity Store in AWS IAM Identity Center
+      Identifier of Identity Store in AWS IAM Identity Center, NOT USED only present for backward compatability.
     Default: ""
     AllowedPattern: '(?!.*\s)|d-[1-z0-9]{10}'
 
@@ -291,7 +291,7 @@ Parameters:
 Conditions:
   SetFunctionName: !Not 
     - !Equals [!Ref FunctionName, "" ]
-  GroupSync: !Equals [ !Ref SyncMethod, "groups" ]
+  LegacySync: !Equals [ !Ref SyncMethod, "users_groups" ]
   SetGoogleUserMatch: !And
     - !Condition GroupSync
     - !Not
@@ -300,13 +300,12 @@ Conditions:
     - !Condition GroupSync
     - !Not
       - !Equals [ !Ref GoogleGroupMatch, "" ]
-  SetIgnoreGroups: !Not 
+  SetIgnoreGroups: !Not
     - !Equals [ !Ref IgnoreGroups, "" ]
   SetIgnoreUsers: !Not
     - !Equals [ !Ref IgnoreUsers, "" ]
   SetIncludeGroups: !And
-    - !Not
-      - !Condition GroupSync
+    - !Condition LegacySync
     - !Not
       - !Equals [!Ref IncludeGroups, ""]
   SetLogRetention: !Not
@@ -325,32 +324,8 @@ Conditions:
     - !Equals [!Ref DeployPattern, "App + secrets"]
     - !Equals [!Ref DeployPattern, "Secrets only"]
     - !Equals [!Ref DeployPattern, "Secrets for cross-account"]
-  CreateSecretRegion: !And
-    - !Condition CreateSecrets
-    - !Not
-      - !Equals [!Ref Region, ""]
-  CreateSecretIdentityStoreID: !And
-    - !Condition CreateSecrets
-    - !Not
-      - !Equals [!Ref IdentityStoreID, ""]
   CreateKey: !Equals [!Ref DeployPattern, "Secrets for cross-account"]
-  CreateKeyRegion: !AND
-    - !Condition CreateKey
-    - !Not
-      - !Equals [!Ref Region, ""]
-  CreateKeyIdentityStoreID: !AND
-    - !Condition CreateKey
-    - !Not
-      - !Equals [!Ref IdentityStoreID, ""]
   RemoteSecrets: !Equals [!Ref DeployPattern, "App for cross-account"]
-  RemoteSecretRegion: !Equals
-    - !Condition RemoteSecrets
-    - !Not
-      - !Equals [!Select [4, !Split [',', !Ref CrossStackConfig]], ""]
-  RemoteSecretIdentityStoreID: !Equals
-    - !Condition RemoteSecrets
-    - !Not
-      - !Equals [!Select [5, !Split [',', !Ref CrossStackConfig]], ""]
   LocalSecrets: !Or
     - !Equals [!Ref DeployPattern, "App + secrets"]
     - !Equals [!Ref DeployPattern, "App only"]
@@ -442,14 +417,6 @@ Rules:
           - !Ref SCIMEndpointAccessToken
           - ""
         AssertDescription: 'A value for SCIMEndpointAccessToken is not required for this deployment type.'
-      - Assert: !Equals
-          - !Ref Region
-          - ""
-        AssertDescription: 'A value for Region is not required for this deployment type.'
-      - Assert: !Equals
-          - !Ref IdentityStoreID
-          - ""
-        AssertDescription: 'A value for IdentityStoreID is not required for this deployment type.'
       - Assert: !Not
           - !Equals
               - !Ref CrossStackConfig
@@ -489,8 +456,6 @@ Resources:
                   - !If [CreateSecrets, !Ref SecretGoogleAdminEmail, !Select [1, !Split [',', !Ref CrossStackConfig]]]
                   - !If [CreateSecrets, !Ref SecretSCIMEndpoint, !Select [2, !Split [',', !Ref CrossStackConfig]]]
                   - !If [CreateSecrets, !Ref SecretSCIMAccessToken, !Select [3, !Split [',', !Ref CrossStackConfig]]]
-                  - !If [CreateSecretRegion, !Ref SecretRegion, !Select [4, !Split [',', !Ref CrossStackConfig]]]
-                  - !If [CreateSecretIdentityStoreID, !Ref SecretIdentityStoreID, !Select [5, !Split [',', !Ref CrossStackConfig]]]
               - Sid: CrossRegionSecretsPolicy
                 Effect: Allow
                 Action:
@@ -551,8 +516,6 @@ Resources:
                   - !Select [1, !Split [',', !Ref CrossStackConfig]] # GoogleAdminEmail
                   - !Select [2, !Split [',', !Ref CrossStackConfig]] # SCIMEndpointUrl
                   - !Select [3, !Split [',', !Ref CrossStackConfig]] # SCIMEndpointAccessToken
-                  - !If [ RemoteSecretRegion, !Select [4, !Split [',', !Ref CrossStackConfig]], !Ref AWS::NoValue ] # Region
-                  - !If [ RemoteSecretIdentityStoreID, !Select [5, !Split [',', !Ref CrossStackConfig]], !Ref AWS::NoValue ] # IdentityStoreID
               - Sid: CrossRegionSecretsPolicy
                 Effect: Allow
                 Action:
@@ -610,11 +573,9 @@ Resources:
           GOOGLE_ADMIN: !If [CreateSecrets, !Ref SecretGoogleAdminEmail, !Select [1, !Split [',', !Ref CrossStackConfig]]]
           SCIM_ENDPOINT: !If [CreateSecrets, !Ref SecretSCIMEndpoint, !Select [2, !Split [',', !Ref CrossStackConfig]]]
           SCIM_ACCESS_TOKEN: !If [CreateSecrets, !Ref SecretSCIMAccessToken, !Select [3, !Split [',', !Ref CrossStackConfig]]]
-          REGION: !If [CreateSecretRegion, !Ref SecretRegion, !If [ RemoteSecretRegion, !Select [4, !Split [',', !Ref CrossStackConfig]], !Ref AWS::NoValue ]]
-          IDENTITY_STORE_ID: !If [CreateSecretIdentityStoreID, !Ref SecretIdentityStoreID, !If [ RemoteSecretIdentityStoreID, !Select [5, !Split [',', !Ref CrossStackConfig]], !Ref AWS::NoValue ]]
           USER_MATCH: !If [SetGoogleUserMatch, !Ref GoogleUserMatch, !Ref AWS::NoValue]
           GROUP_MATCH: !If [SetGoogleGroupMatch, !Ref GoogleGroupMatch, !Ref AWS::NoValue]
-          SYNC_METHOD: !Ref SyncMethod
+          SYNC_METHOD: !If [LegacySync, !Ref SyncMethod, !Ref AWS::NoValue]
           IGNORE_GROUPS: !If [SetIgnoreGroups, !Ref IgnoreGroups, !Ref AWS::NoValue]
           IGNORE_USERS: !If [SetIgnoreUsers, !Ref IgnoreUsers, !Ref AWS::NoValue]
           INCLUDE_GROUPS: !If [SetIncludeGroups, !Ref IncludeGroups, !Ref AWS::NoValue]
@@ -776,52 +737,6 @@ Resources:
             - secretsmanager:GetSecretValue
           Resource: '*'
         
-  SecretRegion:
-    Type: "AWS::SecretsManager::Secret"
-    Condition: CreateSecretRegion
-    Properties:
-      Name: SSOSyncRegion
-      SecretString: !Ref Region
-      KmsKeyId: !If [CreateKey, !Ref KeyAlias, alias/aws/secretsmanager]
-
-  SecretRegionPolicy:
-    Type: AWS::SecretsManager::ResourcePolicy
-    Condition: CreateKeyRegion
-    Properties:
-      SecretId: !Ref SecretRegion
-      ResourcePolicy:
-        Version: 2012-10-17
-        Statement:
-        - Effect: Allow
-          Principal:
-            AWS: !Sub arn:aws:iam::${CrossStackConfig}:root
-          Action:
-            - secretsmanager:GetSecretValue
-          Resource: '*'
-                
-  SecretIdentityStoreID:
-    Type: "AWS::SecretsManager::Secret"
-    Condition: CreateSecretIdentityStoreID
-    Properties:
-      Name: SSOSyncIdentityStoreID
-      SecretString: !Ref IdentityStoreID
-      KmsKeyId: !If [CreateKey, !Ref KeyAlias, alias/aws/secretsmanager]
-
-  SecretIdentityStoreIDPolicy:
-    Type: AWS::SecretsManager::ResourcePolicy
-    Condition: CreateKeyIdentityStoreID
-    Properties:
-      SecretId: !Ref SecretIdentityStoreID
-      ResourcePolicy:
-        Version: 2012-10-17
-        Statement:
-        - Effect: Allow
-          Principal:
-            AWS: !Sub arn:aws:iam::${CrossStackConfig}:root
-          Action:
-            - secretsmanager:GetSecretValue
-          Resource: '*'
-
 Outputs:
   FunctionArn:
     Condition: OutputFunction
