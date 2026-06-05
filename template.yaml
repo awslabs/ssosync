@@ -303,11 +303,13 @@ Conditions:
     - !Equals [!Ref CustomerId, ""]
   LegacySync: !Equals [ !Ref SyncMethod, "users_groups" ]
   SetGoogleUserMatch: !And
-    - !Condition GroupSync
+    - !Not 
+      - !Condition LegacySync
     - !Not
       - !Equals [ !Ref GoogleUserMatch, "" ]
   SetGoogleGroupMatch: !And 
-    - !Condition GroupSync
+    - !Not 
+      - !Condition LegacySync
     - !Not
       - !Equals [ !Ref GoogleGroupMatch, "" ]
   SetIgnoreGroups: !Not
@@ -318,6 +320,10 @@ Conditions:
     - !Condition LegacySync
     - !Not
       - !Equals [!Ref IncludeGroups, ""]
+  SetIncludeUsers: !And
+    - !Condition LegacySync
+    - !Not
+      - !Equals [!Ref IncludeUsers, ""]
   SetLogRetention: !Not
     - !Equals [!Ref LogRetention, 0 ]
   SetDryRun: !Equals [!Ref DryRun, "dry-run"]
@@ -590,6 +596,7 @@ Resources:
           IGNORE_GROUPS: !If [SetIgnoreGroups, !Ref IgnoreGroups, !Ref AWS::NoValue]
           IGNORE_USERS: !If [SetIgnoreUsers, !Ref IgnoreUsers, !Ref AWS::NoValue]
           INCLUDE_GROUPS: !If [SetIncludeGroups, !Ref IncludeGroups, !Ref AWS::NoValue]
+          INCLUDE_USERS: !If [SetIncludeUsers, !Ref IncludeUsers, !Ref AWS::NoValue]
           DRY_RUN: !If [SetDryRun, 'True', !Ref AWS::NoValue]
           SYNC_SUSPENDED: !If [SetSyncSuspended, 'True', !Ref AWS::NoValue]
           PRECACHE_ORG_UNITS: !If [DisablePrecaching, !Ref AWS::NoValue, !Ref PrecacheOrgUnits]
