@@ -29,6 +29,7 @@ import (
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	aws_config "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/ssoadmin"
 	"github.com/aws/aws-sdk-go-v2/service/codepipeline"
 	"github.com/aws/aws-sdk-go-v2/service/codepipeline/types"
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
@@ -241,6 +242,27 @@ func getRegion(SCIMurl string) string {
 	return r.FindString(SCIMurl)
 }
 
+func getIdentityStoreId(Region string) (string, error) {
+	ctx := context.Background()
+
+	cfg, err := aws_config.LoadDefaultConfig(ctx, aws_config.WithRegion(Region))
+	if err != nil {
+		return "", errors.Wrap(err, "failed to load AWS config")
+	}
+
+	client := ssoadmin.NewFromConfig(cfg)
+	output, err := client.ListInstances(ctx, &ssoadmin.ListInstancesInput{})
+	if err != nil {
+		return "", errors.Wrap(err, "failed to list SSO instances")
+	}
+
+	if len(output.Instances) == 0 {
+		return "", fmt.Errorf("no SSO instances found in region %s", Region)
+	}
+
+	return aws.ToString(output.Instances[0].IdentityStoreId), nil
+}
+
 func configLambda() {
 	ctx := context.Background()
 
@@ -267,7 +289,7 @@ func configLambda() {
 	cfg.CustomerID = getEnvStr("CUSTOMER_ID", config.DefaultCustomerID)
 	cfg.SCIMEndpoint = getSecretFromCache(getEnvStr("SCIM_ENDPOINT", ""))
 	cfg.Region = getRegion(cfg.SCIMEndpoint)
-	cfg.IdentityStoreID = getSecretFromCache(getEnvStr("IDENTITY_STORE_ID", ""))
+	cfg.IdentityStoreID, _ =  getIdentityStoreId(cfg.Region)
 	cfg.GoogleCredentials = getSecretFromCache(getEnvStr("GOOGLE_CREDENTIALS", ""))
 	cfg.SCIMAccessToken = getSecretFromCache(getEnvStr("SCIM_ACCESS_TOKEN", ""))
 
@@ -312,9 +334,9 @@ func addFlags(_ *cobra.Command, cfg *config.Config) {
 	rootCmd.Flags().StringVarP(&cfg.UserMatch, "user-match", "m", "", "Google Workspace Users filter query parameter, example: 'name:John*' 'name=John Doe,email:admin*', to sync all users in the directory specify '*'. For query syntax and more examples see: https://developers.google.com/admin-sdk/directory/v1/guides/search-users")
 	rootCmd.Flags().StringVarP(&cfg.GroupMatch, "group-match", "g", "*", "Google Workspace Groups filter query parameter, example: 'name:Admin*' 'name=AWS-Admins,email:aws*', to sync all groups (and their member users) specify '*'. For query syntax and more examples see: https://developers.google.com/admin-sdk/directory/v1/guides/search-groups")
 	rootCmd.Flags().StringVarP(&cfg.SyncMethod, "sync-method", "s", config.DefaultSyncMethod, "Sync method to use (users_groups|groups)")
-	cfg.Region = getRegion(cfg.SCIMEndpoint)
-	rootCmd.Flags().StringVarP(&cfg.IdentityStoreID, "identity-store-id", "i", "", "Identifier of Identity Store in AWS SSO")
 	rootCmd.Flags().StringSliceVar(&cfg.PrecacheOrgUnits, "precache-ous", nil, "A common separated list of Google Workspace OrgUnitPathis e.g.'/', to precache all users within the organization or '/OU_1/OU 2,/OU3'. Precaching is disabled by default.")
+	cfg.Region = getRegion(cfg.SCIMEndpoint)
+	cfg.IdentityStoreID, _ =  getIdentityStoreId(cfg.Region)
 
 }
 
