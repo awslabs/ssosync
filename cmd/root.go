@@ -19,6 +19,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 
 	"ssosync/internal"
@@ -174,7 +175,6 @@ func initConfig() {
 		"user_match",
 		"group_match",
 		"sync_method",
-		"region",
 		"identity_store_id",
 		"dry_run",
 	}
@@ -235,6 +235,12 @@ func getEnvBool(key string, fallback bool) bool {
 	return fallback
 }
 
+func getRegion(SCIMurl string) string {
+	r, _ := regexp.Compile(`(?:https\://scim\.)((?:af|il|ap|ca|eu|me|sa|us|cn|us\-gov|us\-iso|us\-isob)\-(?:central|north|(north(?:east|west))|south|south(?:east|west)|east|west)\-[1-9])(?:\.(?:amazonaws\.com|api\.aws))(?:(?i)/[a-z0-9\-].*/scim/v2[/]?)`)
+
+	return r.FindString(SCIMurl)
+}
+
 func configLambda() {
 	ctx := context.Background()
 
@@ -260,8 +266,8 @@ func configLambda() {
 	// try to resolve the literal default ("my_customer") as a secret name.
 	cfg.CustomerID = getEnvStr("CUSTOMER_ID", config.DefaultCustomerID)
 	cfg.SCIMEndpoint = getSecretFromCache(getEnvStr("SCIM_ENDPOINT", ""))
+	cfg.Region = getRegion(cfg.SCIMEndpoint)
 	cfg.IdentityStoreID = getSecretFromCache(getEnvStr("IDENTITY_STORE_ID", ""))
-	cfg.Region = getSecretFromCache(getEnvStr("REGION", ""))
 	cfg.GoogleCredentials = getSecretFromCache(getEnvStr("GOOGLE_CREDENTIALS", ""))
 	cfg.SCIMAccessToken = getSecretFromCache(getEnvStr("SCIM_ACCESS_TOKEN", ""))
 
@@ -306,7 +312,7 @@ func addFlags(_ *cobra.Command, cfg *config.Config) {
 	rootCmd.Flags().StringVarP(&cfg.UserMatch, "user-match", "m", "", "Google Workspace Users filter query parameter, example: 'name:John*' 'name=John Doe,email:admin*', to sync all users in the directory specify '*'. For query syntax and more examples see: https://developers.google.com/admin-sdk/directory/v1/guides/search-users")
 	rootCmd.Flags().StringVarP(&cfg.GroupMatch, "group-match", "g", "*", "Google Workspace Groups filter query parameter, example: 'name:Admin*' 'name=AWS-Admins,email:aws*', to sync all groups (and their member users) specify '*'. For query syntax and more examples see: https://developers.google.com/admin-sdk/directory/v1/guides/search-groups")
 	rootCmd.Flags().StringVarP(&cfg.SyncMethod, "sync-method", "s", config.DefaultSyncMethod, "Sync method to use (users_groups|groups)")
-	rootCmd.Flags().StringVarP(&cfg.Region, "region", "r", "", "AWS Region where AWS SSO is enabled")
+	cfg.Region = getRegion(cfg.SCIMEndpoint)
 	rootCmd.Flags().StringVarP(&cfg.IdentityStoreID, "identity-store-id", "i", "", "Identifier of Identity Store in AWS SSO")
 	rootCmd.Flags().StringSliceVar(&cfg.PrecacheOrgUnits, "precache-ous", nil, "A common separated list of Google Workspace OrgUnitPathis e.g.'/', to precache all users within the organization or '/OU_1/OU 2,/OU3'. Precaching is disabled by default.")
 
