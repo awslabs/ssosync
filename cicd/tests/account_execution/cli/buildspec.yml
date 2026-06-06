@@ -5,8 +5,6 @@ env:
     GoogleAdminEmail: SSOSyncGoogleAdminEmail
     SCIMEndpointUrl: SSOSyncSCIMEndpointUrl
     SCIMAccessToken: SSOSyncSCIMAccessToken
-    IdentityStoreID: SSOSyncIdentityStoreID
-    Region: SSOSyncRegion
   variables:
     ExpectedExitState: 0
   
@@ -22,7 +20,7 @@ phases:
       - aws secretsmanager  get-secret-value --secret-id=SSOSyncGoogleCredentials --query SecretString --output text | jq '.' > credentials.json
       - cat credentials.json
 
-      - ./ssosync -t "${SCIMAccessToken}" -e "${SCIMEndpointUrl}" -u "${GoogleAdminEmail}" -i "${IdentityStoreID}" -r "${Region}" -s "groups" -g "name:AWS*"; ExitState=$?
+      - ./ssosync -t "${SCIMAccessToken}" -e "${SCIMEndpointUrl}" -u "${GoogleAdminEmail}" -s "groups" -g "name:AWS*"; ExitState=$?
       - echo "ExitState= ${ExitState}"
       - echo "ExpectedExitState= ${ExpectedExitState}"
 
