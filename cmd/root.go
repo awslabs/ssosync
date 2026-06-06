@@ -242,7 +242,7 @@ func getRegion(SCIMurl string) string {
 	return r.FindString(SCIMurl)
 }
 
-func getIdentityStoreId(Region string) (string, error) {
+func getIdentityStoreId(Region string) (string) {
 	ctx := context.Background()
 
 	cfg, err := aws_config.LoadDefaultConfig(ctx, aws_config.WithRegion(Region))
@@ -253,14 +253,14 @@ func getIdentityStoreId(Region string) (string, error) {
 	client := ssoadmin.NewFromConfig(cfg)
 	output, err := client.ListInstances(ctx, &ssoadmin.ListInstancesInput{})
 	if err != nil {
-		return "", errors.Wrap(err, "failed to list SSO instances")
+		log.Fatal(errors.Wrap(err, "Failed to list SSO instances").Error())
 	}
 
 	if len(output.Instances) == 0 {
-		return "", fmt.Errorf("no SSO instances found in region %s", Region)
+		log.Fatal(errors.Wrap(err, "no SSO instances found in region").Error())
 	}
 
-	return aws.ToString(output.Instances[0].IdentityStoreId), nil
+	return aws.ToString(output.Instances[0].IdentityStoreId)
 }
 
 func configLambda() {
@@ -289,7 +289,7 @@ func configLambda() {
 	cfg.CustomerID = getEnvStr("CUSTOMER_ID", config.DefaultCustomerID)
 	cfg.SCIMEndpoint = getSecretFromCache(getEnvStr("SCIM_ENDPOINT", ""))
 	cfg.Region = getRegion(cfg.SCIMEndpoint)
-	cfg.IdentityStoreID, _ =  getIdentityStoreId(cfg.Region)
+	cfg.IdentityStoreID =  getIdentityStoreId(cfg.Region)
 	cfg.GoogleCredentials = getSecretFromCache(getEnvStr("GOOGLE_CREDENTIALS", ""))
 	cfg.SCIMAccessToken = getSecretFromCache(getEnvStr("SCIM_ACCESS_TOKEN", ""))
 
@@ -306,6 +306,7 @@ func configLambda() {
 	cfg.DryRun = getEnvBool("DRY_RUN", false)
 	cfg.SyncSuspended = getEnvBool("SYNC_SUSPENDED", false)
 
+	log.WithField(cfg).Info("config")
 }
 
 func getSecretFromCache(secretName string) string {
@@ -336,8 +337,9 @@ func addFlags(_ *cobra.Command, cfg *config.Config) {
 	rootCmd.Flags().StringVarP(&cfg.SyncMethod, "sync-method", "s", config.DefaultSyncMethod, "Sync method to use (users_groups|groups)")
 	rootCmd.Flags().StringSliceVar(&cfg.PrecacheOrgUnits, "precache-ous", nil, "A common separated list of Google Workspace OrgUnitPathis e.g.'/', to precache all users within the organization or '/OU_1/OU 2,/OU3'. Precaching is disabled by default.")
 	cfg.Region = getRegion(cfg.SCIMEndpoint)
-	cfg.IdentityStoreID, _ =  getIdentityStoreId(cfg.Region)
+	cfg.IdentityStoreID =  getIdentityStoreId(cfg.Region)
 
+	log.WithField(cfg).Info("config")
 }
 
 func logConfig(cfg *config.Config) {
