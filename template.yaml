@@ -93,7 +93,7 @@ Parameters:
       [App for cross-account] this is the AppConfig from the ouputs of the Secrets for cross-account stack.
       [Secrets for cross-account] this is the AWS account id into which you will be deploying the SSOSync app?
     Default: ""
-    AllowedPattern: '(?!.*\s)|(\d{12})|(arn:aws:secretsmanager:((us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-\d):[0-9]{8,12}:secret:[a-zA-Z0-9/_+=.@-]{1,512}){4},,(,arn:aws:kms:((us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-\d):[0-9]{12}:key/[a-zA-Z0-9/_+=.@-]{1,512})?'
+    AllowedPattern: '(?!.*\s)|(\d{12})|((?:arn:aws:secretsmanager:(?:(?:us(?:-gov)?|ap|ca|cn|eu|sa)-(?:central|(?:north|south)?(?:east|west)?)-\d):[0-9]{8,12}:secret:[a-zA-Z0-9\/_+=.@-]{1,512})(?:,arn:aws:secretsmanager:(?:(?:us(?:-gov)?|ap|ca|cn|eu|sa)-(?:central|(?:north|south)?(?:east|west)?)-\d):[0-9]{8,12}:secret:[a-zA-Z0-9\/_+=.@-]{1,512}){3}(?:,|(?:,arn:aws:secretsmanager:(?:(?:us(?:-gov)?|ap|ca|cn|eu|sa)-(?:central|(?:north|south)?(?:east|west)?)-\d):[0-9]{8,12}:secret:[a-zA-Z0-9\/_+=.@-]{1,512})){2}(?:,arn:aws:kms:(?:(?:us(?:-gov)?|ap|ca|cn|eu|sa)-(?:central|(?:north|south)?(?:east|west)?)-\d):[0-9]{12}:key\/[a-zA-Z0-9\/_+=.@-]{1,512})?)'
 
   FunctionName:
     Type: String
