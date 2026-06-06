@@ -62,6 +62,9 @@ what it is going to do.
 
 ## ⚠️ Important Notices
 
+> [!IMPORTANT]
+> The following parameters are no long used by **Region** and **IdentityStoreID**, these are determined programatically based on the **SCIM Endpoint** and api calls to IAM Identity Center, they are still present in the template.yaml. To avoid breaking deployment tooling for anyone passing a paramter file to the CloudFormation Stack. These parameters will be fully removed in v3.x.
+
 > [!CAUTION]
 > When using ssosync with an instance of IAM Identity Center integrated with AWS Control Tower. AWS Control Tower creates a number of groups and users (directly via the Identity Store API), when an external identity provider is configured these users and groups are can not be used to log in. However it is important to remember that because ssosync implemements a uni-directional sync it will make the IAM Identity Store match the subset of your Google Workspaces directory you specify, including removing these groups and users created by AWS Control Tower. There is a PFR [#179 Configurable handling of 'manually created' Users/Groups in IAM Identity Center](https://github.com/awslabs/ssosync/issues/179) to implement an option to ignore these users and groups, hopefully this will be implemented in version 3.x. However, this has a dependancy on PFR [#166 Ensure all groups/user creates in IAM Identity Store are via SCIM api and populate externalId field](https://github.com/awslabs/ssosync/issues/166), to be able to reliably and consistently disinguish between **SCIM Provisioned** users from **Manually Created** users
 
