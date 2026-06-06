@@ -750,13 +750,13 @@ Outputs:
   AppConfigLocal:
     Condition: OutputSecrets
     Description: "The Comma Separated list of secrets ARNs to copy and paste into the CrossStackConfig field of the App only stack."
-    Value: !Sub ${SecretGoogleCredentials},${SecretGoogleAdminEmail},${SecretSCIMEndpoint},${SecretSCIMAccessToken},!If [CreateSecretRegion, ${SecretRegion}, ${AWS::NoValue}],!If [CreateSecretIdentityStoreID, ${SecretIdentityStoreID}, ${AWS::NoValue}]
+    Value: !Sub ${SecretGoogleCredentials},${SecretGoogleAdminEmail},${SecretSCIMEndpoint},${SecretSCIMAccessToken},,
     Export:
       Name: AppConfig
 
   AppConfigRemote:
     Condition: CreateKey
     Description: "The Comma Separated list of Secrets and KMS Key ARNs to copy and paste into the CrossStackConfig field of the app for cross-account stack."
-    Value: !Sub ${SecretGoogleCredentials},${SecretGoogleAdminEmail},${SecretSCIMEndpoint},${SecretSCIMAccessToken},!If [CreateSecretRegion, ${SecretRegion}, ${AWS::NoValue}],!If [CreateSecretIdentityStoreID, ${SecretIdentityStoreID}, ${AWS::NoValue}],arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/${KeyForSecrets}
+    Value: !Sub ${SecretGoogleCredentials},${SecretGoogleAdminEmail},${SecretSCIMEndpoint},${SecretSCIMAccessToken},,,arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/${KeyForSecrets}
     Export:
       Name: AppConfig
