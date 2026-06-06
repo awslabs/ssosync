@@ -14,8 +14,6 @@ Metadata:
         Parameters:
           - SCIMEndpointUrl
           - SCIMEndpointAccessToken
-          - IdentityStoreID
-          - Region
       - Label:
           default: Google Workspace Credentials 
         Parameters:
@@ -24,14 +22,14 @@ Metadata:
       - Label:
           default: Sync Configuration
         Parameters:
-          - PrecacheOrgUnits
           - GoogleUserMatch
           - GoogleGroupMatch
+          - SyncSuspended
+          - PrecacheOrgUnits
       - Label:
           default: "Lambda Configuration"
         Parameters:
           - ScheduleExpression
-          - SyncSuspended
           - DryRun
           - MemorySize
           - TimeOut
@@ -167,7 +165,7 @@ Parameters:
     Description: |
       AWS IAM Identity Center - SCIM Endpoint Url
     Default: ""
-    AllowedPattern: '(?!.*\s)|(https://scim.(us(-gov)?|ap|ca|cn|eu|il|me|mx|sa)-(central|(north|south)?(east|west)?)-([0-9]{1}).amazonaws.com/([A-Za-z0-9]{8,11})-([A-Za-z0-9]{4})-([A-Za-z0-9]{4})-([A-Za-z0-9]{4})-([A-Za-z0-9]{12})/scim/v2/?)'
+    AllowedPattern: '(?!.*\s)|(https://scim.(us(-gov)?|ap|ca|cn|eu|il|me|mx|sa)-(central|(north|south)?(east|west)?)-([0-9]{1})(.amazonaws.com|.api.aws)/([A-Za-z0-9]{8,11})-([A-Za-z0-9]{4})-([A-Za-z0-9]{4})-([A-Za-z0-9]{4})-([A-Za-z0-9]{12})/scim/v2/?)'
 
   SCIMEndpointAccessToken:
     Type: String
@@ -176,20 +174,6 @@ Parameters:
     Default: ""
     AllowedPattern: '(?!.*\s)|([0-9a-zA-Z/=+-\\]{500,620})'
     NoEcho: true
-
-  Region:
-    Type: String
-    Description: |
-      AWS Region where AWS IAM Identity Center is enabled
-    Default: ""
-    AllowedPattern: '(?!.*\s)|(us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-\d'
-
-  IdentityStoreID:
-    Type: String
-    Description: |
-      Identifier of Identity Store in AWS IAM Identity Center
-    Default: ""
-    AllowedPattern: '(?!.*\s)|d-[1-z0-9]{10}'
 
   GoogleUserMatch:
     Type: String
