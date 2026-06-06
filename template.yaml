@@ -465,7 +465,7 @@ Resources:
                   - "secretsmanager:DescribeSecret"
                 Resource:
                   - !Sub "arn:aws:secretsmanager:*:${AWS::AccountId}:secret:SSOSync*"
-              - Sid: IdentityStoreAccesPolicy
+              - Sid: IdentityStoreAccessPolicy
                 Effect: Allow
                 Action:
                   - "identitystore:DeleteUser"
@@ -478,6 +478,12 @@ Resources:
                   - "identitystore:GetGroupMembershipId"
                   - "identitystore:DeleteGroupMembership"
                   - "identitystore:DeleteGroup"
+                Resource:
+                  - "*"
+              - Sid: SsoAdminAccessPolicy
+                Effect: Allow
+                Action: 
+                  - "sso:ListInstances"
                 Resource:
                   - "*"
               - Sid: CodePipelinePolicy
@@ -544,6 +550,12 @@ Resources:
                   - "identitystore:GetGroupMembershipId"
                   - "identitystore:DeleteGroupMembership"
                   - "identitystore:DeleteGroup"
+                Resource:
+                  - "*"
+              - Sid: SsoAdminAccessPolicy
+                Effect: Allow
+                Action: 
+                  - "sso:ListInstances"
                 Resource:
                   - "*"
               - Sid: CodePipelinePolicy
