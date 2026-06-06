@@ -485,7 +485,7 @@ Resources:
                   - "secretsmanager:DescribeSecret"
                 Resource:
                   - !Sub "arn:aws:secretsmanager:*:${AWS::AccountId}:secret:SSOSync*"
-              - Sid: IdentityStoreAccesPolicy
+              - Sid: IdentityStoreAccessPolicy
                 Effect: Allow
                 Action:
                   - "identitystore:ListGroups"
@@ -493,6 +493,12 @@ Resources:
                   - "identitystore:ListGroupMemberships"
                   - "identitystore:IsMemberInGroups"
                   - "identitystore:GetGroupMembershipId"
+                Resource:
+                  - "*"
+              - Sid: SsoAdminAccessPolicy
+                Effect: Allow
+                Action: 
+                  - "sso:ListInstances"
                 Resource:
                   - "*"
               - Sid: CodePipelinePolicy
@@ -554,6 +560,12 @@ Resources:
                   - "identitystore:ListGroupMemberships"
                   - "identitystore:IsMemberInGroups"
                   - "identitystore:GetGroupMembershipId"
+                Resource:
+                  - "*"
+              - Sid: SsoAdminAccessPolicy
+                Effect: Allow
+                Action: 
+                  - "sso:ListInstances"
                 Resource:
                   - "*"
               - Sid: CodePipelinePolicy
