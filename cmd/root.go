@@ -201,8 +201,10 @@ func initConfig() {
 		cfg.UserFilter = " isSuspended=false isArchived=false"
 	}
 
-	cfg.Region = getRegion()
-	cfg.IdentityStoreID =  getIdentityStoreId()
+	if cfg.SCIMEndpoint != "" {
+		cfg.Region = getRegion()
+		cfg.IdentityStoreID =  getIdentityStoreId()
+	}
 
 }
 
