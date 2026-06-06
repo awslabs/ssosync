@@ -14,8 +14,6 @@ Metadata:
         Parameters:
           - SCIMEndpointUrl
           - SCIMEndpointAccessToken
-          - IdentityStoreID
-          - Region
       - Label:
           default: Google Workspace Credentials 
         Parameters:
@@ -25,22 +23,17 @@ Metadata:
       - Label:
           default: Sync Configuration
         Parameters:
-          - SyncMethod
-          - PrecacheOrgUnits
-          - GoogleUserMatch
           - GoogleGroupMatch
+          - GoogleUserMatch
           - IgnoreUsers
           - IgnoreGroups
-      - Label:
-          default: "Configuration options for users_groups Mode only"
-        Parameters:
-          - IncludeGroups
+          - SyncSuspended
+          - PrecacheOrgUnits
       - Label:
           default: "Lambda Configuration"
         Parameters:
           - FunctionName
           - ScheduleExpression
-          - SyncSuspended
           - DryRun
           - MemorySize
           - TimeOut
@@ -50,6 +43,16 @@ Metadata:
           - LogLevel
           - LogFormat
           - LogRetention
+      - Label:
+          default: "Configuration options for users_groups Mode only, to be deprecated in version 3.x"
+        Parameters:
+          - SyncMethod
+          - IncludeGroups
+      - Label:
+          default: "Deprecated Parameters, to be deprecated in version 3.x"
+        Parameters:
+          - IdentityStoreID
+          - Region
 
 
   AWS::ServerlessRepo::Application:
