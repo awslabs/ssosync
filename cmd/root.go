@@ -237,7 +237,7 @@ func getEnvBool(key string, fallback bool) bool {
 }
 
 func getRegion(SCIMurl string) string {
-	r, _ := regexp.Compile(`(?:https\://scim\.)((?:af|il|ap|ca|eu|me|sa|us|cn|us\-gov|us\-iso|us\-isob)\-(?:central|north|(north(?:east|west))|south|south(?:east|west)|east|west)\-[1-9])(?:\.(?:amazonaws\.com|api\.aws))(?:(?i)/[a-z0-9\-].*/scim/v2[/]?)`)
+	r, _ := regexp.Compile(`((?:af|il|ap|ca|eu|me|sa|us|cn|us\-gov|us\-iso|us\-isob)\-(?:central|north|(north(?:east|west))|south|south(?:east|west)|east|west)\-[1-9])`)
 
 	return r.FindString(SCIMurl)
 }
