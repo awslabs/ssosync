@@ -649,10 +649,6 @@ Resources:
               Effect: Allow
               Resource:
               - !GetAtt ArtifactBucketKey.Arn
-            - Action:
-              - "sso:ListInstances"
-              Effect: Allow
-              Resource: '*'
             - Action: 's3:*'
               Effect: Allow
               Resource:
@@ -695,10 +691,6 @@ Resources:
               Resource:
               - !Sub ${ArtifactBucket.Arn}/*
               - !Sub ${AppBucket.Arn}/*
-            - Action:
-              - "sso:ListInstances"
-              Effect: Allow
-              Resource: '*'
             - Action: 'serverlessrepo:*'
               Effect: Allow
               Resource:
