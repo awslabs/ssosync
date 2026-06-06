@@ -93,7 +93,7 @@ Parameters:
       [App for cross-account] this is the AppConfig from the ouputs of the Secrets for cross-account stack.
       [Secrets for cross-account] this is the AWS account id into which you will be deploying the SSOSync app?
     Default: ""
-    AllowedPattern: '(?!.*\s)|(\d{12})|(arn:aws:secretsmanager:((us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-\d):[0-9]{8,12}:secret:[a-zA-Z0-9/_+=.@-]{1,512})(,arn:aws:secretsmanager:((us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-\d):[0-9]{8,12}:secret:[a-zA-Z0-9/_+=.@-]{1,512}){5}(,arn:aws:kms:((us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-\d):[0-9]{12}:key/[a-zA-Z0-9/_+=.@-]{1,512})?'
+    AllowedPattern: '(?!.*\s)|(\d{12})|(arn:aws:secretsmanager:((us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-\d):[0-9]{8,12}:secret:[a-zA-Z0-9/_+=.@-]{1,512}){4},,(,arn:aws:kms:((us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-\d):[0-9]{12}:key/[a-zA-Z0-9/_+=.@-]{1,512})?'
 
   FunctionName:
     Type: String
@@ -232,7 +232,7 @@ Parameters:
     Description: |
       AWS IAM Identity Center - SCIM Endpoint Url
     Default: ""
-    AllowedPattern: '(?!.*\s)|(https://scim.(us(-gov)?|ap|ca|cn|eu|il|me|mx|sa)-(central|(north|south)?(east|west)?)-([0-9]{1}).amazonaws.com/([A-Za-z0-9]{8,11})-([A-Za-z0-9]{4})-([A-Za-z0-9]{4})-([A-Za-z0-9]{4})-([A-Za-z0-9]{12})/scim/v2/?)'
+    AllowedPattern: '(?!.*\s)|(https://scim.(us(-gov)?|ap|ca|cn|eu|il|me|mx|sa)-(central|(north|south)?(east|west)?)-([0-9]{1})(.amazonaws.com|.api.aws)/([A-Za-z0-9]{8,11})-([A-Za-z0-9]{4})-([A-Za-z0-9]{4})-([A-Za-z0-9]{4})-([A-Za-z0-9]{12})/scim/v2/?)'
 
   SCIMEndpointAccessToken:
     Type: String
