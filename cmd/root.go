@@ -203,6 +203,9 @@ func initConfig() {
 		cfg.UserFilter = " isSuspended=false isArchived=false"
 	}
 
+	cfg.Region = getRegion()
+	cfg.IdentityStoreID =  getIdentityStoreId()
+
 }
 
 var secretCache *secretcache.Cache
@@ -237,31 +240,33 @@ func getEnvBool(key string, fallback bool) bool {
 
 func getRegion() string {
 	r, _ := regexp.Compile(`((?:af|il|ap|ca|eu|me|sa|us|cn|us\-gov|us\-iso|us\-isob)\-(?:central|north|(north(?:east|west))|south|south(?:east|west)|east|west)\-[1-9])`)
-	region := r.FindString(cfg.SCIMEndpoint)
-	log.WithField("Region", region).Info("config")
-	return region
+	log.WithField("SCIMEndpoint", cfg.SCIMEndpoint).Debug("getRegion()")
+	Region := r.FindString(cfg.SCIMEndpoint)
+	log.WithField("Region", Region).Info("getRegion()")
+	return Region
 }
 
-func getIdentityStoreId() (string) {
+func getIdentityStoreId() string {
 	ctx := context.Background()
 
+	log.WithField("cfg.Region", cfg.Region).Info("getIdentityStoreId()")
 	cfg, err := aws_config.LoadDefaultConfig(ctx, aws_config.WithRegion(cfg.Region))
 	if err != nil {
-		log.Fatal(errors.Wrap(err, "failed to load AWS config").Error())
+		log.Fatal(errors.Wrap(err, "getIdentityStoreId(): failed to load AWS config").Error())
 	}
 
 	client := ssoadmin.NewFromConfig(cfg)
 	output, err := client.ListInstances(ctx, &ssoadmin.ListInstancesInput{})
 	if err != nil {
-		log.Fatal(errors.Wrap(err, "Failed to list SSO instances").Error())
+		log.Fatal(errors.Wrap(err, "getIdentityStoreId(): Failed to list SSO instances").Error())
 	}
 
 	if len(output.Instances) == 0 {
-		log.Fatal(errors.Wrap(err, "no SSO instances found in region").Error())
+		log.Fatal(errors.Wrap(err, "getIdentityStoreId(): no SSO instances found in region").Error())
 	}
 
 	IdentityStoreId := aws.ToString(output.Instances[0].IdentityStoreId)
-		log.WithField("IdentityStoreId", IdentityStoreId).Info("config")
+		log.WithField("IdentityStoreId", IdentityStoreId).Info("getIdentityStoreId()")
 	return IdentityStoreId
 }
 
@@ -290,8 +295,6 @@ func configLambda() {
 	// try to resolve the literal default ("my_customer") as a secret name.
 	cfg.CustomerID = getEnvStr("CUSTOMER_ID", config.DefaultCustomerID)
 	cfg.SCIMEndpoint = getSecretFromCache(getEnvStr("SCIM_ENDPOINT", ""))
-	cfg.Region = getRegion()
-	cfg.IdentityStoreID =  getIdentityStoreId()
 	cfg.GoogleCredentials = getSecretFromCache(getEnvStr("GOOGLE_CREDENTIALS", ""))
 	cfg.SCIMAccessToken = getSecretFromCache(getEnvStr("SCIM_ACCESS_TOKEN", ""))
 
@@ -336,8 +339,6 @@ func addFlags(_ *cobra.Command, cfg *config.Config) {
 	rootCmd.Flags().StringVarP(&cfg.GroupMatch, "group-match", "g", "*", "Google Workspace Groups filter query parameter, example: 'name:Admin*' 'name=AWS-Admins,email:aws*', to sync all groups (and their member users) specify '*'. For query syntax and more examples see: https://developers.google.com/admin-sdk/directory/v1/guides/search-groups")
 	rootCmd.Flags().StringVarP(&cfg.SyncMethod, "sync-method", "s", config.DefaultSyncMethod, "Sync method to use (users_groups|groups)")
 	rootCmd.Flags().StringSliceVar(&cfg.PrecacheOrgUnits, "precache-ous", nil, "A common separated list of Google Workspace OrgUnitPathis e.g.'/', to precache all users within the organization or '/OU_1/OU 2,/OU3'. Precaching is disabled by default.")
-	cfg.Region = getRegion()
-	cfg.IdentityStoreID =  getIdentityStoreId()
 }
 
 func logConfig(cfg *config.Config) {
