@@ -720,7 +720,7 @@ Resources:
         Type: LINUX_CONTAINER
         EnvironmentVariables:
           - Name: ExpectedResponse
-            Value: !If [DeployNonDelegated, "true", "false"]
+            Value: 0
       Artifacts:
         Name: SSOSync
         Type: CODEPIPELINE

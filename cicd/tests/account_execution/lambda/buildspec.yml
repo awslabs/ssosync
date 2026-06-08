@@ -14,7 +14,8 @@ phases:
     commands:
       # Execute the lambda
       - FunctionError=$(aws lambda invoke --function-name "SSOSyncFunction" response.json | jq 'has("FunctionError")') 
-
+      - echo "FunctionError= ${FunctionError}"
+      - echo "ExpectedResponse= ${ExpectedResponse}"
       - |
         if expr "${FunctionError}" : "${ExpectedResponse}" >/dev/null; then
           echo "We got what we expected"
