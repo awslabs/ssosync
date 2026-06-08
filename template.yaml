@@ -19,6 +19,7 @@ Metadata:
       - Label:
           default: Google Workspace Credentials 
         Parameters:
+          - CustomerId
           - GoogleAdminEmail
           - GoogleCredentials
       - Label:
@@ -199,6 +200,13 @@ Parameters:
     Default: "/"
     AllowedPattern: '(?!.*\s)|(^\/$)|(\/[a-zA-Z0-9_\/\- ]{0,50})|(\/[a-zA-Z0-9_\/\- ]{0,50})(?:(,\/[a-zA-Z0-9_\/\- ]{1,50}))'
 
+  CustomerId:
+    Type: String
+    Description: |
+      Google CustomerId, retrieve from https://admin.google.com/ac/accountsettings/profile
+    Default: ""
+    AllowedPattern: '(?!.*\s)|(?:(?i)C[0-9az]{8})'
+
 # Secrets
   GoogleCredentials:
     Type: String
@@ -292,6 +300,10 @@ Conditions:
   SetFunctionName: !Not 
     - !Equals
         - !Ref FunctionName
+        - ""
+  SetCustomerId: !Not
+    - !Equals
+        - !Ref CustomerId
         - ""
   SetGoogleUserMatch: !And
     - !Not
@@ -651,6 +663,7 @@ Resources:
           LOG_FORMAT: !Ref LogFormat
           GOOGLE_CREDENTIALS: !If [CreateSecrets, !Ref SecretGoogleCredentials, !Select [0, !Split [',', !Ref CrossStackConfig]]]
           GOOGLE_ADMIN: !If [CreateSecrets, !Ref SecretGoogleAdminEmail, !Select [1, !Split [',', !Ref CrossStackConfig]]]
+          CUSTOMER_ID: !If [SetCustomerId, !Ref CustomerId, !Ref AWS::NoValue]
           SCIM_ENDPOINT: !If [CreateSecrets, !Ref SecretSCIMEndpoint, !Select [2, !Split [',', !Ref CrossStackConfig]]]
           SCIM_ACCESS_TOKEN: !If [CreateSecrets, !Ref SecretSCIMAccessToken, !Select [3, !Split [',', !Ref CrossStackConfig]]]
           REGION: !If [CreateSecrets, !Ref SecretRegion, !Select [4, !Split [',', !Ref CrossStackConfig]]]
