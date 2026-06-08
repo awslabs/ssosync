@@ -17,6 +17,7 @@ Metadata:
       - Label:
           default: Google Workspace Credentials 
         Parameters:
+          - GoogleCustomerId
           - GoogleAdminEmail
           - GoogleCredentials
       - Label:
@@ -141,38 +142,40 @@ Parameters:
     Description: | 
        To reduce the volume of apis, ssosync precaches the users and groups from the Google directory. If you directory is large >10,000 users, you may wish to limit the organizational units that are precached. The default is the whole directory '/'. The parameter accpets a comma separate list of OrgUnitPaths, /OU1,/OU2/OU3 in this example all users within the tree of /OU1 and /OU2/OU3 would be precached but not from /OU2 itself. Precaching can be disable by leaving the field empty.
     Default: "/"
-    AllowedPattern: '(?!.*\s)|(^\/$)|(\/[a-zA-Z0-9_\/\- ]{0,50})|(\/[a-zA-Z0-9_\/\- ]{0,50})(?:(,\/[a-zA-Z0-9_\/\- ]{1,50}))'
+    AllowedPattern: '(^\/$)|(\/[a-zA-Z0-9_\/\- ]{0,50})|(\/[a-zA-Z0-9_\/\- ]{0,50})(?:(,\/[a-zA-Z0-9_\/\- ]{1,50}))'
 
 # Secrets
+  GoogleCustomerId:
+    Type: String
+    Description: |
+      Google CustomerId, retrieve from https://admin.google.com/ac/accountsettings/profile
+    AllowedPattern: '(?:(?i)C[0-9az]{8})'
+
   GoogleCredentials:
     Type: String
     Description: |
       Credentials to log into Google (content of credentials.json)
-    Default: ""
-    AllowedPattern: '(?!.*\s)|(\{(\s)*(".*")(\s)*:(\s)*(".*")(\s)*\})'
+    AllowedPattern: '(\{(\s)*(".*")(\s)*:(\s)*(".*")(\s)*\})'
     NoEcho: true
 
   GoogleAdminEmail:
     Type: String
     Description: |
       Google Admin email
-    Default: ""
-    AllowedPattern: '(?!.*\s)|(([a-zA-Z0-9.+=_-]{0,61})@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*)'
+    AllowedPattern: '(([a-zA-Z0-9.+=_-]{0,61})@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*)'
     NoEcho: true
 
   SCIMEndpointUrl:
     Type: String
     Description: |
       AWS IAM Identity Center - SCIM Endpoint Url
-    Default: ""
-    AllowedPattern: '(?!.*\s)|(https://scim.(us(-gov)?|ap|ca|cn|eu|il|me|mx|sa)-(central|(north|south)?(east|west)?)-([0-9]{1})(.amazonaws.com|.api.aws)/([A-Za-z0-9]{8,11})-([A-Za-z0-9]{4})-([A-Za-z0-9]{4})-([A-Za-z0-9]{4})-([A-Za-z0-9]{12})/scim/v2/?)'
+    AllowedPattern: '(https://scim.(us(-gov)?|ap|ca|cn|eu|il|me|mx|sa)-(central|(north|south)?(east|west)?)-([0-9]{1})(.amazonaws.com|.api.aws)/([A-Za-z0-9]{8,11})-([A-Za-z0-9]{4})-([A-Za-z0-9]{4})-([A-Za-z0-9]{4})-([A-Za-z0-9]{12})/scim/v2/?)'
 
   SCIMEndpointAccessToken:
     Type: String
     Description: |
       AWS IAM Identity Center - SCIM AccessToken
-    Default: ""
-    AllowedPattern: '(?!.*\s)|([0-9a-zA-Z/=+-\\]{500,620})'
+    AllowedPattern: '([0-9a-zA-Z/=+-\\]{500,620})'
     NoEcho: true
 
   GoogleUserMatch:
@@ -201,7 +204,11 @@ Resources:
       Parameters:
         DeployPattern: App only
         FunctionName: SSOSync
-        CrossStackConfig: !GetAtt [Secrets, Outputs.AppConfigLocal]
+        SCIMEndpointUrl: !GetAtt [Secrets, Outputs.SCIMEndpointUrl]
+        SCIMEndpointAccessToken: !GetAtt [Secrets, Outputs. SCIMEndpointAccessToken]
+        GoogleCustomerId: !GetAtt [Secrets, Outputs. GoogleCustomerId]
+        GoogleAdminEmail: !GetAtt [Secrets, Outputs. GoogleAdminEmail]
+        GoogleCredentials: !GetAtt [Secrets, Outputs. GoogleCredentials]
         PrecacheOrgUnits: !Ref PrecacheOrgUnits
         GoogleUserMatch: !Ref GoogleUserMatch
         GoogleGroupMatch: !Ref GoogleGroupMatch
@@ -225,7 +232,6 @@ Resources:
         DeployPattern: Secrets only
         SCIMEndpointUrl: !Ref SCIMEndpointUrl
         SCIMEndpointAccessToken: !Ref SCIMEndpointAccessToken
-        IdentityStoreID: !Ref IdentityStoreID
-        Region: !Ref Region
+        GoogleCustomerId: !Ref GoogleCustomerId
         GoogleAdminEmail: !Ref GoogleAdminEmail
         GoogleCredentials: !Ref GoogleCredentials
