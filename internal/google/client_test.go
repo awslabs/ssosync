@@ -14,7 +14,7 @@ func TestNewClient_InvalidCredentials(t *testing.T) {
 	ctx := context.Background()
 	invalidJSON := []byte("invalid json")
 
-	client, err := NewClient(ctx, "admin@example.com", invalidJSON)
+	client, err := NewClient(ctx, "admin@example.com", "my_custmer", invalidJSON)
 	assert.Error(t, err)
 	assert.Nil(t, client)
 }
