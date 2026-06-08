@@ -689,7 +689,7 @@ Resources:
         Type: LINUX_CONTAINER
         EnvironmentVariables:
           - Name: ExpectedExitState
-            Value: !If [DeployNonDelegated, 1, 0]
+            Value: 0
       Artifacts:
         Name: SSOSync
         Type: CODEPIPELINE
