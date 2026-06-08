@@ -417,13 +417,13 @@ Rules:
   memberKeyQuery:
     RuleCondition: !Contains
       - [memberkey, memberKey, MEMBERKEY]
-      - !Ref GroupMatch
+      - !Ref GoogleGroupMatch
     Assertions:
       - Assert: !Not
         - !Equals
           - !Ref CustomerId
           - ""
-        AssertDescription: 'If memberKey is used a CustomerId must also be supplied.'
+        AssertDescription: 'If memberKey is used in GroupMatch, a CustomerId must also be supplied.'
   SecretValues:
     RuleCondition: !Or
       - !Equals
