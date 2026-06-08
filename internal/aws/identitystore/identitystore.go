@@ -3,10 +3,11 @@ package identitystore
 import (
 	"context"
 
+	"ssosync/internal/interfaces"
+
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/identitystore"
 	"github.com/aws/aws-sdk-go-v2/service/identitystore/types"
-	"github.com/awslabs/ssosync/internal/interfaces"
 )
 
 // CreateGroup creates a group in the identity store

@@ -14,7 +14,7 @@
 
 package aws
 
-import "github.com/awslabs/ssosync/internal/interfaces"
+import "ssosync/internal/interfaces"
 
 // Group represents a Group in AWS SSO
 type Group = interfaces.Group
@@ -29,8 +29,6 @@ type GroupFilterResults struct {
 	Resources    []Group  `json:"Resources"`
 }
 
-// GroupMemberChangeMember is a value needed for the ID of the member
-// to add/remove
 type GroupMemberChangeMember struct {
 	Value string `json:"value"`
 }

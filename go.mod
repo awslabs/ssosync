@@ -1,4 +1,4 @@
-module github.com/awslabs/ssosync
+module ssosync
 
 go 1.24.0
 
@@ -11,7 +11,6 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/identitystore v1.30.0
 	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.37.0
 	github.com/aws/aws-secretsmanager-caching-go/v2 v2.1.1
-	github.com/golang/mock v1.6.0
 	github.com/hashicorp/go-retryablehttp v0.7.8
 	github.com/pkg/errors v0.9.1
 	github.com/sirupsen/logrus v1.9.3

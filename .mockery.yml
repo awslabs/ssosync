@@ -11,13 +11,26 @@ require-template-schema-exists: true
 template: testify
 template-schema: "{{.Template}}.schema.json"
 packages:
-  github.com/awslabs/ssosync/internal/interfaces:
+  ssosync/internal/interfaces:
     config:
       all: true
       dir: "internal/mocks"
       filename: "mocks_{{.InterfaceName}}.go"
-  github.com/awslabs/ssosync/internal/http:
+  ssosync/internal/http:
     config:
       all: true
       dir: "internal/mocks"
-      filename: "mocks_{{.InterfaceName}}.go"
+      filename: "mocks_Http{{.InterfaceName}}.go"
+      structname: "MockHttp{{.InterfaceName}}"
+  ssosync/internal/aws:
+    config:
+      all: true
+      dir: "internal/mocks"
+      filename: "mocks_Aws{{.InterfaceName}}.go"
+      structname: "MockAws{{.InterfaceName}}"
+  ssosync/internal/google:
+    config:
+      all: true
+      dir: "internal/mocks"
+      filename: "mocks_Google{{.InterfaceName}}.go"
+      structname: "MockGoogle{{.InterfaceName}}"

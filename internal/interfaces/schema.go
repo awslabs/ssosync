@@ -19,6 +19,7 @@ type Group struct {
 	ID          string   `json:"id,omitempty"`
 	Schemas     []string `json:"schemas"`
 	DisplayName string   `json:"displayName"`
+	ExternalId  string   `json:"externalId,omitempty"`
 	Members     []string `json:"members"`
 }
 
@@ -30,6 +31,20 @@ type GroupFilterResults struct {
 	ItemsPerPage int      `json:"itemsPerPage"`
 	StartIndex   int      `json:"startIndex"`
 	Resources    []Group  `json:"Resources"`
+}
+
+// GroupChangeOperation details the operation to take place on a group
+type GroupChangeOperation struct {
+	Operation string `json:"op"`
+	Path      string `json:"path,omitempty"`
+	Value     string `json:"value"`
+}
+
+// GroupChange represents a change operation
+// for a group
+type GroupChange struct {
+	Schemas    []string               `json:"schemas"`
+	Operations []GroupChangeOperation `json:"Operations"`
 }
 
 // GroupMemberChangeMember is a value needed for the ID of the member
@@ -66,10 +81,11 @@ type UserAddress struct {
 
 // User represents a User in AWS SSO
 type User struct {
-	ID       string   `json:"id,omitempty"`
-	Schemas  []string `json:"schemas"`
-	Username string   `json:"userName"`
-	Name     struct {
+	ID         string   `json:"id,omitempty"`
+	Schemas    []string `json:"schemas"`
+	ExternalId string   `json:"externalId,omitempty"`
+	Username   string   `json:"userName"`
+	Name       struct {
 		FamilyName string `json:"familyName"`
 		GivenName  string `json:"givenName"`
 	} `json:"name"`
