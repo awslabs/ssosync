@@ -414,6 +414,16 @@ Conditions:
     - ""
 
 Rules:
+  memberKeyQuery:
+    RuleCondition: - !Contains
+      - [memberkey, memberKey, MEMBERKEY]
+      - !Ref GroupMatch
+    Assertions:
+      - Assert: !Not
+        - !Equals
+          - !Ref CustomerId
+          - ""
+        AssertDescription: 'If memberKey is used a CustomerId must also be supplied.'
   SecretValues:
     RuleCondition: !Or
       - !Equals
