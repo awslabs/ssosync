@@ -720,7 +720,7 @@ Resources:
         Type: LINUX_CONTAINER
         EnvironmentVariables:
           - Name: ExpectedResponse
-            Value: 0
+            Value: "false"
       Artifacts:
         Name: SSOSync
         Type: CODEPIPELINE
