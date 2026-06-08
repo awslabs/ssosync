@@ -415,7 +415,7 @@ Conditions:
 
 Rules:
   memberKeyQuery:
-    RuleCondition: - !Contains
+    RuleCondition: !Contains
       - [memberkey, memberKey, MEMBERKEY]
       - !Ref GroupMatch
     Assertions:
