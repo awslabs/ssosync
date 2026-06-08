@@ -322,38 +322,23 @@ Conditions:
     - !Equals [ !Ref IgnoreGroups, "" ]
   SetIgnoreUsers: !Not
     - !Equals [ !Ref IgnoreUsers, "" ]
-    - !Equals [ !Ref IgnoreUsers, "" ]
   SetIncludeGroups: !And
     - !Condition LegacySync
     - !Not
-      - !Equals [!Ref IncludeGroups, ""]
       - !Equals [!Ref IncludeGroups, ""]
   SetLogRetention: !Not
     - !Equals [!Ref LogRetention, 0 ]
   SetDryRun: !Equals [!Ref DryRun, "dry-run"]
   SetSyncSuspended: !Equals [!Ref SyncSuspended, "sync"]
-    - !Equals [!Ref LogRetention, 0 ]
-  SetDryRun: !Equals [!Ref DryRun, "dry-run"]
-  SetSyncSuspended: !Equals [!Ref SyncSuspended, "sync"]
   OnSchedule: !And
     - !Condition CreateFunction
-    - !Condition CreateFunction
     - !Not
-      - !Equals [!Ref ScheduleExpression, ""]
       - !Equals [!Ref ScheduleExpression, ""]
   CreateFunction: !Or
     - !Equals [!Ref DeployPattern, "App for cross-account"]
     - !Equals [!Ref DeployPattern, "App + secrets"]
     - !Equals [!Ref DeployPattern, "App only"]
-    - !Equals [!Ref DeployPattern, "App for cross-account"]
-    - !Equals [!Ref DeployPattern, "App + secrets"]
-    - !Equals [!Ref DeployPattern, "App only"]
   CreateSecrets: !Or
-    - !Equals [!Ref DeployPattern, "App + secrets"]
-    - !Equals [!Ref DeployPattern, "Secrets only"]
-    - !Equals [!Ref DeployPattern, "Secrets for cross-account"]
-  CreateKey: !Equals [!Ref DeployPattern, "Secrets for cross-account"]
-  RemoteSecrets: !Equals [!Ref DeployPattern, "App for cross-account"]
     - !Equals [!Ref DeployPattern, "App + secrets"]
     - !Equals [!Ref DeployPattern, "Secrets only"]
     - !Equals [!Ref DeployPattern, "Secrets for cross-account"]
@@ -495,10 +480,10 @@ Resources:
                   - "secretsmanager:Get*"
                   - "secretsmanager:DescribeSecret"
                 Resource:
-                  - !If [CreateSecrets, !Ref SecretGoogleCredentials, !Select [0, !Split [',', !Ref CrossStackConfig]]]
-                  - !If [CreateSecrets, !Ref SecretGoogleAdminEmail, !Select [1, !Split [',', !Ref CrossStackConfig]]]
-                  - !If [CreateSecrets, !Ref SecretSCIMEndpoint, !Select [2, !Split [',', !Ref CrossStackConfig]]]
-                  - !If [CreateSecrets, !Ref SecretSCIMAccessToken, !Select [3, !Split [',', !Ref CrossStackConfig]]]
+                  - !Ref SecretGoogleCredentials
+                  - !Ref SecretGoogleAdminEmail
+                  - !Ref SecretSCIMEndpoint
+                  - !Ref SecretSCIMAccessToken
               - Sid: CrossRegionSecretsPolicy
                 Effect: Allow
                 Action:
