@@ -48,12 +48,6 @@ Metadata:
         Parameters:
           - SyncMethod
           - IncludeGroups
-      - Label:
-          default: "Deprecated Parameters, to be deprecated in version 3.x"
-        Parameters:
-          - IdentityStoreID
-          - Region
-
 
   AWS::ServerlessRepo::Application:
     Name: ssosync
@@ -241,20 +235,6 @@ Parameters:
     Default: ""
     AllowedPattern: '(?!.*\s)|([0-9a-zA-Z/=+-\\]{500,620})'
     NoEcho: true
-
-  Region:
-    Type: String
-    Description: |
-      AWS Region where AWS IAM Identity Center is enabled, NOT USED only present for backward compatability.
-    Default: ""
-    AllowedPattern: '(?!.*\s)|(us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-\d'
-
-  IdentityStoreID:
-    Type: String
-    Description: |
-      Identifier of Identity Store in AWS IAM Identity Center, NOT USED only present for backward compatability.
-    Default: ""
-    AllowedPattern: '(?!.*\s)|d-[1-z0-9]{10}'
 
   GoogleUserMatch:
     Type: String
