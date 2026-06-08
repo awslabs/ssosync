@@ -25,8 +25,11 @@ Metadata:
         Parameters:
           - GoogleGroupMatch
           - GoogleUserMatch
+          - GoogleUserMatch
           - IgnoreUsers
           - IgnoreGroups
+          - SyncSuspended
+          - PrecacheOrgUnits
           - SyncSuspended
           - PrecacheOrgUnits
       - Label:
@@ -319,23 +322,38 @@ Conditions:
     - !Equals [ !Ref IgnoreGroups, "" ]
   SetIgnoreUsers: !Not
     - !Equals [ !Ref IgnoreUsers, "" ]
+    - !Equals [ !Ref IgnoreUsers, "" ]
   SetIncludeGroups: !And
     - !Condition LegacySync
     - !Not
+      - !Equals [!Ref IncludeGroups, ""]
       - !Equals [!Ref IncludeGroups, ""]
   SetLogRetention: !Not
     - !Equals [!Ref LogRetention, 0 ]
   SetDryRun: !Equals [!Ref DryRun, "dry-run"]
   SetSyncSuspended: !Equals [!Ref SyncSuspended, "sync"]
+    - !Equals [!Ref LogRetention, 0 ]
+  SetDryRun: !Equals [!Ref DryRun, "dry-run"]
+  SetSyncSuspended: !Equals [!Ref SyncSuspended, "sync"]
   OnSchedule: !And
     - !Condition CreateFunction
+    - !Condition CreateFunction
     - !Not
+      - !Equals [!Ref ScheduleExpression, ""]
       - !Equals [!Ref ScheduleExpression, ""]
   CreateFunction: !Or
     - !Equals [!Ref DeployPattern, "App for cross-account"]
     - !Equals [!Ref DeployPattern, "App + secrets"]
     - !Equals [!Ref DeployPattern, "App only"]
+    - !Equals [!Ref DeployPattern, "App for cross-account"]
+    - !Equals [!Ref DeployPattern, "App + secrets"]
+    - !Equals [!Ref DeployPattern, "App only"]
   CreateSecrets: !Or
+    - !Equals [!Ref DeployPattern, "App + secrets"]
+    - !Equals [!Ref DeployPattern, "Secrets only"]
+    - !Equals [!Ref DeployPattern, "Secrets for cross-account"]
+  CreateKey: !Equals [!Ref DeployPattern, "Secrets for cross-account"]
+  RemoteSecrets: !Equals [!Ref DeployPattern, "App for cross-account"]
     - !Equals [!Ref DeployPattern, "App + secrets"]
     - !Equals [!Ref DeployPattern, "Secrets only"]
     - !Equals [!Ref DeployPattern, "Secrets for cross-account"]
@@ -755,52 +773,6 @@ Resources:
     Condition: CreateKey
     Properties:
       SecretId: !Ref SecretSCIMAccessToken
-      ResourcePolicy:
-        Version: 2012-10-17
-        Statement:
-        - Effect: Allow
-          Principal:
-            AWS: !Sub arn:aws:iam::${CrossStackConfig}:root
-          Action:
-            - secretsmanager:GetSecretValue
-          Resource: '*'
-        
-  SecretRegion:
-    Type: "AWS::SecretsManager::Secret"
-    Condition: CreateSecretRegion
-    Properties:
-      Name: SSOSyncRegion
-      SecretString: !Ref Region
-      KmsKeyId: !If [CreateKey, !Ref KeyAlias, alias/aws/secretsmanager]
-
-  SecretRegionPolicy:
-    Type: AWS::SecretsManager::ResourcePolicy
-    Condition: CreateKeyRegion
-    Properties:
-      SecretId: !Ref SecretRegion
-      ResourcePolicy:
-        Version: 2012-10-17
-        Statement:
-        - Effect: Allow
-          Principal:
-            AWS: !Sub arn:aws:iam::${CrossStackConfig}:root
-          Action:
-            - secretsmanager:GetSecretValue
-          Resource: '*'
-                
-  SecretIdentityStoreID:
-    Type: "AWS::SecretsManager::Secret"
-    Condition: CreateSecretIdentityStoreID
-    Properties:
-      Name: SSOSyncIdentityStoreID
-      SecretString: !Ref IdentityStoreID
-      KmsKeyId: !If [CreateKey, !Ref KeyAlias, alias/aws/secretsmanager]
-
-  SecretIdentityStoreIDPolicy:
-    Type: AWS::SecretsManager::ResourcePolicy
-    Condition: CreateKeyIdentityStoreID
-    Properties:
-      SecretId: !Ref SecretIdentityStoreID
       ResourcePolicy:
         Version: 2012-10-17
         Statement:
