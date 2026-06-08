@@ -355,17 +355,13 @@ Conditions:
 
 Rules:
   memberKeyQuery:
-    RuleCondition: !Contains
-      - [memberkey, memberKey, MEMBERKEY]
-      - !Ref GoogleGroupMatch
+    RuleCondition: !Contains [[memberkey, memberKey, MEMBERKEY], !Ref GoogleGroupMatch]
     Assertions:
       - Assert: !Not
-        - !Equals
-          - !Ref GoogleCustomerId
-          - "my_customer"
+        - !Equals [!Ref GoogleCustomerId, "my_customer"]
         AssertDescription: 'If memberKey is used in GroupMatch, the actual CustomerId must also be supplied.'
   SecretValues:
-    RuleCondition: !Condition RemoteSecrets
+    RuleCondition: !Equals [!Ref DeployPattern, "App for cross-account"]
     Assertions:
       - Assert: !Contains [['arn:aws:secretsmanager:'], !Ref GoogleCustomerId]
         AssertDescription: 'The arn of the secret contenting the CustomerId is required for this deployment type.'
@@ -384,14 +380,16 @@ Rules:
           - !Equals ['', !Ref KMSKey]
         AssertDescription: 'The Arn of the KMS Key used to encrypt the secrets is required for this deployment type.'
   LocalSecrets:
-    RuleCondition:  !Condition LocalSecrets
+    RuleCondition: !Or
+      - !Equals [!Ref DeployPattern, "App + secrets"]
+      - !Equals [!Ref DeployPattern, "App only"]
     Assertions:
       - Assert: !Equals ['', !Ref AppAccount]
         AssertDescription: 'Do not provide a AppAccount for this deployment type.'
       - Assert: !Equals ['', !Ref KMSKey]
         AssertDescription: 'Do not provide a KMS Key for this deployment type.'
   CrossSecrets:
-    RuleCondition: !Condition CreateKey
+    RuleCondition: !Equals [!Ref DeployPattern, "Secrets for cross-account"]
     Assertions:
       - Assert: !Equals ['', !Ref AppAccount]
         AssertDescription: 'The AWS account id, of the account where you intend to deploy the app.'
