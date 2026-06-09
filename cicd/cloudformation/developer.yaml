@@ -797,6 +797,11 @@ Resources:
               Effect: Allow
               Resource: '*'
             - Action:
+              - "sso:ListInstances"
+              Effect: Allow
+              Resource: 
+              - '*'
+            - Action:
                 - "identitystore:DeleteUser"
                 - "identitystore:DeleteGroup"
                 - "identitystore:CreateGroup"
