@@ -92,6 +92,8 @@ jobs:
     steps:
       - name: Check out code
         uses: actions/checkout@v6
+        with:
+          persist-credentials: true
 
       - name: Fetch SEMANTIC_VERSION
         run : |
@@ -115,5 +117,6 @@ jobs:
         uses: stefanzweifel/git-auto-commit-action@v7
         with:
           branch: master
+          commit_options: '--no-verify --signoff'
           commit_message: Update Quick Start templates
           file_pattern: quick-start
