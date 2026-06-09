@@ -33,6 +33,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/codepipeline"
 	"github.com/aws/aws-sdk-go-v2/service/codepipeline/types"
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
+	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	"github.com/aws/aws-secretsmanager-caching-go/v2/secretcache"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
@@ -215,9 +216,13 @@ var secretCache *secretcache.Cache
 func getEnvSensitive(key string, fallback string) string {
 	EnvVar := getEnvStr(key, fallback)
 	secretMgr, _ := regexp.Compile(`(?:arn:aws:secretsmanager:)`)
+	ssmParam, _ := regexp.Compile(`(?:arn:aws:ssm:)`)
 
 	if secretMgr.MatchString(EnvVar) {
 		return getSecretFromCache(EnvVar)
+	}
+	if ssmParam.MatchString(EnvVar) {
+		return getEncryptParam(EnvVar)
 	}
 	return EnvVar
 }
@@ -328,6 +333,21 @@ func getSecretFromCache(secretName string) string {
 		log.Fatal(errors.Wrap(err, fmt.Sprintf("cannot read secret: %s", secretName)).Error())
 	}
 	return value
+}
+
+func getEncryptParam(parameterArn string) string {
+	ctx := context.Background()
+
+	ssmClient := ssm.NewFromConfig(awsConfig)
+	output, err := ssmClient.GetParameter(ctx, &ssm.GetParameterInput{
+		Name:           aws.String(parameterArn),
+		WithDecryption: aws.Bool(true),
+	})
+	if err != nil {
+		log.Fatal(errors.Wrap(err, fmt.Sprintf("failed to get SSM parameter: %s", parameterArn)).Error())
+	}
+
+	return aws.ToString(output.Parameter.Value)
 }
 
 func addFlags(_ *cobra.Command, cfg *config.Config) {
