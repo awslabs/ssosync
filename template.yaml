@@ -745,7 +745,7 @@ Outputs:
     Description: "The Arn of the secret containing the GoogleCustomerId"
     Value: !Ref SecretGoogleCustomerId
     Export:
-      Name: GoogleCredentials
+      Name: GoogleCustomerId
   OutputGoogleCredentials:
     Condition: CreateSecrets
     Description: "The Arn of the secret containing the GoogleCredentials"
