@@ -293,9 +293,7 @@ func configLambda() {
 
 	// Get sensitive values from Secrets Manager with caching
 	cfg.GoogleAdmin = getSecretFromCache(getEnvStr("GOOGLE_ADMIN", config.DefaultGoogleCredentials))
-	// Customer ID is not a secret; read it directly so the lambda doesn't
-	// try to resolve the literal default ("my_customer") as a secret name.
-	cfg.CustomerID = getEnvStr("CUSTOMER_ID", config.DefaultCustomerID)
+	cfg.CustomerID = getSecretFromCache(getEnvStr("CUSTOMER_ID", config.DefaultCustomerID))
 	cfg.SCIMEndpoint = getSecretFromCache(getEnvStr("SCIM_ENDPOINT", ""))
 	cfg.GoogleCredentials = getSecretFromCache(getEnvStr("GOOGLE_CREDENTIALS", ""))
 	cfg.SCIMAccessToken = getSecretFromCache(getEnvStr("SCIM_ACCESS_TOKEN", ""))
