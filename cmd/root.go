@@ -212,6 +212,16 @@ func initConfig() {
 
 var secretCache *secretcache.Cache
 
+func getEnvSensitive(key string, fallback string) string {
+	EnvVar := getEnvStr(key, fallback)
+	secretMgr, _ := regexp.Compile(`(?:arn:aws:secretsmanager:)`)
+
+	if secretMgr.MatchString(EnvVar) {
+		return getSecretFromCache(EnvVar)
+	}
+	return EnvVar
+}
+
 func getEnvStr(key string, fallback string) string {
 	if valueStr, ok := os.LookupEnv(key); ok {
 		log.WithField(key, valueStr).Info("EnvVar")
@@ -291,12 +301,12 @@ func configLambda() {
 		log.Fatal(errors.Wrap(err, "Failed to create secret cache").Error())
 	}
 
-	// Get sensitive values from Secrets Manager with caching
-	cfg.GoogleAdmin = getSecretFromCache(getEnvStr("GOOGLE_ADMIN", config.DefaultGoogleCredentials))
-	cfg.CustomerID = getSecretFromCache(getEnvStr("CUSTOMER_ID", config.DefaultCustomerID))
-	cfg.SCIMEndpoint = getSecretFromCache(getEnvStr("SCIM_ENDPOINT", ""))
-	cfg.GoogleCredentials = getSecretFromCache(getEnvStr("GOOGLE_CREDENTIALS", ""))
-	cfg.SCIMAccessToken = getSecretFromCache(getEnvStr("SCIM_ACCESS_TOKEN", ""))
+	// Get retreive sensitive values from envVars/Secrets Manager with caching
+	cfg.CustomerID = getEnvSensitive("CUSTOMER_ID", config.DefaultCustomerID)
+	cfg.GoogleAdmin = getEnvSensitive("GOOGLE_ADMIN", "")
+	cfg.GoogleCredentials = getEnvSensitive("GOOGLE_CREDENTIALS", "")
+	cfg.SCIMEndpoint = getEnvSensitive("SCIM_ENDPOINT", "")
+	cfg.SCIMAccessToken = getEnvSensitive("SCIM_ACCESS_TOKEN", "")
 
 	// Handle environment variables for other settings
 	cfg.LogLevel = getEnvStr("LOG_LEVEL", config.DefaultLogLevel)
