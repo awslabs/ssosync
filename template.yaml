@@ -219,7 +219,7 @@ Parameters:
     Description: |
       Google CustomerId, retrieve from https://admin.google.com/ac/accountsettings/profile, [Required from v3.x] or the Arn of a secret that contains it
     Default: "my_customer"
-    AllowedPattern: '(my_customer)|(?:arn:aws:secretsmanager:(?:(?:us(?:-gov)?|ap|ca|cn|eu|sa)-(?:central|(?:north|south)?(?:east|west)?)-\d):[0-9]{8,12}:secret:[a-zA-Z0-9\/_+=.@-]{1,512})|(?:(?i)C[0-9az]{8})'
+    AllowedPattern: '(my_customer)|(?:arn:aws:secretsmanager:(?:(?:us(?:-gov)?|ap|ca|cn|eu|sa)-(?:central|(?:north|south)?(?:east|west)?)-\d):[0-9]{8,12}:secret:[a-zA-Z0-9\/_+=.@-]{1,512})|(?:C[0-9a-zA-Z]{8})'
 
   GoogleCredentials:
     Type: String

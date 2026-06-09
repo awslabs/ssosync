@@ -919,18 +919,19 @@ Resources:
               Effect: Allow
               Resource: '*'
             - Action:
-                - "identitystore:DeleteUser"
-                - "identitystore:CreateGroup"
-                - "identitystore:CreateGroupMembership"
                 - "identitystore:ListGroups"
                 - "identitystore:ListUsers"
                 - "identitystore:ListGroupMemberships"
                 - "identitystore:IsMemberInGroups"
                 - "identitystore:GetGroupMembershipId"
-                - "identitystore:DeleteGroupMembership"
-                - "identitystore:DeleteGroup"
               Effect: Allow
               Resource: '*'
+            - Sid: SsoAdminAccessPolicy
+              Effect: Allow
+              Action: 
+                - "sso:ListInstances"
+              Resource:
+                - "*"
             - Action:
                 - "secretsmanager:Get*"
               Resource:

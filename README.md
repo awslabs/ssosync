@@ -63,7 +63,7 @@ what it is going to do.
 ## ⚠️ Important Notices
 
 > [!IMPORTANT]
-> The following parameters are no long used by **Region** and **IdentityStoreID**, these are determined programatically based on the **SCIM Endpoint** and api calls to IAM Identity Center, they are still present in the template.yaml. To avoid breaking deployment tooling for anyone passing a paramter file to the CloudFormation Stack. These parameters will be fully removed in v3.x.
+> **Region** and **IdentityStoreID** are no longer configurable parameters. Region is extracted programmatically from the **SCIM Endpoint** URL, and IdentityStoreID is resolved automatically via the IAM Identity Center `ListInstances` API. These parameters are still present in `template.yaml` to avoid breaking deployment tooling for anyone passing a parameter file to the CloudFormation Stack. They will be fully removed in v3.x.
 
 > [!CAUTION]
 > When using ssosync with an instance of IAM Identity Center integrated with AWS Control Tower. AWS Control Tower creates a number of groups and users (directly via the Identity Store API), when an external identity provider is configured these users and groups are can not be used to log in. However it is important to remember that because ssosync implemements a uni-directional sync it will make the IAM Identity Store match the subset of your Google Workspaces directory you specify, including removing these groups and users created by AWS Control Tower. There is a PFR [#179 Configurable handling of 'manually created' Users/Groups in IAM Identity Center](https://github.com/awslabs/ssosync/issues/179) to implement an option to ignore these users and groups, hopefully this will be implemented in version 3.x. However, this has a dependancy on PFR [#166 Ensure all groups/user creates in IAM Identity Store are via SCIM api and populate externalId field](https://github.com/awslabs/ssosync/issues/166), to be able to reliably and consistently disinguish between **SCIM Provisioned** users from **Manually Created** users
@@ -142,15 +142,12 @@ SSO Sync requires configuration from both Google Workspace and AWS sides.
    - Select Settings → Enable automatic provisioning
    - Copy the **SCIM Endpoint URL** and **Access Token**
 
-2. **Get Identity Store ID**
-   - In IAM Identity Center console → Settings
-   - Copy the **Identity Store ID** from the Identity Source section
-
-3. **AWS Credentials**
+2. **AWS Credentials**
    - Configure AWS credentials using any standard method:
      - AWS credentials file (`~/.aws/credentials`)
      - Environment variables (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`)
      - IAM roles (for Lambda deployment)
+   - The executing role needs permissions for `sso:ListInstances` to auto-detect the Identity Store ID
 
 ## 🚀 Usage
 
@@ -168,8 +165,6 @@ SSO Sync requires configuration from both Google Workspace and AWS sides.
   --google-credentials ./credentials.json \
   --endpoint https://scim.us-east-1.amazonaws.com/... \
   --access-token AQoDYXdzE... \
-  --region us-east-1 \
-  --identity-store-id d-1234567890 \
   --group-match "name:AWS*"
 ```
 
@@ -205,8 +200,6 @@ export SSOSYNC_GOOGLE_ADMIN="admin@company.com"
 export SSOSYNC_GOOGLE_CREDENTIALS="./credentials.json"
 export SSOSYNC_SCIM_ENDPOINT="https://scim.us-east-1.amazonaws.com/..."
 export SSOSYNC_SCIM_ACCESS_TOKEN="AQoDYXdzE..."
-export SSOSYNC_REGION="us-east-1"
-export SSOSYNC_IDENTITY_STORE_ID="d-1234567890"
 export SSOSYNC_GROUP_MATCH="name:AWS*"
 export SSOSYNC_DRY_RUN="true"
 ```
@@ -217,19 +210,22 @@ export SSOSYNC_DRY_RUN="true"
 |------|---------------------|-------------|---------|
 | `--google-admin` | `SSOSYNC_GOOGLE_ADMIN` | Google Workspace admin email | Required |
 | `--google-credentials` | `SSOSYNC_GOOGLE_CREDENTIALS` | Path to Google credentials JSON | `credentials.json` |
+| `--customer-id` | `SSOSYNC_CUSTOMER_ID` | Google Workspace customer ID | `my_customer` |
 | `--endpoint` | `SSOSYNC_SCIM_ENDPOINT` | AWS SCIM endpoint URL | Required |
 | `--access-token` | `SSOSYNC_SCIM_ACCESS_TOKEN` | AWS SCIM access token | Required |
-| `--region` | `SSOSYNC_REGION` | AWS region | Required |
-| `--identity-store-id` | `SSOSYNC_IDENTITY_STORE_ID` | AWS Identity Store ID | Required |
 | `--sync-method` | `SSOSYNC_SYNC_METHOD` | Sync method (`groups` or `users_groups`) | `groups` |
 | `--group-match` | `SSOSYNC_GROUP_MATCH` | Google Groups filter query | `*` |
 | `--user-match` | `SSOSYNC_USER_MATCH` | Google Users filter query | `""` |
 | `--ignore-users` | `SSOSYNC_IGNORE_USERS` | Comma-separated list of users to ignore | `[]` |
 | `--ignore-groups` | `SSOSYNC_IGNORE_GROUPS` | Comma-separated list of groups to ignore | `[]` |
 | `--include-groups` | `SSOSYNC_INCLUDE_GROUPS` | Include only these groups (users_groups method only) | `[]` |
+| `--precache-ous` | `SSOSYNC_PRECACHE_ORG_UNITS` | Comma-separated list of Google OrgUnit paths to precache | `[]` |
 | `--dry-run` | `SSOSYNC_DRY_RUN` | Enable dry-run mode | `false` |
+| `--suspended` | `SSOSYNC_SYNC_SUSPENDED` | Include suspended users when syncing | `false` |
 | `--log-level` | `SSOSYNC_LOG_LEVEL` | Log level (debug, info, warn, error) | `info` |
 | `--log-format` | `SSOSYNC_LOG_FORMAT` | Log format (text, json) | `text` |
+
+> **Note:** `--region` and `--identity-store-id` are no longer required. Region is extracted from the SCIM endpoint URL, and Identity Store ID is resolved automatically via the IAM Identity Center API.
 
 ### Filtering Examples
 
@@ -249,18 +245,46 @@ export SSOSYNC_DRY_RUN="true"
 ```
 
 #### User Filtering
+
+The `--user-match` parameter supports the following query fields and operators:
+
+| Field | Prefix (`:`) | Exact (`=`) | Example |
+|-------|:---:|:---:|---------|
+| `name` | ✓ | ✓ | `name:John*` or `name=John Doe` |
+| `email` | ✓ | ✓ | `email:admin*` or `email=john@company.com` |
+| `manager` | — | ✓ | `manager=boss@company.com` |
+| `managerId` | ✓ | ✓ | `managerId:abc123*` |
+| `orgName` | ✓ | ✓ | `orgName=Engineering` |
+| `orgDepartment` | ✓ | ✓ | `orgDepartment:Sales*` |
+| `orgCostCenter` | ✓ | ✓ | `orgCostCenter=CC-1234` |
+
+- Use `:` for prefix/wildcard matching (e.g. `name:John*`)
+- Use `=` for exact matching (e.g. `name=John Doe` or `email=admin@company.com`)
+- Use `"` for exact values containing spaces (e.g. `orgName="My Department"`)
+- Combine multiple patterns with `,` or space separator
+- Use `*` alone to sync all users
+
 ```bash
 # Sync users with specific name pattern
 --user-match "name:John*"
 
-# Sync users with email pattern
+# Sync users by email prefix
 --user-match "email:admin*"
+
+# Sync users in a specific org unit
+--user-match "orgName=Engineering"
+
+# Sync users by department and cost center
+--user-match "orgDepartment:Sales*,orgCostCenter=CC-1234"
+
+# Sync users managed by a specific person
+--user-match "manager=boss@company.com"
+
+# Combine multiple query fields
+--user-match "name:John*,email:admin*,orgName=Engineering"
 
 # Sync all users
 --user-match "*"
-
-# Complex query
---user-match "name:John*,email:admin*,orgName=Engineering"
 ```
 
 For complete query syntax, see:
@@ -363,16 +387,18 @@ sam deploy \
 
 ### Lambda Environment Variables
 
-When deployed as Lambda, configuration is managed through environment variables and AWS Secrets Manager:
+When deployed as Lambda, configuration is managed through environment variables. Sensitive values can be stored in AWS Secrets Manager or SSM Parameter Store — simply set the environment variable to the resource ARN and ssosync will resolve the value automatically:
+
+- **Secrets Manager**: `arn:aws:secretsmanager:<region>:<account>:secret:<name>`
+- **SSM Parameter Store** (SecureString): `arn:aws:ssm:<region>:<account>:parameter/<name>`
 
 ```bash
-# Required secrets (stored in Secrets Manager)
-GOOGLE_ADMIN=<secret-arn>
-GOOGLE_CREDENTIALS=<secret-arn>
-SCIM_ENDPOINT=<secret-arn>
-SCIM_ACCESS_TOKEN=<secret-arn>
-REGION=<secret-arn>
-IDENTITY_STORE_ID=<secret-arn>
+# Required secrets (stored in Secrets Manager or SSM Parameter Store)
+GOOGLE_ADMIN=<secret-arn or ssm-parameter-arn>
+GOOGLE_CREDENTIALS=<secret-arn or ssm-parameter-arn>
+SCIM_ENDPOINT=<secret-arn or ssm-parameter-arn>
+SCIM_ACCESS_TOKEN=<secret-arn or ssm-parameter-arn>
+CUSTOMER_ID=<secret-arn, ssm-parameter-arn, or plain value>
 
 # Optional environment variables
 LOG_LEVEL=info
@@ -383,7 +409,10 @@ USER_MATCH=
 IGNORE_USERS=
 IGNORE_GROUPS=
 DRY_RUN=false
+SYNC_SUSPENDED=false
 ```
+
+> **Note:** `REGION` and `IDENTITY_STORE_ID` environment variables are no longer required. Region is derived from the SCIM endpoint URL, and Identity Store ID is resolved via the IAM Identity Center API.
 
 ## 📊 Monitoring & Troubleshooting
 

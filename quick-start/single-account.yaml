@@ -149,7 +149,7 @@ Parameters:
     Type: String
     Description: |
       Google CustomerId, retrieve from https://admin.google.com/ac/accountsettings/profile
-    AllowedPattern: '(?:(?i)C[0-9az]{8})'
+    AllowedPattern: '(?:C[0-9a-zA-Z]{8})'
 
   GoogleCredentials:
     Type: String
