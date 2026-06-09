@@ -740,37 +740,37 @@ Outputs:
     Value: !GetAtt SSOSyncFunction.Arn
     Export:
       Name: FunctionARN
-  OutputGoogleCustomerId:
+  GoogleCustomerId:
     Condition: CreateSecrets
     Description: "The Arn of the secret containing the GoogleCustomerId"
     Value: !Ref SecretGoogleCustomerId
     Export:
       Name: GoogleCustomerId
-  OutputGoogleCredentials:
+  GoogleCredentials:
     Condition: CreateSecrets
     Description: "The Arn of the secret containing the GoogleCredentials"
     Value: !Ref SecretGoogleCredentials
     Export:
       Name: GoogleCredentials
-  OutputGoogleAdminEmail:
+  GoogleAdminEmail:
     Condition: CreateSecrets
     Description: "The Arn of the secret containing the GoogleAdminEmail"
     Value: !Ref SecretGoogleAdminEmail
     Export:
       Name: GoogleAdminEmail
-  OutputSecretSCIMEndpoint:
+  SCIMEndpointUrl:
     Condition: CreateSecrets
     Description: "The Arn of the secret containing the SCIMEndpointUrl"
     Value: !Ref SecretSCIMEndpoint
     Export:
-      Name: SCIMEndpoint
-  OutputSecretSCIMAccessToken:
+      Name: SCIMEndpointUrl
+  SCIMEndpointAccessToken:
     Condition: CreateSecrets
     Description: "The Arn of the secret containing the SCIMEndpointAccessToken"
     Value: !Ref SecretSCIMAccessToken
     Export:
-      Name: SCIMAccessToken
-  OutputKMSKey:
+      Name: SCIMEndpointAccessToken
+  KeyAlias:
     Condition: CreateKey
     Description: "The Arn of the KMS key used to encrypt the secrets"
     Value: !Sub arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/${KeyForSecrets}

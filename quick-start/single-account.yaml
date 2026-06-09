@@ -197,18 +197,19 @@ Resources:
 
   Function:
     Type: AWS::Serverless::Application
+    DependsOn: Secrets
     Properties:
       Location:
         ApplicationId: arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync
-        SemanticVersion: 2.4.0
+        SemanticVersion: 2.5.1
       Parameters:
         DeployPattern: App only
         FunctionName: SSOSync
         SCIMEndpointUrl: !GetAtt [Secrets, Outputs.SCIMEndpointUrl]
-        SCIMEndpointAccessToken: !GetAtt [Secrets, Outputs. SCIMEndpointAccessToken]
-        GoogleCustomerId: !GetAtt [Secrets, Outputs. GoogleCustomerId]
-        GoogleAdminEmail: !GetAtt [Secrets, Outputs. GoogleAdminEmail]
-        GoogleCredentials: !GetAtt [Secrets, Outputs. GoogleCredentials]
+        SCIMEndpointAccessToken: !GetAtt [Secrets, Outputs.SCIMEndpointAccessToken]
+        GoogleCustomerId: !GetAtt [Secrets, Outputs.GoogleCustomerId]
+        GoogleAdminEmail: !GetAtt [Secrets, Outputs.GoogleAdminEmail]
+        GoogleCredentials: !GetAtt [Secrets, Outputs.GoogleCredentials]
         PrecacheOrgUnits: !Ref PrecacheOrgUnits
         GoogleUserMatch: !Ref GoogleUserMatch
         GoogleGroupMatch: !Ref GoogleGroupMatch
@@ -227,7 +228,7 @@ Resources:
     Properties:
       Location:
         ApplicationId: arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync
-        SemanticVersion: 2.4.0
+        SemanticVersion: 2.5.1
       Parameters:
         DeployPattern: Secrets only
         SCIMEndpointUrl: !Ref SCIMEndpointUrl
