@@ -367,19 +367,21 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 	}
 
 	// create list of changes by operations
-	addAWSUsers, delAWSUsers, updateAWSUsers, _ := getUserOperations(awsUsers, googleUsers)
+	addAWSUsers, delAWSUsers, updateAWSUsers, unchangedAWSUsers := getUserOperations(awsUsers, googleUsers)
 	log.WithFields(
 		log.Fields{
-			"addUsers": len(addAWSUsers),
-			"updateUsers": len(updateAWSUsers),
-			"delUsers": len(delAWSUsers)}).Info("syncing user changes")
+			"unchanged": len(unchangedAWSUsers),
+			"create": len(addAWSUsers),
+			"update": len(updateAWSUsers),
+			"delete": len(delAWSUsers)}).Info("syncing user changes")
 
-	addAWSGroups, delAWSGroups, updateAWSGroups, equalAWSGroups := getGroupOperations(awsGroups, googleGroups)
+	addAWSGroups, delAWSGroups, updateAWSGroups, unchangedAWSGroups := getGroupOperations(awsGroups, googleGroups)
 	log.WithFields(
 		log.Fields{
-			"addUsers": len(addAWSGroups),
-			"updateUsers": len(updateAWSGroups),
-			"delUsers": len(delAWSGroups)}).Info("syncing group changes")
+			"unchanged": len(unchangedAWSGroups),
+			"create": len(addAWSGroups),
+			"update": len(updateAWSGroups),
+			"delete": len(delAWSGroups)}).Info("syncing group changes")
 
 	// update aws users (updated in google)
 	log.Debug("updating aws users updated in google")
@@ -493,7 +495,7 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 
 	// validate groups members are equal in aws and google
 	log.Debug("validating groups members, equals in aws and google")
-	for _, awsGroup := range equalAWSGroups {
+	for _, awsGroup := range unchangedAWSGroups {
 
 		// add members of the new group
 		log := log.WithFields(log.Fields{"group": awsGroup.DisplayName})
