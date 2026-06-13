@@ -368,9 +368,18 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 
 	// create list of changes by operations
 	addAWSUsers, delAWSUsers, updateAWSUsers, _ := getUserOperations(awsUsers, googleUsers)
-	addAWSGroups, delAWSGroups, updateAWSGroups, equalAWSGroups := getGroupOperations(awsGroups, googleGroups)
+	log.WithFields(
+		log.Fields{
+			"addUsers": len(addAWSUsers),
+			"updateUsers": len(updateAWSUsers),
+			"delUsers": len(delAWSUsers)}).Info("syncing user changes")
 
-	log.Info("syncing changes")
+	addAWSGroups, delAWSGroups, updateAWSGroups, equalAWSGroups := getGroupOperations(awsGroups, googleGroups)
+	log.WithFields(
+		log.Fields{
+			"addUsers": len(addAWSGroups),
+			"updateUsers": len(updateAWSGroups),
+			"delUsers": len(delAWSGroups)}).Info("syncing group changes")
 
 	// update aws users (updated in google)
 	log.Debug("updating aws users updated in google")
