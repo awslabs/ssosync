@@ -1195,6 +1195,7 @@ func ConvertIdentityStoreGroupToAWSGroup(group identitystore_types.Group) *inter
 	log.WithField("groupId", group.GroupId).WithField("displayName", group.DisplayName).Debug("ConvertIdentityStoreGroupToAWSGroup() Group converted")
 	return &interfaces.Group{
 		ID:          *group.GroupId,
+		ExternalId:  getExternalId(group.ExternalIds),
 		Schemas:     []string{constants.SCIMSchemaGroup},
 		DisplayName: *group.DisplayName,
 		Members:     []string{},
