@@ -1270,8 +1270,9 @@ func ConvertSdkUserObjToNative(user identitystore_types.User) *interfaces.User {
 	}
 
 	return &interfaces.User{
-		ID:       *user.UserId,
-		Schemas:  []string{constants.SCIMSchemaUser},
+		ID:         *user.UserId,
+		ExternalId: getExternalId(user.ExternalIds),
+		Schemas:    []string{constants.SCIMSchemaUser},
 		Username: *user.UserName,
 		Name: struct {
 			FamilyName string `json:"familyName"`
@@ -1284,6 +1285,15 @@ func ConvertSdkUserObjToNative(user identitystore_types.User) *interfaces.User {
 		Emails:      userEmails,
 		Addresses:   userAddresses,
 	}
+}
+
+// getExternalId extracts the external ID from the identity store ExternalIds slice.
+// Returns an empty string if no external IDs are present.
+func getExternalId(externalIds []identitystore_types.ExternalId) string {
+	if len(externalIds) > 0 && externalIds[0].Id != nil {
+		return *externalIds[0].Id
+	}
+	return ""
 }
 
 // CreateUserIDtoUserObjMap
