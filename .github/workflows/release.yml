@@ -118,5 +118,6 @@ jobs:
         with:
           branch: master
           commit_options: '--no-verify --signoff'
+          puch_options: --force
           commit_message: Update Quick Start templates
           file_pattern: quick-start
