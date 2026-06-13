@@ -373,7 +373,7 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 			"unchanged": len(unchangedAWSUsers),
 			"create": len(addAWSUsers),
 			"update": len(updateAWSUsers),
-			"delete": len(delAWSUsers)}).Info("syncing user changes")
+			"delete": len(delAWSUsers)}).Info("Change Summary: users")
 
 	addAWSGroups, delAWSGroups, updateAWSGroups, unchangedAWSGroups := getGroupOperations(awsGroups, googleGroups)
 	log.WithFields(
@@ -381,7 +381,7 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 			"unchanged": len(unchangedAWSGroups),
 			"create": len(addAWSGroups),
 			"update": len(updateAWSGroups),
-			"delete": len(delAWSGroups)}).Info("syncing group changes")
+			"delete": len(delAWSGroups)}).Info("Change Summary: Groups")
 
 	// update aws users (updated in google)
 	log.Debug("updating aws users updated in google")
