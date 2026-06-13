@@ -56,6 +56,27 @@ type syncGSuite struct {
 	ignoreUsersSet   map[string]struct{}
 	ignoreGroupsSet  map[string]struct{}
 	includeGroupsSet map[string]struct{}
+	cacheStats map[string]CacheStats
+}
+
+// OperationType handle patch operations for add/remove
+type CacheOperationType string
+
+const (
+	// PreCache is adding a user/group as part of the precaching
+	PreCache CacheOperationType = "precache"
+	// CacheHit means a user was successfully found in the cache and prepresents an api called avoided
+	CacheHit CacheOperationType = "hit"
+	// CacheMiss means a user was not found in the cache so an api call was required
+	CacheMiss CacheOperationType = "miss"
+)
+
+// User represents a User in AWS SSO
+type CacheStats struct {
+	Precaches int
+	Hits int
+	Misses int
+	TotalUsers int
 }
 
 // New will create a new SyncGSuite object
@@ -69,6 +90,67 @@ func New(cfg *config.Config, a aws.Client, g google.Client, ids interfaces.Ident
 	}
 }
 
+func (s *syncGSuite) recordCacheStat(orgPath string, operation CacheOperationType) {
+	// if this is the first use of s.cachStats make it
+	if s.cacheStats == nil {
+		s.cacheStats = make(map[string]CacheStats, 0)
+	}
+	// have we seen this orgPath before, if not create an stats for it
+	if _, exists := s.cacheStats[orgPath]; !exists {
+		s.cacheStats[orgPath] = CacheStats{}
+	}
+	// update the stat for the operation
+	if entry, exists := s.cacheStats[orgPath]; exists {
+		switch operation {
+		case PreCache:
+			entry.Precaches++
+		case CacheHit:
+			entry.Hits++
+		case CacheMiss:
+			entry.Misses++
+		default:
+			log.WithFields(
+				log.Fields{
+					"orgPath": orgPath,
+					"operation": operation}).Error("unknown operation")
+		}
+	}
+
+	// If existing paths are parent or orgPath, update their stats
+	for path, entry := range s.cacheStats {
+		if !strings.Contains(orgPath, path) {
+			continue
+		}
+		switch operation {
+		case PreCache:
+			entry.Precaches++
+		case CacheHit:
+			entry.Hits++
+		case CacheMiss:
+			entry.Misses++
+		}
+	}
+}
+
+func (s *syncGSuite) outputCacheStats() {
+	for orgUnitPath, entry := range s.cacheStats {
+		var query string
+		if strings.ContainsRune(orgUnitPath, ' ') {
+			query = "OrgUnitPath='" + orgUnitPath + "'"
+		} else {
+			query = "OrgUnitPath=" + orgUnitPath
+		}	
+		googleUsers, err := s.google.GetUsers(query, s.cfg.UserFilter)
+		if err != nil {
+			log.WithFields(log.Fields{
+				"error": err,
+			}).Error("Failed retrieving usercache count")
+		} else {
+			entry.TotalUsers = len(googleUsers)
+		}
+	}
+	log.WithFields(log.Fields{"Cache Stats": s.cacheStats}).Info("Caching Performance, orgPaths with a high Miss rate compared with the TotalUsers consider precaching")
+}
 // SyncUsers will Sync Google Users to AWS SSO SCIM
 // References:
 // * https://developers.google.com/admin-sdk/directory/v1/guides/search-users
@@ -563,7 +645,7 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 			return err
 		}
 	}
-
+    s.outputCacheStats()
 	log.Info("sync completed")
 
 	return nil
@@ -611,63 +693,7 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 		}
 	}
 
-	// Fetch Users
-	if queryUsers == "" {
-		log.WithFields(log.Fields{
-			"func": funcName,
-		}).Info("Skipping fetch for userMatch")
-	} else {
-		log.WithFields(log.Fields{
-			"func":         funcName,
-			"queryUsers":   queryUsers,
-			"queryFilters": s.cfg.UserFilter,
-		}).Info("fetching userMatch")
 
-		googleUsers, err := s.google.GetUsers(queryUsers, s.cfg.UserFilter)
-		if err != nil {
-			log.WithFields(log.Fields{
-				"func":  funcName,
-				"error": err,
-			}).Error("failed fetching userMatch from Google")
-			return nil, nil, nil, err
-		}
-
-		log.WithFields(log.Fields{
-			"func": funcName,
-		}).Debug("process users from google, filtering as required")
-
-		for _, u := range googleUsers {
-			log.WithFields(log.Fields{
-				"func": funcName,
-				"user": u,
-			}).Debug("process user")
-
-			// Remove any users that should be ignored
-			if s.ignoreUser(u.PrimaryEmail) {
-				log.WithFields(log.Fields{
-					"func":    funcName,
-					"user.Id": u.Id,
-				}).Info("ignoring user")
-				continue
-			}
-
-			if _, found := gUniqUsers[u.PrimaryEmail]; !found {
-				log.WithFields(log.Fields{
-					"func":    funcName,
-					"user.Id": u.Id,
-				}).Debug("adding user")
-				gUserDetailCache[u.PrimaryEmail] = u
-				gUniqUsers[u.PrimaryEmail] = gUserDetailCache[u.PrimaryEmail]
-				continue
-			} else {
-				log.WithFields(log.Fields{
-					"func":    funcName,
-					"user.Id": u.Id,
-				}).Debug("already existing")
-				continue
-			}
-		}
-	}
 
 	// For larger directories this will reduce execution time and avoid throttling limits
 	// however if you have directory with 10,000+ users you may want to down scope
@@ -730,6 +756,7 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 						"func":    funcName,
 						"user.Id": u.Id,
 					}).Debug("Cache user")
+					s.recordCacheStat(u.OrgUnitPath, PreCache)
 
 					gUserDetailCache[u.PrimaryEmail] = u
 					continue
@@ -738,8 +765,70 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 						"func":    funcName,
 						"user.Id": u.Id,
 					}).Debug("already in cache")
+					s.recordCacheStat(u.OrgUnitPath, CacheHit)
 					continue
 				}
+			}
+		}
+	}
+
+
+	// Fetch Users
+	if queryUsers == "" {
+		log.WithFields(log.Fields{
+			"func": funcName,
+		}).Info("Skipping fetch for userMatch")
+	} else {
+		log.WithFields(log.Fields{
+			"func":         funcName,
+			"queryUsers":   queryUsers,
+			"queryFilters": s.cfg.UserFilter,
+		}).Info("fetching userMatch")
+
+		googleUsers, err := s.google.GetUsers(queryUsers, s.cfg.UserFilter)
+		if err != nil {
+			log.WithFields(log.Fields{
+				"func":  funcName,
+				"error": err,
+			}).Error("failed fetching userMatch from Google")
+			return nil, nil, nil, err
+		}
+
+		log.WithFields(log.Fields{
+			"func": funcName,
+		}).Debug("process users from google, filtering as required")
+
+		for _, u := range googleUsers {
+			log.WithFields(log.Fields{
+				"func": funcName,
+				"user": u,
+			}).Debug("process user")
+
+			// Remove any users that should be ignored
+			if s.ignoreUser(u.PrimaryEmail) {
+				log.WithFields(log.Fields{
+					"func":    funcName,
+					"user.Id": u.Id,
+				}).Info("ignoring user")
+				continue
+			}
+
+			if _, found := gUniqUsers[u.PrimaryEmail]; !found {
+				log.WithFields(log.Fields{
+					"func":    funcName,
+					"user.Id": u.Id,
+				}).Debug("adding user")
+				gUserDetailCache[u.PrimaryEmail] = u
+				s.recordCacheStat(u.OrgUnitPath, CacheMiss)
+				gUniqUsers[u.PrimaryEmail] = gUserDetailCache[u.PrimaryEmail]
+				continue
+			} else {
+				log.WithFields(log.Fields{
+					"func":    funcName,
+					"user.Id": u.Id,
+				}).Debug("already existing")
+				s.recordCacheStat(u.OrgUnitPath, CacheHit)
+				continue
 			}
 		}
 	}
@@ -1521,6 +1610,7 @@ func (s *syncGSuite) getGoogleUsersInGroup(group *admin.Group, userCache map[str
 						"Member#": memberIndex,
 					}).Debug("Cache user")
 					userCache[u.PrimaryEmail] = u
+					s.recordCacheStat(u.OrgUnitPath, CacheMiss)
 				}
 				memberEmail = u.PrimaryEmail
 			}
@@ -1551,6 +1641,7 @@ func (s *syncGSuite) getGoogleUsersInGroup(group *admin.Group, userCache map[str
 				"Member#": memberIndex,
 			}).Debug("Add member")
 		}
+		s.recordCacheStat(userCache[memberEmail].OrgUnitPath, CacheHit)
 		membersUsers = append(membersUsers, userCache[memberEmail])
 
 	}
