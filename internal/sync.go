@@ -367,10 +367,21 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 	}
 
 	// create list of changes by operations
-	addAWSUsers, delAWSUsers, updateAWSUsers, _ := getUserOperations(awsUsers, googleUsers)
-	addAWSGroups, delAWSGroups, updateAWSGroups, equalAWSGroups := getGroupOperations(awsGroups, googleGroups)
+	addAWSUsers, delAWSUsers, updateAWSUsers, unchangedAWSUsers := getUserOperations(awsUsers, googleUsers)
+	log.WithFields(
+		log.Fields{
+			"unchanged": len(unchangedAWSUsers),
+			"create": len(addAWSUsers),
+			"update": len(updateAWSUsers),
+			"delete": len(delAWSUsers)}).Info("Change Summary: users")
 
-	log.Info("syncing changes")
+	addAWSGroups, delAWSGroups, updateAWSGroups, unchangedAWSGroups := getGroupOperations(awsGroups, googleGroups)
+	log.WithFields(
+		log.Fields{
+			"unchanged": len(unchangedAWSGroups),
+			"create": len(addAWSGroups),
+			"update": len(updateAWSGroups),
+			"delete": len(delAWSGroups)}).Info("Change Summary: Groups")
 
 	// update aws users (updated in google)
 	log.Debug("updating aws users updated in google")
@@ -484,7 +495,7 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 
 	// validate groups members are equal in aws and google
 	log.Debug("validating groups members, equals in aws and google")
-	for _, awsGroup := range equalAWSGroups {
+	for _, awsGroup := range unchangedAWSGroups {
 
 		// add members of the new group
 		log := log.WithFields(log.Fields{"group": awsGroup.DisplayName})
@@ -1195,6 +1206,7 @@ func ConvertIdentityStoreGroupToAWSGroup(group identitystore_types.Group) *inter
 	log.WithField("groupId", group.GroupId).WithField("displayName", group.DisplayName).Debug("ConvertIdentityStoreGroupToAWSGroup() Group converted")
 	return &interfaces.Group{
 		ID:          *group.GroupId,
+		ExternalId:  getExternalId(group.ExternalIds),
 		Schemas:     []string{constants.SCIMSchemaGroup},
 		DisplayName: *group.DisplayName,
 		Members:     []string{},
@@ -1270,8 +1282,9 @@ func ConvertSdkUserObjToNative(user identitystore_types.User) *interfaces.User {
 	}
 
 	return &interfaces.User{
-		ID:       *user.UserId,
-		Schemas:  []string{constants.SCIMSchemaUser},
+		ID:         *user.UserId,
+		ExternalId: getExternalId(user.ExternalIds),
+		Schemas:    []string{constants.SCIMSchemaUser},
 		Username: *user.UserName,
 		Name: struct {
 			FamilyName string `json:"familyName"`
@@ -1284,6 +1297,15 @@ func ConvertSdkUserObjToNative(user identitystore_types.User) *interfaces.User {
 		Emails:      userEmails,
 		Addresses:   userAddresses,
 	}
+}
+
+// getExternalId extracts the external ID from the identity store ExternalIds slice.
+// Returns an empty string if no external IDs are present.
+func getExternalId(externalIds []identitystore_types.ExternalId) string {
+	if len(externalIds) > 0 && externalIds[0].Id != nil {
+		return *externalIds[0].Id
+	}
+	return ""
 }
 
 // CreateUserIDtoUserObjMap
