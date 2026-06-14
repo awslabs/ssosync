@@ -56,7 +56,7 @@ type syncGSuite struct {
 	ignoreUsersSet   map[string]struct{}
 	ignoreGroupsSet  map[string]struct{}
 	includeGroupsSet map[string]struct{}
-	cacheStats map[string]*CacheStats
+	cacheMetrics map[string]*CacheMetrics
 }
 
 // OperationType handle patch operations for add/remove
@@ -72,7 +72,7 @@ const (
 )
 
 // User represents a User in AWS SSO
-type CacheStats struct {
+type CacheMetrics struct {
 	Precaches int
 	Hits int
 	Misses int
@@ -90,20 +90,20 @@ func New(cfg *config.Config, a aws.Client, g google.Client, ids interfaces.Ident
 	}
 }
 
-func (s *syncGSuite) recordCacheStat(orgPath string, operation CacheOperationType) {
-	if ! s.cfg.CacheStats {
+func (s *syncGSuite) recordCacheOp(orgPath string, operation CacheOperationType) {
+	if ! s.cfg.CacheMetrics {
 		return
 	}
 	// if this is the first use of s.cachStats make it
-	if s.cacheStats == nil {
-		s.cacheStats = make(map[string]*CacheStats, 0)
+	if s.cacheMetrics == nil {
+		s.cacheMetrics = make(map[string]*CacheMetrics, 0)
 	}
 	// have we seen this orgPath before, if not create an stats for it
-	if _, exists := s.cacheStats[orgPath]; !exists {
-		s.cacheStats[orgPath] = &CacheStats{}
+	if _, exists := s.cacheMetrics[orgPath]; !exists {
+		s.cacheMetrics[orgPath] = &CacheMetrics{}
 	}
 	// update the stat for the operation
-	if entry, exists := s.cacheStats[orgPath]; exists {
+	if entry, exists := s.cacheMetrics[orgPath]; exists {
 		switch operation {
 		case PreCache:
 			entry.Precaches++
@@ -120,7 +120,7 @@ func (s *syncGSuite) recordCacheStat(orgPath string, operation CacheOperationTyp
 	}
 
 	// If existing paths are parent or orgPath, update their stats
-	for path, entry := range s.cacheStats {
+	for path, entry := range s.cacheMetrics {
 		if !strings.Contains(orgPath, path) {
 			continue
 		}
@@ -135,12 +135,12 @@ func (s *syncGSuite) recordCacheStat(orgPath string, operation CacheOperationTyp
 	}
 }
 
-func (s *syncGSuite) outputCacheStats() {
-	if ! s.cfg.CacheStats {
+func (s *syncGSuite) outputCacheMetrics() {
+	if ! s.cfg.CacheMetrics {
 		return
 	}
 	
-	for orgUnitPath, entry := range s.cacheStats {
+	for orgUnitPath, entry := range s.cacheMetrics {
 		var query string
 		if strings.ContainsRune(orgUnitPath, ' ') {
 			query = "OrgUnitPath='" + orgUnitPath + "'"
@@ -156,7 +156,7 @@ func (s *syncGSuite) outputCacheStats() {
 			entry.TotalUsers = len(googleUsers)
 		}
 	}
-	log.WithFields(log.Fields{"Cache Stats": s.cacheStats}).Info("Caching Performance, orgPaths with a high Miss rate compared with the TotalUsers consider precaching")
+	log.WithFields(log.Fields{"Cache Stats": s.cacheMetrics}).Info("Caching Performance, orgPaths with a high Miss rate compared with the TotalUsers consider precaching")
 }
 // SyncUsers will Sync Google Users to AWS SSO SCIM
 // References:
@@ -652,7 +652,7 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 			return err
 		}
 	}
-    s.outputCacheStats()
+    s.outputCacheMetrics()
 	log.Info("sync completed")
 
 	return nil
@@ -763,7 +763,7 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 						"func":    funcName,
 						"user.Id": u.Id,
 					}).Debug("Cache user")
-					s.recordCacheStat(u.OrgUnitPath, PreCache)
+					s.recordCacheOp(u.OrgUnitPath, PreCache)
 
 					gUserDetailCache[u.PrimaryEmail] = u
 					continue
@@ -772,7 +772,7 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 						"func":    funcName,
 						"user.Id": u.Id,
 					}).Debug("already in cache")
-					s.recordCacheStat(u.OrgUnitPath, CacheHit)
+					s.recordCacheOp(u.OrgUnitPath, CacheHit)
 					continue
 				}
 			}
@@ -826,7 +826,7 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 					"user.Id": u.Id,
 				}).Debug("adding user")
 				gUserDetailCache[u.PrimaryEmail] = u
-				s.recordCacheStat(u.OrgUnitPath, CacheMiss)
+				s.recordCacheOp(u.OrgUnitPath, CacheMiss)
 				gUniqUsers[u.PrimaryEmail] = gUserDetailCache[u.PrimaryEmail]
 				continue
 			} else {
@@ -834,7 +834,7 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 					"func":    funcName,
 					"user.Id": u.Id,
 				}).Debug("already existing")
-				s.recordCacheStat(u.OrgUnitPath, CacheHit)
+				s.recordCacheOp(u.OrgUnitPath, CacheHit)
 				continue
 			}
 		}
@@ -1617,7 +1617,7 @@ func (s *syncGSuite) getGoogleUsersInGroup(group *admin.Group, userCache map[str
 						"Member#": memberIndex,
 					}).Debug("Cache user")
 					userCache[u.PrimaryEmail] = u
-					s.recordCacheStat(u.OrgUnitPath, CacheMiss)
+					s.recordCacheOp(u.OrgUnitPath, CacheMiss)
 				}
 				memberEmail = u.PrimaryEmail
 			}
@@ -1648,7 +1648,7 @@ func (s *syncGSuite) getGoogleUsersInGroup(group *admin.Group, userCache map[str
 				"Member#": memberIndex,
 			}).Debug("Add member")
 		}
-		s.recordCacheStat(userCache[memberEmail].OrgUnitPath, CacheHit)
+		s.recordCacheOp(userCache[memberEmail].OrgUnitPath, CacheHit)
 		membersUsers = append(membersUsers, userCache[memberEmail])
 
 	}

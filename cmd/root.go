@@ -180,7 +180,7 @@ func initConfig() {
 		"identity_store_id",
 		"dry_run",
 		"precache_org_units",
-		"cache_stats",
+		"cache_metrics",
 	}
 
 	for _, e := range appEnvVars {
@@ -325,7 +325,7 @@ func configLambda() {
 	cfg.IgnoreUsers = getEnvStrs("IGNORE_USERS", nil)
 	cfg.IncludeGroups = getEnvStrs("INCLUDE_GROUPS", nil)
 	cfg.PrecacheOrgUnits = getEnvStrs("PRECACHE_ORG_UNITS", nil)
-	cfg.CacheStats = getEnvBool("CACHE_STATS", false)
+	cfg.CacheMetrics = getEnvBool("CACHE_METRICS", false)
 	cfg.DryRun = getEnvBool("DRY_RUN", false)
 	cfg.SyncSuspended = getEnvBool("SYNC_SUSPENDED", false)
 }
@@ -372,7 +372,7 @@ func addFlags(_ *cobra.Command, cfg *config.Config) {
 	rootCmd.Flags().StringVarP(&cfg.GroupMatch, "group-match", "g", "*", "Google Workspace Groups filter query parameter, example: 'name:Admin*' 'name=AWS-Admins,email:aws*', to sync all groups (and their member users) specify '*'. For query syntax and more examples see: https://developers.google.com/admin-sdk/directory/v1/guides/search-groups")
 	rootCmd.Flags().StringVarP(&cfg.SyncMethod, "sync-method", "s", config.DefaultSyncMethod, "Sync method to use (users_groups|groups)")
 	rootCmd.Flags().StringSliceVar(&cfg.PrecacheOrgUnits, "precache-ous", nil, "A common separated list of Google Workspace OrgUnitPathis e.g.'/', to precache all users within the organization or '/OU_1/OU 2,/OU3'. Precaching is disabled by default.")
-	rootCmd.PersistentFlags().BoolVarP(&cfg.CacheStats, "cache-stats", "", false, "Boolean to gather stats for cache hits/miss, and output at end of run to help refine OrgUnitPath string.")
+	rootCmd.PersistentFlags().BoolVarP(&cfg.CacheMetrics, "cache-metrics", "", false, "Gather metrics for cache hits/miss, and output at end of run to help refine OrgUnitPath string.")
 }
 
 func logConfig(cfg *config.Config) {
