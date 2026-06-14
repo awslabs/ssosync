@@ -56,7 +56,7 @@ type syncGSuite struct {
 	ignoreUsersSet   map[string]struct{}
 	ignoreGroupsSet  map[string]struct{}
 	includeGroupsSet map[string]struct{}
-	cacheStats map[string]CacheStats
+	cacheStats map[string]*CacheStats
 }
 
 // OperationType handle patch operations for add/remove
@@ -93,11 +93,11 @@ func New(cfg *config.Config, a aws.Client, g google.Client, ids interfaces.Ident
 func (s *syncGSuite) recordCacheStat(orgPath string, operation CacheOperationType) {
 	// if this is the first use of s.cachStats make it
 	if s.cacheStats == nil {
-		s.cacheStats = make(map[string]CacheStats, 0)
+		s.cacheStats = make(map[string]*CacheStats, 0)
 	}
 	// have we seen this orgPath before, if not create an stats for it
 	if _, exists := s.cacheStats[orgPath]; !exists {
-		s.cacheStats[orgPath] = CacheStats{}
+		s.cacheStats[orgPath] = &CacheStats{}
 	}
 	// update the stat for the operation
 	if entry, exists := s.cacheStats[orgPath]; exists {
