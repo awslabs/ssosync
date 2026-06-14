@@ -45,6 +45,8 @@ type Config struct {
 	IdentityStoreID string `mapstructure:"identity_store_id"`
 	// Precaching queries as a comma separated list of query strings
 	PrecacheOrgUnits []string
+	// Enabled Caching stats to help refine PrecacheOrgUnits configuration
+	CacheStats bool
 	// DryRun flag, when set to true, no change will be made in the Identity Store
 	DryRun bool
 	// sync suspended user, if true suspended user and their group memberships are sync'd into IAM Identity Center

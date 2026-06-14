@@ -91,6 +91,9 @@ func New(cfg *config.Config, a aws.Client, g google.Client, ids interfaces.Ident
 }
 
 func (s *syncGSuite) recordCacheStat(orgPath string, operation CacheOperationType) {
+	if ! s.cfg.CacheStats {
+		return
+	}
 	// if this is the first use of s.cachStats make it
 	if s.cacheStats == nil {
 		s.cacheStats = make(map[string]*CacheStats, 0)
@@ -133,6 +136,10 @@ func (s *syncGSuite) recordCacheStat(orgPath string, operation CacheOperationTyp
 }
 
 func (s *syncGSuite) outputCacheStats() {
+	if ! s.cfg.CacheStats {
+		return
+	}
+	
 	for orgUnitPath, entry := range s.cacheStats {
 		var query string
 		if strings.ContainsRune(orgUnitPath, ' ') {
