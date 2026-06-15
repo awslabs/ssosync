@@ -580,25 +580,25 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 	}
 
 	// list of users to to be removed in aws groups
-	deleteUsersFromGroup, _ := getGroupUsersOperations(googleGroupsUsers, awsGroupsUsers)
+	addUsersToGroup, deleteUsersFromGroup, unchangedUsersInGroup, err := s.getGroupUsersOperations(googleGroupsUsers, awsGroupsUsers)
+	if err != nil {
+		return err
+	}
 
 	// validate groups members are equal in aws and google
 	log.Debug("validating groups members, equals in aws and google")
 	for _, awsGroup := range unchangedAWSGroups {
-
 		// add members of the new group
-		log := log.WithFields(log.Fields{"group": awsGroup.DisplayName})
+		log.WithFields(
+			log.Fields{
+				"group": awsGroup.DisplayName,
+				"add": len(addUsersToGroup[awsGroup.DisplayName]),
+				"remove": len(deleteUsersFromGroup[awsGroup.DisplayName]),
+				"unchanged": len(unchangedUsersInGroup[awsGroup.DisplayName])}).Info("Change Summary: Group Members")
 
-		for _, googleUser := range googleGroupsUsers[awsGroup.DisplayName] {
-
-			log.WithField("user", googleUser.PrimaryEmail).Debug("finding user")
-			awsUserFull, err := s.aws.FindUserByEmail(googleUser.PrimaryEmail)
-			if err != nil {
-				return err
-			}
-
-			log.WithField("user", awsUserFull.Username).Info("adding user to group")
-			err = s.aws.AddUserToGroup(awsUserFull, awsGroup)
+		for _, awsUser := range addUsersToGroup[awsGroup.DisplayName] {
+			log.WithField("user", awsUser.Username).Info("adding user to group")
+			err = s.aws.AddUserToGroup(awsUser, awsGroup)
 			if err != nil {
 				return err
 			}
@@ -1094,17 +1094,38 @@ func getUserOperations(awsUsers []*interfaces.User, googleUsers []*admin.User) (
 }
 
 // groupUsersOperations returns the groups and its users of AWS that must be delete from these groups and what are equals
-func getGroupUsersOperations(gGroupsUsers map[string][]*admin.User, awsGroupsUsers map[string][]*interfaces.User) (delete map[string][]*interfaces.User, equals map[string][]*interfaces.User) {
-
+func (s *syncGSuite) getGroupUsersOperations(gGroupsUsers map[string][]*admin.User, awsGroupsUsers map[string][]*interfaces.User) (add map[string][]*interfaces.User, delete map[string][]*interfaces.User, equals map[string][]*interfaces.User, err error) {
 	log.Debug("getGroupUsersOperations()")
 	mbG := make(map[string]map[string]struct{})
+	mbA := make(map[string]map[string]struct{})
 
-	// get user in google groups that are in aws groups and
-	// users in aws groups that aren't in google groups
 	for gGroupName, gGroupUsers := range gGroupsUsers {
 		mbG[gGroupName] = make(map[string]struct{})
 		for _, gUser := range gGroupUsers {
 			mbG[gGroupName][gUser.PrimaryEmail] = struct{}{}
+		}
+	}
+
+	for awsGroupName, awsGroupUsers := range awsGroupsUsers {
+		mbA[awsGroupName] = make(map[string]struct{})
+		for _, awsUser := range awsGroupUsers {
+			mbA[awsGroupName][awsUser.Username] = struct{}{}
+		}
+	}		
+
+	add = make(map[string][]*interfaces.User)
+	// get user in google groups that are in aws groups and
+	// users in aws groups that aren't in google groups
+	for gGroupName, gGroupUsers := range gGroupsUsers {
+		for _, gUser := range gGroupUsers {
+			if _, found := mbA[gGroupName][gUser.PrimaryEmail]; ! found {
+				log.Debug("finding user")
+				awsUserFull, err := s.aws.FindUserByEmail(gUser.PrimaryEmail)
+				if err != nil {
+					return nil, nil, nil, err
+				}
+				add[gGroupName] = append(add[gGroupName], awsUserFull)
+			}
 		}
 	}
 
@@ -1121,7 +1142,7 @@ func getGroupUsersOperations(gGroupsUsers map[string][]*admin.User, awsGroupsUse
 		}
 	}
 
-	return
+	return add, delete, equals, nil
 }
 
 // DoSync will create a logger and run the sync with the paths

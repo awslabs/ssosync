@@ -550,7 +550,6 @@ func TestGetGroupUsersOperations(t *testing.T) {
 	awsGroupsUsers := map[string][]*interfaces.User{
 		"group1@example.com": {
 			{Username: "user1@example.com"},
-			{Username: "user2@example.com"},
 			{Username: "user3@example.com"}, // Should be removed
 		},
 		"group2@example.com": {
@@ -559,7 +558,18 @@ func TestGetGroupUsersOperations(t *testing.T) {
 		},
 	}
 
-	deleteUsers, equalsUsers := getGroupUsersOperations(googleGroupsUsers, awsGroupsUsers)
+	mockAws := mocks.NewMockAwsClient(t)
+	mockAws.On("FindUserByEmail", "user2@example.com").Return(&interfaces.User{Username: "user2@example.com"}, nil)
+
+	s := &syncGSuite{
+		aws: mockAws,
+	}
+
+	addUsers, deleteUsers, unchangedUsers, err := s.getGroupUsersOperations(googleGroupsUsers, awsGroupsUsers)
+	assert.NoError(t, err)
+
+	// Should Add user2 in group1
+	assert.Len(t, addUsers["group1@example.com"], 1)
 
 	// Should remove user3 from group1 and user4 from group2
 	assert.Len(t, deleteUsers["group1@example.com"], 1)
@@ -568,9 +578,9 @@ func TestGetGroupUsersOperations(t *testing.T) {
 	assert.Len(t, deleteUsers["group2@example.com"], 1)
 	assert.Equal(t, "user4@example.com", deleteUsers["group2@example.com"][0].Username)
 
-	// Should keep user1 and user2 in group1, user1 in group2
-	assert.Len(t, equalsUsers["group1@example.com"], 2)
-	assert.Len(t, equalsUsers["group2@example.com"], 1)
+	// Should keep user1 in group1, user1 in group2
+	assert.Len(t, unchangedUsers["group1@example.com"], 1)
+	assert.Len(t, unchangedUsers["group2@example.com"], 1)
 }
 
 func TestCreateUserIDtoUserObjMap(t *testing.T) {
