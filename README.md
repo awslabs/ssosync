@@ -193,37 +193,38 @@ SSO Sync requires configuration from both Google Workspace and AWS sides.
 
 ### Environment Variables
 
-All CLI flags can be set via environment variables with the `SSOSYNC_` prefix:
+All CLI flags can be set via environment variables:
 
 ```bash
-export SSOSYNC_GOOGLE_ADMIN="admin@company.com"
-export SSOSYNC_GOOGLE_CREDENTIALS="./credentials.json"
-export SSOSYNC_SCIM_ENDPOINT="https://scim.us-east-1.amazonaws.com/..."
-export SSOSYNC_SCIM_ACCESS_TOKEN="AQoDYXdzE..."
-export SSOSYNC_GROUP_MATCH="name:AWS*"
-export SSOSYNC_DRY_RUN="true"
+export GOOGLE_ADMIN="admin@company.com"
+export GOOGLE_CREDENTIALS="./credentials.json"
+export SCIM_ENDPOINT="https://scim.us-east-1.amazonaws.com/..."
+export SCIM_ACCESS_TOKEN="AQoDYXdzE..."
+export GROUP_MATCH="name:AWS*"
+export DRY_RUN="true"
 ```
 
 ### Configuration Options
 
 | Flag | Environment Variable | Description | Default |
 |------|---------------------|-------------|---------|
-| `--google-admin` | `SSOSYNC_GOOGLE_ADMIN` | Google Workspace admin email | Required |
-| `--google-credentials` | `SSOSYNC_GOOGLE_CREDENTIALS` | Path to Google credentials JSON | `credentials.json` |
-| `--customer-id` | `SSOSYNC_CUSTOMER_ID` | Google Workspace customer ID | `my_customer` |
-| `--endpoint` | `SSOSYNC_SCIM_ENDPOINT` | AWS SCIM endpoint URL | Required |
-| `--access-token` | `SSOSYNC_SCIM_ACCESS_TOKEN` | AWS SCIM access token | Required |
-| `--sync-method` | `SSOSYNC_SYNC_METHOD` | Sync method (`groups` or `users_groups`) | `groups` |
-| `--group-match` | `SSOSYNC_GROUP_MATCH` | Google Groups filter query | `*` |
-| `--user-match` | `SSOSYNC_USER_MATCH` | Google Users filter query | `""` |
-| `--ignore-users` | `SSOSYNC_IGNORE_USERS` | Comma-separated list of users to ignore | `[]` |
-| `--ignore-groups` | `SSOSYNC_IGNORE_GROUPS` | Comma-separated list of groups to ignore | `[]` |
-| `--include-groups` | `SSOSYNC_INCLUDE_GROUPS` | Include only these groups (users_groups method only) | `[]` |
-| `--precache-ous` | `SSOSYNC_PRECACHE_ORG_UNITS` | Comma-separated list of Google OrgUnit paths to precache | `[]` |
-| `--dry-run` | `SSOSYNC_DRY_RUN` | Enable dry-run mode | `false` |
-| `--suspended` | `SSOSYNC_SYNC_SUSPENDED` | Include suspended users when syncing | `false` |
-| `--log-level` | `SSOSYNC_LOG_LEVEL` | Log level (debug, info, warn, error) | `info` |
-| `--log-format` | `SSOSYNC_LOG_FORMAT` | Log format (text, json) | `text` |
+| `--google-admin` | `GOOGLE_ADMIN` | Google Workspace admin email | Required |
+| `--google-credentials` | `GOOGLE_CREDENTIALS` | Path to Google credentials JSON. On lambda, must contain the JSON content itself. | `credentials.json` |
+| `--customer-id` | `CUSTOMER_ID` | Google Workspace customer ID | `my_customer` |
+| `--endpoint` | `SCIM_ENDPOINT` | AWS SCIM endpoint URL | Required |
+| `--access-token` | `SCIM_ACCESS_TOKEN` | AWS SCIM access token | Required |
+| `--sync-method` | `SYNC_METHOD` | Sync method (`groups` or `users_groups`) | `groups` |
+| `--group-match` | `GROUP_MATCH` | Google Groups filter query | `*` |
+| `--user-match` | `USER_MATCH` | Google Users filter query | `""` |
+| `--ignore-users` | `IGNORE_USERS` | Comma-separated list of users to ignore | `[]` |
+| `--ignore-groups` | `IGNORE_GROUPS` | Comma-separated list of groups to ignore | `[]` |
+| `--include-groups` | `INCLUDE_GROUPS` | Include only these groups (users_groups method only) | `[]` |
+| `--precache-ous` | `PRECACHE_ORG_UNITS` | Comma-separated list of Google OrgUnit paths to precache | `[]` |
+| `--cache-metrics` | `CACHE_METRICS` | Gather metrics for cache hits/miss, and output at end of run to help refine OrgUnitPath string | `false` | 
+| `--dry-run` | `DRY_RUN` | Enable dry-run mode | `false` |
+| `--suspended` | `SYNC_SUSPENDED` | Include suspended users when syncing | `false` |
+| `--log-level` | `LOG_LEVEL` | Log level (debug, info, warn, error) | `info` |
+| `--log-format` | `LOG_FORMAT` | Log format (text, json) | `text` |
 
 > **Note:** `--region` and `--identity-store-id` are no longer required. Region is extracted from the SCIM endpoint URL, and Identity Store ID is resolved automatically via the IAM Identity Center API.
 
