@@ -49,13 +49,11 @@ phases:
       # Set EnvVars for GoReleaser
       - |
         if expr "${GitIsRelease}" : "true" >/dev/null; then
-          export Version="${GitTag}"
+          export GORELEASER_CURRENT_TAG="${GitTag}"
         else
-          export Version="${GitTag}-${GitVersionHash}"
+          export GORELEASER_CURRENT_TAG="${GitTag}-${GitVersionHash}"
         fi
-      - export FullCommit="${GitCommit}"
-      - export Date="$(date +"%Y-%m-%dT%H:%M:%S%z")"
-
+      - echo "$GORELEASER_CURRENT_TAG"
 
   build:
     commands:
