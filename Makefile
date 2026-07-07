@@ -27,9 +27,9 @@ else
 endif
 
 # Tool versions
-MOCKERY_VERSION ?= v3.5.2
-GOLANGCI_LINT_VERSION ?= v2.3.1
-GORELEASER_VERSION ?= v2.11.2
+MOCKERY_VERSION ?= v3.7.1
+GOLANGCI_LINT_VERSION ?= v2.12.2
+GORELEASER_VERSION ?= v2.17
 UPX_VERSION ?= v4.2.4
 
 # Tool installation paths
