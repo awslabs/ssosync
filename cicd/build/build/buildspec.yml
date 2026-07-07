@@ -8,7 +8,7 @@ env:
     GOPATH:
     GOPROXY: direct
     git-credential-helper: yes
-    GOVERSION: go1.24.3
+    GOVERSION: go1.26.4
     #MOCKERY_VERSION: v3.5.2
     #GOLANGCI_LINT_VERSION: v2.3.1
     #GORELEASER_VERSION: v2.11.2
