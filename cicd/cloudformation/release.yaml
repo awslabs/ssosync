@@ -226,6 +226,24 @@ Resources:
                 DetectChanges: true
         - Name: Build-App
           Actions:
+          Actions:
+            - Name: InspectorScan
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: InspectorScan
+                Version: '1'
+              RunOrder: 1
+              Configuration:
+                InspectorRunMode: SourceCodeScan
+                CriticalThreshold: 0
+                HighThreshold: 1
+                MediumThreshold: 2
+                LowThreshold: 3
+              InputArtifacts:
+                - Name: Source
+              OutputArtifacts:
+                - Name: Vulnerabilities
             - Name: Git-Metadata
               Namespace: Git
               InputArtifacts:
@@ -237,7 +255,7 @@ Resources:
                 Provider: CodeBuild
               OutputArtifacts:
                 - Name: GitVars
-              RunOrder: 1
+              RunOrder: 2
               Configuration:
                 ProjectName: !Ref GitMetadata
                 PrimarySource: Source
@@ -251,7 +269,7 @@ Resources:
                 Provider: CodeBuild
               OutputArtifacts:
                 - Name: Built
-              RunOrder: 2
+              RunOrder: 3
               Configuration: 
                 ProjectName: !Ref CodeBuildApp
                 PrimarySource: Source
@@ -262,7 +280,7 @@ Resources:
                 Owner: AWS
                 Version: 1
                 Provider: CodeBuild
-              RunOrder: 3
+              RunOrder: 4
               Configuration:
                 ProjectName: !Ref CodeBuildPackage
                 PrimarySource: Source
@@ -844,6 +862,16 @@ Resources:
               - !Sub ${CodeBuildApproveRelease.Arn}
               - !Sub ${CodeBuildRelease.Arn}
               Effect: Allow
+            - Action:
+              - 'inspector-scan:ScanSbom'
+              Resource: '*'
+              Effect: Allow
+            - Action:
+              - 'logs:CreateLogGroup'
+              - 'logs:CreateLogStream'
+              - 'logs:PutLogEvents'
+              Effect: Allow
+              Resource: '*'
             - Action:
               - 's3:GetBucketPolicy'
               - 's3:GetBucketVersioning'
