@@ -29,6 +29,7 @@ import (
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	aws_config "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/aws/arn"
 	"github.com/aws/aws-sdk-go-v2/service/ssoadmin"
 	"github.com/aws/aws-sdk-go-v2/service/codepipeline"
 	"github.com/aws/aws-sdk-go-v2/service/codepipeline/types"
@@ -216,17 +217,16 @@ func initConfig() {
 var secretCache *secretcache.Cache
 
 func getEnvSensitive(key string, fallback string) string {
-	EnvVar := getEnvStr(key, fallback)
-	secretMgr, _ := regexp.Compile(`(?:arn:aws:secretsmanager:)`)
-	ssmParam, _ := regexp.Compile(`(?:arn:aws:ssm:)`)
-
-	if secretMgr.MatchString(EnvVar) {
-		return getSecretFromCache(EnvVar)
-	}
-	if ssmParam.MatchString(EnvVar) {
-		return getEncryptParam(EnvVar)
-	}
-	return EnvVar
+    EnvVar := getEnvStr(key, fallback)
+    if a, err := arn.Parse(EnvVar); err == nil {
+        switch a.Service {
+        case "secretsmanager":
+            return getSecretFromCache(EnvVar)
+        case "ssm":
+            return getEncryptParam(EnvVar)
+        }
+    }
+    return EnvVar // not an ARN -> use the literal value
 }
 
 func getEnvStr(key string, fallback string) string {
