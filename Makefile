@@ -29,7 +29,7 @@ endif
 # Tool versions
 MOCKERY_VERSION ?= v3.7.1
 GOLANGCI_LINT_VERSION ?= v2.12.2
-GORELEASER_VERSION ?= v2.17
+GORELEASER_VERSION ?= v2.17.0
 UPX_VERSION ?= v4.2.4
 
 # Tool installation paths
