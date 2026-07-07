@@ -76,7 +76,7 @@ install-golangci-lint:
 	$(Q)echo "Installing golangci-lint $(GOLANGCI_LINT_VERSION)..."
 	$(Q)mkdir -p $(TOOLS_DIR)
 	@if [ ! -f $(GOLANGCI_LINT) ] || [ "$$($(GOLANGCI_LINT) --version 2>/dev/null | grep -o 'v[0-9]\+\.[0-9]\+\.[0-9]\+')" != "$(GOLANGCI_LINT_VERSION)" ]; then \
-		curl $(VERBOSE_CURL_FLAG)SfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(TOOLS_DIR) $(GOLANGCI_LINT_VERSION); \
+		curl $(VERBOSE_CURL_FLAG)SfL https://golangci-lint.run/install.sh | sh -s -- -b $(TOOLS_DIR) $(GOLANGCI_LINT_VERSION); \
 		echo "golangci-lint $(GOLANGCI_LINT_VERSION) installed"; \
 	else \
 		echo "golangci-lint $(GOLANGCI_LINT_VERSION) already installed"; \
