@@ -46,6 +46,16 @@ phases:
       # Check the Go code for common problems with 'go vet'
       - make vet
 
+      # Set EnvVars for GoReleaser
+      - |
+        if expr "${GitIsRelease}" : "true" >/dev/null; then
+          export Version="${GitTag}"
+        else
+          export Version="${GitTag}-${GitVersionHash}"
+        fi
+      - export FullCommit="${GitCommit}"
+      - export Date="$(date +"%Y-%m-%dT%H:%M:%S%z")"
+
 
   build:
     commands:
