@@ -410,7 +410,7 @@ Resources:
         BuildSpec: "cicd/build/gitvars/buildspec.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
-        Image: aws/codebuild/standard:7.0
+        Image: aws/codebuild/amazonlinux-x86_64-standard:6.0
         Type: LINUX_CONTAINER
         EnvironmentVariables:
           - Name: ARTIFACT_S3_BUCKET
@@ -445,7 +445,7 @@ Resources:
         BuildSpec: "cicd/build/build/buildspec.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
-        Image: aws/codebuild/standard:7.0
+        Image: aws/codebuild/amazonlinux-x86_64-standard:6.0
         Type: LINUX_CONTAINER
         EnvironmentVariables:
           - Name: ARTIFACT_S3_BUCKET
@@ -480,7 +480,7 @@ Resources:
         BuildSpec: "cicd/build/package/buildspec.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
-        Image: aws/codebuild/standard:7.0
+        Image: aws/codebuild/amazonlinux-x86_64-standard:6.0
         Type: LINUX_CONTAINER
         EnvironmentVariables:
           - Name: ARTIFACT_S3_BUCKET
@@ -515,7 +515,7 @@ Resources:
         BuildSpec: "cicd/account_execution/staging/buildspec.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
-        Image: aws/codebuild/standard:7.0
+        Image: aws/codebuild/amazonlinux-x86_64-standard:6.0
         Type: LINUX_CONTAINER
         EnvironmentVariables:
           - Name: ARTIFACT_S3_BUCKET
@@ -568,7 +568,7 @@ Resources:
         BuildSpec: "cicd/account_execution/testing/buildspec.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
-        Image: aws/codebuild/standard:7.0
+        Image: aws/codebuild/amazonlinux-x86_64-standard:6.0
         Type: LINUX_CONTAINER
         EnvironmentVariables:
           - Name: TARGETS3BUCKET
@@ -597,7 +597,7 @@ Resources:
         BuildSpec: "cicd/account_execution/testing/buildspec.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
-        Image: aws/codebuild/standard:7.0
+        Image: aws/codebuild/amazonlinux-x86_64-standard:6.0
         Type: LINUX_CONTAINER
         EnvironmentVariables:
           - Name: TARGETS3BUCKET
@@ -626,7 +626,7 @@ Resources:
         BuildSpec: "cicd/account_execution/testing/buildspec.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
-        Image: aws/codebuild/standard:7.0
+        Image: aws/codebuild/amazonlinux-x86_64-standard:6.0
         Type: LINUX_CONTAINER
         EnvironmentVariables:
           - Name: TARGETS3BUCKET
@@ -655,7 +655,7 @@ Resources:
         BuildSpec: "cicd/deploy_patterns/singlestack/buildspec.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
-        Image: aws/codebuild/standard:7.0
+        Image: aws/codebuild/amazonlinux-x86_64-standard:6.0
         Type: LINUX_CONTAINER
         EnvironmentVariables:
           - Name: ARTIFACT_S3_BUCKET
@@ -712,7 +712,7 @@ Resources:
         BuildSpec: "cicd/release/approve/buildspec.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
-        Image: aws/codebuild/standard:7.0
+        Image: aws/codebuild/amazonlinux-x86_64-standard:6.0
         Type: LINUX_CONTAINER
         EnvironmentVariables:
           - Name: ARTIFACT_S3_BUCKET
@@ -743,7 +743,7 @@ Resources:
         BuildSpec: "cicd/release/public/buildspec.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
-        Image: aws/codebuild/standard:7.0
+        Image: aws/codebuild/amazonlinux-x86_64-standard:6.0
         Type: LINUX_CONTAINER
         EnvironmentVariables:
           - Name: ARTIFACT_S3_BUCKET
