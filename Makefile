@@ -139,6 +139,10 @@ test-coverage: test
 go-build: install-goreleaser
 	$(Q)$(GORELEASER_BIN) build --snapshot --clean --id ssosync $(VERBOSE_BUILD_FLAG) $(GOREL_ARGS)
 
+.PHONY: go-build-lambda
+go-build-lambda: install-goreleaser
+	$(Q)$(GORELEASER_BIN) build --snapshot --clean --id SSOSync $(VERBOSE_BUILD_FLAG) $(GOREL_ARGS)
+
 .PHONY: clean
 clean:
 	rm -f $(OUTPUT) $(PACKAGED_TEMPLATE) bootstrap coverage.out coverage.html

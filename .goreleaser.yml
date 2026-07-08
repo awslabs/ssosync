@@ -36,6 +36,19 @@ builds:
       - -trimpath
     ldflags:
       - -s -w -X github.com/awslabs/ssosync/cmd.version={{.Version}} -X github.com/awslabs/ssosync/cmd.commit={{.FullCommit}} -X github.com/awslabs/ssosync/cmd.date={{.Date}} -X github.com/awslabs/ssosync/cmd.builtBy=goreleaser
+  - id: SSOSync
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+    goarch:
+      - arm64
+    goarm64:
+      - v8.0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X github.com/awslabs/ssosync/cmd.version={{.Env.GitTag}} -X github.com/awslabs/ssosync/cmd.commit={{.Env.GitCommit}} -X github.com/awslabs/ssosync/cmd.date={{.Date}} -X github.com/awslabs/ssosync/cmd.builtBy=goreleaser
 
 upx:
   - enabled: true

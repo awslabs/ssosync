@@ -46,15 +46,6 @@ phases:
       # Check the Go code for common problems with 'go vet'
       - make vet
 
-      # Set EnvVars for GoReleaser
-      - |
-        if expr "${GitIsRelease}" : "true" >/dev/null; then
-          export GORELEASER_CURRENT_TAG="${GitTag}"
-        else
-          export GORELEASER_CURRENT_TAG="${GitTag}-${GitVersionHash}"
-        fi
-      - echo "$GORELEASER_CURRENT_TAG"
-
   build:
     commands:
       # Clean previous builds
@@ -62,7 +53,7 @@ phases:
       - make test
 
       # Build using goreleaser via Makefile
-      - make go-build
+      - make go-build-lambda
 
       # Check we've built something useful
       - find dist/ -name "ssosync*" -type f | head -5
@@ -70,15 +61,13 @@ phases:
 
   post_build:
     commands:
-      # Tweak the .goreleaser.yml so it uses the variables from .Env (if patch still needed)
-      - if [ -f cicd/build/build/goreleaser.patch ]; then patch .goreleaser.yml cicd/build/build/goreleaser.patch; fi
 
       # Verify the build works
       - |
         if [ -f dist/ssosync_linux_amd64_v1/ssosync ]; then
           ./dist/ssosync_linux_amd64_v1/ssosync --version
-        elif [ -f dist/ssosync_linux_arm64_v8.2/ssosync ]; then
-          ./dist/ssosync_linux_arm64_v8.2/ssosync --version
+        elif [ -f dist/ssosync_linux_arm64_v8.0/ssosync ]; then
+          ./dist/ssosync_linux_arm64_v8.0/ssosync --version
         else
           echo "Built binary not found in expected location"
           find dist/ -name "ssosync*" -type f
