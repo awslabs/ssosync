@@ -52,7 +52,7 @@ builds:
 
 upx:
   - enabled: true
-    ids: [ssosync]
+    ids: [ssosync,SSOSync]
     goos: [linux]
     goarch: [arm, arm64, amd64]
     compress: best

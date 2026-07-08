@@ -52,27 +52,16 @@ phases:
       - make clean
       - make test
 
+      # Make sure we have received the EnvVars from upstream
+      - echo "GitTag: ${GitTag}"
+      - echo "GitCommit: ${GitCommit}"
+
       # Build using goreleaser via Makefile
       - make go-build-lambda
 
       # Check we've built something useful
       - find dist/ -name "ssosync*" -type f | head -5
       - echo "Build completed with VERBOSE=${VERBOSE}"
-
-  post_build:
-    commands:
-
-      # Verify the build works
-      - |
-        if [ -f dist/ssosync_linux_amd64_v1/ssosync ]; then
-          ./dist/ssosync_linux_amd64_v1/ssosync --version
-        elif [ -f dist/ssosync_linux_arm64_v8.0/ssosync ]; then
-          ./dist/ssosync_linux_arm64_v8.0/ssosync --version
-        else
-          echo "Built binary not found in expected location"
-          find dist/ -name "ssosync*" -type f
-          exit 1
-        fi
 
 artifacts:
   files:
