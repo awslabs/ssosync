@@ -39,14 +39,17 @@ builds:
   - id: SSOSync
     env:
       - CGO_ENABLED=0
-      - CodeBuildVersion={{ .Env.GitTag }}
-      - CodeBuildCommitId={{ .Env.GitCommit }}
+      - CodeBuildVersion=${GitTag}
+      - CodeBuildCommitId=${GitCommit}
     goos:
       - linux
     goarch:
+      - amd64
       - arm64
     goarm64:
       - v8.0
+    goamd64:
+      - v1
     flags:
       - -trimpath
     ldflags:

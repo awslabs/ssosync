@@ -10,6 +10,7 @@ phases:
       # Print all environment variables (handy for AWS CodeBuild logs)
       - env
 
+      - ls -lar ${CODEBUILD_SRC_DIR_Built}/
       - cp -r ${CODEBUILD_SRC_DIR_Built}/* ./
       - ls -la
 
