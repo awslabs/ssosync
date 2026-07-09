@@ -40,6 +40,15 @@ phases:
       - go version
       - '[ "$(go version | awk ''{print $3}'')" = "${GOVERSION}" ] || (echo "Wrong go version" && exit 1)'
 
+      # Output the EnvVars used in the build
+      - echo "GitTag=${GitTag}"
+      - echo "GitCommit=${GitCommit}"
+
+      # Force replacement of these variables in config
+      - envsubst < .goreleaser.yml >> .goreleaser.yml.tmp
+      - mv .goreleaser.yml.tmp .goreleaser.yml
+      - cat .goreleaser.yml
+      
       # Setup project dependencies
       - make config
 
@@ -51,14 +60,6 @@ phases:
       # Clean previous builds
       - make clean
       - make test
-
-      # Output the EnvVars used in the build
-      - echo "GitTag=${GitTag}"
-      - echo "GitCommit=${GitCommit}"
-
-      # Force replacement of these variables in config
-      - envsubst < .goreleaser.yml >> .goreleaser.yml.tmp
-      - mv .goreleaser.yml.tmp .goreleaser.yml
 
       # Build using goreleaser via Makefile
       - make go-build-lambda
