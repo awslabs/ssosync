@@ -52,13 +52,15 @@ phases:
       - make clean
       - make test
 
-      # Make sure we have received the EnvVars from upstream
-      - echo "GitTag: ${GitTag}"
-      - echo "GitCommit: ${GitCommit}"
+      # Output the EnvVars used in the build
+      - echo "GitTag=${GitTag}"
+      - echo "GitCommit=${GitCommit}"
 
       # Build using goreleaser via Makefile
       - make go-build-lambda
 
+  post_build:
+    commands:
       # Check we've built something useful
       - find dist/ -name "ssosync*" -type f | head -5
       - echo "Build completed with VERBOSE=${VERBOSE}"
