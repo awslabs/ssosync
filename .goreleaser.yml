@@ -44,12 +44,9 @@ builds:
     goos:
       - linux
     goarch:
-      - amd64
       - arm64
     goarm64:
       - v8.0
-    goamd64:
-      - v1
     flags:
       - -trimpath
     ldflags:

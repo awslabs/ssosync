@@ -56,6 +56,10 @@ phases:
       - echo "GitTag=${GitTag}"
       - echo "GitCommit=${GitCommit}"
 
+      # Force replacement of these variables in config
+      - envsubst < .goreleaser.yml >> .goreleaser.yml.tmp
+      - mv .goreleaser.yml.tmp .goreleaser.yml
+
       # Build using goreleaser via Makefile
       - make go-build-lambda
 
