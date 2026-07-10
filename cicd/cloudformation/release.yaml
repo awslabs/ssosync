@@ -226,7 +226,6 @@ Resources:
                 DetectChanges: true
         - Name: Build-App
           Actions:
-          Actions:
             - Name: InspectorScan
               ActionTypeId:
                 Category: Invoke
@@ -284,7 +283,7 @@ Resources:
               Configuration:
                 ProjectName: !Ref CodeBuildPackage
                 PrimarySource: Source
-                EnvironmentVariables: '[{"name":"GitTag","value":"#{Git.Tag}","type":"PLAINTEXT"},{"name":"GitVersionHash","value":"#{Git.CommitHash}","type":"PLAINTEXT"},{"name":"GitCommit","value":"#{Git.CommitId}","type":"PLAINTEXT"}]'
+                EnvironmentVariables: '[{"name":"GitTag","value":"#{Git.Tag}","type":"PLAINTEXT"},{"name":"GitCommit","value":"#{Git.CommitId}","type":"PLAINTEXT"}]'
               OutputArtifacts:
                 - Name: Packaged
               InputArtifacts:
