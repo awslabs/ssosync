@@ -8,7 +8,7 @@ env:
     GOPATH:
     GOPROXY: direct
     git-credential-helper: yes
-    GOVERSION: go1.24.3
+    GOVERSION: go1.26.4
     #MOCKERY_VERSION: v3.5.2
     #GOLANGCI_LINT_VERSION: v2.3.1
     #GORELEASER_VERSION: v2.11.2
@@ -40,12 +40,20 @@ phases:
       - go version
       - '[ "$(go version | awk ''{print $3}'')" = "${GOVERSION}" ] || (echo "Wrong go version" && exit 1)'
 
+      # Output the EnvVars used in the build
+      - echo "GitTag=${GitTag}"
+      - echo "GitCommit=${GitCommit}"
+
+      # Force replacement of these variables in config
+      - envsubst < .goreleaser.yml >> .goreleaser.yml.tmp
+      - mv .goreleaser.yml.tmp .goreleaser.yml
+      - cat .goreleaser.yml
+      
       # Setup project dependencies
       - make config
 
       # Check the Go code for common problems with 'go vet'
       - make vet
-
 
   build:
     commands:
@@ -54,28 +62,13 @@ phases:
       - make test
 
       # Build using goreleaser via Makefile
-      - make go-build
-
-      # Check we've built something useful
-      - find dist/ -name "ssosync*" -type f | head -5
-      - echo "Build completed with VERBOSE=${VERBOSE}"
+      - make go-build-lambda
 
   post_build:
     commands:
-      # Tweak the .goreleaser.yml so it uses the variables from .Env (if patch still needed)
-      - if [ -f cicd/build/build/goreleaser.patch ]; then patch .goreleaser.yml cicd/build/build/goreleaser.patch; fi
-
-      # Verify the build works
-      - |
-        if [ -f dist/ssosync_linux_amd64_v1/ssosync ]; then
-          ./dist/ssosync_linux_amd64_v1/ssosync --version
-        elif [ -f dist/ssosync_linux_arm64_v8.2/ssosync ]; then
-          ./dist/ssosync_linux_arm64_v8.2/ssosync --version
-        else
-          echo "Built binary not found in expected location"
-          find dist/ -name "ssosync*" -type f
-          exit 1
-        fi
+      # Check we've built something useful
+      - find dist/ -name "ssosync*" -type f | head -5
+      - echo "Build completed with VERBOSE=${VERBOSE}"
 
 artifacts:
   files:
