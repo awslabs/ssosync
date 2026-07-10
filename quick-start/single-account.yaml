@@ -200,7 +200,7 @@ Resources:
     Properties:
       Location:
         ApplicationId: arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync
-        SemanticVersion: 2.6.1
+        SemanticVersion: 2.6.2
       Parameters:
         DeployPattern: App only
         FunctionName: SSOSync
@@ -227,7 +227,7 @@ Resources:
     Properties:
       Location:
         ApplicationId: arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync
-        SemanticVersion: 2.6.1
+        SemanticVersion: 2.6.2
       Parameters:
         DeployPattern: Secrets only
         SCIMEndpointUrl: !Ref SCIMEndpointUrl
