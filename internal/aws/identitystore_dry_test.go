@@ -4,10 +4,11 @@ import (
 	"context"
 	"testing"
 
+	"ssosync/internal/mocks"
+
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/identitystore"
 	"github.com/aws/aws-sdk-go-v2/service/identitystore/types"
-	"github.com/awslabs/ssosync/internal/mocks"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

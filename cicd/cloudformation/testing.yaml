@@ -689,7 +689,7 @@ Resources:
         Type: LINUX_CONTAINER
         EnvironmentVariables:
           - Name: ExpectedExitState
-            Value: !If [DeployNonDelegated, 1, 0]
+            Value: 0
       Artifacts:
         Name: SSOSync
         Type: CODEPIPELINE
@@ -720,7 +720,7 @@ Resources:
         Type: LINUX_CONTAINER
         EnvironmentVariables:
           - Name: ExpectedResponse
-            Value: !If [DeployNonDelegated, "true", "false"]
+            Value: "false"
       Artifacts:
         Name: SSOSync
         Type: CODEPIPELINE
@@ -919,18 +919,19 @@ Resources:
               Effect: Allow
               Resource: '*'
             - Action:
-                - "identitystore:DeleteUser"
-                - "identitystore:CreateGroup"
-                - "identitystore:CreateGroupMembership"
                 - "identitystore:ListGroups"
                 - "identitystore:ListUsers"
                 - "identitystore:ListGroupMemberships"
                 - "identitystore:IsMemberInGroups"
                 - "identitystore:GetGroupMembershipId"
-                - "identitystore:DeleteGroupMembership"
-                - "identitystore:DeleteGroup"
               Effect: Allow
               Resource: '*'
+            - Sid: SsoAdminAccessPolicy
+              Effect: Allow
+              Action: 
+                - "sso:ListInstances"
+              Resource:
+                - "*"
             - Action:
                 - "secretsmanager:Get*"
               Resource:

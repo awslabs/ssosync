@@ -19,18 +19,23 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
+
+	"ssosync/internal"
+	"ssosync/internal/config"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	aws_config "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/aws/arn"
+	"github.com/aws/aws-sdk-go-v2/service/ssoadmin"
 	"github.com/aws/aws-sdk-go-v2/service/codepipeline"
 	"github.com/aws/aws-sdk-go-v2/service/codepipeline/types"
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
+	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	"github.com/aws/aws-secretsmanager-caching-go/v2/secretcache"
-	"github.com/awslabs/ssosync/internal"
-	"github.com/awslabs/ssosync/internal/config"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -161,6 +166,7 @@ func initConfig() {
 
 	appEnvVars := []string{
 		"google_admin",
+		"customer_id",
 		"google_credentials",
 		"scim_access_token",
 		"scim_endpoint",
@@ -172,9 +178,10 @@ func initConfig() {
 		"user_match",
 		"group_match",
 		"sync_method",
-		"region",
 		"identity_store_id",
 		"dry_run",
+		"precache_org_units",
+		"cache_metrics",
 	}
 
 	for _, e := range appEnvVars {
@@ -200,9 +207,27 @@ func initConfig() {
 		cfg.UserFilter = " isSuspended=false isArchived=false"
 	}
 
+	if cfg.SCIMEndpoint != "" {
+		cfg.Region = getRegion()
+		cfg.IdentityStoreID =  getIdentityStoreId()
+	}
+
 }
 
 var secretCache *secretcache.Cache
+
+func getEnvSensitive(key string, fallback string) string {
+    EnvVar := getEnvStr(key, fallback)
+    if a, err := arn.Parse(EnvVar); err == nil {
+        switch a.Service {
+        case "secretsmanager":
+            return getSecretFromCache(EnvVar)
+        case "ssm":
+            return getEncryptParam(EnvVar)
+        }
+    }
+    return EnvVar // not an ARN -> use the literal value
+}
 
 func getEnvStr(key string, fallback string) string {
 	if valueStr, ok := os.LookupEnv(key); ok {
@@ -227,10 +252,41 @@ func getEnvBool(key string, fallback bool) bool {
 	if valueStr, ok := os.LookupEnv(key); ok {
 		log.WithField(key, valueStr).Info("EnvVar")
 		valueBool := strings.ToLower(valueStr) == "true"
-		log.WithField(key, valueBool).Info("config")
 		return valueBool
 	}
 	return fallback
+}
+
+func getRegion() string {
+	r, _ := regexp.Compile(`((?:af|il|ap|ca|eu|me|sa|us|cn|us\-gov|us\-iso|us\-isob)\-(?:central|north|(north(?:east|west))|south|south(?:east|west)|east|west)\-[1-9])`)
+	log.WithField("SCIMEndpoint", cfg.SCIMEndpoint).Debug("getRegion()")
+	Region := r.FindString(cfg.SCIMEndpoint)
+	log.WithField("Region", Region).Info("getRegion()")
+	return Region
+}
+
+func getIdentityStoreId() string {
+	ctx := context.Background()
+
+	log.WithField("cfg.Region", cfg.Region).Info("getIdentityStoreId()")
+	cfg, err := aws_config.LoadDefaultConfig(ctx, aws_config.WithRegion(cfg.Region))
+	if err != nil {
+		log.Fatal(errors.Wrap(err, "getIdentityStoreId(): failed to load AWS config").Error())
+	}
+
+	client := ssoadmin.NewFromConfig(cfg)
+	output, err := client.ListInstances(ctx, &ssoadmin.ListInstancesInput{})
+	if err != nil {
+		log.Fatal(errors.Wrap(err, "getIdentityStoreId(): Failed to list SSO instances").Error())
+	}
+
+	if len(output.Instances) == 0 {
+		log.Fatal(errors.Wrap(err, "getIdentityStoreId(): no SSO instances found in region").Error())
+	}
+
+	IdentityStoreId := aws.ToString(output.Instances[0].IdentityStoreId)
+		log.WithField("IdentityStoreId", IdentityStoreId).Info("getIdentityStoreId()")
+	return IdentityStoreId
 }
 
 func configLambda() {
@@ -252,13 +308,12 @@ func configLambda() {
 		log.Fatal(errors.Wrap(err, "Failed to create secret cache").Error())
 	}
 
-	// Get sensitive values from Secrets Manager with caching
-	cfg.GoogleAdmin = getSecretFromCache(getEnvStr("GOOGLE_ADMIN", config.DefaultGoogleCredentials))
-	cfg.SCIMEndpoint = getSecretFromCache(getEnvStr("SCIM_ENDPOINT", ""))
-	cfg.IdentityStoreID = getSecretFromCache(getEnvStr("IDENTITY_STORE_ID", ""))
-	cfg.Region = getSecretFromCache(getEnvStr("REGION", ""))
-	cfg.GoogleCredentials = getSecretFromCache(getEnvStr("GOOGLE_CREDENTIALS", ""))
-	cfg.SCIMAccessToken = getSecretFromCache(getEnvStr("SCIM_ACCESS_TOKEN", ""))
+	// Get retreive sensitive values from envVars/Secrets Manager with caching
+	cfg.CustomerID = getEnvSensitive("CUSTOMER_ID", config.DefaultCustomerID)
+	cfg.GoogleAdmin = getEnvSensitive("GOOGLE_ADMIN", "")
+	cfg.GoogleCredentials = getEnvSensitive("GOOGLE_CREDENTIALS", "")
+	cfg.SCIMEndpoint = getEnvSensitive("SCIM_ENDPOINT", "")
+	cfg.SCIMAccessToken = getEnvSensitive("SCIM_ACCESS_TOKEN", "")
 
 	// Handle environment variables for other settings
 	cfg.LogLevel = getEnvStr("LOG_LEVEL", config.DefaultLogLevel)
@@ -270,9 +325,9 @@ func configLambda() {
 	cfg.IgnoreUsers = getEnvStrs("IGNORE_USERS", nil)
 	cfg.IncludeGroups = getEnvStrs("INCLUDE_GROUPS", nil)
 	cfg.PrecacheOrgUnits = getEnvStrs("PRECACHE_ORG_UNITS", nil)
+	cfg.CacheMetrics = getEnvBool("CACHE_METRICS", false)
 	cfg.DryRun = getEnvBool("DRY_RUN", false)
 	cfg.SyncSuspended = getEnvBool("SYNC_SUSPENDED", false)
-
 }
 
 func getSecretFromCache(secretName string) string {
@@ -281,6 +336,21 @@ func getSecretFromCache(secretName string) string {
 		log.Fatal(errors.Wrap(err, fmt.Sprintf("cannot read secret: %s", secretName)).Error())
 	}
 	return value
+}
+
+func getEncryptParam(parameterArn string) string {
+	ctx := context.Background()
+
+	ssmClient := ssm.NewFromConfig(awsConfig)
+	output, err := ssmClient.GetParameter(ctx, &ssm.GetParameterInput{
+		Name:           aws.String(parameterArn),
+		WithDecryption: aws.Bool(true),
+	})
+	if err != nil {
+		log.Fatal(errors.Wrap(err, fmt.Sprintf("failed to get SSM parameter: %s", parameterArn)).Error())
+	}
+
+	return aws.ToString(output.Parameter.Value)
 }
 
 func addFlags(_ *cobra.Command, cfg *config.Config) {
@@ -294,16 +364,15 @@ func addFlags(_ *cobra.Command, cfg *config.Config) {
 	rootCmd.Flags().StringVarP(&cfg.SCIMEndpoint, "endpoint", "e", "", "AWS SSO SCIM API Endpoint")
 	rootCmd.Flags().StringVarP(&cfg.GoogleCredentials, "google-credentials", "c", config.DefaultGoogleCredentials, "path to Google Workspace credentials file")
 	rootCmd.Flags().StringVarP(&cfg.GoogleAdmin, "google-admin", "u", "", "Google Workspace admin user email")
+	rootCmd.Flags().StringVar(&cfg.CustomerID, "customer-id", config.DefaultCustomerID, "Google Workspace customer ID to operate against (defaults to 'my_customer')")
 	rootCmd.Flags().StringSliceVar(&cfg.IgnoreUsers, "ignore-users", nil, "ignores these Google Workspace users")
 	rootCmd.Flags().StringSliceVar(&cfg.IgnoreGroups, "ignore-groups", nil, "ignores these Google Workspace groups")
 	rootCmd.Flags().StringSliceVar(&cfg.IncludeGroups, "include-groups", nil, "include only these Google Workspace groups, NOTE: only works when --sync-method 'users_groups'")
 	rootCmd.Flags().StringVarP(&cfg.UserMatch, "user-match", "m", "", "Google Workspace Users filter query parameter, example: 'name:John*' 'name=John Doe,email:admin*', to sync all users in the directory specify '*'. For query syntax and more examples see: https://developers.google.com/admin-sdk/directory/v1/guides/search-users")
 	rootCmd.Flags().StringVarP(&cfg.GroupMatch, "group-match", "g", "*", "Google Workspace Groups filter query parameter, example: 'name:Admin*' 'name=AWS-Admins,email:aws*', to sync all groups (and their member users) specify '*'. For query syntax and more examples see: https://developers.google.com/admin-sdk/directory/v1/guides/search-groups")
 	rootCmd.Flags().StringVarP(&cfg.SyncMethod, "sync-method", "s", config.DefaultSyncMethod, "Sync method to use (users_groups|groups)")
-	rootCmd.Flags().StringVarP(&cfg.Region, "region", "r", "", "AWS Region where AWS SSO is enabled")
-	rootCmd.Flags().StringVarP(&cfg.IdentityStoreID, "identity-store-id", "i", "", "Identifier of Identity Store in AWS SSO")
 	rootCmd.Flags().StringSliceVar(&cfg.PrecacheOrgUnits, "precache-ous", nil, "A common separated list of Google Workspace OrgUnitPathis e.g.'/', to precache all users within the organization or '/OU_1/OU 2,/OU3'. Precaching is disabled by default.")
-
+	rootCmd.PersistentFlags().BoolVarP(&cfg.CacheMetrics, "cache-metrics", "", false, "Gather metrics for cache hits/miss, and output at end of run to help refine OrgUnitPath string.")
 }
 
 func logConfig(cfg *config.Config) {

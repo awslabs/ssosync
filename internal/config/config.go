@@ -15,6 +15,10 @@ type Config struct {
 	GoogleCredentials string `mapstructure:"google_credentials"`
 	// GoogleAdmin ...
 	GoogleAdmin string `mapstructure:"google_admin"`
+	// CustomerID is the Google Workspace customer ID to operate against.
+	// Defaults to "my_customer", which means the customer associated with
+	// the service account's domain.
+	CustomerID string `mapstructure:"customer_id"`
 	// UserMatch ...
 	UserMatch string `mapstructure:"user_match"`
 	// GroupFilter ...
@@ -41,6 +45,8 @@ type Config struct {
 	IdentityStoreID string `mapstructure:"identity_store_id"`
 	// Precaching queries as a comma separated list of query strings
 	PrecacheOrgUnits []string
+	// Enabled Caching stats to help refine PrecacheOrgUnits configuration
+	CacheMetrics bool
 	// DryRun flag, when set to true, no change will be made in the Identity Store
 	DryRun bool
 	// sync suspended user, if true suspended user and their group memberships are sync'd into IAM Identity Center
@@ -58,6 +64,8 @@ const (
 	DefaultDebug = false
 	// DefaultGoogleCredentials is the default credentials path
 	DefaultGoogleCredentials = "credentials.json"
+	// DefaultCustomerID is the default Google Workspace customer ID.
+	DefaultCustomerID = "my_customer"
 	// DefaultSyncMethod is the default sync method to use.
 	DefaultSyncMethod = "groups"
 )
@@ -70,6 +78,7 @@ func New() *Config {
 		LogFormat:         DefaultLogFormat,
 		SyncMethod:        DefaultSyncMethod,
 		GoogleCredentials: DefaultGoogleCredentials,
+		CustomerID:        DefaultCustomerID,
 	}
 }
 

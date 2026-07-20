@@ -34,8 +34,9 @@ type Client interface {
 }
 
 type client struct {
-	ctx     context.Context
-	service *admin.Service
+	ctx        context.Context
+	service    *admin.Service
+	customerID string
 }
 
 const (
@@ -43,8 +44,11 @@ const (
 	MaxRetries = 5
 )
 
-// NewClient creates a new client for Google's Admin API
-func NewClient(ctx context.Context, adminEmail string, serviceAccountKey []byte) (Client, error) {
+// NewClient creates a new client for Google's Admin API. customerID is the
+// Google Workspace customer to operate against; pass "my_customer" (or the
+// DefaultCustomerID constant) to target the customer associated with the
+// service account's domain.
+func NewClient(ctx context.Context, adminEmail, customerID string, serviceAccountKey []byte) (Client, error) {
 	config, err := google.JWTConfigFromJSON(serviceAccountKey, admin.AdminDirectoryGroupReadonlyScope,
 		admin.AdminDirectoryGroupMemberReadonlyScope,
 		admin.AdminDirectoryUserReadonlyScope)
@@ -63,8 +67,9 @@ func NewClient(ctx context.Context, adminEmail string, serviceAccountKey []byte)
 	}
 
 	return &client{
-		ctx:     ctx,
-		service: srv,
+		ctx:        ctx,
+		service:    srv,
+		customerID: customerID,
 	}, nil
 }
 
@@ -86,7 +91,7 @@ func (c *client) getDeletedUsers() ([]*admin.User, error) {
 	u := make([]*admin.User, 0)
 	var err error
 
-	if err = c.service.Users.List().Customer("my_customer").ShowDeleted("true").Pages(c.ctx, func(users *admin.Users) error {
+	if err = c.service.Users.List().Customer(c.customerID).ShowDeleted("true").Pages(c.ctx, func(users *admin.Users) error {
 		u = append(u, users.Users...)
 		return nil
 	}); err != nil {
@@ -162,7 +167,7 @@ func (c *client) getUsers(query string, filter string) ([]*admin.User, error) {
 
 	// If we have wildcard then fetch all users
 	if query == "*" {
-		if err = c.service.Users.List().Query(filter).Customer("my_customer").Pages(c.ctx, func(users *admin.Users) error {
+		if err = c.service.Users.List().Query(filter).Customer(c.customerID).Pages(c.ctx, func(users *admin.Users) error {
 			u = append(u, users.Users...)
 			return nil
 		}); err != nil {
@@ -176,7 +181,7 @@ func (c *client) getUsers(query string, filter string) ([]*admin.User, error) {
 
 		// Then call the api one query at a time, appending to our list
 		for _, subQuery := range queries {
-			if err = c.service.Users.List().Query(subQuery+filter).Customer("my_customer").Pages(c.ctx, func(users *admin.Users) error {
+			if err = c.service.Users.List().Query(subQuery+filter).Customer(c.customerID).Pages(c.ctx, func(users *admin.Users) error {
 				u = append(u, users.Users...)
 				return nil
 			}); err != nil {
@@ -237,7 +242,7 @@ func (c *client) getGroups(query string) ([]*admin.Group, error) {
 
 	// If we have wildcard then fetch all groups
 	if query == "*" {
-		if err = c.service.Groups.List().Customer("my_customer").Pages(context.TODO(), func(groups *admin.Groups) error {
+		if err = c.service.Groups.List().Customer(c.customerID).Pages(context.TODO(), func(groups *admin.Groups) error {
 			g = append(g, groups.Groups...)
 			return nil
 		}); err != nil {
@@ -255,7 +260,7 @@ func (c *client) getGroups(query string) ([]*admin.Group, error) {
 
 	// Then call the api one query at a time, appending to our list
 	for _, subQuery := range queries {
-		if err = c.service.Groups.List().Customer("my_customer").Query(subQuery).Pages(context.TODO(), func(groups *admin.Groups) error {
+		if err = c.service.Groups.List().Customer(c.customerID).Query(subQuery).Pages(context.TODO(), func(groups *admin.Groups) error {
 			g = append(g, groups.Groups...)
 			return nil
 		}); err != nil {
