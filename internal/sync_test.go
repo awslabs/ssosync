@@ -10,6 +10,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/service/identitystore/types"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	admin "google.golang.org/api/admin/directory/v1"
 )
 
@@ -653,4 +654,42 @@ func TestDoSync_DryRun(t *testing.T) {
 	err := DoSync(context.Background(), cfg)
 	// We expect this to fail without proper credentials, but we're testing the dry run path
 	assert.Error(t, err) // Expected to fail without valid credentials
+}
+
+func TestSyncGroups_DryRunUserWithoutID(t *testing.T) {
+	cfg := &config.Config{
+		SyncMethod:      "users_groups",
+		IncludeGroups:   []string{"group@example.com"},
+		IdentityStoreID: "d-1234567890",
+		DryRun:          true,
+	}
+
+	group := &admin.Group{Email: "group@example.com", Id: "gid"}
+	awsGroup := &interfaces.Group{ID: "aws-gid", DisplayName: "group@example.com"}
+
+	googleClient := mocks.NewMockGoogleClient(t)
+	googleClient.EXPECT().GetGroups("").Return([]*admin.Group{group}, nil)
+	googleClient.EXPECT().GetGroupMembers(group).
+		Return([]*admin.Member{{Email: "new@example.com"}}, nil)
+
+	awsClient := mocks.NewMockAwsClient(t)
+	awsClient.EXPECT().FindGroupByDisplayName("group@example.com").Return(awsGroup, nil)
+	awsClient.EXPECT().AddUserToGroup(mock.Anything, awsGroup).Return(nil)
+
+	// No EXPECT for IsMemberInGroups: mockery fails the test on any unexpected
+	// call, so this asserts the API is never reached for an ID-less user.
+	identityStore := mocks.NewMockIdentityStoreAPI(t)
+
+	s := &syncGSuite{
+		aws:           awsClient,
+		google:        googleClient,
+		identityStore: identityStore,
+		cfg:           cfg,
+		users: map[string]*interfaces.User{
+			// As dryClient.CreateUser leaves it: no ID.
+			"new@example.com": {Username: "new@example.com", ID: ""},
+		},
+	}
+
+	assert.NoError(t, s.SyncGroups(""))
 }
