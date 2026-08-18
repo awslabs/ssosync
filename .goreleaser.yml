@@ -40,7 +40,7 @@ builds:
       - -X github.com/awslabs/ssosync/cmd.commit={{.FullCommit}} 
       - -X github.com/awslabs/ssosync/cmd.date={{.Date}} 
       - -X github.com/awslabs/ssosync/cmd.builtBy=goreleaser
-  - id: SSOSync
+  - id: SAR
     env:
       - CGO_ENABLED=0
     goos:

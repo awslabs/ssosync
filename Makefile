@@ -141,7 +141,7 @@ go-build: install-goreleaser install-upx
 
 .PHONY: go-build-lambda
 go-build-lambda: install-goreleaser
-	$(Q)$(GORELEASER_BIN) build --snapshot --clean --id SSOSync $(VERBOSE_BUILD_FLAG) $(GOREL_ARGS)
+	$(Q)$(GORELEASER_BIN) build --snapshot --clean --id SAR $(VERBOSE_BUILD_FLAG) $(GOREL_ARGS)
 
 .PHONY: clean
 clean:
@@ -184,7 +184,7 @@ build: clean main
 
 .PHONY: release
 release: go-build
-	$(Q)$(GORELEASER_BIN) release --clean --id ssosync $(VERBOSE_BUILD_FLAG) $(GOREL_ARGS)
+	$(Q)$(GORELEASER_BIN) release --clean $(VERBOSE_BUILD_FLAG) $(GOREL_ARGS)
 
 .PHONY: dry-run
 dry-run: 
