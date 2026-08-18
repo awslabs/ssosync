@@ -136,7 +136,7 @@ test-coverage: test
 	go tool cover -func=coverage.out
 
 .PHONY: go-build
-go-build: install-goreleaser
+go-build: install-goreleaser install-upx
 	$(Q)$(GORELEASER_BIN) build --snapshot --clean --id ssosync $(VERBOSE_BUILD_FLAG) $(GOREL_ARGS)
 
 .PHONY: go-build-lambda
@@ -183,7 +183,7 @@ lambda: main
 build: clean main
 
 .PHONY: release
-release: install-goreleaser
+release: go-build
 	$(Q)$(GORELEASER_BIN) release --clean $(VERBOSE_BUILD_FLAG) $(GOREL_ARGS)
 
 .PHONY: dry-run
