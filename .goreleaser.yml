@@ -88,6 +88,7 @@ archives:
       {{- else if eq .Arch "386" }}i386
       {{- else }}{{ .Arch }}{{ end }}
       {{- if .Arm }}v{{ .Arm }}{{ end -}}
+    allow_different_binary_count: true
     format_overrides:
       - goos: windows
         formats:
