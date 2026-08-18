@@ -184,7 +184,7 @@ build: clean main
 
 .PHONY: release
 release: go-build
-	$(Q)$(GORELEASER_BIN) release --clean $(VERBOSE_BUILD_FLAG) $(GOREL_ARGS)
+	$(Q)$(GORELEASER_BIN) release --clean --id ssosync $(VERBOSE_BUILD_FLAG) $(GOREL_ARGS)
 
 .PHONY: dry-run
 dry-run: 
