@@ -19,15 +19,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version-file: 'go.mod'
 
       - name: Cache development tools
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .bin
           key: ${{ runner.os }}-tools-${{ hashFiles('Makefile') }}
