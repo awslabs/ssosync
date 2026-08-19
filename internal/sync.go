@@ -480,7 +480,7 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 
 		log.Warn("updating user")
 		_, err = s.aws.UpdateUser(aws.UpdateUser(
-			awsUserFull.ID,
+			awsUser.ID,
 			awsUser.Name.GivenName,
 			awsUser.Name.FamilyName,
 			awsUser.Username,
