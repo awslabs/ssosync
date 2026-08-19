@@ -14,7 +14,7 @@ phases:
       # Check that the files need to package exist
       - ls README.md
       - ls SAR.md
-      - cp ${CODEBUILD_SRC_DIR_Built}/dist/SSOSync_linux_arm64_v8.0/ssosync bootstrap
+      - cp ${CODEBUILD_SRC_DIR_Built}/dist/ssosync_linux_arm64_v8.0/ssosync bootstrap
  
   build:
     commands:
