@@ -473,25 +473,19 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 			"delete": len(delAWSGroups)}).Info("Change Summary: Groups")
 
 	// update aws users (updated in google)
+	// The entries in updateAWSUsers already carry the identity store ID and
+	// the desired attributes, so update directly. Re-finding the user by
+	// email here deadlocks the sync when the update is a primary-email
+	// rename: the query uses the new address while SCIM still holds the old
+	// one, so no user is found and every run aborts before its first write
+	// (#353).
 	log.Debug("updating aws users updated in google")
 	for _, awsUser := range updateAWSUsers {
 
 		log := log.WithFields(log.Fields{"user": awsUser.Username})
 
-		log.Debug("finding user")
-		awsUserFull, err := s.aws.FindUserByEmail(awsUser.Username)
-		if err != nil {
-			return err
-		}
-
 		log.Warn("updating user")
-		_, err = s.aws.UpdateUser(aws.UpdateUser(
-			awsUserFull.ID,
-			awsUser.Name.GivenName,
-			awsUser.Name.FamilyName,
-			awsUser.Username,
-			awsUser.Active,
-			awsUser.ExternalId))
+		_, err := s.aws.UpdateUser(awsUser)
 		if err != nil {
 			log.WithField("user", awsUser).Error("error updating user")
 			return err
@@ -537,6 +531,7 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 			log.WithField("email:", googleUser.PrimaryEmail).Debug("aws.FindUserByEmail() finding user")
 			awsUserFull, err := s.aws.FindUserByEmail(googleUser.PrimaryEmail)
 			if err != nil {
+				log.WithField("email", googleUser.PrimaryEmail).Error("user not found in identity store")
 				return err
 			}
 
@@ -568,6 +563,7 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 			log.WithField("email:", googleUser.PrimaryEmail).Debug("aws.FindUserByEmail() finding user")
 			awsUserFull, err := s.aws.FindUserByEmail(googleUser.PrimaryEmail)
 			if err != nil {
+				log.WithField("email", googleUser.PrimaryEmail).Error("user not found in identity store")
 				return err
 			}
 
@@ -642,6 +638,7 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 		log.Debug("finding user")
 		awsUserFull, err := s.aws.FindUserByEmail(awsUser.Username)
 		if err != nil {
+			log.Error("user not found in identity store")
 			return err
 		}
 
@@ -1122,6 +1119,7 @@ func (s *syncGSuite) getGroupUsersOperations(gGroupsUsers map[string][]*admin.Us
 				log.Debug("finding user")
 				awsUserFull, err := s.aws.FindUserByEmail(gUser.PrimaryEmail)
 				if err != nil {
+					log.WithField("email", gUser.PrimaryEmail).Error("user not found in identity store")
 					return nil, nil, nil, err
 				}
 				add[gGroupName] = append(add[gGroupName], awsUserFull)
