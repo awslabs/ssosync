@@ -1,0 +1,46 @@
+# .github/workflows/release.yaml
+name: quickstarts
+
+on:
+  release:
+    types: [release]
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: true
+
+      - name: Fetch SEMANTIC_VERSION
+        run : |
+          echo "SEMANTIC_VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
+
+      - name: Show SemanticVersion
+        run: |
+          echo "env.SemanticVersion: ${{ env.SEMANTIC_VERSION }}"
+
+      - name: Show current SemanticVersion
+        run: grep SemanticVersion quick-start/*.yaml
+
+      - name: Update Templates
+        run: |
+          git grep -lr -e 'SemanticVersion' -- quick-start | xargs sed -i -E 's/SemanticVersion: [0-9.]+/SemanticVersion: ${{ env.SEMANTIC_VERSION }}/g'
+
+      - name: Show Templates SemanticVersion
+        run: grep SemanticVersion quick-start/*.yaml
+
+      - name: Commit updated Quick Start Templates
+        uses: stefanzweifel/git-auto-commit-action@v7
+        with:
+          branch: master
+          commit_options: '--no-verify --signoff'
+          puch_options: --force
+          commit_message: Update Quick Start templates
+          file_pattern: quick-start
