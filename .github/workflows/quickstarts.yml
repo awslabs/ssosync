@@ -17,6 +17,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           persist-credentials: true
+          ref: master
 
       - name: Fetch SEMANTIC_VERSION
         run : |
