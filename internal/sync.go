@@ -478,15 +478,9 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 
 		log := log.WithFields(log.Fields{"user": awsUser.Username})
 
-		log.Debug("finding user")
-		awsUserFull, err := s.aws.FindUserByEmail(awsUser.Username)
-		if err != nil {
-			return err
-		}
-
 		log.Warn("updating user")
 		_, err = s.aws.UpdateUser(aws.UpdateUser(
-			awsUserFull.ID,
+			awsUser.ID,
 			awsUser.Name.GivenName,
 			awsUser.Name.FamilyName,
 			awsUser.Username,
