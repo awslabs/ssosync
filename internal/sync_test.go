@@ -427,14 +427,18 @@ func TestGetUserOperations_UpdateDeleteRecreate(t *testing.T) {
 
 	add, delete, update, equals := getUserOperations(awsUsers, googleUsers)
 
-	assert.Len(t, add, 0)
-	assert.Len(t, delete, 0)
-	assert.Len(t, update, 1)
+	assert.Len(t, add, 1)
+	assert.Len(t, delete, 1)
+	assert.Len(t, update, 0)
 	assert.Len(t, equals, 0)
-	assert.Equal(t, update[0].ExternalId, "G6")
-	assert.Equal(t, update[0].Username, "user6@example.com")
-	assert.Equal(t, update[0].Name.GivenName, "Alan")
-	assert.Equal(t, update[0].Name.FamilyName, "Brown")
+	assert.Equal(t, delete[0].ExternalId, "GX")
+	assert.Equal(t, delete[0].Username, "user6@example.com")
+	assert.Equal(t, delete[0].Name.GivenName, "Alan")
+	assert.Equal(t, delete[0].Name.FamilyName, "Brown")
+	assert.Equal(t, add[0].ExternalId, "G6")
+	assert.Equal(t, add[0].Username, "user6@example.com")
+	assert.Equal(t, add[0].Name.GivenName, "Alan")
+	assert.Equal(t, add[0].Name.FamilyName, "Brown")
 }
 
 func TestGetUserOperations_DeleteNoExternalId(t *testing.T) {
