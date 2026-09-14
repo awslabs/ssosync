@@ -1062,12 +1062,20 @@ func getUserOperations(awsUsers []*interfaces.User, googleUsers []*admin.User) (
 			}
 		} else if awsUser, found := awsMap[gUser.PrimaryEmail]; found {
 			if len(awsUser.ExternalId) > 0 {
-				log.WithFields(log.Fields{
-					"gUser": gUser,
-					"awsUser": awsUser,
-				}).Warn("New google user with the same primary email address but a different id, delete AWS user and create a new AWS user.")
-				delete = append(delete, aws.UpdateUser(awsUser.ID, awsUser.Name.GivenName, awsUser.Name.FamilyName, awsUser.Username, awsUser.Active, awsUser.ExternalId))
-				add = append(add, aws.NewUser(gUser.Name.GivenName, gUser.Name.FamilyName, gUser.PrimaryEmail, !gUser.Suspended, gUser.Id))
+				if cfg.ForceExternalIdUpdate {
+					log.WithFields(log.Fields{
+						"gUser": gUser,
+						"awsUser": awsUser,	
+					}).Warn("New google user with the same primary email address but a different id, Force option set, so retaining the existing user and updating its ExternalId. Caution this may lead inherited privileges.")
+					update = append(update, aws.UpdateUser(awsUser.ID, gUser.Name.GivenName, gUser.Name.FamilyName, gUser.PrimaryEmail, !gUser.Suspended, gUser.Id))
+				} else {
+					log.WithFields(log.Fields{
+						"gUser": gUser,
+						"awsUser": awsUser,
+					}).Warn("New google user with the same primary email address but a different id, delete AWS user and create a new AWS user.")
+					delete = append(delete, aws.UpdateUser(awsUser.ID, awsUser.Name.GivenName, awsUser.Name.FamilyName, awsUser.Username, awsUser.Active, awsUser.ExternalId))
+					add = append(add, aws.NewUser(gUser.Name.GivenName, gUser.Name.FamilyName, gUser.PrimaryEmail, !gUser.Suspended, gUser.Id))
+				}
 			}  else {
 				log.WithFields(log.Fields{
 					"gUser": gUser,

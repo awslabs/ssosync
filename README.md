@@ -222,10 +222,24 @@ export SSOSYNC_DRY_RUN="true"
 | `--precache-ous` | `SSOSYNC_PRECACHE_ORG_UNITS` | Comma-separated list of Google OrgUnit paths to precache | `[]` |
 | `--dry-run` | `SSOSYNC_DRY_RUN` | Enable dry-run mode | `false` |
 | `--suspended` | `SSOSYNC_SYNC_SUSPENDED` | Include suspended users when syncing | `false` |
+| `--force-externalid-update` | `SSOSYNC_FORCE_EXTERNAL_ID_UPDATE` | When a Google user shares the same primary email as an existing Identity Store user but has a different ID, update the existing user's `ExternalId` in place instead of deleting and recreating it. See [Preserving assignments when migrating IdPs](#preserving-assignments-when-migrating-idps). | `false` |
 | `--log-level` | `SSOSYNC_LOG_LEVEL` | Log level (debug, info, warn, error) | `info` |
 | `--log-format` | `SSOSYNC_LOG_FORMAT` | Log format (text, json) | `text` |
 
 > **Note:** `--region` and `--identity-store-id` are no longer required. Region is extracted from the SCIM endpoint URL, and Identity Store ID is resolved automatically via the IAM Identity Center API.
+
+#### Preserving assignments when migrating IdPs
+
+When ssosync finds an Identity Store user whose primary email matches a Google Workspace user but whose ID differs, the default behaviour is to **delete** the existing Identity Store user and **create** a new one. This is intentional: it prevents a new Google user from inheriting the permission set and group assignments of a previous, unrelated user that happened to reuse the same email address.
+
+Setting `--force-externalid-update` (or `SSOSYNC_FORCE_EXTERNAL_ID_UPDATE=true`) changes this behaviour. Instead of delete-and-recreate, ssosync updates the existing Identity Store user's `ExternalId` in place, which preserves that user's existing assignments and group memberships.
+
+This is required when migrating from another external IdP (for example Microsoft Entra) to Google Workspace Directory, where the users already exist in the Identity Store and their assignments need to be retained.
+
+If an existing Identity Store user matches a Google Workspace user by email address but has **no `ExternalId` set**, that user is adopted and updated to sync with its Google Workspace equivalent. This happens regardless of the `--force-externalid-update` flag, and no delete-and-recreate occurs because there is no prior external identity to preserve or displace.
+
+> [!CAUTION]
+> Enabling this flag can cause a user to inherit privileges from the previously matched Identity Store user. Only enable it when you understand and accept that risk, such as during a controlled IdP migration.
 
 ### Filtering Examples
 
@@ -410,6 +424,7 @@ IGNORE_USERS=
 IGNORE_GROUPS=
 DRY_RUN=false
 SYNC_SUSPENDED=false
+FORCE_EXTERNAL_ID_UPDATE=false
 ```
 
 > **Note:** `REGION` and `IDENTITY_STORE_ID` environment variables are no longer required. Region is derived from the SCIM endpoint URL, and Identity Store ID is resolved via the IAM Identity Center API.
