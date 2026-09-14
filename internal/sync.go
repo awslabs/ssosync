@@ -456,7 +456,7 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 	}
 
 	// create list of changes by operations
-	addAWSUsers, delAWSUsers, updateAWSUsers, unchangedAWSUsers := getUserOperations(awsUsers, googleUsers)
+	addAWSUsers, delAWSUsers, updateAWSUsers, unchangedAWSUsers := getUserOperations(awsUsers, googleUsers, s.cfg.ForceExternalIdUpdate)
 	log.WithFields(
 		log.Fields{
 			"unchanged": len(unchangedAWSUsers),
@@ -1023,7 +1023,7 @@ func getGroupOperations(awsGroups []*interfaces.Group, googleGroups []*admin.Gro
 }
 
 // getUserOperations returns the users of AWS that must be added, deleted, updated and are equals
-func getUserOperations(awsUsers []*interfaces.User, googleUsers []*admin.User) (add []*interfaces.User, delete []*interfaces.User, update []*interfaces.User, equals []*interfaces.User) {
+func getUserOperations(awsUsers []*interfaces.User, googleUsers []*admin.User, forceExternalIdUpdate bool) (add []*interfaces.User, delete []*interfaces.User, update []*interfaces.User, equals []*interfaces.User) {
 
 	log.Debug("getUserOperations()")
 	awsMap := make(map[string]*interfaces.User)
@@ -1061,9 +1061,28 @@ func getUserOperations(awsUsers []*interfaces.User, googleUsers []*admin.User) (
 				equals = append(equals, awsUser)
 			}
 		} else if awsUser, found := awsMap[gUser.PrimaryEmail]; found {
-			log.WithField("gUser", gUser).Debug("update")
-			log.WithField("awsUser", awsUser).Debug("update")
-			update = append(update, aws.UpdateUser(awsUser.ID, gUser.Name.GivenName, gUser.Name.FamilyName, gUser.PrimaryEmail, !gUser.Suspended, gUser.Id))
+			if len(awsUser.ExternalId) > 0 {
+				if forceExternalIdUpdate {
+					log.WithFields(log.Fields{
+						"gUser": gUser,
+						"awsUser": awsUser,	
+					}).Warn("New google user with the same primary email address but a different id, Force option set, so retaining the existing user and updating its ExternalId. Caution this may lead inherited privileges.")
+					update = append(update, aws.UpdateUser(awsUser.ID, gUser.Name.GivenName, gUser.Name.FamilyName, gUser.PrimaryEmail, !gUser.Suspended, gUser.Id))
+				} else {
+					log.WithFields(log.Fields{
+						"gUser": gUser,
+						"awsUser": awsUser,
+					}).Warn("New google user with the same primary email address but a different id, delete AWS user and create a new AWS user.")
+					delete = append(delete, aws.UpdateUser(awsUser.ID, awsUser.Name.GivenName, awsUser.Name.FamilyName, awsUser.Username, awsUser.Active, awsUser.ExternalId))
+					add = append(add, aws.NewUser(gUser.Name.GivenName, gUser.Name.FamilyName, gUser.PrimaryEmail, !gUser.Suspended, gUser.Id))
+				}
+			}  else {
+				log.WithFields(log.Fields{
+					"gUser": gUser,
+					"awsUser": awsUser,	
+				}).Debug("A local user that matches the primary email address of a google user has been found, adopting to be synced.")
+				update = append(update, aws.UpdateUser(awsUser.ID, gUser.Name.GivenName, gUser.Name.FamilyName, gUser.PrimaryEmail, !gUser.Suspended, gUser.Id))
+			}
 		} else {
 			log.WithFields(log.Fields{
 				"gUser": gUser,

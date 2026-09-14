@@ -51,6 +51,11 @@ type Config struct {
 	DryRun bool
 	// sync suspended user, if true suspended user and their group memberships are sync'd into IAM Identity Center
 	SyncSuspended bool
+	// Force preservation of Identity Store UserId, when Google Workspace Directory UserId change but email addresses 
+	// still match. Default behaviour orginial user is deleted and a new user created to ensure excessive privileges
+	// are not preserved. This option is required when switching from a different external IdP (Microsoft Entra for example) 
+	// to Google Workspace Directory (with ssosync) and assignments need to be preserved.
+	ForceExternalIdUpdate bool
 	// User filter string
 	UserFilter string
 }
@@ -68,6 +73,9 @@ const (
 	DefaultCustomerID = "my_customer"
 	// DefaultSyncMethod is the default sync method to use.
 	DefaultSyncMethod = "groups"
+	// Default behaviour orginial user is deleted and a new user created to ensure excessive privileges
+	// are not preserved.
+	DefaultForceExternalIdUpdate = false
 )
 
 // New returns a new Config
