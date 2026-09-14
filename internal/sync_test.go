@@ -235,7 +235,7 @@ func TestGetUserOperations_NoChange(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals := getUserOperations(awsUsers, googleUsers)
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, false)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
@@ -262,7 +262,7 @@ func TestGetUserOperations_Add(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals := getUserOperations(awsUsers, googleUsers)
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, false)
 
 	assert.Len(t, add, 1)
 	assert.Len(t, delete, 0)
@@ -303,7 +303,7 @@ func TestGetUserOperations_UpdateAttribute(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals := getUserOperations(awsUsers, googleUsers)
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, false)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
@@ -343,7 +343,7 @@ func TestGetUserOperations_UpdateMissingExternalId(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals := getUserOperations(awsUsers, googleUsers)
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, false)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
@@ -384,7 +384,7 @@ func TestGetUserOperations_UpdatePrimaryEmail(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals := getUserOperations(awsUsers, googleUsers)
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, false)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
@@ -396,7 +396,7 @@ func TestGetUserOperations_UpdatePrimaryEmail(t *testing.T) {
 	assert.Equal(t, update[0].Name.FamilyName, "Smith")
 }
 
-func TestGetUserOperations_UpdateDeleteRecreate(t *testing.T) {
+func TestGetUserOperations_UpdateExternalId_DeleteRecreate(t *testing.T) {
 	awsUsers := []*interfaces.User{
 		{
 			ID:         "A6",
@@ -425,7 +425,7 @@ func TestGetUserOperations_UpdateDeleteRecreate(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals := getUserOperations(awsUsers, googleUsers)
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, false)
 
 	assert.Len(t, add, 1)
 	assert.Len(t, delete, 1)
@@ -439,6 +439,47 @@ func TestGetUserOperations_UpdateDeleteRecreate(t *testing.T) {
 	assert.Equal(t, add[0].Username, "user6@example.com")
 	assert.Equal(t, add[0].Name.GivenName, "Alan")
 	assert.Equal(t, add[0].Name.FamilyName, "Brown")
+}
+
+func TestGetUserOperations_UpdateExternalId_ForceUpdate(t *testing.T) {
+	awsUsers := []*interfaces.User{
+		{
+			ID:         "A6",
+			ExternalId: "GX",
+			Username:   "user6@example.com",
+			Name: struct {
+				FamilyName string `json:"familyName"`
+				GivenName  string `json:"givenName"`
+			}{
+				GivenName:  "Alan",
+				FamilyName: "Brown",
+			},
+			Active: true,
+		},
+	}
+
+	googleUsers := []*admin.User{
+		{
+			Id:           "G6",
+			PrimaryEmail: "user6@example.com",
+			Name: &admin.UserName{
+				GivenName:  "Alan",
+				FamilyName: "Brown",
+			},
+			Suspended: false,
+		},
+	}
+
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, true)
+
+	assert.Len(t, add, 0)
+	assert.Len(t, delete, 0)
+	assert.Len(t, update, 1)
+	assert.Len(t, equals, 0)
+	assert.Equal(t, update[0].ExternalId, "G6")
+	assert.Equal(t, update[0].Username, "user6@example.com")
+	assert.Equal(t, update[0].Name.GivenName, "Alan")
+	assert.Equal(t, update[0].Name.FamilyName, "Brown")
 }
 
 func TestGetUserOperations_DeleteNoExternalId(t *testing.T) {
@@ -459,7 +500,7 @@ func TestGetUserOperations_DeleteNoExternalId(t *testing.T) {
 
 	googleUsers := []*admin.User{}
 
-	add, delete, update, equals := getUserOperations(awsUsers, googleUsers)
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, false)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 1)
@@ -489,7 +530,7 @@ func TestGetUserOperations_DeleteExternalId(t *testing.T) {
 
 	googleUsers := []*admin.User{}
 
-	add, delete, update, equals := getUserOperations(awsUsers, googleUsers)
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, false)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 1)
@@ -528,7 +569,7 @@ func TestGetUserOperations_SuspendedStateChange(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals := getUserOperations(awsUsers, googleUsers)
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, false)
 
 	// Should update user1 (suspended state changed)
 	assert.Len(t, update, 1)

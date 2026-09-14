@@ -456,7 +456,7 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 	}
 
 	// create list of changes by operations
-	addAWSUsers, delAWSUsers, updateAWSUsers, unchangedAWSUsers := getUserOperations(awsUsers, googleUsers)
+	addAWSUsers, delAWSUsers, updateAWSUsers, unchangedAWSUsers := getUserOperations(awsUsers, googleUsers, s.cfg.ForceExternalIdUpdate)
 	log.WithFields(
 		log.Fields{
 			"unchanged": len(unchangedAWSUsers),
@@ -1023,7 +1023,7 @@ func getGroupOperations(awsGroups []*interfaces.Group, googleGroups []*admin.Gro
 }
 
 // getUserOperations returns the users of AWS that must be added, deleted, updated and are equals
-func getUserOperations(awsUsers []*interfaces.User, googleUsers []*admin.User) (add []*interfaces.User, delete []*interfaces.User, update []*interfaces.User, equals []*interfaces.User) {
+func getUserOperations(awsUsers []*interfaces.User, googleUsers []*admin.User, forceExternalIdUpdate bool) (add []*interfaces.User, delete []*interfaces.User, update []*interfaces.User, equals []*interfaces.User) {
 
 	log.Debug("getUserOperations()")
 	awsMap := make(map[string]*interfaces.User)
@@ -1062,7 +1062,7 @@ func getUserOperations(awsUsers []*interfaces.User, googleUsers []*admin.User) (
 			}
 		} else if awsUser, found := awsMap[gUser.PrimaryEmail]; found {
 			if len(awsUser.ExternalId) > 0 {
-				if cfg.ForceExternalIdUpdate {
+				if forceExternalIdUpdate {
 					log.WithFields(log.Fields{
 						"gUser": gUser,
 						"awsUser": awsUser,	
