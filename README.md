@@ -61,6 +61,11 @@ This project provides a CLI tool to pull users and groups from Google and push t
 what it is going to do.
 
 ## ⚠️ Important Notices
+> [!IMPORTANT]
+> From v2.7.x the behavior when syncing users has changed for the following situation: If a user in the Google Workspace Directory has been deleted and recreated (and therefore its user id has changed but the email address remains the same). 
+- Since v2.4 the existing IAM Identity Store user would have the ExternalId field updated. 
+However, in the situation where an email address has been re-assigned to a different user this would lead to them inheriting permission assignments made directly to the user.
+- From v2.7 the default bahvaiour will be to delete the existing user and create a new one. This behavior can be overriden with `--force-externalid-update` option.
 
 > [!IMPORTANT]
 > **Region** and **IdentityStoreID** are no longer configurable parameters. Region is extracted programmatically from the **SCIM Endpoint** URL, and IdentityStoreID is resolved automatically via the IAM Identity Center `ListInstances` API. These parameters are still present in `template.yaml` to avoid breaking deployment tooling for anyone passing a parameter file to the CloudFormation Stack. They will be fully removed in v3.x.
