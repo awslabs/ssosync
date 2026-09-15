@@ -1,8 +1,8 @@
 # .github/workflows/release-publish.yaml
-name: "Release Publish"
+name: "Post Release Updates"
 
 on:
-  release:
+    release:
     types: [released]
 
 permissions:
@@ -10,36 +10,15 @@ permissions:
   id-token: write
 
 jobs:
-  changelog:
+  updates:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.release.target_commitish }}
-
-      - name: Update Changelog
-        uses: stefanzweifel/changelog-updater-action@v1
-        with:
-          latest-version: ${{ github.event.release.tag_name }}
-          release-notes: ${{ github.event.release.body }}
-
-      - name: Commit updated CHANGELOG
-        uses: stefanzweifel/git-auto-commit-action@v7
-        with:
-          branch: master
-          commit_message: Update CHANGELOG
-          file_pattern: CHANGELOG.md
-
-  quickstarts:
-    runs-on: ubuntu-latest
-    needs: [ changelog ]
-    steps:
-      - name: Check out code
-        uses: actions/checkout@v7
-        with:
+          ref: ${{ github.head_ref }}
+          # Value already defaults to true, but `persist-credentials` is required to push new commits to the repository.
           persist-credentials: true
-          ref: ${{ github.event.release.target_commitish }}
 
       - name: Fetch SEMANTIC_VERSION
         run: |
@@ -59,11 +38,15 @@ jobs:
       - name: Show Templates SemanticVersion
         run: grep SemanticVersion quick-start/*.yaml
 
-      - name: Commit updated Quick Start Templates
+      - name: Update Changelog
+        uses: stefanzweifel/changelog-updater-action@v1
+        with:
+          latest-version: ${{ github.event.release.tag_name }}
+          release-notes: ${{ github.event.release.body }}
+
+      - name: Commit changes
         uses: stefanzweifel/git-auto-commit-action@v7
         with:
           branch: master
-          commit_options: '--no-verify --signoff'
-          push_options: --force
-          commit_message: Update Quick Start templates
-          file_pattern: quick-start
+          commit_message: Update CHANGELOG and Quick Start templates
+          file_pattern: 'CHANGELOG.md quick-start'
