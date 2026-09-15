@@ -2,7 +2,7 @@
 name: "Post Release Updates"
 
 on:
-    release:
+  release:
     types: [released]
 
 permissions:
