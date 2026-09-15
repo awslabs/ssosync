@@ -39,7 +39,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           persist-credentials: true
-          ref: ref: ${{ github.event.release.target_commitish }}
+          ref: {{ github.event.release.target_commitish }}
 
       - name: Fetch SEMANTIC_VERSION
         run: |
