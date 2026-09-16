@@ -358,15 +358,25 @@ func (s *syncGSuite) SyncGroups(query string) error {
 
 		for _, u := range s.users {
 			log.WithField("user", u.Username).Debug("Checking user is in group already")
-			b, err := identitystore.IsMemberInGroups(context.Background(), s.identityStore, &s.cfg.IdentityStoreID, []string{group.ID}, &u.ID)
-			if err != nil {
-				return err
+
+			// Dry-run users have no ID; the Identity Store rejects an empty
+			// memberId.userId, and a user that does not exist is not a member.
+			var b *bool
+			if u.ID == "" {
+				notAMember := false
+				b = &notAMember
+			} else {
+				var err error
+				b, err = identitystore.IsMemberInGroups(context.Background(), s.identityStore, &s.cfg.IdentityStoreID, []string{group.ID}, &u.ID)
+				if err != nil {
+					return err
+				}
 			}
 
 			if _, ok := memberList[u.Username]; ok {
 				if !*b {
 					log.WithField("user", u.Username).Info("Adding user to group")
-					err = s.aws.AddUserToGroup(u, group)
+					err := s.aws.AddUserToGroup(u, group)
 					if err != nil {
 						return err
 					}
