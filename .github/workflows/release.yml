@@ -79,6 +79,7 @@ jobs:
           audience: sts.amazonaws.com
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::004480582608:role/SSOSync-GitHubActions
+          role-duration-seconds: 7200
       - name: Start CodePipeline
         uses: moia-oss/aws-codepipeline-trigger@v2.1.0
         with:
