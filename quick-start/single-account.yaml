@@ -30,6 +30,7 @@ Metadata:
       - Label:
           default: "Lambda Configuration"
         Parameters:
+          - Release
           - ScheduleExpression
           - DryRun
           - MemorySize
@@ -43,6 +44,19 @@ Metadata:
 
 
 Parameters:
+  Release:
+    Type: String
+    Description: |
+      Select the release to deploy.
+    Default: 2.7.1
+    AllowedValues:
+      - 2.7.1
+      - 2.7.0
+      - 2.6.3
+      - 2.6.2
+      - 2.6.1
+      - 2.6.0
+
   ScheduleExpression:
     Type: String
     Description: |
@@ -200,7 +214,7 @@ Resources:
     Properties:
       Location:
         ApplicationId: arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync
-        SemanticVersion: 2.7.0
+        SemanticVersion: !Ref Release
       Parameters:
         DeployPattern: App only
         FunctionName: SSOSync
@@ -227,7 +241,7 @@ Resources:
     Properties:
       Location:
         ApplicationId: arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync
-        SemanticVersion: 2.7.0
+        SemanticVersion: !Ref Release
       Parameters:
         DeployPattern: Secrets only
         SCIMEndpointUrl: !Ref SCIMEndpointUrl
