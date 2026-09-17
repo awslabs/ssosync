@@ -223,7 +223,7 @@ Resources:
                 ConnectionArn: !Ref CodeStarConnection
                 FullRepositoryId: awslabs/ssosync
                 BranchName: master
-                DetectChanges: true
+                DetectChanges: false
         - Name: Build-App
           Actions:
             - Name: InspectorScan
