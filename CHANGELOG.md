@@ -1,4 +1,43 @@
-## v2.4.0 Latest
+## v2.7.0 Latest
+- Adjust behavior for users that mis-matched ExternalId (#361)
+- Update dependancies (#359)
+- fix: log group id/displayName values, not pointers, in ConvertIdentityStoreGroupToAWSGroup
+
+## v2.6.3
+- 353 changing a users primary email in google workspace permanently aborts every sync (#355)
+
+## v2.6.2
+- 341 go toolchain version 1240 results in numerous cves reported by inspector (#342)
+- Avoid goreleaser build clashes
+- Fix arn handling for none commercial regions (#343)
+- update workflows for node24
+
+## v2.6.1
+- avoid re-adding (#334)
+
+## v2.6.0
+- Add cachestats (#332)
+- Rename feature to CacheMetrics
+
+## v2.5.2
+- BugFix for #329 v25x updates every user and group on every run externalid is never read back from the identity store (#330)
+- BugFix Cross-stack parameter passing in quick-start: single-account.yaml
+
+## v2.5.1
+- Correcting error in Outputs Ids
+
+## v2.5.0
+- 152 remove unnecessary parameters (#327)
+- 324 all createupdatedelete actions via SCIM api (#326)
+- Adding CustomerId to template
+- Adding integration with SAR pipeline
+- CICD updates because should now work in non-delegated
+- Fix quickstart workflow job
+- Updates to ReadMe and CICD pipelines
+- feat: configurable Google Workspace customer ID (#233)
+- update CICD templates
+
+## v2.4.0
 Changelog
 - 309 precache field regex does not all for disabled (#312)
 - Configurable LogRetention and QuickStart, plus bugfixes (#316)
