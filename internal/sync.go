@@ -466,21 +466,23 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 	}
 
 	// create list of changes by operations
-	addAWSUsers, delAWSUsers, updateAWSUsers, unchangedAWSUsers := getUserOperations(awsUsers, googleUsers, s.cfg.ForceExternalIdUpdate)
+	addAWSUsers, delAWSUsers, updateAWSUsers, unchangedAWSUsers, retainAWSUsers := getUserOperations(awsUsers, googleUsers, s.cfg.ForceExternalIdUpdate, s.cfg.RetainUnmatched)
 	log.WithFields(
 		log.Fields{
 			"unchanged": len(unchangedAWSUsers),
 			"create": len(addAWSUsers),
 			"update": len(updateAWSUsers),
-			"delete": len(delAWSUsers)}).Info("Change Summary: users")
+			"delete": len(delAWSUsers),
+			"retained": len (retainAWSUsers)}).Info("Change Summary: users")
 
-	addAWSGroups, delAWSGroups, updateAWSGroups, unchangedAWSGroups := getGroupOperations(awsGroups, googleGroups)
+	addAWSGroups, delAWSGroups, updateAWSGroups, unchangedAWSGroups, retainAWSGroups := getGroupOperations(awsGroups, googleGroups, s.cfg.RetainUnmatched)
 	log.WithFields(
 		log.Fields{
 			"unchanged": len(unchangedAWSGroups),
 			"create": len(addAWSGroups),
 			"update": len(updateAWSGroups),
-			"delete": len(delAWSGroups)}).Info("Change Summary: Groups")
+			"delete": len(delAWSGroups),
+			"retain" : len(retainAWSGroups)}).Info("Change Summary: Groups")
 
 	// update aws users (updated in google)
 	log.Debug("updating aws users updated in google")
@@ -977,7 +979,7 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 }
 
 // getGroupOperations returns the groups of AWS that must be added, deleted and are equals
-func getGroupOperations(awsGroups []*interfaces.Group, googleGroups []*admin.Group) (add []*interfaces.Group, delete []*interfaces.Group, update []*interfaces.Group, equals []*interfaces.Group) {
+func getGroupOperations(awsGroups []*interfaces.Group, googleGroups []*admin.Group, retainUnmatched bool) (add []*interfaces.Group, delete []*interfaces.Group, update []*interfaces.Group, equals []*interfaces.Group, retain []*interfaces.Group) {
 
 	log.Debug("getGroupOperations()")
 	awsMap := make(map[string]*interfaces.Group)
@@ -1022,18 +1024,23 @@ func getGroupOperations(awsGroups []*interfaces.Group, googleGroups []*admin.Gro
 	for _, awsGroup := range awsGroups {
 		if _, found := googleMapId[awsGroup.ExternalId]; !found {
 			if _, found := googleMap[awsGroup.DisplayName]; !found {
-				log.WithField("awsGroup", awsGroup).Debug("delete")
-				delete = append(delete, aws.UpdateGroup(awsGroup.ID, awsGroup.DisplayName, awsGroup.ExternalId))
+				if retainUnmatched {
+					log.WithField("awsGroup", awsGroup).Warn("Retained : deletion supressed.")
+					retain = append(retain, aws.UpdateGroup(awsGroup.ID, awsGroup.DisplayName, awsGroup.ExternalId))
+				} else {
+					log.WithField("awsGroup", awsGroup).Debug("delete")
+					delete = append(delete, aws.UpdateGroup(awsGroup.ID, awsGroup.DisplayName, awsGroup.ExternalId))
+				}
 			}
 		}
 
 	}
 
-	return add, delete, update, equals
+	return add, delete, update, equals, retain
 }
 
-// getUserOperations returns the users of AWS that must be added, deleted, updated and are equals
-func getUserOperations(awsUsers []*interfaces.User, googleUsers []*admin.User, forceExternalIdUpdate bool) (add []*interfaces.User, delete []*interfaces.User, update []*interfaces.User, equals []*interfaces.User) {
+// getUserOperations( returns the users of AWS that must be added, deleted, updated and are equals
+func getUserOperations(awsUsers []*interfaces.User, googleUsers []*admin.User, forceExternalIdUpdate bool, retainUnmatched bool) (add []*interfaces.User, delete []*interfaces.User, update []*interfaces.User, equals []*interfaces.User, retain []*interfaces.User) {
 
 	log.Debug("getUserOperations()")
 	awsMap := make(map[string]*interfaces.User)
@@ -1105,15 +1112,22 @@ func getUserOperations(awsUsers []*interfaces.User, googleUsers []*admin.User, f
 	for _, awsUser := range awsUsers {
 		if _, found := googleMapId[awsUser.ExternalId]; !found {
 			if _, found := googleMap[awsUser.Username]; !found {
-				log.WithFields(log.Fields{
-					"awsUser": awsUser,
-				}).Debug("delete")
-				delete = append(delete, aws.UpdateUser(awsUser.ID, awsUser.Name.GivenName, awsUser.Name.FamilyName, awsUser.Username, awsUser.Active, awsUser.ExternalId))
+				if retainUnmatched {
+					log.WithFields(log.Fields{
+						"awsUser": awsUser,
+					}).Warn("Retained : deletion supressed")
+					retain = append(retain, aws.UpdateUser(awsUser.ID, awsUser.Name.GivenName, awsUser.Name.FamilyName, awsUser.Username, awsUser.Active, awsUser.ExternalId))
+				} else {
+					log.WithFields(log.Fields{
+						"awsUser": awsUser,
+					}).Debug("delete")
+					delete = append(delete, aws.UpdateUser(awsUser.ID, awsUser.Name.GivenName, awsUser.Name.FamilyName, awsUser.Username, awsUser.Active, awsUser.ExternalId))
+				}
 			}
 		}
 	}
 
-	return add, delete, update, equals
+	return add, delete, update, equals, retain
 }
 
 // groupUsersOperations returns the groups and its users of AWS that must be delete from these groups and what are equals

@@ -56,6 +56,8 @@ type Config struct {
 	// are not preserved. This option is required when switching from a different external IdP (Microsoft Entra for example) 
 	// to Google Workspace Directory (with ssosync) and assignments need to be preserved.
 	ForceExternalIdUpdate bool
+	// Blocks the deletion of user and groups that exist in the IAM Identity Store but not in the Google Workspace Directory
+	RetainUnmatched bool
 	// User filter string
 	UserFilter string
 }
@@ -85,6 +87,7 @@ const (
 	// Default behaviour orginial user is deleted and a new user created to ensure excessive privileges
 	// are not preserved.
 	DefaultForceExternalIdUpdate = false
+	DefaultRetainUnmatched = false
 )
 
 // Slice-typed defaults cannot be declared as constants in Go, so they are
