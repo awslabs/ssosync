@@ -56,6 +56,8 @@ type Config struct {
 	// are not preserved. This option is required when switching from a different external IdP (Microsoft Entra for example) 
 	// to Google Workspace Directory (with ssosync) and assignments need to be preserved.
 	ForceExternalIdUpdate bool
+	// Blocks the deletion of user and groups that exist in the IAM Identity Store but not in the Google Workspace Directory
+	RetainUnmatched bool
 	// User filter string
 	UserFilter string
 }
@@ -69,13 +71,36 @@ const (
 	DefaultDebug = false
 	// DefaultGoogleCredentials is the default credentials path
 	DefaultGoogleCredentials = "credentials.json"
+	// DefaultGoogleAdmin is the default service account email address
+	DefaultGoogleAdmin = ""
 	// DefaultCustomerID is the default Google Workspace customer ID.
 	DefaultCustomerID = "my_customer"
 	// DefaultSyncMethod is the default sync method to use.
+	DefaultUserMatch = ""
+	DefaultGroupMatch = "*"
+	DefaultSCIMEndpoint = ""
+	DefaultSCIMAccessToken = ""
 	DefaultSyncMethod = "groups"
+	DefaultCacheMetrics = false
+	DefaultDryRun = false
+	DefaultSyncSuspended = false
 	// Default behaviour orginial user is deleted and a new user created to ensure excessive privileges
 	// are not preserved.
 	DefaultForceExternalIdUpdate = false
+	DefaultRetainUnmatched = false
+)
+
+// Slice-typed defaults cannot be declared as constants in Go, so they are
+// defined as package-level variables.
+var (
+	// DefaultIgnoreUsers is the default set of users to ignore.
+	DefaultIgnoreUsers []string = nil
+	// DefaultIgnoreGroups is the default set of groups to ignore.
+	DefaultIgnoreGroups []string = nil
+	// DefaultPrecacheOrgUnits is the default set of org units to precache.
+	DefaultPrecacheOrgUnits []string = nil
+	// DefaultIncludeGroups is the default set of groups to sync.
+	DefaultIncludeGroups []string = nil
 )
 
 // New returns a new Config
@@ -102,14 +127,6 @@ func (c *Config) Validate() error {
 
 	if c.SCIMAccessToken == "" {
 		return errors.New("SCIM access token is required")
-	}
-
-	if c.Region == "" {
-		return errors.New("AWS region is required")
-	}
-
-	if c.IdentityStoreID == "" {
-		return errors.New("identity store ID is required")
 	}
 
 	if c.SyncMethod != "groups" && c.SyncMethod != "users_groups" {

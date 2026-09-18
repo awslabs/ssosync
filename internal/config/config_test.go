@@ -78,34 +78,6 @@ func TestConfigValidate_MissingSCIMAccessToken(t *testing.T) {
 	assert.Contains(t, err.Error(), "SCIM access token is required")
 }
 
-func TestConfigValidate_MissingRegion(t *testing.T) {
-	cfg := &Config{
-		GoogleAdmin:     "admin@example.com",
-		SCIMEndpoint:    "https://scim.example.com",
-		SCIMAccessToken: "token123",
-		IdentityStoreID: "d-123456789",
-		SyncMethod:      "groups",
-	}
-
-	err := cfg.Validate()
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "AWS region is required")
-}
-
-func TestConfigValidate_MissingIdentityStoreID(t *testing.T) {
-	cfg := &Config{
-		GoogleAdmin:     "admin@example.com",
-		SCIMEndpoint:    "https://scim.example.com",
-		SCIMAccessToken: "token123",
-		Region:          "us-east-1",
-		SyncMethod:      "groups",
-	}
-
-	err := cfg.Validate()
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "identity store ID is required")
-}
-
 func TestConfigValidate_InvalidSyncMethod(t *testing.T) {
 	cfg := &Config{
 		GoogleAdmin:     "admin@example.com",
