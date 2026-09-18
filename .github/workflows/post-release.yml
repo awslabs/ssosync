@@ -1,4 +1,4 @@
-# .github/workflows/release-publish.yaml
+# .github/workflows/post-release.yml
 name: "Post Release Updates"
 
 on:
@@ -16,27 +16,35 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.head_ref }}
+          ref: master
           # Value already defaults to true, but `persist-credentials` is required to push new commits to the repository.
           persist-credentials: true
 
       - name: Fetch SEMANTIC_VERSION
+        env:
+          TAG_NAME: ${{ github.event.release.tag_name }}
         run: |
-          echo "SEMANTIC_VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
+          echo "SEMANTIC_VERSION=${TAG_NAME#v}" >> "$GITHUB_ENV"
 
       - name: Show SemanticVersion
         run: |
           echo "env.SemanticVersion: ${{ env.SEMANTIC_VERSION }}"
 
       - name: Show current SemanticVersion
-        run: grep SemanticVersion quick-start/*.yaml
+        run: grep SemanticVersion quick-start/*.yaml || true
 
       - name: Update Templates
         run: |
-          git grep -lr -e 'SemanticVersion' -- quick-start | xargs sed -i -E 's/SemanticVersion: [0-9.]+/SemanticVersion: ${{ env.SEMANTIC_VERSION }}/g'
+          git grep -lr -e '#SemanticVersion' -- quick-start | xargs sed -i -E -e "/^[[:space:]]*#[[:space:]]*Semantic ?Version[[:space:]]*$/{
+          n
+          /^[[:space:]]*Default: ${{ env.SEMANTIC_VERSION }}$/b
+          s/^([[:space:]]*Default: ).*$/\1${{ env.SEMANTIC_VERSION }}/
+          n
+          a\\      - ${{ env.SEMANTIC_VERSION }}
+          }"
 
       - name: Show Templates SemanticVersion
-        run: grep SemanticVersion quick-start/*.yaml
+        run: grep SemanticVersion quick-start/*.yaml || true
 
       - name: Update Changelog
         uses: stefanzweifel/changelog-updater-action@v1
