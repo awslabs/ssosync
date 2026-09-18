@@ -48,6 +48,7 @@ Parameters:
     Type: String
     Description: |
       Select the release to deploy.
+    #SemanticVersion 
     Default: 2.7.1
     AllowedValues:
       - 2.7.1
