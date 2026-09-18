@@ -473,7 +473,7 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 			"create": len(addAWSUsers),
 			"update": len(updateAWSUsers),
 			"delete": len(delAWSUsers),
-			"retained": len (retainAWSUsers)}).Info("Change Summary: users")
+			"retain": len(retainAWSUsers)}).Info("Change Summary: users")
 
 	addAWSGroups, delAWSGroups, updateAWSGroups, unchangedAWSGroups, retainAWSGroups := getGroupOperations(awsGroups, googleGroups, s.cfg.RetainUnmatched)
 	log.WithFields(
@@ -482,7 +482,7 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 			"create": len(addAWSGroups),
 			"update": len(updateAWSGroups),
 			"delete": len(delAWSGroups),
-			"retain" : len(retainAWSGroups)}).Info("Change Summary: Groups")
+			"retain": len(retainAWSGroups)}).Info("Change Summary: Groups")
 
 	// update aws users (updated in google)
 	log.Debug("updating aws users updated in google")
@@ -1025,7 +1025,7 @@ func getGroupOperations(awsGroups []*interfaces.Group, googleGroups []*admin.Gro
 		if _, found := googleMapId[awsGroup.ExternalId]; !found {
 			if _, found := googleMap[awsGroup.DisplayName]; !found {
 				if retainUnmatched {
-					log.WithField("awsGroup", awsGroup).Warn("Retained : deletion supressed.")
+					log.WithField("awsGroup", awsGroup).Warn("Retained: deletion suppressed.")
 					retain = append(retain, aws.UpdateGroup(awsGroup.ID, awsGroup.DisplayName, awsGroup.ExternalId))
 				} else {
 					log.WithField("awsGroup", awsGroup).Debug("delete")
@@ -1039,7 +1039,7 @@ func getGroupOperations(awsGroups []*interfaces.Group, googleGroups []*admin.Gro
 	return add, delete, update, equals, retain
 }
 
-// getUserOperations( returns the users of AWS that must be added, deleted, updated and are equals
+// getUserOperations returns the users of AWS that must be added, deleted, updated and are equals
 func getUserOperations(awsUsers []*interfaces.User, googleUsers []*admin.User, forceExternalIdUpdate bool, retainUnmatched bool) (add []*interfaces.User, delete []*interfaces.User, update []*interfaces.User, equals []*interfaces.User, retain []*interfaces.User) {
 
 	log.Debug("getUserOperations()")
@@ -1115,7 +1115,7 @@ func getUserOperations(awsUsers []*interfaces.User, googleUsers []*admin.User, f
 				if retainUnmatched {
 					log.WithFields(log.Fields{
 						"awsUser": awsUser,
-					}).Warn("Retained : deletion supressed")
+					}).Warn("Retained: deletion suppressed")
 					retain = append(retain, aws.UpdateUser(awsUser.ID, awsUser.Name.GivenName, awsUser.Name.FamilyName, awsUser.Username, awsUser.Active, awsUser.ExternalId))
 				} else {
 					log.WithFields(log.Fields{
