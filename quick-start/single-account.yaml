@@ -51,14 +51,9 @@ Parameters:
     Description: |
       Select the release to deploy.
     #SemanticVersion 
-    Default: 2.7.1
+    Default: 2.8.0
     AllowedValues:
-      - 2.7.1
-      - 2.7.0
-      - 2.6.3
-      - 2.6.2
-      - 2.6.1
-      - 2.6.0
+      - 2.8.0
 
   ScheduleExpression:
     Type: String
@@ -250,7 +245,7 @@ Resources:
         SyncMethod: groups
         ScheduleExpression: !Ref ScheduleExpression
         SyncSuspended: !Ref SyncSuspended
-        ExternalIdChange: !Refg ExternalIdChange
+        ExternalIdChange: !Ref ExternalIdChange
         RetainUnmatched: !Ref RetainUnmatched
         DryRun: !Ref DryRun
         MemorySize: !Ref MemorySize
