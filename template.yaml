@@ -25,8 +25,8 @@ Metadata:
           - IgnoreGroups
           - SyncSuspended
           - PrecacheOrgUnits
-          - SyncSuspended
-          - PrecacheOrgUnits
+          - ExternalIdChange
+          - RetainUnmatched
       - Label:
           default: "Lambda Configuration"
         Parameters:
@@ -196,7 +196,25 @@ Parameters:
     AllowedValues:
       - ignore
       - sync
+
+  ExternalIdChange:
+    Type: String
+    Description: |
+      When a user (in the Google Workspace Directory) is deleted and recreated, either 'update' the existing IAM Identity Store user, to preserve permission assignments or 'delete and recreate' to prevent permission inheritance.
+    Default: delete/recreate
+    AllowedValues:
+      - delete/recreate
+      - update
       
+  RetainUnmatched:
+    Type: String
+    Description: |
+      Retain all unmatched users and groups when syncing, users will not be able login without a matching user in the Google Workspace Directory.
+    Default: remove
+    AllowedValues:
+      - remove
+      - retain
+
   DryRun:
     Type: String
     Description: | 
@@ -336,6 +354,8 @@ Conditions:
   SetDryRun: !Equals [!Ref DryRun, "dry-run"]
   SetSyncSuspended: !Equals [!Ref SyncSuspended, "sync"]
   DisablePrecaching: !Equals [!Ref PrecacheOrgUnits, ""]
+  SetForceExternalIdUpdate: !Equals [!Ref ExternalIdChange, "update"]
+  SetRetainUnmatched: !Equals [!Ref RetainUnmatched, "retain"]
   OnSchedule: !And
     - !Condition CreateFunction
     - !Not
@@ -561,6 +581,8 @@ Resources:
           DRY_RUN: !If [SetDryRun, 'True', !Ref AWS::NoValue]
           SYNC_SUSPENDED: !If [SetSyncSuspended, 'True', !Ref AWS::NoValue]
           PRECACHE_ORG_UNITS: !If [DisablePrecaching, !Ref AWS::NoValue, !Ref PrecacheOrgUnits]
+          FORCE_EXTERNAL_ID_UPDATE: !If [SetForceExternalIdUpdate, 'True', !Ref AWS::NoValue]
+          RETAIN_UNMATCHED: !If [SetRetainUnmatched, 'True', !Ref AWS::NoValue]
 
   PermissionForEventsToInvokeLambda:
     Type: AWS::Lambda::Permission

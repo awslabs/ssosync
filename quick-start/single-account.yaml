@@ -27,6 +27,8 @@ Metadata:
           - GoogleGroupMatch
           - SyncSuspended
           - PrecacheOrgUnits
+          - ExternalIdChange
+          - RetainUnmatched
       - Label:
           default: "Lambda Configuration"
         Parameters:
@@ -142,7 +144,25 @@ Parameters:
     AllowedValues:
       - ignore
       - sync
+
+  ExternalIdChange:
+    Type: String
+    Description: |
+      When a user (in the Google Workspace Directory) is deleted and recreated, either 'update' the existing IAM Identity Store user, to preserve permission assignments or 'delete and recreate' to prevent permission inheritance.
+    Default: delete/recreate
+    AllowedValues:
+      - delete/recreate
+      - update
       
+  RetainUnmatched:
+    Type: String
+    Description: |
+      Retain all unmatched users and groups when syncing, users will not be able login without a matching user in the Google Workspace Directory.
+    Default: remove
+    AllowedValues:
+      - remove
+      - retain
+
   DryRun:
     Type: String
     Description: | 
@@ -230,6 +250,8 @@ Resources:
         SyncMethod: groups
         ScheduleExpression: !Ref ScheduleExpression
         SyncSuspended: !Ref SyncSuspended
+        ExternalIdChange: !Refg ExternalIdChange
+        RetainUnmatched: !Ref RetainUnmatched
         DryRun: !Ref DryRun
         MemorySize: !Ref MemorySize
         TimeOut: !Ref TimeOut
