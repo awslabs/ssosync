@@ -213,21 +213,24 @@ export SSOSYNC_DRY_RUN="true"
 
 | Flag | Environment Variable | Description | Default |
 |------|---------------------|-------------|---------|
-| `--google-admin` | `SSOSYNC_GOOGLE_ADMIN` | Google Workspace admin email | Required |
-| `--google-credentials` | `SSOSYNC_GOOGLE_CREDENTIALS` | Path to Google credentials JSON | `credentials.json` |
+| `--google-admin` / `-u` | `SSOSYNC_GOOGLE_ADMIN` | Google Workspace admin email | Required |
+| `--google-credentials` / `-c` | `SSOSYNC_GOOGLE_CREDENTIALS` | Path to Google credentials JSON | `credentials.json` |
 | `--customer-id` | `SSOSYNC_CUSTOMER_ID` | Google Workspace customer ID | `my_customer` |
-| `--endpoint` | `SSOSYNC_SCIM_ENDPOINT` | AWS SCIM endpoint URL | Required |
-| `--access-token` | `SSOSYNC_SCIM_ACCESS_TOKEN` | AWS SCIM access token | Required |
-| `--sync-method` | `SSOSYNC_SYNC_METHOD` | Sync method (`groups` or `users_groups`) | `groups` |
-| `--group-match` | `SSOSYNC_GROUP_MATCH` | Google Groups filter query | `*` |
-| `--user-match` | `SSOSYNC_USER_MATCH` | Google Users filter query | `""` |
+| `--endpoint` / `-e` | `SSOSYNC_SCIM_ENDPOINT` | AWS SCIM endpoint URL | Required |
+| `--access-token` / `-t` | `SSOSYNC_SCIM_ACCESS_TOKEN` | AWS SCIM access token | Required |
+| `--sync-method` / `-s` | `SSOSYNC_SYNC_METHOD` | Sync method (`groups` or `users_groups`) | `groups` |
+| `--group-match` / `-g` | `SSOSYNC_GROUP_MATCH` | Google Groups filter query | `*` |
+| `--user-match` / `-m` | `SSOSYNC_USER_MATCH` | Google Users filter query | `""` |
 | `--ignore-users` | `SSOSYNC_IGNORE_USERS` | Comma-separated list of users to ignore | `[]` |
 | `--ignore-groups` | `SSOSYNC_IGNORE_GROUPS` | Comma-separated list of groups to ignore | `[]` |
 | `--include-groups` | `SSOSYNC_INCLUDE_GROUPS` | Include only these groups (users_groups method only) | `[]` |
 | `--precache-ous` | `SSOSYNC_PRECACHE_ORG_UNITS` | Comma-separated list of Google OrgUnit paths to precache | `[]` |
-| `--dry-run` | `SSOSYNC_DRY_RUN` | Enable dry-run mode | `false` |
+| `--cache-metrics` | `SSOSYNC_CACHE_METRICS` | Gather cache hit/miss metrics and output them at the end of the run to help refine `--precache-ous` | `false` |
+| `--dry-run` / `-n` | `SSOSYNC_DRY_RUN` | Enable dry-run mode | `false` |
 | `--suspended` | `SSOSYNC_SYNC_SUSPENDED` | Include suspended users when syncing | `false` |
 | `--force-externalid-update` | `SSOSYNC_FORCE_EXTERNAL_ID_UPDATE` | When a Google user shares the same primary email as an existing Identity Store user but has a different ID, update the existing user's `ExternalId` in place instead of deleting and recreating it. See [Preserving assignments when migrating IdPs](#preserving-assignments-when-migrating-idps). | `false` |
+| `--retain-unmatched` / `-r` | `SSOSYNC_RETAIN_UNMATCHED` | Retain users and groups that exist in the IAM Identity Store but cannot be matched to the Google Workspace directory, instead of deleting them. See [Retaining unmatched users and groups](#retaining-unmatched-users-and-groups). | `false` |
+| `--debug` / `-d` | `SSOSYNC_DEBUG` | Enable verbose / debug logging (forces log level to `debug`) | `false` |
 | `--log-level` | `SSOSYNC_LOG_LEVEL` | Log level (debug, info, warn, error) | `info` |
 | `--log-format` | `SSOSYNC_LOG_FORMAT` | Log format (text, json) | `text` |
 
@@ -245,6 +248,17 @@ If an existing Identity Store user matches a Google Workspace user by email addr
 
 > [!CAUTION]
 > Enabling this flag can cause a user to inherit privileges from the previously matched Identity Store user. Only enable it when you understand and accept that risk, such as during a controlled IdP migration.
+
+#### Retaining unmatched users and groups
+
+ssosync performs a uni-directional sync: by default any user or group that exists in the IAM Identity Store but cannot be matched to the subset of your Google Workspace directory you are syncing is **deleted** so the Identity Store mirrors Google Workspace.
+
+Setting `--retain-unmatched` (or `SSOSYNC_RETAIN_UNMATCHED=true`) blocks those deletions. Users and groups that exist in the Identity Store but have no match in the Google Workspace directory are left in place instead of being removed.
+
+This is useful when the Identity Store also contains identities managed outside of ssosync (for example users and groups created by AWS Control Tower) that you do not want removed on each sync.
+
+> [!CAUTION]
+> Retaining unmatched identities means the Identity Store will no longer be an exact mirror of your Google Workspace directory. Users removed from Google Workspace will not be removed from the Identity Store while this flag is set.
 
 ### Filtering Examples
 
@@ -427,9 +441,13 @@ GROUP_MATCH=*
 USER_MATCH=
 IGNORE_USERS=
 IGNORE_GROUPS=
+INCLUDE_GROUPS=
+PRECACHE_ORG_UNITS=
+CACHE_METRICS=false
 DRY_RUN=false
 SYNC_SUSPENDED=false
 FORCE_EXTERNAL_ID_UPDATE=false
+RETAIN_UNMATCHED=false
 ```
 
 > **Note:** `REGION` and `IDENTITY_STORE_ID` environment variables are no longer required. Region is derived from the SCIM endpoint URL, and Identity Store ID is resolved via the IAM Identity Center API.
