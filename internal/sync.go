@@ -240,49 +240,141 @@ func (s *syncGSuite) SyncUsers(query string) error {
 		return err
 	}
 
+	// Filter out ignored google users before correlating with AWS.
+	filteredGoogleUsers := make([]*admin.User, 0, len(googleUsers))
 	for _, u := range googleUsers {
 		if s.ignoreUser(u.PrimaryEmail) {
 			continue
 		}
+		filteredGoogleUsers = append(filteredGoogleUsers, u)
+	}
 
+	// Source the existing AWS users from the Identity Store so that their
+	// ExternalId is populated. This allows matching on ExternalId (the Google
+	// user id) rather than email address alone, mirroring getUserOperations.
+	log.Debug("get existing aws users")
+	awsUsers, err := s.GetUsers()
+	if err != nil {
+		log.Error("error getting aws users")
+		return err
+	}
+
+	// ConvertSdkUserObjToNative does not populate Active; fetch it via SCIM.
+	for _, awsUser := range awsUsers {
+		scimUser, err := s.aws.FindUserByEmail(awsUser.Username)
+		if err != nil {
+			log.WithField("user", awsUser.Username).Error("error getting active status for user")
+			return err
+		}
+		awsUser.Active = scimUser.Active
+	}
+
+	// Build lookup maps by ExternalId (Google id) and by username (email).
+	awsUsersByExtId := make(map[string]*interfaces.User)
+	awsUsersByUsername := make(map[string]*interfaces.User)
+	for _, awsUser := range awsUsers {
+		if awsUser.ExternalId != "" {
+			awsUsersByExtId[awsUser.ExternalId] = awsUser
+		}
+		awsUsersByUsername[awsUser.Username] = awsUser
+	}
+
+	// setUser upserts the synced user into s.users so SyncGroups can use it
+	// for membership sync. It re-fetches by email to obtain the SCIM ID.
+	setUser := func(username string) error {
+		uu, err := s.aws.FindUserByEmail(username)
+		if err != nil {
+			return err
+		}
+		s.users[uu.Username] = uu
+		return nil
+	}
+
+	for _, u := range filteredGoogleUsers {
 		ll := log.WithFields(log.Fields{
 			"email": u.PrimaryEmail,
 		})
 
-		ll.Debug("finding user")
-		uu, _ := s.aws.FindUserByEmail(u.PrimaryEmail)
-		if uu != nil {
-			s.users[uu.Username] = uu
-			// Update the user when suspended state is changed
-			if uu.Active == u.Suspended {
-				log.Debug("Mismatch active/suspended, updating user")
-				// create new user object and update the user
-				_, err := s.aws.UpdateUser(aws.UpdateUser(
-					uu.ID,
-					u.Name.GivenName,
-					u.Name.FamilyName,
-					u.PrimaryEmail,
-					!u.Suspended,
-					u.Id))
-				if err != nil {
+		if awsUser, found := awsUsersByExtId[u.Id]; found {
+			// Matched by ExternalId (Google id). Update if any attribute differs.
+			if awsUser.Active == u.Suspended ||
+				awsUser.Username != u.PrimaryEmail ||
+				awsUser.Name.GivenName != u.Name.GivenName ||
+				awsUser.Name.FamilyName != u.Name.FamilyName {
+				ll.Debug("update")
+				if _, err := s.aws.UpdateUser(aws.UpdateUser(
+					awsUser.ID, u.Name.GivenName, u.Name.FamilyName, u.PrimaryEmail, !u.Suspended, u.Id)); err != nil {
+					return err
+				}
+			} else {
+				ll.Debug("equals")
+			}
+		} else if awsUser, found := awsUsersByUsername[u.PrimaryEmail]; found {
+			// Matched by email but not by ExternalId.
+			if len(awsUser.ExternalId) > 0 {
+				if s.cfg.ForceExternalIdUpdate {
+					ll.WithField("awsUser", awsUser).Warn("New google user with the same primary email address but a different id, Force option set, so retaining the existing user and updating its ExternalId. Caution this may lead to inherited privileges.")
+					if _, err := s.aws.UpdateUser(aws.UpdateUser(
+						awsUser.ID, u.Name.GivenName, u.Name.FamilyName, u.PrimaryEmail, !u.Suspended, u.Id)); err != nil {
+						return err
+					}
+				} else {
+					ll.WithField("awsUser", awsUser).Warn("New google user with the same primary email address but a different id, delete AWS user and create a new AWS user.")
+					if err := s.aws.DeleteUser(aws.UpdateUser(
+						awsUser.ID, awsUser.Name.GivenName, awsUser.Name.FamilyName, awsUser.Username, awsUser.Active, awsUser.ExternalId)); err != nil {
+						return err
+					}
+					if _, err := s.aws.CreateUser(aws.NewUser(
+						u.Name.GivenName, u.Name.FamilyName, u.PrimaryEmail, !u.Suspended, u.Id)); err != nil {
+						return err
+					}
+				}
+			} else {
+				// Existing user with no ExternalId: adopt it and sync in place.
+				ll.Debug("A local user that matches the primary email address of a google user has been found, adopting to be synced.")
+				if _, err := s.aws.UpdateUser(aws.UpdateUser(
+					awsUser.ID, u.Name.GivenName, u.Name.FamilyName, u.PrimaryEmail, !u.Suspended, u.Id)); err != nil {
 					return err
 				}
 			}
-			continue
+		} else {
+			ll.Info("creating user")
+			if _, err := s.aws.CreateUser(aws.NewUser(
+				u.Name.GivenName, u.Name.FamilyName, u.PrimaryEmail, !u.Suspended, u.Id)); err != nil {
+				return err
+			}
 		}
 
-		ll.Info("creating user")
-		uu, err := s.aws.CreateUser(aws.NewUser(
-			u.Name.GivenName,
-			u.Name.FamilyName,
-			u.PrimaryEmail,
-			!u.Suspended,
-			u.Id))
-		if err != nil {
+		if err := setUser(u.PrimaryEmail); err != nil {
 			return err
 		}
+	}
 
-		s.users[uu.Username] = uu
+	// Look for AWS users not found in Google and delete them, unless the
+	// RetainUnmatched option is set.
+	googleUsersById := make(map[string]struct{}, len(filteredGoogleUsers))
+	googleUsersByEmail := make(map[string]struct{}, len(filteredGoogleUsers))
+	for _, u := range filteredGoogleUsers {
+		googleUsersById[u.Id] = struct{}{}
+		googleUsersByEmail[u.PrimaryEmail] = struct{}{}
+	}
+
+	for _, awsUser := range awsUsers {
+		if _, found := googleUsersById[awsUser.ExternalId]; found {
+			continue
+		}
+		if _, found := googleUsersByEmail[awsUser.Username]; found {
+			continue
+		}
+		if s.cfg.RetainUnmatched {
+			log.WithField("awsUser", awsUser).Warn("Retained: deletion suppressed")
+			continue
+		}
+		log.WithField("awsUser", awsUser).Info("deleting user")
+		if err := s.aws.DeleteUser(aws.UpdateUser(
+			awsUser.ID, awsUser.Name.GivenName, awsUser.Name.FamilyName, awsUser.Username, awsUser.Active, awsUser.ExternalId)); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -307,12 +399,37 @@ func (s *syncGSuite) SyncGroups(query string) error {
 		return err
 	}
 
+	// Source the existing AWS groups from the Identity Store so that their
+	// ExternalId is populated. This allows matching on ExternalId (the Google
+	// group id) rather than display name alone, mirroring getGroupOperations.
+	log.Debug("get existing aws groups")
+	awsGroups, err := s.GetGroups()
+	if err != nil {
+		log.Error("error getting aws groups")
+		return err
+	}
+
+	awsGroupsByExtId := make(map[string]*interfaces.Group)
+	awsGroupsByDisplayName := make(map[string]*interfaces.Group)
+	for _, awsGroup := range awsGroups {
+		if awsGroup.ExternalId != "" {
+			awsGroupsByExtId[awsGroup.ExternalId] = awsGroup
+		}
+		awsGroupsByDisplayName[awsGroup.DisplayName] = awsGroup
+	}
+
+	// Track the display names of the google groups actually synced so that
+	// unmatched AWS groups can be reconciled (deleted/retained) afterwards.
+	syncedGroupNames := make(map[string]struct{})
+
 	correlatedGroups := make(map[string]*interfaces.Group)
 
 	for _, g := range googleGroups {
 		if s.ignoreGroup(g.Email) || !s.includeGroup(g.Email) {
 			continue
 		}
+
+		syncedGroupNames[g.Email] = struct{}{}
 
 		log := log.WithFields(log.Fields{
 			"group": g.Email,
@@ -321,25 +438,38 @@ func (s *syncGSuite) SyncGroups(query string) error {
 		log.Debug("Check group")
 		var group *interfaces.Group
 
-		gg, err := s.aws.FindGroupByDisplayName(g.Email)
-		if err != nil && err != aws.ErrGroupNotFound {
-			return err
-		}
-
-		if gg != nil {
-			log.Debug("Found group")
-			correlatedGroups[gg.DisplayName] = gg
-			group = gg
+		if awsGroup, found := awsGroupsByExtId[g.Id]; found {
+			// Matched by ExternalId (Google id). Update if the display name differs.
+			if awsGroup.DisplayName != g.Email {
+				log.Debug("update")
+				if _, err := s.aws.UpdateGroup(aws.UpdateGroup(awsGroup.ID, g.Email, g.Id)); err != nil {
+					return err
+				}
+				awsGroup.DisplayName = g.Email
+			} else {
+				log.Debug("equals")
+			}
+			group = awsGroup
+		} else if awsGroup, found := awsGroupsByDisplayName[g.Email]; found {
+			// Matched by display name but not by ExternalId: update to backfill
+			// (or correct) the ExternalId.
+			log.Debug("update")
+			if _, err := s.aws.UpdateGroup(aws.UpdateGroup(awsGroup.ID, g.Email, g.Id)); err != nil {
+				return err
+			}
+			awsGroup.ExternalId = g.Id
+			group = awsGroup
 		} else {
 			log.Info("Creating group in AWS")
 			newGroup := aws.NewGroup(g.Email, g.Id)
-			_, err := s.aws.CreateGroup(newGroup)
+			createdGroup, err := s.aws.CreateGroup(newGroup)
 			if err != nil {
 				return err
 			}
-			correlatedGroups[newGroup.DisplayName] = newGroup
-			group = newGroup
+			group = createdGroup
 		}
+
+		correlatedGroups[group.DisplayName] = group
 
 		groupMembers, err := s.google.GetGroupMembers(g)
 		if err != nil {
@@ -390,6 +520,33 @@ func (s *syncGSuite) SyncGroups(query string) error {
 					}
 				}
 			}
+		}
+	}
+
+	// Look for AWS groups not matched to a synced Google group and delete
+	// them, unless the RetainUnmatched option is set.
+	googleGroupsById := make(map[string]struct{})
+	for _, g := range googleGroups {
+		if s.ignoreGroup(g.Email) || !s.includeGroup(g.Email) {
+			continue
+		}
+		googleGroupsById[g.Id] = struct{}{}
+	}
+
+	for _, awsGroup := range awsGroups {
+		if _, found := googleGroupsById[awsGroup.ExternalId]; found {
+			continue
+		}
+		if _, found := syncedGroupNames[awsGroup.DisplayName]; found {
+			continue
+		}
+		if s.cfg.RetainUnmatched {
+			log.WithField("awsGroup", awsGroup).Warn("Retained: deletion suppressed")
+			continue
+		}
+		log.WithField("awsGroup", awsGroup).Info("deleting group")
+		if err := s.aws.DeleteGroup(aws.UpdateGroup(awsGroup.ID, awsGroup.DisplayName, awsGroup.ExternalId)); err != nil {
+			return err
 		}
 	}
 
