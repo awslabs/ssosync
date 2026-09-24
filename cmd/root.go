@@ -28,13 +28,13 @@ import (
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/aws"
-	aws_config "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/aws/arn"
-	"github.com/aws/aws-sdk-go-v2/service/ssoadmin"
+	aws_config "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/codepipeline"
 	"github.com/aws/aws-sdk-go-v2/service/codepipeline/types"
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
+	"github.com/aws/aws-sdk-go-v2/service/ssoadmin"
 	"github.com/aws/aws-secretsmanager-caching-go/v2/secretcache"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
@@ -209,7 +209,7 @@ func initConfig() {
 
 	if cfg.SCIMEndpoint != "" {
 		cfg.Region = getRegion()
-		cfg.IdentityStoreID =  getIdentityStoreId()
+		cfg.IdentityStoreID = getIdentityStoreId()
 	}
 
 }
@@ -217,16 +217,16 @@ func initConfig() {
 var secretCache *secretcache.Cache
 
 func getEnvSensitive(key string, fallback string) string {
-    EnvVar := getEnvStr(key, fallback)
-    if a, err := arn.Parse(EnvVar); err == nil {
-        switch a.Service {
-        case "secretsmanager":
-            return getSecretFromCache(EnvVar)
-        case "ssm":
-            return getEncryptParam(EnvVar)
-        }
-    }
-    return EnvVar // not an ARN -> use the literal value
+	EnvVar := getEnvStr(key, fallback)
+	if a, err := arn.Parse(EnvVar); err == nil {
+		switch a.Service {
+		case "secretsmanager":
+			return getSecretFromCache(EnvVar)
+		case "ssm":
+			return getEncryptParam(EnvVar)
+		}
+	}
+	return EnvVar // not an ARN -> use the literal value
 }
 
 func getEnvStr(key string, fallback string) string {
@@ -285,7 +285,7 @@ func getIdentityStoreId() string {
 	}
 
 	IdentityStoreId := aws.ToString(output.Instances[0].IdentityStoreId)
-		log.WithField("IdentityStoreId", IdentityStoreId).Info("getIdentityStoreId()")
+	log.WithField("IdentityStoreId", IdentityStoreId).Info("getIdentityStoreId()")
 	return IdentityStoreId
 }
 
