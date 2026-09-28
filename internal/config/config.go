@@ -33,6 +33,8 @@ type Config struct {
 	IsLambdaRunningInCodePipeline bool
 	// Ignore users ...
 	IgnoreUsers []string `mapstructure:"ignore_users"`
+	// Ignore users whose primary email ends with one of these suffixes ...
+	IgnoreUserSuffixes []string `mapstructure:"ignore_user_suffixes"`
 	// Ignore groups ...
 	IgnoreGroups []string `mapstructure:"ignore_groups"`
 	// Include groups ...
@@ -95,6 +97,8 @@ const (
 var (
 	// DefaultIgnoreUsers is the default set of users to ignore.
 	DefaultIgnoreUsers []string = nil
+	// DefaultIgnoreUserSuffixes is the default set of email suffixes to ignore.
+	DefaultIgnoreUserSuffixes []string = nil
 	// DefaultIgnoreGroups is the default set of groups to ignore.
 	DefaultIgnoreGroups []string = nil
 	// DefaultPrecacheOrgUnits is the default set of org units to precache.

@@ -41,6 +41,74 @@ func TestIgnoreUser(t *testing.T) {
 	assert.False(t, sync.ignoreUser("allow@example.com"))
 }
 
+func TestIgnoreUserSuffixes(t *testing.T) {
+	tests := []struct {
+		name     string
+		cfg      *config.Config
+		user     string
+		expected bool
+	}{
+		{
+			name: "exact match only, no suffixes configured",
+			cfg: &config.Config{
+				IgnoreUsers: []string{"ignore1@example.com"},
+			},
+			user:     "ignore1@example.com",
+			expected: true,
+		},
+		{
+			name: "suffix match",
+			cfg: &config.Config{
+				IgnoreUserSuffixes: []string{".guest.google"},
+			},
+			user:     "x@example.com.guest.google",
+			expected: true,
+		},
+		{
+			name: "suffix match is case-insensitive",
+			cfg: &config.Config{
+				IgnoreUserSuffixes: []string{".GUEST.Google"},
+			},
+			user:     "x@example.com.guest.google",
+			expected: true,
+		},
+		{
+			name: "non-matching user",
+			cfg: &config.Config{
+				IgnoreUserSuffixes: []string{".guest.google"},
+			},
+			user:     "regular@example.com",
+			expected: false,
+		},
+		{
+			name: "empty suffix entry is ignored",
+			cfg: &config.Config{
+				IgnoreUserSuffixes: []string{"", "   "},
+			},
+			user:     "regular@example.com",
+			expected: false,
+		},
+		{
+			name: "nil suffixes",
+			cfg: &config.Config{
+				IgnoreUserSuffixes: nil,
+			},
+			user:     "regular@example.com",
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sync := &syncGSuite{
+				cfg: tt.cfg,
+			}
+
+			assert.Equal(t, tt.expected, sync.ignoreUser(tt.user))
+		})
+	}
+}
+
 func TestIgnoreGroup(t *testing.T) {
 	cfg := &config.Config{
 		IgnoreGroups: []string{"ignore-group1@example.com", "ignore-group2@example.com"},

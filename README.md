@@ -222,6 +222,7 @@ export SSOSYNC_DRY_RUN="true"
 | `--group-match` / `-g` | `SSOSYNC_GROUP_MATCH` | Google Groups filter query | `*` |
 | `--user-match` / `-m` | `SSOSYNC_USER_MATCH` | Google Users filter query | `""` |
 | `--ignore-users` | `SSOSYNC_IGNORE_USERS` | Comma-separated list of users to ignore | `[]` |
+| `--ignore-user-suffixes` | `SSOSYNC_IGNORE_USER_SUFFIXES` | Comma-separated email suffixes; users whose primary email ends with one are ignored, e.g. `.guest.google` | `[]` |
 | `--ignore-groups` | `SSOSYNC_IGNORE_GROUPS` | Comma-separated list of groups to ignore | `[]` |
 | `--include-groups` | `SSOSYNC_INCLUDE_GROUPS` | Include only these groups (users_groups method only) | `[]` |
 | `--precache-ous` | `SSOSYNC_PRECACHE_ORG_UNITS` | Comma-separated list of Google OrgUnit paths to precache | `[]` |
