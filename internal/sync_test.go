@@ -4,10 +4,13 @@ import (
 	"context"
 	"testing"
 
+	awsinternal "ssosync/internal/aws"
 	"ssosync/internal/config"
 	"ssosync/internal/interfaces"
 	"ssosync/internal/mocks"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/identitystore"
 	"github.com/aws/aws-sdk-go-v2/service/identitystore/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -831,20 +834,33 @@ func TestSyncGroups_DryRunUserWithoutID(t *testing.T) {
 	}
 
 	group := &admin.Group{Email: "group@example.com", Id: "gid"}
-	awsGroup := &interfaces.Group{ID: "aws-gid", DisplayName: "group@example.com"}
 
 	googleClient := mocks.NewMockGoogleClient(t)
 	googleClient.EXPECT().GetGroups("").Return([]*admin.Group{group}, nil)
 	googleClient.EXPECT().GetGroupMembers(group).
 		Return([]*admin.Member{{Email: "new@example.com"}}, nil)
 
-	awsClient := mocks.NewMockAwsClient(t)
-	awsClient.EXPECT().FindGroupByDisplayName("group@example.com").Return(awsGroup, nil)
-	awsClient.EXPECT().AddUserToGroup(mock.Anything, awsGroup).Return(nil)
-
+	// SyncGroups now sources existing AWS groups from the Identity Store so
+	// their ExternalId is populated for matching.
+	identityStore := mocks.NewMockIdentityStoreAPI(t)
+	identityStore.EXPECT().ListGroups(mock.Anything, mock.Anything, mock.Anything).
+		Return(&identitystore.ListGroupsOutput{
+			Groups: []types.Group{
+				{GroupId: aws.String("aws-gid"), DisplayName: aws.String("group@example.com")},
+			},
+		}, nil)
 	// No EXPECT for IsMemberInGroups: mockery fails the test on any unexpected
 	// call, so this asserts the API is never reached for an ID-less user.
-	identityStore := mocks.NewMockIdentityStoreAPI(t)
+
+	awsClient := mocks.NewMockAwsClient(t)
+	// The AWS group matches by display name but has no ExternalId, so it is
+	// updated to backfill the ExternalId (the Google group id).
+	awsClient.EXPECT().UpdateGroup(mock.MatchedBy(func(g *interfaces.Group) bool {
+		return g.ID == "aws-gid" && g.DisplayName == "group@example.com" && g.ExternalId == "gid"
+	})).Return(&interfaces.Group{ID: "aws-gid", DisplayName: "group@example.com", ExternalId: "gid"}, nil)
+	awsClient.EXPECT().AddUserToGroup(mock.Anything, mock.MatchedBy(func(g *interfaces.Group) bool {
+		return g.ID == "aws-gid"
+	})).Return(nil)
 
 	s := &syncGSuite{
 		aws:           awsClient,
@@ -856,6 +872,434 @@ func TestSyncGroups_DryRunUserWithoutID(t *testing.T) {
 			"new@example.com": {Username: "new@example.com", ID: ""},
 		},
 	}
+
+	assert.NoError(t, s.SyncGroups(""))
+}
+
+// sdkUser builds an Identity Store SDK user with all the pointer fields that
+// ConvertSdkUserObjToNative dereferences populated.
+func sdkUser(id, userName, givenName, familyName, externalID string) types.User {
+	u := types.User{
+		UserId:      aws.String(id),
+		UserName:    aws.String(userName),
+		DisplayName: aws.String(givenName + " " + familyName),
+		Name: &types.Name{
+			GivenName:  aws.String(givenName),
+			FamilyName: aws.String(familyName),
+		},
+	}
+	if externalID != "" {
+		u.ExternalIds = []types.ExternalId{{Id: aws.String(externalID), Issuer: aws.String("ssosync")}}
+	}
+	return u
+}
+
+// sdkGroup builds an Identity Store SDK group with an optional external id.
+func sdkGroup(id, displayName, externalID string) types.Group {
+	g := types.Group{
+		GroupId:     aws.String(id),
+		DisplayName: aws.String(displayName),
+	}
+	if externalID != "" {
+		g.ExternalIds = []types.ExternalId{{Id: aws.String(externalID), Issuer: aws.String("ssosync")}}
+	}
+	return g
+}
+
+// newSyncUsersSuite wires up a syncGSuite for SyncUsers tests. It stubs the
+// google deleted-users lookup (empty) and both GetUsers calls, and the
+// Identity Store ListUsers call that s.GetUsers() drives.
+func newSyncUsersSuite(t *testing.T, cfg *config.Config, googleUsers []*admin.User, awsSdkUsers []types.User) (*syncGSuite, *mocks.MockAwsClient, *mocks.MockGoogleClient) {
+	t.Helper()
+
+	googleClient := mocks.NewMockGoogleClient(t)
+	googleClient.EXPECT().GetDeletedUsers().Return([]*admin.User{}, nil)
+	googleClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return(googleUsers, nil)
+
+	identityStore := mocks.NewMockIdentityStoreAPI(t)
+	identityStore.EXPECT().ListUsers(mock.Anything, mock.Anything, mock.Anything).
+		Return(&identitystore.ListUsersOutput{Users: awsSdkUsers}, nil)
+
+	awsClient := mocks.NewMockAwsClient(t)
+
+	s := &syncGSuite{
+		aws:           awsClient,
+		google:        googleClient,
+		identityStore: identityStore,
+		cfg:           cfg,
+		users:         make(map[string]*interfaces.User),
+	}
+	return s, awsClient, googleClient
+}
+
+func gUser(id, email, given, family string, suspended bool) *admin.User {
+	return &admin.User{
+		Id:           id,
+		PrimaryEmail: email,
+		Suspended:    suspended,
+		Name:         &admin.UserName{GivenName: given, FamilyName: family},
+	}
+}
+
+func TestSyncUsers_ExternalIdMatch_Update(t *testing.T) {
+	cfg := &config.Config{IdentityStoreID: "d-1", SyncMethod: "user_groups"}
+
+	// Same ExternalId, but the family name changed in Google -> update.
+	google := []*admin.User{gUser("gid-1", "user@example.com", "Jane", "Doe", false)}
+	awsSdk := []types.User{sdkUser("aws-1", "user@example.com", "Jane", "Smith", "gid-1")}
+
+	s, awsClient, _ := newSyncUsersSuite(t, cfg, google, awsSdk)
+
+	// Active is backfilled via FindUserByEmail for each existing AWS user, and
+	// setUser re-fetches the synced user afterwards.
+	awsClient.EXPECT().FindUserByEmail("user@example.com").
+		Return(&interfaces.User{ID: "aws-1", Username: "user@example.com", Active: true}, nil)
+	awsClient.EXPECT().UpdateUser(mock.MatchedBy(func(u *interfaces.User) bool {
+		return u.ID == "aws-1" && u.ExternalId == "gid-1" && u.Name.FamilyName == "Doe"
+	})).Return(&interfaces.User{ID: "aws-1", Username: "user@example.com"}, nil)
+
+	assert.NoError(t, s.SyncUsers(""))
+}
+
+func TestSyncUsers_EmailMatch_ForceExternalIdUpdate(t *testing.T) {
+	cfg := &config.Config{IdentityStoreID: "d-1", SyncMethod: "user_groups", ForceExternalIdUpdate: true}
+
+	// Same email, different Google id, existing AWS user has an ExternalId.
+	google := []*admin.User{gUser("gid-new", "user@example.com", "Jane", "Doe", false)}
+	awsSdk := []types.User{sdkUser("aws-1", "user@example.com", "Jane", "Doe", "gid-old")}
+
+	s, awsClient, _ := newSyncUsersSuite(t, cfg, google, awsSdk)
+
+	awsClient.EXPECT().FindUserByEmail("user@example.com").
+		Return(&interfaces.User{ID: "aws-1", Username: "user@example.com", Active: true}, nil)
+	// Force option -> update in place with the new ExternalId, no delete/create.
+	awsClient.EXPECT().UpdateUser(mock.MatchedBy(func(u *interfaces.User) bool {
+		return u.ID == "aws-1" && u.ExternalId == "gid-new"
+	})).Return(&interfaces.User{ID: "aws-1", Username: "user@example.com"}, nil)
+
+	assert.NoError(t, s.SyncUsers(""))
+}
+
+func TestSyncUsers_EmailMatch_DeleteAndRecreate(t *testing.T) {
+	cfg := &config.Config{IdentityStoreID: "d-1", SyncMethod: "user_groups", ForceExternalIdUpdate: false}
+
+	google := []*admin.User{gUser("gid-new", "user@example.com", "Jane", "Doe", false)}
+	awsSdk := []types.User{sdkUser("aws-1", "user@example.com", "Jane", "Doe", "gid-old")}
+
+	s, awsClient, _ := newSyncUsersSuite(t, cfg, google, awsSdk)
+
+	awsClient.EXPECT().FindUserByEmail("user@example.com").
+		Return(&interfaces.User{ID: "aws-1", Username: "user@example.com", Active: true}, nil)
+	// No force -> delete existing, create new to avoid inherited privileges.
+	awsClient.EXPECT().DeleteUser(mock.MatchedBy(func(u *interfaces.User) bool {
+		return u.ID == "aws-1" && u.ExternalId == "gid-old"
+	})).Return(nil)
+	awsClient.EXPECT().CreateUser(mock.MatchedBy(func(u *interfaces.User) bool {
+		return u.ID == "" && u.ExternalId == "gid-new" && u.Username == "user@example.com"
+	})).Return(&interfaces.User{ID: "aws-2", Username: "user@example.com"}, nil)
+
+	assert.NoError(t, s.SyncUsers(""))
+}
+
+func TestSyncUsers_EmailMatch_AdoptNoExternalId(t *testing.T) {
+	cfg := &config.Config{IdentityStoreID: "d-1", SyncMethod: "user_groups"}
+
+	// Existing AWS user matched by email with no ExternalId -> adopt (update).
+	google := []*admin.User{gUser("gid-1", "user@example.com", "Jane", "Doe", false)}
+	awsSdk := []types.User{sdkUser("aws-1", "user@example.com", "Jane", "Doe", "")}
+
+	s, awsClient, _ := newSyncUsersSuite(t, cfg, google, awsSdk)
+
+	awsClient.EXPECT().FindUserByEmail("user@example.com").
+		Return(&interfaces.User{ID: "aws-1", Username: "user@example.com", Active: true}, nil)
+	awsClient.EXPECT().UpdateUser(mock.MatchedBy(func(u *interfaces.User) bool {
+		return u.ID == "aws-1" && u.ExternalId == "gid-1"
+	})).Return(&interfaces.User{ID: "aws-1", Username: "user@example.com"}, nil)
+
+	assert.NoError(t, s.SyncUsers(""))
+}
+
+func TestSyncUsers_NoMatch_Create(t *testing.T) {
+	cfg := &config.Config{IdentityStoreID: "d-1", SyncMethod: "user_groups"}
+
+	// New google user, no existing AWS users.
+	google := []*admin.User{gUser("gid-1", "new@example.com", "New", "User", false)}
+
+	s, awsClient, _ := newSyncUsersSuite(t, cfg, google, []types.User{})
+
+	awsClient.EXPECT().CreateUser(mock.MatchedBy(func(u *interfaces.User) bool {
+		return u.Username == "new@example.com" && u.ExternalId == "gid-1"
+	})).Return(&interfaces.User{ID: "aws-9", Username: "new@example.com"}, nil)
+	// setUser re-fetch after create.
+	awsClient.EXPECT().FindUserByEmail("new@example.com").
+		Return(&interfaces.User{ID: "aws-9", Username: "new@example.com"}, nil)
+
+	assert.NoError(t, s.SyncUsers(""))
+}
+
+func TestSyncUsers_Unmatched_Delete(t *testing.T) {
+	cfg := &config.Config{IdentityStoreID: "d-1", SyncMethod: "user_groups"}
+
+	// No google users; one existing AWS user that is unmatched -> delete.
+	awsSdk := []types.User{sdkUser("aws-1", "stale@example.com", "Stale", "User", "gid-stale")}
+
+	s, awsClient, _ := newSyncUsersSuite(t, cfg, []*admin.User{}, awsSdk)
+
+	awsClient.EXPECT().FindUserByEmail("stale@example.com").
+		Return(&interfaces.User{ID: "aws-1", Username: "stale@example.com", Active: true}, nil)
+	awsClient.EXPECT().DeleteUser(mock.MatchedBy(func(u *interfaces.User) bool {
+		return u.ID == "aws-1" && u.Username == "stale@example.com"
+	})).Return(nil)
+
+	assert.NoError(t, s.SyncUsers(""))
+}
+
+func TestSyncUsers_Unmatched_RetainUnmatched(t *testing.T) {
+	cfg := &config.Config{IdentityStoreID: "d-1", SyncMethod: "user_groups", RetainUnmatched: true}
+
+	awsSdk := []types.User{sdkUser("aws-1", "stale@example.com", "Stale", "User", "gid-stale")}
+
+	s, awsClient, _ := newSyncUsersSuite(t, cfg, []*admin.User{}, awsSdk)
+
+	// RetainUnmatched -> deletion suppressed. Active is still backfilled.
+	// No DeleteUser expectation: mockery fails on any unexpected call.
+	awsClient.EXPECT().FindUserByEmail("stale@example.com").
+		Return(&interfaces.User{ID: "aws-1", Username: "stale@example.com", Active: true}, nil)
+
+	assert.NoError(t, s.SyncUsers(""))
+}
+
+// newSyncGroupsSuite wires up a syncGSuite for SyncGroups tests. It stubs the
+// google groups lookup and the Identity Store ListGroups call that
+// s.GetGroups() drives. s.users is left empty so member sync is a no-op.
+func newSyncGroupsSuite(t *testing.T, cfg *config.Config, googleGroups []*admin.Group, awsSdkGroups []types.Group) (*syncGSuite, *mocks.MockAwsClient, *mocks.MockGoogleClient) {
+	t.Helper()
+
+	googleClient := mocks.NewMockGoogleClient(t)
+	googleClient.EXPECT().GetGroups(mock.Anything).Return(googleGroups, nil)
+
+	identityStore := mocks.NewMockIdentityStoreAPI(t)
+	identityStore.EXPECT().ListGroups(mock.Anything, mock.Anything, mock.Anything).
+		Return(&identitystore.ListGroupsOutput{Groups: awsSdkGroups}, nil)
+
+	awsClient := mocks.NewMockAwsClient(t)
+
+	s := &syncGSuite{
+		aws:           awsClient,
+		google:        googleClient,
+		identityStore: identityStore,
+		cfg:           cfg,
+		users:         make(map[string]*interfaces.User),
+	}
+	return s, awsClient, googleClient
+}
+
+func TestSyncGroups_ExternalIdMatch_UpdateDisplayName(t *testing.T) {
+	cfg := &config.Config{IdentityStoreID: "d-1", IncludeGroups: []string{"group@example.com"}}
+
+	google := []*admin.Group{{Email: "group@example.com", Id: "gid-1"}}
+	// Matched by ExternalId but the display name differs -> update.
+	awsSdk := []types.Group{sdkGroup("aws-1", "old-name@example.com", "gid-1")}
+
+	s, awsClient, googleClient := newSyncGroupsSuite(t, cfg, google, awsSdk)
+	googleClient.EXPECT().GetGroupMembers(google[0]).Return([]*admin.Member{}, nil)
+
+	awsClient.EXPECT().UpdateGroup(mock.MatchedBy(func(g *interfaces.Group) bool {
+		return g.ID == "aws-1" && g.DisplayName == "group@example.com" && g.ExternalId == "gid-1"
+	})).Return(&interfaces.Group{ID: "aws-1", DisplayName: "group@example.com", ExternalId: "gid-1"}, nil)
+
+	assert.NoError(t, s.SyncGroups(""))
+}
+
+func TestSyncGroups_DisplayNameMatch_BackfillExternalId(t *testing.T) {
+	cfg := &config.Config{IdentityStoreID: "d-1", IncludeGroups: []string{"group@example.com"}}
+
+	google := []*admin.Group{{Email: "group@example.com", Id: "gid-1"}}
+	// Matched by display name, no ExternalId -> update to backfill it.
+	awsSdk := []types.Group{sdkGroup("aws-1", "group@example.com", "")}
+
+	s, awsClient, googleClient := newSyncGroupsSuite(t, cfg, google, awsSdk)
+	googleClient.EXPECT().GetGroupMembers(google[0]).Return([]*admin.Member{}, nil)
+
+	awsClient.EXPECT().UpdateGroup(mock.MatchedBy(func(g *interfaces.Group) bool {
+		return g.ID == "aws-1" && g.ExternalId == "gid-1"
+	})).Return(&interfaces.Group{ID: "aws-1", DisplayName: "group@example.com", ExternalId: "gid-1"}, nil)
+
+	assert.NoError(t, s.SyncGroups(""))
+}
+
+func TestSyncGroups_NoMatch_Create(t *testing.T) {
+	cfg := &config.Config{IdentityStoreID: "d-1", IncludeGroups: []string{"group@example.com"}}
+
+	google := []*admin.Group{{Email: "group@example.com", Id: "gid-1"}}
+
+	s, awsClient, googleClient := newSyncGroupsSuite(t, cfg, google, []types.Group{})
+	googleClient.EXPECT().GetGroupMembers(google[0]).Return([]*admin.Member{}, nil)
+
+	awsClient.EXPECT().CreateGroup(mock.MatchedBy(func(g *interfaces.Group) bool {
+		return g.DisplayName == "group@example.com" && g.ExternalId == "gid-1"
+	})).Return(&interfaces.Group{ID: "aws-new", DisplayName: "group@example.com", ExternalId: "gid-1"}, nil)
+
+	assert.NoError(t, s.SyncGroups(""))
+}
+
+func TestSyncGroups_Unmatched_Delete(t *testing.T) {
+	cfg := &config.Config{IdentityStoreID: "d-1"}
+
+	// No google groups; one existing AWS group -> delete.
+	awsSdk := []types.Group{sdkGroup("aws-1", "stale@example.com", "gid-stale")}
+
+	s, awsClient, _ := newSyncGroupsSuite(t, cfg, []*admin.Group{}, awsSdk)
+
+	awsClient.EXPECT().DeleteGroup(mock.MatchedBy(func(g *interfaces.Group) bool {
+		return g.ID == "aws-1" && g.DisplayName == "stale@example.com"
+	})).Return(nil)
+
+	assert.NoError(t, s.SyncGroups(""))
+}
+
+func TestSyncGroups_Unmatched_RetainUnmatched(t *testing.T) {
+	cfg := &config.Config{IdentityStoreID: "d-1", RetainUnmatched: true}
+
+	awsSdk := []types.Group{sdkGroup("aws-1", "stale@example.com", "gid-stale")}
+
+	// RetainUnmatched -> no DeleteGroup expectation; mockery fails on unexpected calls.
+	s, _, _ := newSyncGroupsSuite(t, cfg, []*admin.Group{}, awsSdk)
+
+	assert.NoError(t, s.SyncGroups(""))
+}
+
+// --- SyncUsers: deleted google user pruning ---
+
+// newSyncUsersDeleteSuite wires a syncGSuite where GetDeletedUsers returns the
+// supplied deleted users and both GetUsers calls return activeGoogleUsers. The
+// Identity Store ListUsers (driven by s.GetUsers()) returns awsSdkUsers.
+func newSyncUsersDeleteSuite(t *testing.T, cfg *config.Config, deletedUsers, activeGoogleUsers []*admin.User, awsSdkUsers []types.User) (*syncGSuite, *mocks.MockAwsClient) {
+	t.Helper()
+
+	googleClient := mocks.NewMockGoogleClient(t)
+	googleClient.EXPECT().GetDeletedUsers().Return(deletedUsers, nil)
+	googleClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return(activeGoogleUsers, nil)
+
+	identityStore := mocks.NewMockIdentityStoreAPI(t)
+	identityStore.EXPECT().ListUsers(mock.Anything, mock.Anything, mock.Anything).
+		Return(&identitystore.ListUsersOutput{Users: awsSdkUsers}, nil)
+
+	awsClient := mocks.NewMockAwsClient(t)
+
+	s := &syncGSuite{
+		aws:           awsClient,
+		google:        googleClient,
+		identityStore: identityStore,
+		cfg:           cfg,
+		users:         make(map[string]*interfaces.User),
+	}
+	return s, awsClient
+}
+
+func TestSyncUsers_DeletedUser_Deleted(t *testing.T) {
+	cfg := &config.Config{IdentityStoreID: "d-1", SyncMethod: "user_groups"}
+
+	deleted := []*admin.User{gUser("gid-del", "gone@example.com", "Gone", "User", false)}
+
+	// No active google users, and no existing AWS users to correlate.
+	s, awsClient := newSyncUsersDeleteSuite(t, cfg, deleted, []*admin.User{}, []types.User{})
+
+	// The deleted google user still exists in AWS -> looked up and deleted.
+	deletedAwsUser := &interfaces.User{ID: "aws-del", Username: "gone@example.com"}
+	awsClient.EXPECT().FindUserByEmail("gone@example.com").Return(deletedAwsUser, nil)
+	awsClient.EXPECT().DeleteUser(deletedAwsUser).Return(nil)
+
+	assert.NoError(t, s.SyncUsers(""))
+}
+
+func TestSyncUsers_DeletedUser_ActiveAgain_NotDeleted(t *testing.T) {
+	cfg := &config.Config{IdentityStoreID: "d-1", SyncMethod: "user_groups"}
+
+	// The user appears in both the deleted list and the active list -> it was
+	// re-activated, so it must NOT be deleted.
+	active := []*admin.User{gUser("gid-1", "user@example.com", "Active", "Again", false)}
+	deleted := []*admin.User{gUser("gid-1", "user@example.com", "Active", "Again", false)}
+	awsSdk := []types.User{sdkUser("aws-1", "user@example.com", "Active", "Again", "gid-1")}
+
+	s, awsClient := newSyncUsersDeleteSuite(t, cfg, deleted, active, awsSdk)
+
+	// Active status backfill + setUser re-fetch; no DeleteUser for the deletion
+	// pruning (mockery fails on any unexpected DeleteUser call).
+	awsClient.EXPECT().FindUserByEmail("user@example.com").
+		Return(&interfaces.User{ID: "aws-1", Username: "user@example.com", Active: true}, nil)
+
+	assert.NoError(t, s.SyncUsers(""))
+}
+
+func TestSyncUsers_DeletedUser_AlreadyGone(t *testing.T) {
+	cfg := &config.Config{IdentityStoreID: "d-1", SyncMethod: "user_groups"}
+
+	deleted := []*admin.User{gUser("gid-del", "gone@example.com", "Gone", "User", false)}
+
+	s, awsClient := newSyncUsersDeleteSuite(t, cfg, deleted, []*admin.User{}, []types.User{})
+
+	// The deleted google user is already absent from AWS -> no DeleteUser call.
+	awsClient.EXPECT().FindUserByEmail("gone@example.com").Return(nil, awsinternal.ErrUserNotFound)
+
+	assert.NoError(t, s.SyncUsers(""))
+}
+
+// --- SyncGroups: member add/remove ---
+
+func TestSyncGroups_MemberAdded(t *testing.T) {
+	cfg := &config.Config{IdentityStoreID: "d-1", IncludeGroups: []string{"group@example.com"}}
+
+	google := []*admin.Group{{Email: "group@example.com", Id: "gid-1"}}
+	awsSdk := []types.Group{sdkGroup("aws-1", "group@example.com", "gid-1")}
+
+	s, awsClient, googleClient := newSyncGroupsSuite(t, cfg, google, awsSdk)
+
+	// A synced user that is a google member but not yet an AWS group member.
+	user := &interfaces.User{ID: "user-1", Username: "member@example.com"}
+	s.users["member@example.com"] = user
+
+	googleClient.EXPECT().GetGroupMembers(google[0]).
+		Return([]*admin.Member{{Email: "member@example.com"}}, nil)
+
+	// Group matched by ExternalId with the same display name -> no UpdateGroup.
+	// Not currently a member -> AddUserToGroup.
+	s.identityStore.(*mocks.MockIdentityStoreAPI).EXPECT().
+		IsMemberInGroups(mock.Anything, mock.Anything, mock.Anything).
+		Return(&identitystore.IsMemberInGroupsOutput{
+			Results: []types.GroupMembershipExistenceResult{{MembershipExists: false}},
+		}, nil)
+	awsClient.EXPECT().AddUserToGroup(user, mock.MatchedBy(func(g *interfaces.Group) bool {
+		return g.ID == "aws-1"
+	})).Return(nil)
+
+	assert.NoError(t, s.SyncGroups(""))
+}
+
+func TestSyncGroups_MemberRemoved(t *testing.T) {
+	cfg := &config.Config{IdentityStoreID: "d-1", IncludeGroups: []string{"group@example.com"}}
+
+	google := []*admin.Group{{Email: "group@example.com", Id: "gid-1"}}
+	awsSdk := []types.Group{sdkGroup("aws-1", "group@example.com", "gid-1")}
+
+	s, awsClient, googleClient := newSyncGroupsSuite(t, cfg, google, awsSdk)
+
+	// A synced user who is an existing AWS group member but no longer a google member.
+	user := &interfaces.User{ID: "user-1", Username: "stale@example.com"}
+	s.users["stale@example.com"] = user
+
+	// No google members for this group.
+	googleClient.EXPECT().GetGroupMembers(google[0]).Return([]*admin.Member{}, nil)
+
+	// Currently a member -> RemoveUserFromGroup.
+	s.identityStore.(*mocks.MockIdentityStoreAPI).EXPECT().
+		IsMemberInGroups(mock.Anything, mock.Anything, mock.Anything).
+		Return(&identitystore.IsMemberInGroupsOutput{
+			Results: []types.GroupMembershipExistenceResult{{MembershipExists: true}},
+		}, nil)
+	awsClient.EXPECT().RemoveUserFromGroup(user, mock.MatchedBy(func(g *interfaces.Group) bool {
+		return g.ID == "aws-1"
+	})).Return(nil)
 
 	assert.NoError(t, s.SyncGroups(""))
 }
