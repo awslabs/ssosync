@@ -99,6 +99,9 @@ jobs:
     needs: [ release ]
     # Skip prerelease tags (e.g. v3.0.0-rc.1); only run for final releases.
     if: ${{ !contains(github.ref_name, '-') }}
+    permissions:
+      contents: write
+      pull-requests: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -153,9 +156,18 @@ jobs:
           latest-version: ${{ github.ref_name }}
           release-notes: ${{ env.RELEASE_NOTES }}
 
-      - name: Commit changes
-        uses: stefanzweifel/git-auto-commit-action@v7
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v7
         with:
-          branch: master
-          commit_message: Update CHANGELOG and Quick Start templates
-          file_pattern: 'CHANGELOG.md quick-start'
+          branch: post-release/${{ github.ref_name }}
+          base: master
+          commit-message: Update CHANGELOG and Quick Start templates
+          title: "chore: post-release updates for ${{ github.ref_name }}"
+          body: |
+            Automated post-release updates for `${{ github.ref_name }}`:
+
+            - Update CHANGELOG.md
+            - Update Quick Start template SemanticVersion
+          add-paths: |
+            CHANGELOG.md
+            quick-start
