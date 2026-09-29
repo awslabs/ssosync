@@ -53,6 +53,7 @@ Parameters:
     #SemanticVersion 
     Default: 2.8.0
     AllowedValues:
+      - 2.9.0
       - 2.8.0
 
   ScheduleExpression:
