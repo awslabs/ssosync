@@ -661,6 +661,26 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 		}
 	}
 
+	// update aws users (updated in google)
+	log.Debug("suspending aws users not matched with users in google")
+	for _, awsUser := range retainAWSUsers {
+
+		log := log.WithFields(log.Fields{"user": awsUser.Username})
+
+		log.Warn("suspending retained user")
+		_, err = s.aws.UpdateUser(aws.UpdateUser(
+			awsUser.ID,
+			awsUser.Name.GivenName,
+			awsUser.Name.FamilyName,
+			awsUser.Username,
+			awsUser.Active,
+			awsUser.ExternalId))
+		if err != nil {
+			log.WithField("user", awsUser).Error("error updating user")
+			return err
+		}
+	}
+
 	// add aws users (added in google)
 	log.Debug("creating aws users added in google")
 	for _, awsUser := range addAWSUsers {
@@ -1181,7 +1201,7 @@ func getGroupOperations(awsGroups []*interfaces.Group, googleGroups []*admin.Gro
 	for _, awsGroup := range awsGroups {
 		if _, found := googleMapId[awsGroup.ExternalId]; !found {
 			if _, found := googleMap[awsGroup.DisplayName]; !found {
-				if retainUnmatched {
+				if retainUnmatched && len(awsGroup.ExternalId) == 0 {
 					log.WithField("awsGroup", awsGroup).Warn("Retained: deletion suppressed.")
 					retain = append(retain, aws.UpdateGroup(awsGroup.ID, awsGroup.DisplayName, awsGroup.ExternalId))
 				} else {
@@ -1269,11 +1289,11 @@ func getUserOperations(awsUsers []*interfaces.User, googleUsers []*admin.User, f
 	for _, awsUser := range awsUsers {
 		if _, found := googleMapId[awsUser.ExternalId]; !found {
 			if _, found := googleMap[awsUser.Username]; !found {
-				if retainUnmatched {
+				if retainUnmatched && len(awsUser.ExternalId) ==0 {
 					log.WithFields(log.Fields{
 						"awsUser": awsUser,
-					}).Warn("Retained: deletion suppressed")
-					retain = append(retain, aws.UpdateUser(awsUser.ID, awsUser.Name.GivenName, awsUser.Name.FamilyName, awsUser.Username, awsUser.Active, awsUser.ExternalId))
+					}).Warn("Retained: deletion suppressed, suspend instead")
+					retain = append(retain, aws.UpdateUser(awsUser.ID, awsUser.Name.GivenName, awsUser.Name.FamilyName, awsUser.Username, false, awsUser.ExternalId))
 				} else {
 					log.WithFields(log.Fields{
 						"awsUser": awsUser,
