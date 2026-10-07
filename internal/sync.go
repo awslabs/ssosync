@@ -56,7 +56,7 @@ type syncGSuite struct {
 	ignoreUsersSet   map[string]struct{}
 	ignoreGroupsSet  map[string]struct{}
 	includeGroupsSet map[string]struct{}
-	cacheMetrics map[string]*CacheMetrics
+	cacheMetrics     map[string]*CacheMetrics
 }
 
 // OperationType handle patch operations for add/remove
@@ -73,9 +73,9 @@ const (
 
 // User represents a User in AWS SSO
 type CacheMetrics struct {
-	Precaches int
-	Hits int
-	Misses int
+	Precaches  int
+	Hits       int
+	Misses     int
 	TotalUsers int
 }
 
@@ -91,7 +91,7 @@ func New(cfg *config.Config, a aws.Client, g google.Client, ids interfaces.Ident
 }
 
 func (s *syncGSuite) recordCacheOp(orgPath string, operation CacheOperationType) {
-	if ! s.cfg.CacheMetrics {
+	if !s.cfg.CacheMetrics {
 		return
 	}
 	// if this is the first use of s.cachStats make it
@@ -114,7 +114,7 @@ func (s *syncGSuite) recordCacheOp(orgPath string, operation CacheOperationType)
 		default:
 			log.WithFields(
 				log.Fields{
-					"orgPath": orgPath,
+					"orgPath":   orgPath,
 					"operation": operation}).Error("unknown operation")
 		}
 	}
@@ -136,17 +136,17 @@ func (s *syncGSuite) recordCacheOp(orgPath string, operation CacheOperationType)
 }
 
 func (s *syncGSuite) outputCacheMetrics() {
-	if ! s.cfg.CacheMetrics {
+	if !s.cfg.CacheMetrics {
 		return
 	}
-	
+
 	for orgUnitPath, entry := range s.cacheMetrics {
 		var query string
 		if strings.ContainsRune(orgUnitPath, ' ') {
 			query = "OrgUnitPath='" + orgUnitPath + "'"
 		} else {
 			query = "OrgUnitPath=" + orgUnitPath
-		}	
+		}
 		googleUsers, err := s.google.GetUsers(query, s.cfg.UserFilter)
 		if err != nil {
 			log.WithFields(log.Fields{
@@ -158,6 +158,7 @@ func (s *syncGSuite) outputCacheMetrics() {
 	}
 	log.WithFields(log.Fields{"Cache Stats": s.cacheMetrics}).Info("Caching Performance, orgPaths with a high Miss rate compared with the TotalUsers consider precaching")
 }
+
 // SyncUsers will Sync Google Users to AWS SSO SCIM
 // References:
 // * https://developers.google.com/admin-sdk/directory/v1/guides/search-users
@@ -627,19 +628,19 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 	log.WithFields(
 		log.Fields{
 			"unchanged": len(unchangedAWSUsers),
-			"create": len(addAWSUsers),
-			"update": len(updateAWSUsers),
-			"delete": len(delAWSUsers),
-			"retain": len(retainAWSUsers)}).Info("Change Summary: users")
+			"create":    len(addAWSUsers),
+			"update":    len(updateAWSUsers),
+			"delete":    len(delAWSUsers),
+			"retain":    len(retainAWSUsers)}).Info("Change Summary: users")
 
 	addAWSGroups, delAWSGroups, updateAWSGroups, unchangedAWSGroups, retainAWSGroups := getGroupOperations(awsGroups, googleGroups, s.cfg.RetainUnmatched)
 	log.WithFields(
 		log.Fields{
 			"unchanged": len(unchangedAWSGroups),
-			"create": len(addAWSGroups),
-			"update": len(updateAWSGroups),
-			"delete": len(delAWSGroups),
-			"retain": len(retainAWSGroups)}).Info("Change Summary: Groups")
+			"create":    len(addAWSGroups),
+			"update":    len(updateAWSGroups),
+			"delete":    len(delAWSGroups),
+			"retain":    len(retainAWSGroups)}).Info("Change Summary: Groups")
 
 	// update aws users (updated in google)
 	log.Debug("updating aws users updated in google")
@@ -648,6 +649,26 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 		log := log.WithFields(log.Fields{"user": awsUser.Username})
 
 		log.Warn("updating user")
+		_, err = s.aws.UpdateUser(aws.UpdateUser(
+			awsUser.ID,
+			awsUser.Name.GivenName,
+			awsUser.Name.FamilyName,
+			awsUser.Username,
+			awsUser.Active,
+			awsUser.ExternalId))
+		if err != nil {
+			log.WithField("user", awsUser).Error("error updating user")
+			return err
+		}
+	}
+
+	// update aws users (updated in google)
+	log.Debug("suspending aws users not matched with users in google")
+	for _, awsUser := range retainAWSUsers {
+
+		log := log.WithFields(log.Fields{"user": awsUser.Username})
+
+		log.Warn("suspending retained user")
 		_, err = s.aws.UpdateUser(aws.UpdateUser(
 			awsUser.ID,
 			awsUser.Name.GivenName,
@@ -754,9 +775,9 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 		// add members of the new group
 		log.WithFields(
 			log.Fields{
-				"group": awsGroup.DisplayName,
-				"add": len(addUsersToGroup[awsGroup.DisplayName]),
-				"remove": len(deleteUsersFromGroup[awsGroup.DisplayName]),
+				"group":     awsGroup.DisplayName,
+				"add":       len(addUsersToGroup[awsGroup.DisplayName]),
+				"remove":    len(deleteUsersFromGroup[awsGroup.DisplayName]),
 				"unchanged": len(unchangedUsersInGroup[awsGroup.DisplayName])}).Info("Change Summary: Group Members")
 
 		for _, awsUser := range addUsersToGroup[awsGroup.DisplayName] {
@@ -815,7 +836,7 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 			return err
 		}
 	}
-    s.outputCacheMetrics()
+	s.outputCacheMetrics()
 	log.Info("sync completed")
 
 	return nil
@@ -862,8 +883,6 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 			gGroupDetailCache[g.Email] = g
 		}
 	}
-
-
 
 	// For larger directories this will reduce execution time and avoid throttling limits
 	// however if you have directory with 10,000+ users you may want to down scope
@@ -941,7 +960,6 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 			}
 		}
 	}
-
 
 	// Fetch Users
 	if queryUsers == "" {
@@ -1181,7 +1199,7 @@ func getGroupOperations(awsGroups []*interfaces.Group, googleGroups []*admin.Gro
 	for _, awsGroup := range awsGroups {
 		if _, found := googleMapId[awsGroup.ExternalId]; !found {
 			if _, found := googleMap[strings.ToLower(awsGroup.DisplayName)]; !found {
-				if retainUnmatched {
+				if retainUnmatched && len(awsGroup.ExternalId) == 0 {
 					log.WithField("awsGroup", awsGroup).Warn("Retained: deletion suppressed.")
 					retain = append(retain, aws.UpdateGroup(awsGroup.ID, awsGroup.DisplayName, awsGroup.ExternalId))
 				} else {
@@ -1238,22 +1256,22 @@ func getUserOperations(awsUsers []*interfaces.User, googleUsers []*admin.User, f
 			if len(awsUser.ExternalId) > 0 {
 				if forceExternalIdUpdate {
 					log.WithFields(log.Fields{
-						"gUser": gUser,
-						"awsUser": awsUser,	
+						"gUser":   gUser,
+						"awsUser": awsUser,
 					}).Warn("New google user with the same primary email address but a different id, Force option set, so retaining the existing user and updating its ExternalId. Caution this may lead inherited privileges.")
 					update = append(update, aws.UpdateUser(awsUser.ID, gUser.Name.GivenName, gUser.Name.FamilyName, gUser.PrimaryEmail, !gUser.Suspended, gUser.Id))
 				} else {
 					log.WithFields(log.Fields{
-						"gUser": gUser,
+						"gUser":   gUser,
 						"awsUser": awsUser,
 					}).Warn("New google user with the same primary email address but a different id, delete AWS user and create a new AWS user.")
 					delete = append(delete, aws.UpdateUser(awsUser.ID, awsUser.Name.GivenName, awsUser.Name.FamilyName, awsUser.Username, awsUser.Active, awsUser.ExternalId))
 					add = append(add, aws.NewUser(gUser.Name.GivenName, gUser.Name.FamilyName, gUser.PrimaryEmail, !gUser.Suspended, gUser.Id))
 				}
-			}  else {
+			} else {
 				log.WithFields(log.Fields{
-					"gUser": gUser,
-					"awsUser": awsUser,	
+					"gUser":   gUser,
+					"awsUser": awsUser,
 				}).Debug("A local user that matches the primary email address of a google user has been found, adopting to be synced.")
 				update = append(update, aws.UpdateUser(awsUser.ID, gUser.Name.GivenName, gUser.Name.FamilyName, gUser.PrimaryEmail, !gUser.Suspended, gUser.Id))
 			}
@@ -1269,11 +1287,11 @@ func getUserOperations(awsUsers []*interfaces.User, googleUsers []*admin.User, f
 	for _, awsUser := range awsUsers {
 		if _, found := googleMapId[awsUser.ExternalId]; !found {
 			if _, found := googleMap[strings.ToLower(awsUser.Username)]; !found {
-				if retainUnmatched {
+				if retainUnmatched && len(awsUser.ExternalId) == 0 {
 					log.WithFields(log.Fields{
 						"awsUser": awsUser,
-					}).Warn("Retained: deletion suppressed")
-					retain = append(retain, aws.UpdateUser(awsUser.ID, awsUser.Name.GivenName, awsUser.Name.FamilyName, awsUser.Username, awsUser.Active, awsUser.ExternalId))
+					}).Warn("Retained: deletion suppressed, suspend instead")
+					retain = append(retain, aws.UpdateUser(awsUser.ID, awsUser.Name.GivenName, awsUser.Name.FamilyName, awsUser.Username, false, awsUser.ExternalId))
 				} else {
 					log.WithFields(log.Fields{
 						"awsUser": awsUser,
@@ -1305,14 +1323,14 @@ func (s *syncGSuite) getGroupUsersOperations(gGroupsUsers map[string][]*admin.Us
 		for _, awsUser := range awsGroupUsers {
 			mbA[awsGroupName][awsUser.Username] = struct{}{}
 		}
-	}		
+	}
 
 	add = make(map[string][]*interfaces.User)
 	// get user in google groups that are in aws groups and
 	// users in aws groups that aren't in google groups
 	for gGroupName, gGroupUsers := range gGroupsUsers {
 		for _, gUser := range gGroupUsers {
-			if _, found := mbA[gGroupName][gUser.PrimaryEmail]; ! found {
+			if _, found := mbA[gGroupName][gUser.PrimaryEmail]; !found {
 				log.Debug("finding user")
 				awsUserFull, err := s.aws.FindUserByEmail(gUser.PrimaryEmail)
 				if err != nil {
