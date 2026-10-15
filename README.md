@@ -71,7 +71,7 @@ However, in the situation where an email address has been re-assigned to a diffe
 > **Region** and **IdentityStoreID** are no longer configurable parameters. Region is extracted programmatically from the **SCIM Endpoint** URL, and IdentityStoreID is resolved automatically via the IAM Identity Center `ListInstances` API. These parameters are still present in `template.yaml` to avoid breaking deployment tooling for anyone passing a parameter file to the CloudFormation Stack. They will be fully removed in v3.x.
 
 > [!CAUTION]
-> When using ssosync with an instance of IAM Identity Center integrated with AWS Control Tower. AWS Control Tower creates a number of groups and users (directly via the Identity Store API), when an external identity provider is configured these users and groups are can not be used to log in. However it is important to remember that because ssosync implemements a uni-directional sync it will make the IAM Identity Store match the subset of your Google Workspaces directory you specify, including removing these groups and users created by AWS Control Tower. If you wish to retain unmatched users/groups, then the `retain-unmatched` option can be enabled, however these users will not be able to authenticate unless a matching user existings in the Google Workspace Directory.
+> When using ssosync with an instance of IAM Identity Center integrated with AWS Control Tower. AWS Control Tower creates a number of groups and users (directly via the Identity Store API), when an external identity provider is configured these users and groups are can not be used to log in. However it is important to remember that because ssosync implemements a uni-directional sync it will make the IAM Identity Store match the subset of your Google Workspaces directory you specify, including removing these groups and users created by AWS Control Tower. If you wish to retain unmatched local users/groups, then the `retain-unmatched` option can be enabled. This will retain 'local' users and groups (those where an ExternalId has not be set), users will be set to suspended, since these users will not be able to authenticate unless a matching user existings in the Google Workspace Directory. If a matching user is created in Google Workspace Directory, then it will be re-activated.
 
 > [!WARNING]
 > There are breaking changes for versions `>= 0.02`
@@ -229,7 +229,7 @@ export SSOSYNC_DRY_RUN="true"
 | `--dry-run` / `-n` | `SSOSYNC_DRY_RUN` | Enable dry-run mode | `false` |
 | `--suspended` | `SSOSYNC_SYNC_SUSPENDED` | Include suspended users when syncing | `false` |
 | `--force-externalid-update` | `SSOSYNC_FORCE_EXTERNAL_ID_UPDATE` | When a Google user shares the same primary email as an existing Identity Store user but has a different ID, update the existing user's `ExternalId` in place instead of deleting and recreating it. Enabling this option carrys the risk of silent permission inheritance, is an email address is re-assigned to a different user in the Google Workspace Directory. See [Preserving assignments when migrating IdPs](#preserving-assignments-when-migrating-idps). | `false` |
-| `--retain-unmatched` / `-r` | `SSOSYNC_RETAIN_UNMATCHED` | Retain users and groups that exist in the IAM Identity Store but cannot be matched to the Google Workspace directory, instead of deleting them. See [Retaining unmatched users and groups](#retaining-unmatched-users-and-groups). | `false` |
+| `--retain-unmatched` / `-r` | `SSOSYNC_RETAIN_UNMATCHED` | Retain 'local' users and groups that exist in the IAM Identity Store but cannot be matched to the Google Workspace directory, instead of deleting them. A 'local' user or group is one which has been created in the Identity Store directly and not synced via SCIM, from any external identity provider. See [Retaining unmatched users and groups](#retaining-unmatched-users-and-groups). | `false` |
 | `--debug` / `-d` | `SSOSYNC_DEBUG` | Enable verbose / debug logging (forces log level to `debug`) | `false` |
 | `--log-level` | `SSOSYNC_LOG_LEVEL` | Log level (debug, info, warn, error) | `info` |
 | `--log-format` | `SSOSYNC_LOG_FORMAT` | Log format (text, json) | `text` |
@@ -253,12 +253,62 @@ If an existing Identity Store user matches a Google Workspace user by email addr
 
 ssosync performs a uni-directional sync: by default any user or group that exists in the IAM Identity Store but cannot be matched to the subset of your Google Workspace directory you are syncing is **deleted** so the Identity Store mirrors Google Workspace.
 
-Setting `--retain-unmatched` (or `SSOSYNC_RETAIN_UNMATCHED=true`) blocks those deletions. Users and groups that exist in the Identity Store but have no match in the Google Workspace directory are left in place instead of being removed.
+Setting `--retain-unmatched` (or `SSOSYNC_RETAIN_UNMATCHED=true`) blocks the deletion of 'local' users and groups. Users and groups that exist in the Identity Store (and don't have an `ExternalId` set) and have no match in the Google Workspace directory are left in place instead of being removed. Users are have an `ExternalId` set, are assumed to have been previous synced by ssosync and are there managed as usual. If a local user or group matches with one in Google Workspace directory, then the `ExternalId` is set and it becomes managed by ssosync.
 
 This is useful when the Identity Store also contains identities managed outside of ssosync (for example users and groups created by AWS Control Tower) that you do not want removed on each sync.
 
 > [!CAUTION]
-> Retaining unmatched identities means the Identity Store will no longer be an exact mirror of your Google Workspace directory. Users removed from Google Workspace will not be removed from the Identity Store while this flag is set.
+> If you want to be able to test what changes would be performed by ssosync with a specific configuration against your existing Identity Store, then `--dry-run` is recommended. In this mode ssosync, simulates the changes it would make but doesn't make any changes at all to the identity store. This is highly recommended when making configuration changes.
+
+##### Usecases
+
+###### local user - Matched
+- `ExternalId` unset
+-   primary email address matches
+**Outcome**
+User is updated with their ExternalId (and any other fields that differ) from the Google Workspace Directory. They have been adopted and are managed by ssosync, and will be treated as a **synced user** in the next execution.
+
+###### synced user - unMatched
+- `ExternalId` set but doesn't match
+-  primary email address doesn't match
+**Outcome**
+the user is **deleted**.
+
+###### synced user - miss-Matched
+- `ExternalId` set but doesn't match
+-  primary email address matches
+**Outcome**
+Default is to delete the user and create a new user, this ensures the 'new user' doesn't inherit privileges from the previous user that happen to be assigned the same email address. This behavior can be overridden so the exist user is updated and it retains the privileges, if the `--force-externalid-update` is also set.
+
+###### synced user - Matched
+- `ExternalId` set and matches
+- primary email address is not inspected
+**Outcome**
+User is compared to the matching user in Google, if it differs in anyway (including primary email address) its updated to match.
+
+###### local group - unMatched
+- `ExternalId` unset
+-  `DisplayName` doesn't match
+**Outcome**
+The group is retained . 
+
+###### local group - Matched
+- `ExternalId` unset
+-  `DisplayName` does match
+**Outcome**
+Groups is updated with their ExternalId from the Google Workspace Directory. They have been adopted and are managed by ssosync
+
+###### synced group - unMatched
+- `ExternalId` set but doesn't match
+**Outcome**
+the group is **deleted**.
+
+###### synced group - Matched
+- `ExternalId` set and matches
+-  `DisplayName` is not inspected
+**Outcome**
+Group is compared to the matching group in Google, if it differs in anyway its updated to match.
+
 
 ### Filtering Examples
 
