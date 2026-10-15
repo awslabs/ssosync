@@ -6,8 +6,7 @@ package internal
 import (
 	"context"
 	"testing"
-
-	"github.com/awslabs/ssosync/internal/config"
+	. "ssosync/internal/config"
 )
 
 // Integration tests - these require actual AWS and Google credentials
