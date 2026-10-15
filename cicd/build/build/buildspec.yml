@@ -39,7 +39,8 @@ phases:
       # Print all environment variables (handy for AWS CodeBuild logs)
       - env
       - go version
-      - '[ "$(go version | awk ''{print $3}'')" = "${GO_VERSION}" ] || (echo "Wrong go version" && exit 1)'
+      - GO_VERSION_INSTALLED=$(go version | sed -En 's/go version go(.*) (.*)$/\1/p')
+      - '[ "${GO_VERSION_INSTALLED}" = "${GO_VERSION}" ] || (echo "Wrong go version" && exit 1)'
 
       # Output the EnvVars used in the build
       - echo "GitTag=${GitTag}"
