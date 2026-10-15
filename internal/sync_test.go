@@ -185,7 +185,7 @@ func TestGetGroupOperations_RetainUnmatched(t *testing.T) {
 
 	googleGroups := []*admin.Group{}
 
-	add, delete, update, equals, retain := getGroupOperations(awsGroups, googleGroups, true)
+	add, delete, update, equals, retain := getGroupOperations(awsGroups, googleGroups, false, true)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
@@ -621,22 +621,6 @@ func TestGetUserOperations_DeleteNoExternalId(t *testing.T) {
 	assert.Equal(t, delete[0].Name.FamilyName, "Johnson")
 }
 
-
-	googleUsers := []*admin.User{}
-
-	add, delete, update, equals, retain := getUserOperations(awsUsers, googleUsers, false, true)
-
-	assert.Len(t, add, 0)
-	assert.Len(t, delete, 0)
-	assert.Len(t, update, 0)
-	assert.Len(t, equals, 0)
-	assert.Len(t, retain, 1)
-	assert.Equal(t, retain[0].Username, "user3@example.com")
-	assert.Equal(t, retain[0].Name.GivenName, "Bob")
-	assert.Equal(t, retain[0].Name.FamilyName, "Johnson")
-	assert.Equal(t, retain[0].Active, false)
-}
-
 func TestGetUserOperations_DeleteExternalId(t *testing.T) {
 	awsUsers := []*interfaces.User{
 		{
@@ -672,8 +656,8 @@ func TestGetUserOperations_DeleteExternalId(t *testing.T) {
 func TestGetUserOperations_RetainUnmatched_LocalUserUnmatched(t *testing.T) {
 	awsUsers := []*interfaces.User{
 		{
-			ID:         "A4",
-			Username:   "user4@example.com",
+			ID:       "A4",
+			Username: "user4@example.com",
 			Name: struct {
 				FamilyName string `json:"familyName"`
 				GivenName  string `json:"givenName"`
@@ -703,8 +687,8 @@ func TestGetUserOperations_RetainUnmatched_LocalUserUnmatched(t *testing.T) {
 func TestGetUserOperations_RetainUnmatched_LocalUserMatched(t *testing.T) {
 	awsUsers := []*interfaces.User{
 		{
-			ID:         "A4",
-			Username:   "user4@example.com",
+			ID:       "A4",
+			Username: "user4@example.com",
 			Name: struct {
 				FamilyName string `json:"familyName"`
 				GivenName  string `json:"givenName"`
