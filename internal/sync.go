@@ -632,7 +632,7 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 			"delete": len(delAWSUsers),
 			"retain": len(retainAWSUsers)}).Info("Change Summary: users")
 
-	addAWSGroups, delAWSGroups, updateAWSGroups, unchangedAWSGroups, retainAWSGroups := getGroupOperations(awsGroups, googleGroups, s.cfg.RetainUnmatched)
+	addAWSGroups, delAWSGroups, updateAWSGroups, unchangedAWSGroups, retainAWSGroups := getGroupOperations(awsGroups, googleGroups, s.cfg.ForceExternalIdUpdate, s.cfg.RetainUnmatched)
 	log.WithFields(
 		log.Fields{
 			"unchanged": len(unchangedAWSGroups),
@@ -1156,7 +1156,7 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 }
 
 // getGroupOperations returns the groups of AWS that must be added, deleted and are equals
-func getGroupOperations(awsGroups []*interfaces.Group, googleGroups []*admin.Group, retainUnmatched bool) (add []*interfaces.Group, delete []*interfaces.Group, update []*interfaces.Group, equals []*interfaces.Group, retain []*interfaces.Group) {
+func getGroupOperations(awsGroups []*interfaces.Group, googleGroups []*admin.Group, forceExternalIdUpdate bool, retainUnmatched bool) (add []*interfaces.Group, delete []*interfaces.Group, update []*interfaces.Group, equals []*interfaces.Group, retain []*interfaces.Group) {
 
 	log.Debug("getGroupOperations()")
 	awsMap := make(map[string]*interfaces.Group)
@@ -1188,9 +1188,28 @@ func getGroupOperations(awsGroups []*interfaces.Group, googleGroups []*admin.Gro
 				equals = append(equals, awsGroup)
 			}
 		} else if awsGroup, found := awsMap[gGroup.Name]; found {
-			log.WithField("awsGroup", awsGroup).Debug("update")
-			log.WithField("gGroup", gGroup).Debug("update")
-			update = append(update, aws.UpdateGroup(awsGroup.ID, gGroup.Name, gGroup.Id))
+			if len(awsGroup.ExternalId) > 0 {
+				if forceExternalIdUpdate {
+					log.WithFields(log.Fields{
+						"gGroup": gGroup,
+						"awsGroup": awsGroup,
+					}).Warn("New google group with the same DisplayName but a different id, Force option set, so retaining the existing groupand updating its ExternalId. Caution this may lead inherited privileges.")
+					update = append(update, aws.UpdateGroup(awsGroup.ID, gGroup.Name, gGroup.Id))	
+				} else {
+					log.WithFields(log.Fields{
+						"gGroup": gGroup,
+						"awsGroup": awsGroup,
+					}).Warn("New google group with the same DisplayName but a different id, delete AWS group and create a new AWS group.")
+					delete = append(delete, aws.UpdateGroup(awsGroup.ID, awsGroup.DisplayName, awsGroup.ExternalId))
+					add = append(add, aws.NewGroup(gGroup.Name, gGroup.Id))	
+				}
+			} else {
+					log.WithFields(log.Fields{
+						"gGroup": gGroup,
+						"awsGroup": awsGroup,
+					}).Debug("A local group that matches the DisplayName of the Google group has been found, adopting.")
+					update = append(update, aws.UpdateGroup(awsGroup.ID, gGroup.Name, gGroup.Id))	
+			}
 		} else {
 			log.WithField("gGroup", gGroup).Debug("add")
 			add = append(add, aws.NewGroup(gGroup.Name, gGroup.Id))
