@@ -18,10 +18,13 @@ package google
 import (
 	"context"
 	"errors"
+	"os"
 	"strings"
 
+	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	admin "google.golang.org/api/admin/directory/v1"
+	"google.golang.org/api/impersonate"
 	"google.golang.org/api/option"
 )
 
@@ -49,17 +52,44 @@ const (
 // DefaultCustomerID constant) to target the customer associated with the
 // service account's domain.
 func NewClient(ctx context.Context, adminEmail, customerID string, serviceAccountKey []byte) (Client, error) {
-	config, err := google.JWTConfigFromJSON(serviceAccountKey, admin.AdminDirectoryGroupReadonlyScope,
+	scopes := []string{
+		admin.AdminDirectoryGroupReadonlyScope,
 		admin.AdminDirectoryGroupMemberReadonlyScope,
-		admin.AdminDirectoryUserReadonlyScope)
-
-	if err != nil {
-		return nil, err
+		admin.AdminDirectoryUserReadonlyScope,
 	}
 
-	config.Subject = adminEmail
+	var ts oauth2.TokenSource
 
-	ts := config.TokenSource(ctx)
+	if len(serviceAccountKey) > 0 {
+		// Legacy path: a downloaded service-account key (JSON) performs
+		// domain-wide delegation directly via the JWT config's Subject.
+		config, err := google.JWTConfigFromJSON(serviceAccountKey, scopes...)
+		if err != nil {
+			return nil, err
+		}
+		config.Subject = adminEmail
+		ts = config.TokenSource(ctx)
+	} else {
+		// Keyless path: no key file. Use Application Default Credentials
+		// (e.g. an AWS Lambda role federated to GCP via Workload Identity
+		// Federation) to impersonate the target service account, carrying
+		// the Workspace admin in Subject so domain-wide delegation still
+		// applies. GOOGLE_IMPERSONATE_SERVICE_ACCOUNT names the service
+		// account that holds the DWD grant.
+		targetSA := os.Getenv("GOOGLE_IMPERSONATE_SERVICE_ACCOUNT")
+		if targetSA == "" {
+			return nil, errors.New("no service-account key provided and GOOGLE_IMPERSONATE_SERVICE_ACCOUNT is not set; cannot authenticate to Google")
+		}
+		var err error
+		ts, err = impersonate.CredentialsTokenSource(ctx, impersonate.CredentialsConfig{
+			TargetPrincipal: targetSA,
+			Scopes:          scopes,
+			Subject:         adminEmail,
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	srv, err := admin.NewService(ctx, option.WithTokenSource(ts))
 	if err != nil {
