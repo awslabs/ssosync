@@ -31,7 +31,7 @@ func TestNewGroup(t *testing.T) {
 	assert.Contains(t, group.Schemas, constants.SCIMSchemaGroup)
 	assert.Empty(t, group.Members)
 	assert.Empty(t, group.ID) // ID should be empty for new groups
-	assert.Equal(t, group.ExternalId, "google_id")
+	assert.Equal(t, group.ExternalId.Id, "google_id")
 }
 
 func TestNewGroupWithEmptyName(t *testing.T) {
@@ -47,7 +47,7 @@ func TestNewGroupSchemas(t *testing.T) {
 
 	assert.Len(t, group.Schemas, 1)
 	assert.Equal(t, constants.SCIMSchemaGroup, group.Schemas[0])
-	assert.Equal(t, group.ExternalId, "google_id")
+	assert.Equal(t, group.ExternalId.Id, "google_id")
 }
 
 func TestNewGroupMembers(t *testing.T) {

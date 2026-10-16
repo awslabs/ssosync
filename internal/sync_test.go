@@ -87,7 +87,7 @@ func TestGetGroupOperations_NoChange(t *testing.T) {
 		{
 			ID:          "1",
 			DisplayName: "Group 1",
-			ExternalId:  "G1",
+			ExternalId:  interfaces.ExternalId{Id: "G1"},
 		},
 	}
 
@@ -107,7 +107,7 @@ func TestGetGroupOperations_NoChange(t *testing.T) {
 	assert.Len(t, equals, 1)
 	assert.Len(t, retain, 0)
 	assert.Equal(t, "Group 1", equals[0].DisplayName)
-	assert.Equal(t, "G1", equals[0].ExternalId)
+	assert.Equal(t, "G1", equals[0].ExternalId.Id)
 }
 
 func TestGetGroupOperations_Add(t *testing.T) {
@@ -129,7 +129,7 @@ func TestGetGroupOperations_Add(t *testing.T) {
 	assert.Len(t, equals, 0)
 	assert.Len(t, retain, 0)
 	assert.Equal(t, "Group 2", add[0].DisplayName)
-	assert.Equal(t, "G2", add[0].ExternalId)
+	assert.Equal(t, "G2", add[0].ExternalId.Id)
 }
 
 func TestGetGroupOperations_Delete(t *testing.T) {
@@ -137,7 +137,7 @@ func TestGetGroupOperations_Delete(t *testing.T) {
 		{
 			ID:          "1",
 			DisplayName: "Group 1",
-			ExternalId:  "G1",
+			ExternalId:  interfaces.ExternalId{Id: "G1"},
 		},
 	}
 
@@ -151,7 +151,7 @@ func TestGetGroupOperations_Delete(t *testing.T) {
 	assert.Len(t, equals, 0)
 	assert.Len(t, retain, 0)
 	assert.Equal(t, "Group 1", delete[0].DisplayName)
-	assert.Equal(t, "G1", delete[0].ExternalId)
+	assert.Equal(t, "G1", delete[0].ExternalId.Id)
 }
 
 func TestGetGroupOperations_DeleteMatched(t *testing.T) {
@@ -219,14 +219,14 @@ func TestGetGroupOperations_LocalGroupMatch(t *testing.T) {
 	assert.Len(t, equals, 0)
 	assert.Len(t, retain, 0)
 	assert.Equal(t, "Group 3", update[0].DisplayName)
-	assert.Equal(t, "G3", update[0].ExternalId)
+	assert.Equal(t, "G3", update[0].ExternalId.Id)
 }
 
 func TestGetGroupOperations_SyncedGroupMatched_Update(t *testing.T) {
 	awsGroups := []*interfaces.Group{
 		{
 			ID:          "4",
-			ExternalId:  "G4",
+			ExternalId:  interfaces.ExternalId{Id: "G4"},
 			DisplayName: "Group 4",
 		},
 	}
@@ -247,14 +247,14 @@ func TestGetGroupOperations_SyncedGroupMatched_Update(t *testing.T) {
 	assert.Len(t, equals, 0)
 	assert.Len(t, retain, 0)
 	assert.Equal(t, "Different Group Name", update[0].DisplayName)
-	assert.Equal(t, "G4", update[0].ExternalId)
+	assert.Equal(t, "G4", update[0].ExternalId.Id)
 }
 
 func TestGetGroupOperations_ExternalIdUpdate_Update(t *testing.T) {
 	awsGroups := []*interfaces.Group{
 		{
 			ID:          "5",
-			ExternalId:  "G5",
+			ExternalId:  interfaces.ExternalId{Id: "G5"},
 			DisplayName: "Group 5",
 		},
 	}
@@ -275,14 +275,14 @@ func TestGetGroupOperations_ExternalIdUpdate_Update(t *testing.T) {
 	assert.Len(t, equals, 0)
 	assert.Len(t, retain, 0)
 	assert.Equal(t, "Group 5", update[0].DisplayName)
-	assert.Equal(t, "G50", update[0].ExternalId)
+	assert.Equal(t, "G50", update[0].ExternalId.Id)
 }
 
 func TestGetGroupOperations_ExternalIdUpdate_DeleteCreate(t *testing.T) {
 	awsGroups := []*interfaces.Group{
 		{
 			ID:          "5",
-			ExternalId:  "G5",
+			ExternalId:  interfaces.ExternalId{Id: "G5"},
 			DisplayName: "Group 5",
 		},
 	}
@@ -303,9 +303,9 @@ func TestGetGroupOperations_ExternalIdUpdate_DeleteCreate(t *testing.T) {
 	assert.Len(t, equals, 0)
 	assert.Len(t, retain, 0)
 	assert.Equal(t, "Group 5", delete[0].DisplayName)
-	assert.Equal(t, "G5", delete[0].ExternalId)
+	assert.Equal(t, "G5", delete[0].ExternalId.Id)
 	assert.Equal(t, "Group 5", add[0].DisplayName)
-	assert.Equal(t, "G50", add[0].ExternalId)
+	assert.Equal(t, "G50", add[0].ExternalId.Id)
 }
 
 func TestGetUserOperations_NoChange(t *testing.T) {
@@ -313,7 +313,7 @@ func TestGetUserOperations_NoChange(t *testing.T) {
 		{
 			ID:         "A1",
 			Username:   "user1@example.com",
-			ExternalId: "G1",
+			ExternalId: interfaces.ExternalId{Id: "G1"},
 			Name: struct {
 				FamilyName string `json:"familyName"`
 				GivenName  string `json:"givenName"`
@@ -344,7 +344,7 @@ func TestGetUserOperations_NoChange(t *testing.T) {
 	assert.Len(t, update, 0)
 	assert.Len(t, equals, 1)
 	assert.Len(t, retain, 0)
-	assert.Equal(t, equals[0].ExternalId, "G1")
+	assert.Equal(t, equals[0].ExternalId.Id, "G1")
 	assert.Equal(t, equals[0].Username, "user1@example.com")
 	assert.Equal(t, equals[0].Name.GivenName, "John")
 	assert.Equal(t, equals[0].Name.FamilyName, "Doe")
@@ -372,7 +372,7 @@ func TestGetUserOperations_Add(t *testing.T) {
 	assert.Len(t, update, 0)
 	assert.Len(t, equals, 0)
 	assert.Len(t, retain, 0)
-	assert.Equal(t, add[0].ExternalId, "G7")
+	assert.Equal(t, add[0].ExternalId.Id, "G7")
 	assert.Equal(t, add[0].Username, "user7@example.com")
 	assert.Equal(t, add[0].Name.GivenName, "Bob")
 	assert.Equal(t, add[0].Name.FamilyName, "Smith")
@@ -383,7 +383,7 @@ func TestGetUserOperations_UpdateAttribute(t *testing.T) {
 		{
 			ID:         "A2",
 			Username:   "user2@example.com",
-			ExternalId: "G2",
+			ExternalId: interfaces.ExternalId{Id: "G2"},
 			Name: struct {
 				FamilyName string `json:"familyName"`
 				GivenName  string `json:"givenName"`
@@ -414,7 +414,7 @@ func TestGetUserOperations_UpdateAttribute(t *testing.T) {
 	assert.Len(t, update, 1)
 	assert.Len(t, equals, 0)
 	assert.Len(t, retain, 0)
-	assert.Equal(t, update[0].ExternalId, "G2")
+	assert.Equal(t, update[0].ExternalId.Id, "G2")
 	assert.Equal(t, update[0].Username, "user2@example.com")
 	assert.Equal(t, update[0].Name.GivenName, "Jane")
 	assert.Equal(t, update[0].Name.FamilyName, "Updated")
@@ -455,7 +455,7 @@ func TestGetUserOperations_UpdateMissingExternalId(t *testing.T) {
 	assert.Len(t, update, 1)
 	assert.Len(t, equals, 0)
 	assert.Len(t, retain, 0)
-	assert.Equal(t, update[0].ExternalId, "G5")
+	assert.Equal(t, update[0].ExternalId.Id, "G5")
 	assert.Equal(t, update[0].Username, "user5@example.com")
 	assert.Equal(t, update[0].Name.GivenName, "Jane")
 	assert.Equal(t, update[0].Name.FamilyName, "Doe")
@@ -466,7 +466,7 @@ func TestGetUserOperations_UpdatePrimaryEmail(t *testing.T) {
 		{
 			ID:         "A2",
 			Username:   "user2@example.com",
-			ExternalId: "G2",
+			ExternalId: interfaces.ExternalId{Id: "G2"},
 			Name: struct {
 				FamilyName string `json:"familyName"`
 				GivenName  string `json:"givenName"`
@@ -497,7 +497,7 @@ func TestGetUserOperations_UpdatePrimaryEmail(t *testing.T) {
 	assert.Len(t, update, 1)
 	assert.Len(t, equals, 0)
 	assert.Len(t, retain, 0)
-	assert.Equal(t, update[0].ExternalId, "G2")
+	assert.Equal(t, update[0].ExternalId.Id, "G2")
 	assert.Equal(t, update[0].Username, "user20@example.com")
 	assert.Equal(t, update[0].Name.GivenName, "Jane")
 	assert.Equal(t, update[0].Name.FamilyName, "Smith")
@@ -507,7 +507,7 @@ func TestGetUserOperations_UpdateExternalId_DeleteRecreate(t *testing.T) {
 	awsUsers := []*interfaces.User{
 		{
 			ID:         "A6",
-			ExternalId: "GX",
+			ExternalId: interfaces.ExternalId{Id: "GX"},
 			Username:   "user6@example.com",
 			Name: struct {
 				FamilyName string `json:"familyName"`
@@ -539,11 +539,11 @@ func TestGetUserOperations_UpdateExternalId_DeleteRecreate(t *testing.T) {
 	assert.Len(t, update, 0)
 	assert.Len(t, equals, 0)
 	assert.Len(t, retain, 0)
-	assert.Equal(t, delete[0].ExternalId, "GX")
+	assert.Equal(t, delete[0].ExternalId.Id, "GX")
 	assert.Equal(t, delete[0].Username, "user6@example.com")
 	assert.Equal(t, delete[0].Name.GivenName, "Alan")
 	assert.Equal(t, delete[0].Name.FamilyName, "Brown")
-	assert.Equal(t, add[0].ExternalId, "G6")
+	assert.Equal(t, add[0].ExternalId.Id, "G6")
 	assert.Equal(t, add[0].Username, "user6@example.com")
 	assert.Equal(t, add[0].Name.GivenName, "Alan")
 	assert.Equal(t, add[0].Name.FamilyName, "Brown")
@@ -553,7 +553,7 @@ func TestGetUserOperations_UpdateExternalId_ForceUpdate(t *testing.T) {
 	awsUsers := []*interfaces.User{
 		{
 			ID:         "A6",
-			ExternalId: "GX",
+			ExternalId: interfaces.ExternalId{Id: "GX"},
 			Username:   "user6@example.com",
 			Name: struct {
 				FamilyName string `json:"familyName"`
@@ -585,7 +585,7 @@ func TestGetUserOperations_UpdateExternalId_ForceUpdate(t *testing.T) {
 	assert.Len(t, update, 1)
 	assert.Len(t, equals, 0)
 	assert.Len(t, retain, 0)
-	assert.Equal(t, update[0].ExternalId, "G6")
+	assert.Equal(t, update[0].ExternalId.Id, "G6")
 	assert.Equal(t, update[0].Username, "user6@example.com")
 	assert.Equal(t, update[0].Name.GivenName, "Alan")
 	assert.Equal(t, update[0].Name.FamilyName, "Brown")
@@ -626,7 +626,7 @@ func TestGetUserOperations_DeleteExternalId(t *testing.T) {
 		{
 			ID:         "A4",
 			Username:   "user4@example.com",
-			ExternalId: "G4",
+			ExternalId: interfaces.ExternalId{Id: "G4"},
 			Name: struct {
 				FamilyName string `json:"familyName"`
 				GivenName  string `json:"givenName"`
@@ -647,7 +647,7 @@ func TestGetUserOperations_DeleteExternalId(t *testing.T) {
 	assert.Len(t, update, 0)
 	assert.Len(t, equals, 0)
 	assert.Len(t, retain, 0)
-	assert.Equal(t, delete[0].ExternalId, "G4")
+	assert.Equal(t, delete[0].ExternalId.Id, "G4")
 	assert.Equal(t, delete[0].Username, "user4@example.com")
 	assert.Equal(t, delete[0].Name.GivenName, "Belinda")
 	assert.Equal(t, delete[0].Name.FamilyName, "Johnson")
@@ -719,7 +719,7 @@ func TestGetUserOperations_RetainUnmatched_LocalUserMatched(t *testing.T) {
 	assert.Len(t, update, 1)
 	assert.Len(t, equals, 0)
 	assert.Len(t, retain, 0)
-	assert.Equal(t, update[0].ExternalId, "G4")
+	assert.Equal(t, update[0].ExternalId.Id, "G4")
 	assert.Equal(t, update[0].Username, "user4@example.com")
 	assert.Equal(t, update[0].Name.GivenName, "Belinda")
 	assert.Equal(t, update[0].Name.FamilyName, "Johnson")
@@ -730,7 +730,7 @@ func TestGetUserOperations_RetainUnmatched_SyncedUserUnmatched(t *testing.T) {
 		{
 			ID:         "A4",
 			Username:   "user4@example.com",
-			ExternalId: "G4",
+			ExternalId: interfaces.ExternalId{Id: "G4"},
 			Name: struct {
 				FamilyName string `json:"familyName"`
 				GivenName  string `json:"givenName"`
@@ -751,7 +751,7 @@ func TestGetUserOperations_RetainUnmatched_SyncedUserUnmatched(t *testing.T) {
 	assert.Len(t, update, 0)
 	assert.Len(t, equals, 0)
 	assert.Len(t, retain, 0)
-	assert.Equal(t, delete[0].ExternalId, "G4")
+	assert.Equal(t, delete[0].ExternalId.Id, "G4")
 	assert.Equal(t, delete[0].Username, "user4@example.com")
 	assert.Equal(t, delete[0].Name.GivenName, "Belinda")
 	assert.Equal(t, delete[0].Name.FamilyName, "Johnson")
@@ -761,7 +761,7 @@ func TestGetUserOperations_RetainUnmatched_SyncedUserMismatched(t *testing.T) {
 	awsUsers := []*interfaces.User{
 		{
 			ID:         "A6",
-			ExternalId: "GX",
+			ExternalId: interfaces.ExternalId{Id: "GX"},
 			Username:   "user6@example.com",
 			Name: struct {
 				FamilyName string `json:"familyName"`
@@ -793,11 +793,11 @@ func TestGetUserOperations_RetainUnmatched_SyncedUserMismatched(t *testing.T) {
 	assert.Len(t, update, 0)
 	assert.Len(t, equals, 0)
 	assert.Len(t, retain, 0)
-	assert.Equal(t, delete[0].ExternalId, "GX")
+	assert.Equal(t, delete[0].ExternalId.Id, "GX")
 	assert.Equal(t, delete[0].Username, "user6@example.com")
 	assert.Equal(t, delete[0].Name.GivenName, "Alan")
 	assert.Equal(t, delete[0].Name.FamilyName, "Brown")
-	assert.Equal(t, add[0].ExternalId, "G6")
+	assert.Equal(t, add[0].ExternalId.Id, "G6")
 	assert.Equal(t, add[0].Username, "user6@example.com")
 	assert.Equal(t, add[0].Name.GivenName, "Alan")
 	assert.Equal(t, add[0].Name.FamilyName, "Brown")
@@ -807,7 +807,7 @@ func TestGetUserOperations_RetainUnmatched_SyncedUserMatched(t *testing.T) {
 	awsUsers := []*interfaces.User{
 		{
 			ID:         "A6",
-			ExternalId: "G6",
+			ExternalId: interfaces.ExternalId{Id: "G6"},
 			Username:   "user6@example.com",
 			Name: struct {
 				FamilyName string `json:"familyName"`
@@ -839,7 +839,7 @@ func TestGetUserOperations_RetainUnmatched_SyncedUserMatched(t *testing.T) {
 	assert.Len(t, update, 0)
 	assert.Len(t, equals, 1)
 	assert.Len(t, retain, 0)
-	assert.Equal(t, equals[0].ExternalId, "G6")
+	assert.Equal(t, equals[0].ExternalId.Id, "G6")
 	assert.Equal(t, equals[0].Username, "user6@example.com")
 	assert.Equal(t, equals[0].Name.GivenName, "Alan")
 	assert.Equal(t, equals[0].Name.FamilyName, "Brown")
@@ -869,7 +869,7 @@ func TestGetGroupOperations_RetainUnmatched_LocalGroupMatched(t *testing.T) {
 	assert.Len(t, equals, 0)
 	assert.Len(t, retain, 0)
 	assert.Equal(t, "Group 1", update[0].DisplayName)
-	assert.Equal(t, "G1", update[0].ExternalId)
+	assert.Equal(t, "G1", update[0].ExternalId.Id)
 }
 
 func TestGetGroupOperations_RetainUnmatched_LocalGroupUnmatched(t *testing.T) {
@@ -897,7 +897,7 @@ func TestGetGroupOperations_RetainUnmatched_SyncedGroupUnMatched(t *testing.T) {
 		{
 			ID:          "1",
 			DisplayName: "Group 1",
-			ExternalId:  "G1",
+			ExternalId:  interfaces.ExternalId{Id: "G1"},
 		},
 	}
 
@@ -911,7 +911,7 @@ func TestGetGroupOperations_RetainUnmatched_SyncedGroupUnMatched(t *testing.T) {
 	assert.Len(t, equals, 0)
 	assert.Len(t, retain, 0)
 	assert.Equal(t, "Group 1", delete[0].DisplayName)
-	assert.Equal(t, "G1", delete[0].ExternalId)
+	assert.Equal(t, "G1", delete[0].ExternalId.Id)
 }
 
 func TestGetGroupOperations_RetainUnmatched_SyncedGroupMismatched(t *testing.T) {
@@ -919,7 +919,7 @@ func TestGetGroupOperations_RetainUnmatched_SyncedGroupMismatched(t *testing.T) 
 		{
 			ID:          "1",
 			DisplayName: "Group 1",
-			ExternalId:  "GX",
+			ExternalId:  interfaces.ExternalId{Id: "GX"},
 		},
 	}
 
@@ -939,9 +939,9 @@ func TestGetGroupOperations_RetainUnmatched_SyncedGroupMismatched(t *testing.T) 
 	assert.Len(t, equals, 0)
 	assert.Len(t, retain, 0)
 	assert.Equal(t, "Group 1", delete[0].DisplayName)
-	assert.Equal(t, "GX", delete[0].ExternalId)
+	assert.Equal(t, "GX", delete[0].ExternalId.Id)
 	assert.Equal(t, "Group 1", add[0].DisplayName)
-	assert.Equal(t, "G1", add[0].ExternalId)
+	assert.Equal(t, "G1", add[0].ExternalId.Id)
 }
 
 func TestGetGroupOperations_RetainUnmatched_SyncedGroupMatched(t *testing.T) {
@@ -949,7 +949,7 @@ func TestGetGroupOperations_RetainUnmatched_SyncedGroupMatched(t *testing.T) {
 		{
 			ID:          "1",
 			DisplayName: "Group 1",
-			ExternalId:  "G1",
+			ExternalId:  interfaces.ExternalId{Id: "G1"},
 		},
 	}
 
@@ -969,7 +969,7 @@ func TestGetGroupOperations_RetainUnmatched_SyncedGroupMatched(t *testing.T) {
 	assert.Len(t, equals, 1)
 	assert.Len(t, retain, 0)
 	assert.Equal(t, "Group 1", equals[0].DisplayName)
-	assert.Equal(t, "G1", equals[0].ExternalId)
+	assert.Equal(t, "G1", equals[0].ExternalId.Id)
 }
 
 func TestGetUserOperations_SuspendedStateChange(t *testing.T) {
@@ -1107,6 +1107,68 @@ func TestConvertIdentityStoreGroupToAWSGroup(t *testing.T) {
 	assert.Nil(t, awsGroupNoName)
 }
 
+// TestConvertSdkUserObjToNative_ExternalIdFull verifies the native user built
+// from an SDK user carries the full ExternalId structure (both Id and Issuer),
+// consuming what the Identity Store SDK exposes.
+func TestConvertSdkUserObjToNative_ExternalIdFull(t *testing.T) {
+	native := ConvertSdkUserObjToNative(sdkUser("uid", "u@e.com", "G", "F", "gid"))
+	assert.NotNil(t, native)
+	assert.Equal(t, "gid", native.ExternalId.Id)
+	assert.Equal(t, "ssosync", native.ExternalId.Issuer)
+}
+
+// TestConvertIdentityStoreGroupToAWSGroup_ExternalIdFull verifies the native
+// group built from an SDK group carries the full ExternalId structure.
+func TestConvertIdentityStoreGroupToAWSGroup_ExternalIdFull(t *testing.T) {
+	native := ConvertIdentityStoreGroupToAWSGroup(types.Group{
+		GroupId:     aws.String("group-123"),
+		DisplayName: aws.String("Test Group"),
+		ExternalIds: []types.ExternalId{{Id: aws.String("gid"), Issuer: aws.String("ssosync")}},
+	})
+	assert.NotNil(t, native)
+	assert.Equal(t, "gid", native.ExternalId.Id)
+	assert.Equal(t, "ssosync", native.ExternalId.Issuer)
+}
+
+// TestGetExternalId_EmptySlice verifies getExternalId returns the zero-value
+// struct when no external IDs are present.
+func TestGetExternalId_EmptySlice(t *testing.T) {
+	assert.Equal(t, interfaces.ExternalId{}, getExternalId(nil))
+	assert.Equal(t, interfaces.ExternalId{}, getExternalId([]types.ExternalId{}))
+}
+
+// TestConvertSdkUserObjToNative_AddressEmptyType verifies that a present
+// address with a nil or empty Type still yields a UserAddress entry with an
+// empty Type rather than being dropped.
+func TestConvertSdkUserObjToNative_AddressEmptyType(t *testing.T) {
+	// Address with a nil Type.
+	nilType := sdkUser("uid", "u@e.com", "G", "F", "gid")
+	nilType.Addresses = []types.Address{{Type: nil}}
+	native := ConvertSdkUserObjToNative(nilType)
+	assert.NotNil(t, native)
+	assert.Len(t, native.Addresses, 1)
+	assert.Equal(t, "", native.Addresses[0].Type)
+
+	// Address with an explicitly empty Type.
+	emptyType := sdkUser("uid", "u@e.com", "G", "F", "gid")
+	emptyType.Addresses = []types.Address{{Type: aws.String("")}}
+	native = ConvertSdkUserObjToNative(emptyType)
+	assert.NotNil(t, native)
+	assert.Len(t, native.Addresses, 1)
+	assert.Equal(t, "", native.Addresses[0].Type)
+}
+
+// TestConvertSdkUserObjToNative_AddressNilSlice verifies that a user with no
+// address block yields a non-nil, empty Addresses slice and does not panic.
+func TestConvertSdkUserObjToNative_AddressNilSlice(t *testing.T) {
+	nilSlice := sdkUser("uid", "u@e.com", "G", "F", "gid")
+	nilSlice.Addresses = nil
+	native := ConvertSdkUserObjToNative(nilSlice)
+	assert.NotNil(t, native)
+	assert.NotNil(t, native.Addresses)
+	assert.Len(t, native.Addresses, 0)
+}
+
 func TestDoSync_InvalidCredentials(t *testing.T) {
 	cfg := &config.Config{
 		GoogleCredentials: "invalid-path.json",
@@ -1162,8 +1224,8 @@ func TestSyncGroups_DryRunUserWithoutID(t *testing.T) {
 	// The AWS group matches by display name but has no ExternalId, so it is
 	// updated to backfill the ExternalId (the Google group id).
 	awsClient.EXPECT().UpdateGroup(mock.MatchedBy(func(g *interfaces.Group) bool {
-		return g.ID == "aws-gid" && g.DisplayName == "group@example.com" && g.ExternalId == "gid"
-	})).Return(&interfaces.Group{ID: "aws-gid", DisplayName: "group@example.com", ExternalId: "gid"}, nil)
+		return g.ID == "aws-gid" && g.DisplayName == "group@example.com" && g.ExternalId.Id == "gid"
+	})).Return(&interfaces.Group{ID: "aws-gid", DisplayName: "group@example.com", ExternalId: interfaces.ExternalId{Id: "gid"}}, nil)
 	awsClient.EXPECT().AddUserToGroup(mock.Anything, mock.MatchedBy(func(g *interfaces.Group) bool {
 		return g.ID == "aws-gid"
 	})).Return(nil)
@@ -1261,7 +1323,7 @@ func TestSyncUsers_ExternalIdMatch_Update(t *testing.T) {
 	awsClient.EXPECT().FindUserByEmail("user@example.com").
 		Return(&interfaces.User{ID: "aws-1", Username: "user@example.com", Active: true}, nil)
 	awsClient.EXPECT().UpdateUser(mock.MatchedBy(func(u *interfaces.User) bool {
-		return u.ID == "aws-1" && u.ExternalId == "gid-1" && u.Name.FamilyName == "Doe"
+		return u.ID == "aws-1" && u.ExternalId.Id == "gid-1" && u.Name.FamilyName == "Doe"
 	})).Return(&interfaces.User{ID: "aws-1", Username: "user@example.com"}, nil)
 
 	assert.NoError(t, s.SyncUsers(""))
@@ -1280,7 +1342,7 @@ func TestSyncUsers_EmailMatch_ForceExternalIdUpdate(t *testing.T) {
 		Return(&interfaces.User{ID: "aws-1", Username: "user@example.com", Active: true}, nil)
 	// Force option -> update in place with the new ExternalId, no delete/create.
 	awsClient.EXPECT().UpdateUser(mock.MatchedBy(func(u *interfaces.User) bool {
-		return u.ID == "aws-1" && u.ExternalId == "gid-new"
+		return u.ID == "aws-1" && u.ExternalId.Id == "gid-new"
 	})).Return(&interfaces.User{ID: "aws-1", Username: "user@example.com"}, nil)
 
 	assert.NoError(t, s.SyncUsers(""))
@@ -1298,10 +1360,10 @@ func TestSyncUsers_EmailMatch_DeleteAndRecreate(t *testing.T) {
 		Return(&interfaces.User{ID: "aws-1", Username: "user@example.com", Active: true}, nil)
 	// No force -> delete existing, create new to avoid inherited privileges.
 	awsClient.EXPECT().DeleteUser(mock.MatchedBy(func(u *interfaces.User) bool {
-		return u.ID == "aws-1" && u.ExternalId == "gid-old"
+		return u.ID == "aws-1" && u.ExternalId.Id == "gid-old"
 	})).Return(nil)
 	awsClient.EXPECT().CreateUser(mock.MatchedBy(func(u *interfaces.User) bool {
-		return u.ID == "" && u.ExternalId == "gid-new" && u.Username == "user@example.com"
+		return u.ID == "" && u.ExternalId.Id == "gid-new" && u.Username == "user@example.com"
 	})).Return(&interfaces.User{ID: "aws-2", Username: "user@example.com"}, nil)
 
 	assert.NoError(t, s.SyncUsers(""))
@@ -1319,7 +1381,7 @@ func TestSyncUsers_EmailMatch_AdoptNoExternalId(t *testing.T) {
 	awsClient.EXPECT().FindUserByEmail("user@example.com").
 		Return(&interfaces.User{ID: "aws-1", Username: "user@example.com", Active: true}, nil)
 	awsClient.EXPECT().UpdateUser(mock.MatchedBy(func(u *interfaces.User) bool {
-		return u.ID == "aws-1" && u.ExternalId == "gid-1"
+		return u.ID == "aws-1" && u.ExternalId.Id == "gid-1"
 	})).Return(&interfaces.User{ID: "aws-1", Username: "user@example.com"}, nil)
 
 	assert.NoError(t, s.SyncUsers(""))
@@ -1334,7 +1396,7 @@ func TestSyncUsers_NoMatch_Create(t *testing.T) {
 	s, awsClient, _ := newSyncUsersSuite(t, cfg, google, []types.User{})
 
 	awsClient.EXPECT().CreateUser(mock.MatchedBy(func(u *interfaces.User) bool {
-		return u.Username == "new@example.com" && u.ExternalId == "gid-1"
+		return u.Username == "new@example.com" && u.ExternalId.Id == "gid-1"
 	})).Return(&interfaces.User{ID: "aws-9", Username: "new@example.com"}, nil)
 	// setUser re-fetch after create.
 	awsClient.EXPECT().FindUserByEmail("new@example.com").
@@ -1411,8 +1473,8 @@ func TestSyncGroups_ExternalIdMatch_UpdateDisplayName(t *testing.T) {
 	googleClient.EXPECT().GetGroupMembers(google[0]).Return([]*admin.Member{}, nil)
 
 	awsClient.EXPECT().UpdateGroup(mock.MatchedBy(func(g *interfaces.Group) bool {
-		return g.ID == "aws-1" && g.DisplayName == "group@example.com" && g.ExternalId == "gid-1"
-	})).Return(&interfaces.Group{ID: "aws-1", DisplayName: "group@example.com", ExternalId: "gid-1"}, nil)
+		return g.ID == "aws-1" && g.DisplayName == "group@example.com" && g.ExternalId.Id == "gid-1"
+	})).Return(&interfaces.Group{ID: "aws-1", DisplayName: "group@example.com", ExternalId: interfaces.ExternalId{Id: "gid-1"}}, nil)
 
 	assert.NoError(t, s.SyncGroups(""))
 }
@@ -1428,8 +1490,8 @@ func TestSyncGroups_DisplayNameMatch_BackfillExternalId(t *testing.T) {
 	googleClient.EXPECT().GetGroupMembers(google[0]).Return([]*admin.Member{}, nil)
 
 	awsClient.EXPECT().UpdateGroup(mock.MatchedBy(func(g *interfaces.Group) bool {
-		return g.ID == "aws-1" && g.ExternalId == "gid-1"
-	})).Return(&interfaces.Group{ID: "aws-1", DisplayName: "group@example.com", ExternalId: "gid-1"}, nil)
+		return g.ID == "aws-1" && g.ExternalId.Id == "gid-1"
+	})).Return(&interfaces.Group{ID: "aws-1", DisplayName: "group@example.com", ExternalId: interfaces.ExternalId{Id: "gid-1"}}, nil)
 
 	assert.NoError(t, s.SyncGroups(""))
 }
@@ -1443,8 +1505,8 @@ func TestSyncGroups_NoMatch_Create(t *testing.T) {
 	googleClient.EXPECT().GetGroupMembers(google[0]).Return([]*admin.Member{}, nil)
 
 	awsClient.EXPECT().CreateGroup(mock.MatchedBy(func(g *interfaces.Group) bool {
-		return g.DisplayName == "group@example.com" && g.ExternalId == "gid-1"
-	})).Return(&interfaces.Group{ID: "aws-new", DisplayName: "group@example.com", ExternalId: "gid-1"}, nil)
+		return g.DisplayName == "group@example.com" && g.ExternalId.Id == "gid-1"
+	})).Return(&interfaces.Group{ID: "aws-new", DisplayName: "group@example.com", ExternalId: interfaces.ExternalId{Id: "gid-1"}}, nil)
 
 	assert.NoError(t, s.SyncGroups(""))
 }
