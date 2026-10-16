@@ -51,8 +51,9 @@ Parameters:
     Description: |
       Select the release to deploy.
     #SemanticVersion 
-    Default: 2.8.0
+    Default: 2.9.1
     AllowedValues:
+      - 2.9.1
       - 2.9.0
       - 2.8.0
 
