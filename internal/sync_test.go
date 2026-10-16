@@ -894,6 +894,81 @@ func sdkUser(id, userName, givenName, familyName, externalID string) types.User 
 	return u
 }
 
+// TestConvertSdkUserObjToNative_AddressWithEmptyType verifies that a user with
+// at least one address whose Type field is empty is converted without error and
+// the empty Type is carried through to the native address.
+func TestConvertSdkUserObjToNative_AddressWithEmptyType(t *testing.T) {
+	user := sdkUser("aws-1", "user@example.com", "Jane", "Doe", "gid-1")
+	user.Addresses = []types.Address{
+		{Type: aws.String("")},
+	}
+
+	native := ConvertSdkUserObjToNative(user)
+
+	assert.NotNil(t, native)
+	assert.Len(t, native.Addresses, 1)
+	assert.Equal(t, "", native.Addresses[0].Type)
+}
+
+// TestConvertSdkUserObjToNative_AddressWithNilType verifies that a user with at
+// least one address whose Type field is unset (nil) is converted without
+// panicking, and the address is carried through with an empty Type.
+func TestConvertSdkUserObjToNative_AddressWithNilType(t *testing.T) {
+	user := sdkUser("aws-1", "user@example.com", "Jane", "Doe", "gid-1")
+	user.Addresses = []types.Address{
+		{Type: nil},
+	}
+
+	native := ConvertSdkUserObjToNative(user)
+
+	assert.NotNil(t, native)
+	assert.Len(t, native.Addresses, 1)
+	assert.Equal(t, "", native.Addresses[0].Type)
+}
+
+// TestConvertSdkUserObjToNative_NilScalarPointers verifies that unset (nil)
+// top-level string pointers (UserId, UserName, DisplayName) are converted to
+// empty strings without panicking.
+func TestConvertSdkUserObjToNative_NilScalarPointers(t *testing.T) {
+	user := sdkUser("aws-1", "user@example.com", "Jane", "Doe", "gid-1")
+	user.UserId = nil
+	user.UserName = nil
+	user.DisplayName = nil
+
+	native := ConvertSdkUserObjToNative(user)
+
+	assert.NotNil(t, native)
+	assert.Equal(t, "", native.ID)
+	assert.Equal(t, "", native.Username)
+	assert.Equal(t, "", native.DisplayName)
+}
+
+// TestConvertSdkUserObjToNative_NilName verifies that a nil Name struct is
+// handled without panicking and the native name fields are empty.
+func TestConvertSdkUserObjToNative_NilName(t *testing.T) {
+	user := sdkUser("aws-1", "user@example.com", "Jane", "Doe", "gid-1")
+	user.Name = nil
+
+	native := ConvertSdkUserObjToNative(user)
+
+	assert.NotNil(t, native)
+	assert.Equal(t, "", native.Name.FamilyName)
+	assert.Equal(t, "", native.Name.GivenName)
+}
+
+// TestConvertSdkUserObjToNative_NilNameFields verifies that a non-nil Name with
+// unset (nil) GivenName/FamilyName pointers is handled without panicking.
+func TestConvertSdkUserObjToNative_NilNameFields(t *testing.T) {
+	user := sdkUser("aws-1", "user@example.com", "Jane", "Doe", "gid-1")
+	user.Name = &types.Name{GivenName: nil, FamilyName: nil}
+
+	native := ConvertSdkUserObjToNative(user)
+
+	assert.NotNil(t, native)
+	assert.Equal(t, "", native.Name.FamilyName)
+	assert.Equal(t, "", native.Name.GivenName)
+}
+
 // sdkGroup builds an Identity Store SDK group with an optional external id.
 func sdkGroup(id, displayName, externalID string) types.Group {
 	g := types.Group{

@@ -1587,27 +1587,53 @@ func ConvertSdkUserObjToNative(user identitystore_types.User) *interfaces.User {
 	userAddresses := make([]interfaces.UserAddress, 0)
 
 	for _, address := range user.Addresses {
+		addressType := ""
+		if address.Type != nil {
+			addressType = *address.Type
+		}
 		userAddresses = append(userAddresses, interfaces.UserAddress{
-			Type: *address.Type,
+			Type: addressType,
 		})
 	}
 
+	// Safely dereference optional pointer fields; the Identity Store SDK leaves
+	// these as nil when a value is not set (e.g. users created outside ssosync).
+	familyName := ""
+	givenName := ""
+	if user.Name != nil {
+		if user.Name.FamilyName != nil {
+			familyName = *user.Name.FamilyName
+		}
+		if user.Name.GivenName != nil {
+			givenName = *user.Name.GivenName
+		}
+	}
+
 	return &interfaces.User{
-		ID:         *user.UserId,
+		ID:         derefString(user.UserId),
 		ExternalId: getExternalId(user.ExternalIds),
 		Schemas:    []string{constants.SCIMSchemaUser},
-		Username: *user.UserName,
+		Username:   derefString(user.UserName),
 		Name: struct {
 			FamilyName string `json:"familyName"`
 			GivenName  string `json:"givenName"`
 		}{
-			FamilyName: *user.Name.FamilyName,
-			GivenName:  *user.Name.GivenName,
+			FamilyName: familyName,
+			GivenName:  givenName,
 		},
-		DisplayName: *user.DisplayName,
+		DisplayName: derefString(user.DisplayName),
 		Emails:      userEmails,
 		Addresses:   userAddresses,
 	}
+}
+
+// derefString safely dereferences a string pointer, returning an empty string
+// when the pointer is nil.
+func derefString(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
 }
 
 // getExternalId extracts the external ID from the identity store ExternalIds slice.
