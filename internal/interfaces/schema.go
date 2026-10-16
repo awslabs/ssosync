@@ -54,6 +54,21 @@ type Group struct {
 	Members     []string   `json:"members"`
 }
 
+// MarshalJSON preserves the SCIM wire format for the externalId field: when the
+// external id is empty the key is omitted entirely (matching the previous
+// string field's omitempty behavior), otherwise it is emitted as a bare JSON
+// string via ExternalId.MarshalJSON.
+func (g Group) MarshalJSON() ([]byte, error) {
+	type alias Group
+	if g.ExternalId.Id == "" {
+		return json.Marshal(struct {
+			alias
+			ExternalId *ExternalId `json:"externalId,omitempty"`
+		}{alias: alias(g)})
+	}
+	return json.Marshal(alias(g))
+}
+
 // GroupFilterResults represents filtered results when we search for
 // groups or List all groups
 type GroupFilterResults struct {
@@ -124,6 +139,21 @@ type User struct {
 	Active      bool          `json:"active"`
 	Emails      []UserEmail   `json:"emails"`
 	Addresses   []UserAddress `json:"addresses"`
+}
+
+// MarshalJSON preserves the SCIM wire format for the externalId field: when the
+// external id is empty the key is omitted entirely (matching the previous
+// string field's omitempty behavior), otherwise it is emitted as a bare JSON
+// string via ExternalId.MarshalJSON.
+func (u User) MarshalJSON() ([]byte, error) {
+	type alias User
+	if u.ExternalId.Id == "" {
+		return json.Marshal(struct {
+			alias
+			ExternalId *ExternalId `json:"externalId,omitempty"`
+		}{alias: alias(u)})
+	}
+	return json.Marshal(alias(u))
 }
 
 // UserFilterResults represents filtered results when we search for

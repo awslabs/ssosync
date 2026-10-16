@@ -138,6 +138,19 @@ func TestExternalId_MarshalJSON_BareString(t *testing.T) {
 	assert.False(t, strings.Contains(string(gb), `"externalId":{`))
 }
 
+// TestExternalId_MarshalJSON_EmptyOmitted verifies that an empty external id is
+// omitted from the SCIM wire body entirely (matching the previous string
+// field's omitempty behavior) rather than being emitted as "externalId":"".
+func TestExternalId_MarshalJSON_EmptyOmitted(t *testing.T) {
+	ub, err := json.Marshal(User{Username: "test@example.com"})
+	assert.NoError(t, err)
+	assert.NotContains(t, string(ub), `"externalId"`)
+
+	gb, err := json.Marshal(Group{DisplayName: "Test Group"})
+	assert.NoError(t, err)
+	assert.NotContains(t, string(gb), `"externalId"`)
+}
+
 // TestExternalId_UnmarshalJSON_BareString verifies that a bare JSON string is
 // read into the Id field, with Issuer left empty.
 func TestExternalId_UnmarshalJSON_BareString(t *testing.T) {
