@@ -583,7 +583,7 @@ func (c *client) UpdateGroup(g *interfaces.Group) (*interfaces.Group, error) {
 			{
 				Operation: OperationReplace,
 				Path:      "externalId",
-				Value:     string(g.ExternalId),
+				Value:     g.ExternalId.Id,
 			},
 		},
 	}

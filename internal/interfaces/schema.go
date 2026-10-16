@@ -14,13 +14,59 @@
 
 package interfaces
 
+import "encoding/json"
+
+// ExternalId represents an external identifier for a user or group. It carries
+// both the identifier value and the issuer that assigned it.
+//
+// On the SCIM wire the external identifier is a bare JSON string, so ExternalId
+// marshals to (and unmarshals from) that bare string via its Id field. The
+// Issuer field is only populated when consuming the Identity Store SDK, which
+// exposes the issuer alongside the id.
+type ExternalId struct {
+	Id     string `json:"id"`
+	Issuer string `json:"issuer"`
+}
+
+// MarshalJSON renders ExternalId as a bare JSON string equal to its Id so the
+// SCIM wire format (externalId as a plain string) is preserved.
+func (e ExternalId) MarshalJSON() ([]byte, error) {
+	return json.Marshal(e.Id)
+}
+
+// UnmarshalJSON reads a bare JSON string into Id, leaving Issuer empty. This
+// matches the SCIM wire format where externalId is a plain string.
+func (e *ExternalId) UnmarshalJSON(b []byte) error {
+	var s string
+	if err := json.Unmarshal(b, &s); err != nil {
+		return err
+	}
+	e.Id = s
+	return nil
+}
+
 // Group represents a Group in AWS SSO
 type Group struct {
-	ID          string   `json:"id,omitempty"`
-	Schemas     []string `json:"schemas"`
-	DisplayName string   `json:"displayName"`
-	ExternalId  string   `json:"externalId,omitempty"`
-	Members     []string `json:"members"`
+	ID          string     `json:"id,omitempty"`
+	Schemas     []string   `json:"schemas"`
+	DisplayName string     `json:"displayName"`
+	ExternalId  ExternalId `json:"externalId,omitempty"`
+	Members     []string   `json:"members"`
+}
+
+// MarshalJSON preserves the SCIM wire format for the externalId field: when the
+// external id is empty the key is omitted entirely (matching the previous
+// string field's omitempty behavior), otherwise it is emitted as a bare JSON
+// string via ExternalId.MarshalJSON.
+func (g Group) MarshalJSON() ([]byte, error) {
+	type alias Group
+	if g.ExternalId.Id == "" {
+		return json.Marshal(struct {
+			alias
+			ExternalId *ExternalId `json:"externalId,omitempty"`
+		}{alias: alias(g)})
+	}
+	return json.Marshal(alias(g))
 }
 
 // GroupFilterResults represents filtered results when we search for
@@ -81,10 +127,10 @@ type UserAddress struct {
 
 // User represents a User in AWS SSO
 type User struct {
-	ID         string   `json:"id,omitempty"`
-	Schemas    []string `json:"schemas"`
-	ExternalId string   `json:"externalId,omitempty"`
-	Username   string   `json:"userName"`
+	ID         string     `json:"id,omitempty"`
+	Schemas    []string   `json:"schemas"`
+	ExternalId ExternalId `json:"externalId,omitempty"`
+	Username   string     `json:"userName"`
 	Name       struct {
 		FamilyName string `json:"familyName"`
 		GivenName  string `json:"givenName"`
@@ -93,6 +139,21 @@ type User struct {
 	Active      bool          `json:"active"`
 	Emails      []UserEmail   `json:"emails"`
 	Addresses   []UserAddress `json:"addresses"`
+}
+
+// MarshalJSON preserves the SCIM wire format for the externalId field: when the
+// external id is empty the key is omitted entirely (matching the previous
+// string field's omitempty behavior), otherwise it is emitted as a bare JSON
+// string via ExternalId.MarshalJSON.
+func (u User) MarshalJSON() ([]byte, error) {
+	type alias User
+	if u.ExternalId.Id == "" {
+		return json.Marshal(struct {
+			alias
+			ExternalId *ExternalId `json:"externalId,omitempty"`
+		}{alias: alias(u)})
+	}
+	return json.Marshal(alias(u))
 }
 
 // UserFilterResults represents filtered results when we search for
