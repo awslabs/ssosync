@@ -255,6 +255,8 @@ ssosync performs a uni-directional sync: by default any user or group that exist
 
 Setting `--retain-unmatched` (or `SSOSYNC_RETAIN_UNMATCHED=true`) blocks those deletions. Users and groups that exist in the Identity Store but have no match in the Google Workspace directory are left in place instead of being removed.
 
+This option does not prevent deletion when a Google Workspace user has the same email address as an Identity Store user but a different, non-empty `ExternalId`. By default, ssosync deletes the old Identity Store user and creates a new one to avoid carrying the old user's permissions forward. The replacement has the same email address but a different Identity Store ID, so compare its group memberships and account assignments after the sync. Use `--force-externalid-update` to update the existing user in place only when preserving those assignments is intended; this carries the permission-inheritance risk described above.
+
 This is useful when the Identity Store also contains identities managed outside of ssosync (for example users and groups created by AWS Control Tower) that you do not want removed on each sync.
 
 > [!CAUTION]
