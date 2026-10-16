@@ -8,7 +8,7 @@ env:
     GOPATH:
     GOPROXY: direct
     git-credential-helper: yes
-    GOVERSION: go1.26.4
+    #GOVERSION: go1.26.9
     #MOCKERY_VERSION: v3.5.2
     #GOLANGCI_LINT_VERSION: v2.3.1
     #GORELEASER_VERSION: v2.11.2
@@ -18,14 +18,15 @@ env:
 phases:
   install: 
     commands:
+      - GO_VERSION=$(sed -En 's/^go (.*)$/\1/p' go.mod ) 
       # Update the repos
       #- apt-get -qq --yes update && apt-get -qq --yes upgrade
       - BUILD_DIR=$PWD
       - cd /root/.goenv/plugins/go-build/../.. && git pull && cd -
       - cd /root/.goenv && git fetch --all && git pull
       - cd $BUILD_DIR
-      - goenv install ${GOVERSION#go}
-      - goenv global ${GOVERSION#go}
+      - goenv install ${GO_VERSION#go}
+      - goenv global ${GO_VERSION#go}
       # Install development tools using Makefile (with verbose output if VERBOSE=1)
       - echo "Installing dependencies with VERBOSE=${VERBOSE}"
       - make install-deps
@@ -38,7 +39,8 @@ phases:
       # Print all environment variables (handy for AWS CodeBuild logs)
       - env
       - go version
-      - '[ "$(go version | awk ''{print $3}'')" = "${GOVERSION}" ] || (echo "Wrong go version" && exit 1)'
+      - GO_VERSION_INSTALLED=$(go version | sed -En 's/go version go(.*) (.*)$/\1/p')
+      - '[ "${GO_VERSION_INSTALLED}" = "${GO_VERSION}" ] || (echo "Wrong go version" && exit 1)'
 
       # Output the EnvVars used in the build
       - echo "GitTag=${GitTag}"
@@ -54,6 +56,8 @@ phases:
 
       # Check the Go code for common problems with 'go vet'
       - make vet
+    exported-variables:
+      - GO_VERSION
 
   build:
     commands:
@@ -78,4 +82,4 @@ cache:
     - /root/.cache/go-build/**/*
     - "/go/pkg/**/*"
     - ".bin/**/*"  # Cache development tools installed by Makefile
-  key: $GOVERSION-$(codebuild-hash-files 'go.sum')
+  key: $GO_VERSION-$(codebuild-hash-files 'go.sum')
