@@ -1460,18 +1460,30 @@ func DoSync(ctx context.Context, cfg *config.Config) error {
 }
 
 func (s *syncGSuite) ignoreUser(name string) bool {
-	if s.cfg.IgnoreUsers == nil {
-		return false
-	}
-
-	if s.ignoreUsersSet == nil {
-		s.ignoreUsersSet = make(map[string]struct{}, len(s.cfg.IgnoreUsers))
-		for _, u := range s.cfg.IgnoreUsers {
-			s.ignoreUsersSet[u] = struct{}{}
+	if s.cfg.IgnoreUsers != nil {
+		if s.ignoreUsersSet == nil {
+			s.ignoreUsersSet = make(map[string]struct{}, len(s.cfg.IgnoreUsers))
+			for _, u := range s.cfg.IgnoreUsers {
+				s.ignoreUsersSet[u] = struct{}{}
+			}
+		}
+		if _, exists := s.ignoreUsersSet[name]; exists {
+			return true
 		}
 	}
-	_, exists := s.ignoreUsersSet[name]
-	return exists
+
+	lowerName := strings.ToLower(name)
+	for _, suffix := range s.cfg.IgnoreUserSuffixes {
+		suffix = strings.TrimSpace(suffix)
+		if suffix == "" {
+			continue
+		}
+		if strings.HasSuffix(lowerName, strings.ToLower(suffix)) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (s *syncGSuite) ignoreGroup(name string) bool {

@@ -22,6 +22,7 @@ Metadata:
           - GoogleUserMatch
           - GoogleUserMatch
           - IgnoreUsers
+          - IgnoreUserSuffixes
           - IgnoreGroups
           - SyncSuspended
           - PrecacheOrgUnits
@@ -310,6 +311,13 @@ Parameters:
     Default: ""
     AllowedPattern: '(?!.*\s)|((([a-zA-Z0-9.\-_]{1,64})@([a-zA-Z0-9.\-]{5,260}))(,(([a-zA-Z0-9.\-_]{1,64})@([a-zA-Z0-9.\-]{5,260})))*)'
 
+  IgnoreUserSuffixes:
+    Type: String
+    Description: |
+      [optional] Ignore Google Workspace users whose primary email ends with one of these comma-separated suffixes (case-insensitive), e.g. '.guest.google', leave empty if not required
+    Default: ""
+    AllowedPattern: '(?!.*\s)|([a-zA-Z0-9.\-_]{1,260}(,[a-zA-Z0-9.\-_]{1,260})*)'
+
   IncludeGroups:
     Type: String
     Description: |
@@ -343,6 +351,8 @@ Conditions:
     - !Equals [ !Ref IgnoreGroups, "" ]
   SetIgnoreUsers: !Not
     - !Equals [ !Ref IgnoreUsers, "" ]
+  SetIgnoreUserSuffixes: !Not
+    - !Equals [ !Ref IgnoreUserSuffixes, "" ]
   SetIncludeGroups: !And
     - !Condition LegacySync
     - !Not
@@ -577,6 +587,7 @@ Resources:
           SYNC_METHOD: !If [LegacySync, !Ref SyncMethod, !Ref AWS::NoValue]
           IGNORE_GROUPS: !If [SetIgnoreGroups, !Ref IgnoreGroups, !Ref AWS::NoValue]
           IGNORE_USERS: !If [SetIgnoreUsers, !Ref IgnoreUsers, !Ref AWS::NoValue]
+          IGNORE_USER_SUFFIXES: !If [SetIgnoreUserSuffixes, !Ref IgnoreUserSuffixes, !Ref AWS::NoValue]
           INCLUDE_GROUPS: !If [SetIncludeGroups, !Ref IncludeGroups, !Ref AWS::NoValue]
           DRY_RUN: !If [SetDryRun, 'True', !Ref AWS::NoValue]
           SYNC_SUSPENDED: !If [SetSyncSuspended, 'True', !Ref AWS::NoValue]

@@ -173,6 +173,7 @@ func initConfig() {
 		"log_level",
 		"log_format",
 		"ignore_users",
+		"ignore_user_suffixes",
 		"ignore_groups",
 		"include_groups",
 		"user_match",
@@ -323,6 +324,7 @@ func configLambda() {
 	cfg.GroupMatch = getEnvStr("GROUP_MATCH", config.DefaultGroupMatch)
 	cfg.IgnoreGroups = getEnvStrs("IGNORE_GROUPS", config.DefaultIgnoreGroups)
 	cfg.IgnoreUsers = getEnvStrs("IGNORE_USERS", config.DefaultIgnoreUsers)
+	cfg.IgnoreUserSuffixes = getEnvStrs("IGNORE_USER_SUFFIXES", config.DefaultIgnoreUserSuffixes)
 	cfg.IncludeGroups = getEnvStrs("INCLUDE_GROUPS", config.DefaultIncludeGroups)
 	cfg.PrecacheOrgUnits = getEnvStrs("PRECACHE_ORG_UNITS", config.DefaultPrecacheOrgUnits)
 	cfg.CacheMetrics = getEnvBool("CACHE_METRICS", config.DefaultCacheMetrics)
@@ -367,6 +369,7 @@ func addFlags(_ *cobra.Command, cfg *config.Config) {
 	rootCmd.Flags().StringVarP(&cfg.GoogleAdmin, "google-admin", "u", config.DefaultGoogleAdmin, "Google Workspace admin user email")
 	rootCmd.Flags().StringVar(&cfg.CustomerID, "customer-id", config.DefaultCustomerID, "Google Workspace customer ID to operate against (defaults to 'my_customer')")
 	rootCmd.Flags().StringSliceVar(&cfg.IgnoreUsers, "ignore-users", config.DefaultIgnoreUsers, "ignores these Google Workspace users")
+	rootCmd.Flags().StringSliceVar(&cfg.IgnoreUserSuffixes, "ignore-user-suffixes", config.DefaultIgnoreUserSuffixes, "ignores Google Workspace users whose primary email ends with one of these suffixes")
 	rootCmd.Flags().StringSliceVar(&cfg.IgnoreGroups, "ignore-groups", config.DefaultIgnoreGroups, "ignores these Google Workspace groups")
 	rootCmd.Flags().StringSliceVar(&cfg.IncludeGroups, "include-groups", config.DefaultIncludeGroups, "include only these Google Workspace groups, NOTE: only works when --sync-method 'users_groups'")
 	rootCmd.Flags().StringVarP(&cfg.UserMatch, "user-match", "m", config.DefaultUserMatch, "Google Workspace Users filter query parameter, example: 'name:John*' 'name=John Doe,email:admin*', to sync all users in the directory specify '*'. For query syntax and more examples see: https://developers.google.com/admin-sdk/directory/v1/guides/search-users")
