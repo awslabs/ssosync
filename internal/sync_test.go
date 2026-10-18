@@ -1111,29 +1111,40 @@ func TestConvertIdentityStoreGroupToAWSGroup(t *testing.T) {
 // from an SDK user carries the full ExternalId structure (both Id and Issuer),
 // consuming what the Identity Store SDK exposes.
 func TestConvertSdkUserObjToNative_ExternalIdFull(t *testing.T) {
-	native := ConvertSdkUserObjToNative(sdkUser("uid", "u@e.com", "G", "F", "gid"))
+	identityStoreUser := sdkUser("user-123", "user1@example.com", "John", "Doe", "G1")
+
+	native := ConvertSdkUserObjToNative(identityStoreUser)
+
 	assert.NotNil(t, native)
-	assert.Equal(t, "gid", native.ExternalId.Id)
+	assert.Equal(t, "G1", native.ExternalId.Id)
 	assert.Equal(t, "ssosync", native.ExternalId.Issuer)
 }
 
 // TestConvertIdentityStoreGroupToAWSGroup_ExternalIdFull verifies the native
 // group built from an SDK group carries the full ExternalId structure.
 func TestConvertIdentityStoreGroupToAWSGroup_ExternalIdFull(t *testing.T) {
-	native := ConvertIdentityStoreGroupToAWSGroup(types.Group{
+	identityStoreGroup := types.Group{
 		GroupId:     aws.String("group-123"),
 		DisplayName: aws.String("Test Group"),
-		ExternalIds: []types.ExternalId{{Id: aws.String("gid"), Issuer: aws.String("ssosync")}},
-	})
+		ExternalIds: []types.ExternalId{
+			{Id: aws.String("G1"), Issuer: aws.String("ssosync")},
+		},
+	}
+
+	native := ConvertIdentityStoreGroupToAWSGroup(identityStoreGroup)
+
 	assert.NotNil(t, native)
-	assert.Equal(t, "gid", native.ExternalId.Id)
+	assert.Equal(t, "G1", native.ExternalId.Id)
 	assert.Equal(t, "ssosync", native.ExternalId.Issuer)
 }
 
 // TestGetExternalId_EmptySlice verifies getExternalId returns the zero-value
 // struct when no external IDs are present.
 func TestGetExternalId_EmptySlice(t *testing.T) {
+	// Test with a nil slice.
 	assert.Equal(t, interfaces.ExternalId{}, getExternalId(nil))
+
+	// Test with an empty slice.
 	assert.Equal(t, interfaces.ExternalId{}, getExternalId([]types.ExternalId{}))
 }
 
@@ -1141,29 +1152,37 @@ func TestGetExternalId_EmptySlice(t *testing.T) {
 // address with a nil or empty Type still yields a UserAddress entry with an
 // empty Type rather than being dropped.
 func TestConvertSdkUserObjToNative_AddressEmptyType(t *testing.T) {
-	// Address with a nil Type.
-	nilType := sdkUser("uid", "u@e.com", "G", "F", "gid")
-	nilType.Addresses = []types.Address{{Type: nil}}
-	native := ConvertSdkUserObjToNative(nilType)
-	assert.NotNil(t, native)
-	assert.Len(t, native.Addresses, 1)
-	assert.Equal(t, "", native.Addresses[0].Type)
+	// Test with a nil address Type.
+	userNilType := sdkUser("user-123", "user1@example.com", "John", "Doe", "G1")
+	userNilType.Addresses = []types.Address{
+		{Type: nil},
+	}
 
-	// Address with an explicitly empty Type.
-	emptyType := sdkUser("uid", "u@e.com", "G", "F", "gid")
-	emptyType.Addresses = []types.Address{{Type: aws.String("")}}
-	native = ConvertSdkUserObjToNative(emptyType)
-	assert.NotNil(t, native)
-	assert.Len(t, native.Addresses, 1)
-	assert.Equal(t, "", native.Addresses[0].Type)
+	nativeNilType := ConvertSdkUserObjToNative(userNilType)
+	assert.NotNil(t, nativeNilType)
+	assert.Len(t, nativeNilType.Addresses, 1)
+	assert.Equal(t, "", nativeNilType.Addresses[0].Type)
+
+	// Test with an explicitly empty address Type.
+	userEmptyType := sdkUser("user-123", "user1@example.com", "John", "Doe", "G1")
+	userEmptyType.Addresses = []types.Address{
+		{Type: aws.String("")},
+	}
+
+	nativeEmptyType := ConvertSdkUserObjToNative(userEmptyType)
+	assert.NotNil(t, nativeEmptyType)
+	assert.Len(t, nativeEmptyType.Addresses, 1)
+	assert.Equal(t, "", nativeEmptyType.Addresses[0].Type)
 }
 
 // TestConvertSdkUserObjToNative_AddressNilSlice verifies that a user with no
 // address block yields a non-nil, empty Addresses slice and does not panic.
 func TestConvertSdkUserObjToNative_AddressNilSlice(t *testing.T) {
-	nilSlice := sdkUser("uid", "u@e.com", "G", "F", "gid")
-	nilSlice.Addresses = nil
-	native := ConvertSdkUserObjToNative(nilSlice)
+	identityStoreUser := sdkUser("user-123", "user1@example.com", "John", "Doe", "G1")
+	identityStoreUser.Addresses = nil
+
+	native := ConvertSdkUserObjToNative(identityStoreUser)
+
 	assert.NotNil(t, native)
 	assert.NotNil(t, native.Addresses)
 	assert.Len(t, native.Addresses, 0)
