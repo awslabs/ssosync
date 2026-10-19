@@ -1,3 +1,10 @@
+## v2.9.2 - 2026-10-19
+
+### Changelog
+
+* f6b4b2b4b1ceb832ba681e9c92b10f88e2dc7464 Update CHANGELOG and Quick Start templates (#376)
+* bf9a4801b7881e7d1ea6ef55192bb2aa8f9503e0 username/email address and group DisplayName uses case sensitive comparison (#379)
+
 ## v2.9.1 - 2026-10-16
 
 ### Changelog
