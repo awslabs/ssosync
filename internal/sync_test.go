@@ -154,11 +154,12 @@ func TestGetGroupOperations_Delete(t *testing.T) {
 	assert.Equal(t, "G1", delete[0].ExternalId.Id)
 }
 
-func TestGetGroupOperations_DeleteMatched(t *testing.T) {
+func TestGetGroupOperations_SyncedGroupMatched_Delete(t *testing.T) {
 	awsGroups := []*interfaces.Group{
 		{
 			ID:          "1",
 			DisplayName: "Group 1",
+			ExternalId:  interfaces.ExternalId{Id: "G1"},
 		},
 	}
 
@@ -172,7 +173,7 @@ func TestGetGroupOperations_DeleteMatched(t *testing.T) {
 	assert.Len(t, equals, 0)
 	assert.Len(t, retain, 0)
 	assert.Equal(t, "Group 1", delete[0].DisplayName)
-	assert.Equal(t, "G1", delete[0].ExternalId)
+	assert.Equal(t, "G1", delete[0].ExternalId.Id)
 }
 
 func TestGetGroupOperations_RetainUnmatched(t *testing.T) {
