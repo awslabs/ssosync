@@ -25,7 +25,14 @@ phases:
       - cd /root/.goenv/plugins/go-build/../.. && git pull && cd -
       - cd /root/.goenv && git fetch --all && git pull
       - cd $BUILD_DIR
-      - goenv install ${GO_VERSION#go}
+      # Only install the required Go version if it isn't already installed
+      - |
+        if goenv versions --bare | grep -qx "${GO_VERSION#go}"; then
+          echo "Go ${GO_VERSION#go} already installed, skipping install"
+        else
+          echo "Go ${GO_VERSION#go} not installed, installing"
+          goenv install ${GO_VERSION#go}
+        fi
       - goenv global ${GO_VERSION#go}
       # Install development tools using Makefile (with verbose output if VERBOSE=1)
       - echo "Installing dependencies with VERBOSE=${VERBOSE}"
