@@ -1145,14 +1145,14 @@ func getGroupOperations(awsGroups []*interfaces.Group, googleGroups []*admin.Gro
 	googleMapId := make(map[string]struct{})
 
 	for _, awsGroup := range awsGroups {
-		awsMap[awsGroup.DisplayName] = awsGroup
+		awsMap[strings.ToLower(awsGroup.DisplayName)] = awsGroup
 		if awsGroup.ExternalId != "" {
 			awsMapExtId[awsGroup.ExternalId] = awsGroup
 		}
 	}
 
 	for _, gGroup := range googleGroups {
-		googleMap[gGroup.Name] = struct{}{}
+		googleMap[strings.ToLower(gGroup.Name)] = struct{}{}
 		googleMapId[gGroup.Id] = struct{}{}
 	}
 
@@ -1167,7 +1167,7 @@ func getGroupOperations(awsGroups []*interfaces.Group, googleGroups []*admin.Gro
 				log.WithField("gGroup", gGroup).Debug("equals")
 				equals = append(equals, awsGroup)
 			}
-		} else if awsGroup, found := awsMap[gGroup.Name]; found {
+		} else if awsGroup, found := awsMap[strings.ToLower(gGroup.Name)]; found {
 			log.WithField("awsGroup", awsGroup).Debug("update")
 			log.WithField("gGroup", gGroup).Debug("update")
 			update = append(update, aws.UpdateGroup(awsGroup.ID, gGroup.Name, gGroup.Id))
@@ -1180,7 +1180,7 @@ func getGroupOperations(awsGroups []*interfaces.Group, googleGroups []*admin.Gro
 	// AWS Groups not found in Google
 	for _, awsGroup := range awsGroups {
 		if _, found := googleMapId[awsGroup.ExternalId]; !found {
-			if _, found := googleMap[awsGroup.DisplayName]; !found {
+			if _, found := googleMap[strings.ToLower(awsGroup.DisplayName)]; !found {
 				if retainUnmatched {
 					log.WithField("awsGroup", awsGroup).Warn("Retained: deletion suppressed.")
 					retain = append(retain, aws.UpdateGroup(awsGroup.ID, awsGroup.DisplayName, awsGroup.ExternalId))
@@ -1207,12 +1207,12 @@ func getUserOperations(awsUsers []*interfaces.User, googleUsers []*admin.User, f
 
 	for _, awsUser := range awsUsers {
 		awsMapExtId[awsUser.ExternalId] = awsUser
-		awsMap[awsUser.Username] = awsUser
+		awsMap[strings.ToLower(awsUser.Username)] = awsUser
 	}
 
 	for _, gUser := range googleUsers {
 		googleMapId[gUser.Id] = gUser
-		googleMap[gUser.PrimaryEmail] = gUser
+		googleMap[strings.ToLower(gUser.PrimaryEmail)] = gUser
 	}
 
 	// Look for Google users in AWS
@@ -1234,7 +1234,7 @@ func getUserOperations(awsUsers []*interfaces.User, googleUsers []*admin.User, f
 				}).Debug("equals")
 				equals = append(equals, awsUser)
 			}
-		} else if awsUser, found := awsMap[gUser.PrimaryEmail]; found {
+		} else if awsUser, found := awsMap[strings.ToLower(gUser.PrimaryEmail)]; found {
 			if len(awsUser.ExternalId) > 0 {
 				if forceExternalIdUpdate {
 					log.WithFields(log.Fields{
@@ -1268,7 +1268,7 @@ func getUserOperations(awsUsers []*interfaces.User, googleUsers []*admin.User, f
 	//  Look for AWS users not found in Google
 	for _, awsUser := range awsUsers {
 		if _, found := googleMapId[awsUser.ExternalId]; !found {
-			if _, found := googleMap[awsUser.Username]; !found {
+			if _, found := googleMap[strings.ToLower(awsUser.Username)]; !found {
 				if retainUnmatched {
 					log.WithFields(log.Fields{
 						"awsUser": awsUser,
