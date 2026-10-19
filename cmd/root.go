@@ -35,6 +35,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	"github.com/aws/aws-sdk-go-v2/service/ssoadmin"
+	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/aws/aws-secretsmanager-caching-go/v2/secretcache"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
@@ -210,6 +211,7 @@ func initConfig() {
 	if cfg.SCIMEndpoint != "" {
 		cfg.Region = getRegion()
 		cfg.IdentityStoreID = getIdentityStoreId()
+		cfg.IssuerArn = getIssuerArn()
 	}
 
 }
@@ -265,6 +267,37 @@ func getRegion() string {
 	return Region
 }
 
+func getIssuerId() string {
+	r, _ := regexp.Compile(`amazonaws\.com/([^/]+)/scim`)
+	log.WithField("SCIMEndpoint", cfg.SCIMEndpoint).Debug("getIssuerId()")
+	IssuerId := ""
+	if matches := r.FindStringSubmatch(cfg.SCIMEndpoint); len(matches) > 1 {
+		IssuerId = matches[1]
+	}
+	log.WithField("IssuerId", IssuerId).Info("getIssuerId()")
+	return IssuerId
+}
+
+func getAccountId() string {
+	ctx := context.Background()
+
+	log.WithField("cfg.Region", cfg.Region).Info("getAccountId()")
+	awsCfg, err := aws_config.LoadDefaultConfig(ctx, aws_config.WithRegion(cfg.Region))
+	if err != nil {
+		log.Fatal(errors.Wrap(err, "getAccountId(): failed to load AWS config").Error())
+	}
+
+	client := sts.NewFromConfig(awsCfg)
+	output, err := client.GetCallerIdentity(ctx, &sts.GetCallerIdentityInput{})
+	if err != nil {
+		log.Fatal(errors.Wrap(err, "getAccountId(): failed to get caller identity").Error())
+	}
+
+	AccountId := aws.ToString(output.Account)
+	log.WithField("AccountId", AccountId).Info("getAccountId()")
+	return AccountId
+}
+
 func getIdentityStoreId() string {
 	ctx := context.Background()
 
@@ -287,6 +320,17 @@ func getIdentityStoreId() string {
 	IdentityStoreId := aws.ToString(output.Instances[0].IdentityStoreId)
 	log.WithField("IdentityStoreId", IdentityStoreId).Info("getIdentityStoreId()")
 	return IdentityStoreId
+}
+
+func getIssuerArn() string {
+	IssuerArn := strings.ToLower(fmt.Sprintf(
+		"arn:aws:identitystore::%s:identitystore/%s/provisioningtenant/%s",
+		getAccountId(),
+		getIdentityStoreId(),
+		getIssuerId(),
+	))
+	log.WithField("IssuerArn", IssuerArn).Info("getIssuerArn()")
+	return IssuerArn
 }
 
 func configLambda() {

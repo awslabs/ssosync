@@ -43,6 +43,8 @@ type Config struct {
 	Region string `mapstructure:"region"`
 	// IdentityStoreID is the ID of the identity store
 	IdentityStoreID string `mapstructure:"identity_store_id"`
+	// ExtyernalId->Issuer
+	IssuerArn string `mapstructure:"issuer_Arn"`
 	// Precaching queries as a comma separated list of query strings
 	PrecacheOrgUnits []string
 	// Enabled Caching stats to help refine PrecacheOrgUnits configuration

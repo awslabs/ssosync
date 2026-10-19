@@ -12,6 +12,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.43.0
 	github.com/aws/aws-sdk-go-v2/service/ssm v1.70.0
 	github.com/aws/aws-sdk-go-v2/service/ssoadmin v1.41.0
+	github.com/aws/aws-sdk-go-v2/service/sts v1.44.0
 	github.com/aws/aws-secretsmanager-caching-go/v2 v2.2.0
 	github.com/hashicorp/go-retryablehttp v0.7.8
 	github.com/pkg/errors v0.9.1
@@ -37,7 +38,6 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/signin v1.3.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sso v1.32.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.37.0 // indirect
-	github.com/aws/aws-sdk-go-v2/service/sts v1.44.0 // indirect
 	github.com/aws/smithy-go v1.27.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
