@@ -1152,7 +1152,7 @@ func getGroupOperations(awsGroups []*interfaces.Group, googleGroups []*admin.Gro
 	}
 
 	for _, gGroup := range googleGroups {
-		googleMap[gGroup.Name] = struct{}{}
+		googleMap[strings.ToLower(gGroup.Name)] = struct{}{}
 		googleMapId[gGroup.Id] = struct{}{}
 	}
 
