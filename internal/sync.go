@@ -1145,7 +1145,7 @@ func getGroupOperations(awsGroups []*interfaces.Group, googleGroups []*admin.Gro
 	googleMapId := make(map[string]struct{})
 
 	for _, awsGroup := range awsGroups {
-		awsMap[awsGroup.DisplayName] = awsGroup
+		awsMap[strings.ToLower(awsGroup.DisplayName)] = awsGroup
 		if awsGroup.ExternalId != "" {
 			awsMapExtId[awsGroup.ExternalId] = awsGroup
 		}
@@ -1167,7 +1167,7 @@ func getGroupOperations(awsGroups []*interfaces.Group, googleGroups []*admin.Gro
 				log.WithField("gGroup", gGroup).Debug("equals")
 				equals = append(equals, awsGroup)
 			}
-		} else if awsGroup, found := awsMap[gGroup.Name]; found {
+		} else if awsGroup, found := awsMap[strings.ToLower(gGroup.Name)]; found {
 			log.WithField("awsGroup", awsGroup).Debug("update")
 			log.WithField("gGroup", gGroup).Debug("update")
 			update = append(update, aws.UpdateGroup(awsGroup.ID, gGroup.Name, gGroup.Id))
@@ -1180,7 +1180,7 @@ func getGroupOperations(awsGroups []*interfaces.Group, googleGroups []*admin.Gro
 	// AWS Groups not found in Google
 	for _, awsGroup := range awsGroups {
 		if _, found := googleMapId[awsGroup.ExternalId]; !found {
-			if _, found := googleMap[awsGroup.DisplayName]; !found {
+			if _, found := googleMap[strings.ToLower(awsGroup.DisplayName)]; !found {
 				if retainUnmatched {
 					log.WithField("awsGroup", awsGroup).Warn("Retained: deletion suppressed.")
 					retain = append(retain, aws.UpdateGroup(awsGroup.ID, awsGroup.DisplayName, awsGroup.ExternalId))
