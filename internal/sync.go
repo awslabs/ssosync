@@ -1216,7 +1216,6 @@ func getGroupOperations(awsGroups []*interfaces.Group, googleGroups []*admin.Gro
 
 	// AWS Groups not found in Google
 	for _, awsGroup := range awsGroups {
-				if retainUnmatched && len(awsGroup.ExternalId) == 0 {
 		if _, found := googleMapId[awsGroup.ExternalId.Id]; !found {
 			if _, found := googleMap[strings.ToLower(awsGroup.DisplayName)]; !found {
 				if retainUnmatched && len(awsGroup.ExternalId.Id) == 0 {
