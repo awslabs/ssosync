@@ -655,7 +655,7 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 	}
 
 	// create list of changes by operations
-	addAWSUsers, delAWSUsers, updateAWSUsers, unchangedAWSUsers, retainAWSUsers := getUserOperations(awsUsers, googleUsers, s.cfg.ForceExternalIdUpdate, s.cfg.RetainUnmatched)
+	addAWSUsers, delAWSUsers, updateAWSUsers, unchangedAWSUsers, retainAWSUsers := getUserOperations(awsUsers, googleUsers, s.cfg.ForceExternalIdUpdate, s.cfg.RetainUnmatched, s.cfg.IssuerArn)
 	log.WithFields(
 		log.Fields{
 			"unchanged": len(unchangedAWSUsers),
@@ -664,7 +664,7 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 			"delete":    len(delAWSUsers),
 			"retain":    len(retainAWSUsers)}).Info("Change Summary: users")
 
-	addAWSGroups, delAWSGroups, updateAWSGroups, unchangedAWSGroups, retainAWSGroups := getGroupOperations(awsGroups, googleGroups, s.cfg.ForceExternalIdUpdate, s.cfg.RetainUnmatched)
+	addAWSGroups, delAWSGroups, updateAWSGroups, unchangedAWSGroups, retainAWSGroups := getGroupOperations(awsGroups, googleGroups, s.cfg.ForceExternalIdUpdate, s.cfg.RetainUnmatched, s.cfg.IssuerArn)
 	log.WithFields(
 		log.Fields{
 			"unchanged": len(unchangedAWSGroups),
@@ -1246,12 +1246,9 @@ func getGroupOperation(awsGroup *interfaces.Group, googleGroup *admin.Group, for
 }
 
 // getGroupOperations returns the groups of AWS that must be added, deleted, updated, are equals and retained
-func getGroupOperations(awsGroups []*interfaces.Group, googleGroups []*admin.Group, forceExternalIdUpdate bool, retainUnmatched bool) (add []*interfaces.Group, delete []*interfaces.Group, update []*interfaces.Group, equals []*interfaces.Group, retain []*interfaces.Group) {
+func getGroupOperations(awsGroups []*interfaces.Group, googleGroups []*admin.Group, forceExternalIdUpdate bool, retainUnmatched bool, issuerArn string) (add []*interfaces.Group, delete []*interfaces.Group, update []*interfaces.Group, equals []*interfaces.Group, retain []*interfaces.Group) {
 
 	log.Debug("getGroupOperations()")
-	// issuerArn is not wired from config into this function yet; an empty
-	// value makes every managed group fall back to legacy ExternalId matching.
-	issuerArn := ""
 
 	awsMap := make(map[string]*interfaces.Group)
 	awsMapExtId := make(map[string]*interfaces.Group)
@@ -1409,12 +1406,9 @@ func getUserOperation(awsUser *interfaces.User, googleUser *admin.User, forceExt
 }
 
 // getUserOperations returns the users of AWS that must be added, deleted, updated, are equals and retained
-func getUserOperations(awsUsers []*interfaces.User, googleUsers []*admin.User, forceExternalIdUpdate bool, retainUnmatched bool) (add []*interfaces.User, delete []*interfaces.User, update []*interfaces.User, equals []*interfaces.User, retain []*interfaces.User) {
+func getUserOperations(awsUsers []*interfaces.User, googleUsers []*admin.User, forceExternalIdUpdate bool, retainUnmatched bool, issuerArn string) (add []*interfaces.User, delete []*interfaces.User, update []*interfaces.User, equals []*interfaces.User, retain []*interfaces.User) {
 
 	log.Debug("getUserOperations()")
-	// issuerArn is not wired from config into this function yet; an empty
-	// value makes every managed user fall back to legacy ExternalId matching.
-	issuerArn := ""
 
 	awsMapUsername := make(map[string]*interfaces.User)
 	awsMapExtId := make(map[string]*interfaces.User)
