@@ -846,6 +846,390 @@ func TestGetUserOperations_RetainUnmatched_SyncedUserMatched(t *testing.T) {
 	assert.Equal(t, equals[0].Name.FamilyName, "Brown")
 }
 
+// The following tests exercise each path through getUserOperation, which
+// returns the OperationAction and the desired user object for a single
+// aws/google user pairing. The issuerArn argument lets these tests reach the
+// "foreign IdP" branches that getUserOperations cannot (it always passes "").
+
+// Path: awsUser == nil (no existing AWS user) -> Create.
+func TestGetUserOperation_Create(t *testing.T) {
+	googleUser := &admin.User{
+		Id:           "G7",
+		PrimaryEmail: "user7@example.com",
+		Name: &admin.UserName{
+			GivenName:  "Bob",
+			FamilyName: "Smith",
+		},
+		Suspended: false,
+	}
+
+	action, user := getUserOperation(nil, googleUser, false, false, "")
+
+	assert.Equal(t, Create, action)
+	assert.NotNil(t, user)
+	assert.Equal(t, user.ExternalId.Id, "G7")
+	assert.Equal(t, user.Username, "user7@example.com")
+	assert.Equal(t, user.Name.GivenName, "Bob")
+	assert.Equal(t, user.Name.FamilyName, "Smith")
+	assert.Equal(t, user.Active, true)
+}
+
+// Path: local user (empty ExternalId.Id), no Google user, retain enabled -> Retain.
+func TestGetUserOperation_LocalUnmatched_Retain(t *testing.T) {
+	awsUser := &interfaces.User{
+		ID:       "A4",
+		Username: "user4@example.com",
+		Name: struct {
+			FamilyName string `json:"familyName"`
+			GivenName  string `json:"givenName"`
+		}{
+			GivenName:  "Belinda",
+			FamilyName: "Johnson",
+		},
+		Active: true,
+	}
+
+	action, user := getUserOperation(awsUser, nil, false, true, "")
+
+	assert.Equal(t, Retain, action)
+	assert.NotNil(t, user)
+	assert.Equal(t, user.Username, "user4@example.com")
+	assert.Equal(t, user.Name.GivenName, "Belinda")
+	assert.Equal(t, user.Name.FamilyName, "Johnson")
+	assert.Equal(t, user.Active, false)
+}
+
+// Path: local user (empty ExternalId.Id), no Google user, retain disabled -> Delete.
+func TestGetUserOperation_LocalUnmatched_Delete(t *testing.T) {
+	awsUser := &interfaces.User{
+		ID:       "A4",
+		Username: "user4@example.com",
+		Name: struct {
+			FamilyName string `json:"familyName"`
+			GivenName  string `json:"givenName"`
+		}{
+			GivenName:  "Belinda",
+			FamilyName: "Johnson",
+		},
+		Active: true,
+	}
+
+	action, user := getUserOperation(awsUser, nil, false, false, "")
+
+	assert.Equal(t, Delete, action)
+	assert.NotNil(t, user)
+	assert.Equal(t, user.Username, "user4@example.com")
+	assert.Equal(t, user.Name.GivenName, "Belinda")
+	assert.Equal(t, user.Name.FamilyName, "Johnson")
+}
+
+// Path: local user (empty ExternalId.Id) with a matching Google user -> AdoptLocal.
+func TestGetUserOperation_LocalMatched_AdoptLocal(t *testing.T) {
+	awsUser := &interfaces.User{
+		ID:       "A5",
+		Username: "user5@example.com",
+		Name: struct {
+			FamilyName string `json:"familyName"`
+			GivenName  string `json:"givenName"`
+		}{
+			GivenName:  "Jane",
+			FamilyName: "Doe",
+		},
+		Active: true,
+	}
+
+	googleUser := &admin.User{
+		Id:           "G5",
+		PrimaryEmail: "user5@example.com",
+		Name: &admin.UserName{
+			GivenName:  "Jane",
+			FamilyName: "Doe",
+		},
+		Suspended: false,
+	}
+
+	action, user := getUserOperation(awsUser, googleUser, false, false, "")
+
+	assert.Equal(t, AdoptLocal, action)
+	assert.NotNil(t, user)
+	assert.Equal(t, user.ExternalId.Id, "G5")
+	assert.Equal(t, user.Username, "user5@example.com")
+	assert.Equal(t, user.Name.GivenName, "Jane")
+	assert.Equal(t, user.Name.FamilyName, "Doe")
+}
+
+// Path: managed user (issuer matches / empty), no Google user -> Delete.
+func TestGetUserOperation_ManagedUnmatched_Delete(t *testing.T) {
+	awsUser := &interfaces.User{
+		ID:         "A1",
+		Username:   "user1@example.com",
+		ExternalId: interfaces.ExternalId{Id: "G1"},
+		Name: struct {
+			FamilyName string `json:"familyName"`
+			GivenName  string `json:"givenName"`
+		}{
+			GivenName:  "John",
+			FamilyName: "Doe",
+		},
+		Active: true,
+	}
+
+	action, user := getUserOperation(awsUser, nil, false, false, "")
+
+	assert.Equal(t, Delete, action)
+	assert.NotNil(t, user)
+	assert.Equal(t, user.ExternalId.Id, "G1")
+	assert.Equal(t, user.Username, "user1@example.com")
+}
+
+// Path: managed user, ExternalId.Id matches Google, all attributes equal -> Equal.
+func TestGetUserOperation_ManagedMatched_Equal(t *testing.T) {
+	awsUser := &interfaces.User{
+		ID:         "A1",
+		Username:   "user1@example.com",
+		ExternalId: interfaces.ExternalId{Id: "G1"},
+		Name: struct {
+			FamilyName string `json:"familyName"`
+			GivenName  string `json:"givenName"`
+		}{
+			GivenName:  "John",
+			FamilyName: "Doe",
+		},
+		Active: true,
+	}
+
+	googleUser := &admin.User{
+		Id:           "G1",
+		PrimaryEmail: "user1@example.com",
+		Name: &admin.UserName{
+			GivenName:  "John",
+			FamilyName: "Doe",
+		},
+		Suspended: false,
+	}
+
+	action, user := getUserOperation(awsUser, googleUser, false, false, "")
+
+	assert.Equal(t, Equal, action)
+	assert.NotNil(t, user)
+	assert.Equal(t, user.ExternalId.Id, "G1")
+	assert.Equal(t, user.Username, "user1@example.com")
+	assert.Equal(t, user.Name.GivenName, "John")
+	assert.Equal(t, user.Name.FamilyName, "Doe")
+}
+
+// Path: managed user, ExternalId.Id matches Google, an attribute differs -> Update.
+func TestGetUserOperation_ManagedMatched_Update(t *testing.T) {
+	awsUser := &interfaces.User{
+		ID:         "A2",
+		Username:   "user2@example.com",
+		ExternalId: interfaces.ExternalId{Id: "G2"},
+		Name: struct {
+			FamilyName string `json:"familyName"`
+			GivenName  string `json:"givenName"`
+		}{
+			GivenName:  "Jane",
+			FamilyName: "Smith",
+		},
+		Active: true,
+	}
+
+	googleUser := &admin.User{
+		Id:           "G2",
+		PrimaryEmail: "user2@example.com",
+		Name: &admin.UserName{
+			GivenName:  "Jane",
+			FamilyName: "Updated", // Name changed
+		},
+		Suspended: false,
+	}
+
+	action, user := getUserOperation(awsUser, googleUser, false, false, "")
+
+	assert.Equal(t, Update, action)
+	assert.NotNil(t, user)
+	assert.Equal(t, user.ExternalId.Id, "G2")
+	assert.Equal(t, user.Username, "user2@example.com")
+	assert.Equal(t, user.Name.GivenName, "Jane")
+	assert.Equal(t, user.Name.FamilyName, "Updated")
+}
+
+// Path: managed user, ExternalId.Id differs from Google, force enabled -> UpdateForced.
+func TestGetUserOperation_ManagedMismatched_UpdateForced(t *testing.T) {
+	awsUser := &interfaces.User{
+		ID:         "A6",
+		Username:   "user6@example.com",
+		ExternalId: interfaces.ExternalId{Id: "GX"},
+		Name: struct {
+			FamilyName string `json:"familyName"`
+			GivenName  string `json:"givenName"`
+		}{
+			GivenName:  "Alan",
+			FamilyName: "Brown",
+		},
+		Active: true,
+	}
+
+	googleUser := &admin.User{
+		Id:           "G6",
+		PrimaryEmail: "user6@example.com",
+		Name: &admin.UserName{
+			GivenName:  "Alan",
+			FamilyName: "Brown",
+		},
+		Suspended: false,
+	}
+
+	action, user := getUserOperation(awsUser, googleUser, true, false, "")
+
+	assert.Equal(t, UpdateForced, action)
+	assert.NotNil(t, user)
+	assert.Equal(t, user.ExternalId.Id, "G6")
+	assert.Equal(t, user.Username, "user6@example.com")
+	assert.Equal(t, user.Name.GivenName, "Alan")
+	assert.Equal(t, user.Name.FamilyName, "Brown")
+}
+
+// Path: managed user, ExternalId.Id differs from Google, force disabled -> Recreate.
+func TestGetUserOperation_ManagedMismatched_Recreate(t *testing.T) {
+	awsUser := &interfaces.User{
+		ID:         "A6",
+		Username:   "user6@example.com",
+		ExternalId: interfaces.ExternalId{Id: "GX"},
+		Name: struct {
+			FamilyName string `json:"familyName"`
+			GivenName  string `json:"givenName"`
+		}{
+			GivenName:  "Alan",
+			FamilyName: "Brown",
+		},
+		Active: true,
+	}
+
+	googleUser := &admin.User{
+		Id:           "G6",
+		PrimaryEmail: "user6@example.com",
+		Name: &admin.UserName{
+			GivenName:  "Alan",
+			FamilyName: "Brown",
+		},
+		Suspended: false,
+	}
+
+	action, user := getUserOperation(awsUser, googleUser, false, false, "")
+
+	assert.Equal(t, Recreate, action)
+	assert.NotNil(t, user)
+	assert.Equal(t, user.ExternalId.Id, "G6")
+	assert.Equal(t, user.Username, "user6@example.com")
+	assert.Equal(t, user.Name.GivenName, "Alan")
+	assert.Equal(t, user.Name.FamilyName, "Brown")
+}
+
+// Path: foreign user (ExternalId set, Issuer != issuerArn), no Google user,
+// retain enabled -> Retain.
+func TestGetUserOperation_ForeignUnmatched_Retain(t *testing.T) {
+	awsUser := &interfaces.User{
+		ID:       "A8",
+		Username: "user8@example.com",
+		ExternalId: interfaces.ExternalId{
+			Id:     "G8",
+			Issuer: "arn:aws:identitystore::111111111111:identitystore/d-other/provisioningtenant/other",
+		},
+		Name: struct {
+			FamilyName string `json:"familyName"`
+			GivenName  string `json:"givenName"`
+		}{
+			GivenName:  "Carol",
+			FamilyName: "White",
+		},
+		Active: true,
+	}
+
+	issuerArn := "arn:aws:identitystore::920862271044:identitystore/d-9a671d7705/provisioningtenant/ssosync"
+
+	action, user := getUserOperation(awsUser, nil, false, true, issuerArn)
+
+	assert.Equal(t, Retain, action)
+	assert.NotNil(t, user)
+	assert.Equal(t, user.Username, "user8@example.com")
+	assert.Equal(t, user.Name.GivenName, "Carol")
+	assert.Equal(t, user.Name.FamilyName, "White")
+	assert.Equal(t, user.Active, false)
+}
+
+// Path: foreign user (ExternalId set, Issuer != issuerArn), no Google user,
+// retain disabled -> Delete.
+func TestGetUserOperation_ForeignUnmatched_Delete(t *testing.T) {
+	awsUser := &interfaces.User{
+		ID:       "A8",
+		Username: "user8@example.com",
+		ExternalId: interfaces.ExternalId{
+			Id:     "G8",
+			Issuer: "arn:aws:identitystore::111111111111:identitystore/d-other/provisioningtenant/other",
+		},
+		Name: struct {
+			FamilyName string `json:"familyName"`
+			GivenName  string `json:"givenName"`
+		}{
+			GivenName:  "Carol",
+			FamilyName: "White",
+		},
+		Active: true,
+	}
+
+	issuerArn := "arn:aws:identitystore::920862271044:identitystore/d-9a671d7705/provisioningtenant/ssosync"
+
+	action, user := getUserOperation(awsUser, nil, false, false, issuerArn)
+
+	assert.Equal(t, Delete, action)
+	assert.NotNil(t, user)
+	assert.Equal(t, user.ExternalId.Id, "G8")
+	assert.Equal(t, user.Username, "user8@example.com")
+}
+
+// Path: foreign user (ExternalId set, Issuer != issuerArn) with a matching
+// Google user -> AdoptForeign.
+func TestGetUserOperation_ForeignMatched_AdoptForeign(t *testing.T) {
+	awsUser := &interfaces.User{
+		ID:       "A8",
+		Username: "user8@example.com",
+		ExternalId: interfaces.ExternalId{
+			Id:     "G8",
+			Issuer: "arn:aws:identitystore::111111111111:identitystore/d-other/provisioningtenant/other",
+		},
+		Name: struct {
+			FamilyName string `json:"familyName"`
+			GivenName  string `json:"givenName"`
+		}{
+			GivenName:  "Carol",
+			FamilyName: "White",
+		},
+		Active: true,
+	}
+
+	googleUser := &admin.User{
+		Id:           "G8",
+		PrimaryEmail: "user8@example.com",
+		Name: &admin.UserName{
+			GivenName:  "Carol",
+			FamilyName: "White",
+		},
+		Suspended: false,
+	}
+
+	issuerArn := "arn:aws:identitystore::920862271044:identitystore/d-9a671d7705/provisioningtenant/ssosync"
+
+	action, user := getUserOperation(awsUser, googleUser, false, false, issuerArn)
+
+	assert.Equal(t, AdoptForeign, action)
+	assert.NotNil(t, user)
+	assert.Equal(t, user.ExternalId.Id, "G8")
+	assert.Equal(t, user.Username, "user8@example.com")
+	assert.Equal(t, user.Name.GivenName, "Carol")
+	assert.Equal(t, user.Name.FamilyName, "White")
+}
+
 func TestGetGroupOperations_RetainUnmatched_LocalGroupMatched(t *testing.T) {
 	awsGroups := []*interfaces.Group{
 		{
