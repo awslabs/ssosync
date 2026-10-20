@@ -1184,14 +1184,79 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 	return gGroups, gUsers, gGroupsUsers, nil
 }
 
-// getGroupOperations returns the groups of AWS that must be added, deleted and are equals
+// getGroupOperation returns the action to perform for this group and the desired group state
+func getGroupOperation(awsGroup *interfaces.Group, googleGroup *admin.Group, forceExternalIdUpdate bool, retainUnmatched bool, issuerArn string) (action OperationAction, group *interfaces.Group) {
+	log.Debug("getGroupOperation()")
+
+	if awsGroup == nil {
+		// Group doesn't exist
+		return Create, aws.NewGroup(googleGroup.Name, googleGroup.Id)
+	}
+
+	if awsGroup.ExternalId.Id == "" {
+		// local (manually created) group, it has no ExternalId
+		if googleGroup == nil {
+			if retainUnmatched {
+				// group not found in Google but retain flag enabled
+				return Retain, aws.UpdateGroup(awsGroup.ID, awsGroup.DisplayName, awsGroup.ExternalId.Id)
+			}
+			// group not found in Google
+			return Delete, awsGroup
+		}
+		// matching Google group found, adopt the local group
+		return AdoptLocal, aws.UpdateGroup(awsGroup.ID, googleGroup.Name, googleGroup.Id)
+	}
+
+	if issuerArn == "" || awsGroup.ExternalId.Issuer == issuerArn {
+		// ssosync managed group
+		if googleGroup == nil {
+			// group not found in Google
+			return Delete, awsGroup
+		}
+		if awsGroup.ExternalId.Id == googleGroup.Id {
+			// group matches on ExternalId
+			if awsGroup.DisplayName == googleGroup.Name {
+				// no action required
+				return Equal, awsGroup
+			}
+			// group needs updating
+			return Update, aws.UpdateGroup(awsGroup.ID, googleGroup.Name, googleGroup.Id)
+		}
+		// both groups exist but ExternalId doesn't match
+		// have they been deleted and recreated?
+		if forceExternalIdUpdate {
+			// Force Retention of existing group and update External Id to match
+			// this may lead to privilege inheritence
+			return UpdateForced, aws.UpdateGroup(awsGroup.ID, googleGroup.Name, googleGroup.Id)
+		}
+		// Do the safe thing and delete the existing group and create a new one to avoid privilege inheritence
+		return Recreate, aws.NewGroup(googleGroup.Name, googleGroup.Id)
+	}
+
+	// There must be an ExternalId setup, its come from a different SCIM provisioning instance/external IdP
+	if googleGroup == nil {
+		if retainUnmatched {
+			// group not found in Google but retain flag enabled
+			return Retain, aws.UpdateGroup(awsGroup.ID, awsGroup.DisplayName, awsGroup.ExternalId.Id)
+		}
+		// group not found in Google
+		return Delete, awsGroup
+	}
+	return AdoptForeign, aws.UpdateGroup(awsGroup.ID, googleGroup.Name, googleGroup.Id)
+}
+
+// getGroupOperations returns the groups of AWS that must be added, deleted, updated, are equals and retained
 func getGroupOperations(awsGroups []*interfaces.Group, googleGroups []*admin.Group, forceExternalIdUpdate bool, retainUnmatched bool) (add []*interfaces.Group, delete []*interfaces.Group, update []*interfaces.Group, equals []*interfaces.Group, retain []*interfaces.Group) {
 
 	log.Debug("getGroupOperations()")
+	// issuerArn is not wired from config into this function yet; an empty
+	// value makes every managed group fall back to legacy ExternalId matching.
+	issuerArn := ""
+
 	awsMap := make(map[string]*interfaces.Group)
 	awsMapExtId := make(map[string]*interfaces.Group)
-	googleMap := make(map[string]struct{})
-	googleMapId := make(map[string]struct{})
+	googleMap := make(map[string]*admin.Group)
+	googleMapId := make(map[string]*admin.Group)
 
 	for _, awsGroup := range awsGroups {
 		awsMap[strings.ToLower(awsGroup.DisplayName)] = awsGroup
@@ -1201,65 +1266,80 @@ func getGroupOperations(awsGroups []*interfaces.Group, googleGroups []*admin.Gro
 	}
 
 	for _, gGroup := range googleGroups {
-		googleMap[strings.ToLower(gGroup.Name)] = struct{}{}
-		googleMapId[gGroup.Id] = struct{}{}
+		googleMap[strings.ToLower(gGroup.Name)] = gGroup
+		googleMapId[gGroup.Id] = gGroup
 	}
 
-	// Google Groups found and not found in AWS
+	// Look for Google groups in AWS
 	for _, gGroup := range googleGroups {
-		if awsGroup, found := awsMapExtId[gGroup.Id]; found {
-			if awsGroup.DisplayName != gGroup.Name {
-				log.WithField("awsGroup", awsGroup).Debug("update")
-				log.WithField("gGroup", gGroup).Debug("update")
-				update = append(update, aws.UpdateGroup(awsGroup.ID, gGroup.Name, gGroup.Id))
-			} else {
-				log.WithField("gGroup", gGroup).Debug("equals")
-				equals = append(equals, awsGroup)
-			}
-		} else if awsGroup, found := awsMap[strings.ToLower(gGroup.Name)]; found {
-			if len(awsGroup.ExternalId.Id) > 0 {
-				if forceExternalIdUpdate {
-					log.WithFields(log.Fields{
-						"gGroup":   gGroup,
-						"awsGroup": awsGroup,
-					}).Warn("New google group with the same DisplayName but a different id, Force option set, so retaining the existing groupand updating its ExternalId. Caution this may lead inherited privileges.")
-					update = append(update, aws.UpdateGroup(awsGroup.ID, gGroup.Name, gGroup.Id))
-				} else {
-					log.WithFields(log.Fields{
-						"gGroup":   gGroup,
-						"awsGroup": awsGroup,
-					}).Warn("New google group with the same DisplayName but a different id, delete AWS group and create a new AWS group.")
-					delete = append(delete, aws.UpdateGroup(awsGroup.ID, awsGroup.DisplayName, awsGroup.ExternalId.Id))
-					add = append(add, aws.NewGroup(gGroup.Name, gGroup.Id))
-				}
-			} else {
-				log.WithFields(log.Fields{
-					"gGroup":   gGroup,
-					"awsGroup": awsGroup,
-				}).Debug("A local group that matches the DisplayName of the Google group has been found, adopting.")
-				update = append(update, aws.UpdateGroup(awsGroup.ID, gGroup.Name, gGroup.Id))
-			}
-		} else {
-			log.WithField("gGroup", gGroup).Debug("add")
-			add = append(add, aws.NewGroup(gGroup.Name, gGroup.Id))
+		var awsGroup *interfaces.Group
+
+		if match, found := awsMapExtId[gGroup.Id]; found {
+			// Found by ExternalId.Id
+			awsGroup = match
+		} else if match, found := awsMap[strings.ToLower(gGroup.Name)]; found {
+			// Found by DisplayName
+			awsGroup = match
+		}
+
+		// awsGroup is nil when the Google group was not found in AWS at all
+		action, group := getGroupOperation(awsGroup, gGroup, forceExternalIdUpdate, retainUnmatched, issuerArn)
+
+		log.WithField("group", group).Info(action)
+
+		switch action {
+		case Equal:
+			equals = append(equals, group)
+		case Create:
+			add = append(add, group)
+		case Delete:
+			delete = append(delete, awsGroup)
+		case Recreate:
+			log.WithField("group", group).Warn(action)
+			delete = append(delete, awsGroup)
+			add = append(add, group)
+		case UpdateForced:
+			log.WithField("group", group).Warn(action)
+			update = append(update, group)
+		case Update:
+			update = append(update, group)
+		case AdoptLocal:
+			update = append(update, group)
+		case AdoptForeign:
+			update = append(update, group)
+		case Retain:
+			retain = append(retain, group)
 		}
 	}
 
-	// AWS Groups not found in Google
+	// Look for AWS groups not found in Google
 	for _, awsGroup := range awsGroups {
-		if _, found := googleMapId[awsGroup.ExternalId.Id]; !found {
-			if _, found := googleMap[strings.ToLower(awsGroup.DisplayName)]; !found {
-				if retainUnmatched && len(awsGroup.ExternalId.Id) == 0 {
-					log.WithField("awsGroup", awsGroup).Warn("Retained: deletion suppressed.")
-					retain = append(retain, aws.UpdateGroup(awsGroup.ID, awsGroup.DisplayName, awsGroup.ExternalId.Id))
-				} else {
-					log.WithField("awsGroup", awsGroup).Debug("delete")
-					delete = append(delete, aws.UpdateGroup(awsGroup.ID, awsGroup.DisplayName, awsGroup.ExternalId.Id))
-				}
-			}
+		if _, found := googleMapId[awsGroup.ExternalId.Id]; found {
+			continue
+		}
+		if _, found := googleMap[strings.ToLower(awsGroup.DisplayName)]; found {
+			continue
 		}
 
+		action, group := getGroupOperation(awsGroup, nil, forceExternalIdUpdate, retainUnmatched, issuerArn)
+
+		log.WithField("group", group).Info(action)
+
+		switch action {
+		case Delete:
+			delete = append(delete, group)
+		case Retain:
+			retain = append(retain, group)
+		}
 	}
+
+	log.WithFields(
+		log.Fields{
+			"unchanged": len(equals),
+			"create":    len(add),
+			"update":    len(update),
+			"delete":    len(delete),
+			"retain":    len(retain)}).Info("Change Summary: Groups")
 
 	return add, delete, update, equals, retain
 }

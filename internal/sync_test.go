@@ -1357,6 +1357,249 @@ func TestGetGroupOperations_RetainUnmatched_SyncedGroupMatched(t *testing.T) {
 	assert.Equal(t, "G1", equals[0].ExternalId.Id)
 }
 
+// Path: awsGroup == nil (no existing AWS group) -> Create.
+func TestGetGroupOperation_Create(t *testing.T) {
+	googleGroup := &admin.Group{
+		Id:    "G1",
+		Name:  "Group 1",
+		Email: "group1@example.com",
+	}
+
+	action, group := getGroupOperation(nil, googleGroup, false, false, "")
+
+	assert.Equal(t, Create, action)
+	assert.NotNil(t, group)
+	assert.Equal(t, "Group 1", group.DisplayName)
+	assert.Equal(t, "G1", group.ExternalId.Id)
+}
+
+// Path: local group (empty ExternalId.Id), no Google group, retain enabled -> Retain.
+func TestGetGroupOperation_LocalUnmatched_Retain(t *testing.T) {
+	awsGroup := &interfaces.Group{
+		ID:          "A1",
+		DisplayName: "Group 1",
+	}
+
+	action, group := getGroupOperation(awsGroup, nil, false, true, "")
+
+	assert.Equal(t, Retain, action)
+	assert.NotNil(t, group)
+	assert.Equal(t, "Group 1", group.DisplayName)
+	assert.Equal(t, "", group.ExternalId.Id)
+}
+
+// Path: local group (empty ExternalId.Id), no Google group, retain disabled -> Delete.
+func TestGetGroupOperation_LocalUnmatched_Delete(t *testing.T) {
+	awsGroup := &interfaces.Group{
+		ID:          "A1",
+		DisplayName: "Group 1",
+	}
+
+	action, group := getGroupOperation(awsGroup, nil, false, false, "")
+
+	assert.Equal(t, Delete, action)
+	assert.NotNil(t, group)
+	assert.Equal(t, "Group 1", group.DisplayName)
+	assert.Equal(t, "", group.ExternalId.Id)
+}
+
+// Path: local group (empty ExternalId.Id) with a matching Google group -> AdoptLocal.
+func TestGetGroupOperation_LocalMatched_AdoptLocal(t *testing.T) {
+	awsGroup := &interfaces.Group{
+		ID:          "A3",
+		DisplayName: "Group 3",
+	}
+
+	googleGroup := &admin.Group{
+		Id:    "G3",
+		Name:  "Group 3",
+		Email: "group3@example.com",
+	}
+
+	action, group := getGroupOperation(awsGroup, googleGroup, false, false, "")
+
+	assert.Equal(t, AdoptLocal, action)
+	assert.NotNil(t, group)
+	assert.Equal(t, "Group 3", group.DisplayName)
+	assert.Equal(t, "G3", group.ExternalId.Id)
+}
+
+// Path: managed group (issuer matches / empty), no Google group -> Delete.
+func TestGetGroupOperation_ManagedUnmatched_Delete(t *testing.T) {
+	awsGroup := &interfaces.Group{
+		ID:          "A1",
+		DisplayName: "Group 1",
+		ExternalId:  interfaces.ExternalId{Id: "G1"},
+	}
+
+	action, group := getGroupOperation(awsGroup, nil, false, false, "")
+
+	assert.Equal(t, Delete, action)
+	assert.NotNil(t, group)
+	assert.Equal(t, "Group 1", group.DisplayName)
+	assert.Equal(t, "G1", group.ExternalId.Id)
+}
+
+// Path: managed group, ExternalId.Id matches Google, DisplayName equal -> Equal.
+func TestGetGroupOperation_ManagedMatched_Equal(t *testing.T) {
+	awsGroup := &interfaces.Group{
+		ID:          "A1",
+		DisplayName: "Group 1",
+		ExternalId:  interfaces.ExternalId{Id: "G1"},
+	}
+
+	googleGroup := &admin.Group{
+		Id:    "G1",
+		Name:  "Group 1",
+		Email: "group1@example.com",
+	}
+
+	action, group := getGroupOperation(awsGroup, googleGroup, false, false, "")
+
+	assert.Equal(t, Equal, action)
+	assert.NotNil(t, group)
+	assert.Equal(t, "Group 1", group.DisplayName)
+	assert.Equal(t, "G1", group.ExternalId.Id)
+}
+
+// Path: managed group, ExternalId.Id matches Google, DisplayName differs -> Update.
+func TestGetGroupOperation_ManagedMatched_Update(t *testing.T) {
+	awsGroup := &interfaces.Group{
+		ID:          "A4",
+		DisplayName: "Group 4",
+		ExternalId:  interfaces.ExternalId{Id: "G4"},
+	}
+
+	googleGroup := &admin.Group{
+		Id:    "G4",
+		Name:  "Different Group Name",
+		Email: "group4@example.com",
+	}
+
+	action, group := getGroupOperation(awsGroup, googleGroup, false, false, "")
+
+	assert.Equal(t, Update, action)
+	assert.NotNil(t, group)
+	assert.Equal(t, "Different Group Name", group.DisplayName)
+	assert.Equal(t, "G4", group.ExternalId.Id)
+}
+
+// Path: managed group, ExternalId.Id differs from Google, force enabled -> UpdateForced.
+func TestGetGroupOperation_ManagedMismatched_UpdateForced(t *testing.T) {
+	awsGroup := &interfaces.Group{
+		ID:          "A5",
+		DisplayName: "Group 5",
+		ExternalId:  interfaces.ExternalId{Id: "GX"},
+	}
+
+	googleGroup := &admin.Group{
+		Id:    "G50",
+		Name:  "Group 5",
+		Email: "group5@example.com",
+	}
+
+	action, group := getGroupOperation(awsGroup, googleGroup, true, false, "")
+
+	assert.Equal(t, UpdateForced, action)
+	assert.NotNil(t, group)
+	assert.Equal(t, "Group 5", group.DisplayName)
+	assert.Equal(t, "G50", group.ExternalId.Id)
+}
+
+// Path: managed group, ExternalId.Id differs from Google, force disabled -> Recreate.
+func TestGetGroupOperation_ManagedMismatched_Recreate(t *testing.T) {
+	awsGroup := &interfaces.Group{
+		ID:          "A5",
+		DisplayName: "Group 5",
+		ExternalId:  interfaces.ExternalId{Id: "GX"},
+	}
+
+	googleGroup := &admin.Group{
+		Id:    "G50",
+		Name:  "Group 5",
+		Email: "group5@example.com",
+	}
+
+	action, group := getGroupOperation(awsGroup, googleGroup, false, false, "")
+
+	assert.Equal(t, Recreate, action)
+	assert.NotNil(t, group)
+	assert.Equal(t, "Group 5", group.DisplayName)
+	assert.Equal(t, "G50", group.ExternalId.Id)
+}
+
+// Path: foreign group (ExternalId set, Issuer != issuerArn), no Google group,
+// retain enabled -> Retain.
+func TestGetGroupOperation_ForeignUnmatched_Retain(t *testing.T) {
+	awsGroup := &interfaces.Group{
+		ID:          "A8",
+		DisplayName: "Group 8",
+		ExternalId: interfaces.ExternalId{
+			Id:     "G8",
+			Issuer: "arn:aws:identitystore::111111111111:identitystore/d-other/provisioningtenant/other",
+		},
+	}
+
+	issuerArn := "arn:aws:identitystore::920862271044:identitystore/d-9a671d7705/provisioningtenant/ssosync"
+
+	action, group := getGroupOperation(awsGroup, nil, false, true, issuerArn)
+
+	assert.Equal(t, Retain, action)
+	assert.NotNil(t, group)
+	assert.Equal(t, "Group 8", group.DisplayName)
+	assert.Equal(t, "G8", group.ExternalId.Id)
+}
+
+// Path: foreign group (ExternalId set, Issuer != issuerArn), no Google group,
+// retain disabled -> Delete.
+func TestGetGroupOperation_ForeignUnmatched_Delete(t *testing.T) {
+	awsGroup := &interfaces.Group{
+		ID:          "A8",
+		DisplayName: "Group 8",
+		ExternalId: interfaces.ExternalId{
+			Id:     "G8",
+			Issuer: "arn:aws:identitystore::111111111111:identitystore/d-other/provisioningtenant/other",
+		},
+	}
+
+	issuerArn := "arn:aws:identitystore::920862271044:identitystore/d-9a671d7705/provisioningtenant/ssosync"
+
+	action, group := getGroupOperation(awsGroup, nil, false, false, issuerArn)
+
+	assert.Equal(t, Delete, action)
+	assert.NotNil(t, group)
+	assert.Equal(t, "Group 8", group.DisplayName)
+	assert.Equal(t, "G8", group.ExternalId.Id)
+}
+
+// Path: foreign group (ExternalId set, Issuer != issuerArn) with a matching
+// Google group -> AdoptForeign.
+func TestGetGroupOperation_ForeignMatched_AdoptForeign(t *testing.T) {
+	awsGroup := &interfaces.Group{
+		ID:          "A8",
+		DisplayName: "Group 8",
+		ExternalId: interfaces.ExternalId{
+			Id:     "G8",
+			Issuer: "arn:aws:identitystore::111111111111:identitystore/d-other/provisioningtenant/other",
+		},
+	}
+
+	googleGroup := &admin.Group{
+		Id:    "G8",
+		Name:  "Group 8",
+		Email: "group8@example.com",
+	}
+
+	issuerArn := "arn:aws:identitystore::920862271044:identitystore/d-9a671d7705/provisioningtenant/ssosync"
+
+	action, group := getGroupOperation(awsGroup, googleGroup, false, false, issuerArn)
+
+	assert.Equal(t, AdoptForeign, action)
+	assert.NotNil(t, group)
+	assert.Equal(t, "Group 8", group.DisplayName)
+	assert.Equal(t, "G8", group.ExternalId.Id)
+}
+
 func TestGetUserOperations_SuspendedStateChange(t *testing.T) {
 	awsUsers := []*interfaces.User{
 		{

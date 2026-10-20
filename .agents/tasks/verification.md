@@ -1,72 +1,74 @@
-# Verification — action-based user-diff refactor (`internal/sync.go`)
+# Verification — action-based group-diff refactor (`internal/sync.go`)
 
-Branch: `fix/user-operations`
-WORKDIR: `/Users/crpates/GitHub/ssosync/.worktrees/fix-user-operations`
+Branch/worktree: `/Users/crpates/GitHub/ssosync/.worktrees/group-operation`
 
 ## What was implemented (first iteration, no review.json present)
 
-Completed the committed action-based `getUserOperations`/`getUserOperation` design in
-`internal/sync.go` exactly per `.agents/tasks/plan.md`. The direction was to COMPLETE,
-not revert, the refactor. No test signatures were changed; no test file was edited.
-Only `internal/sync.go` was modified.
+Refactored the group-diff logic in `internal/sync.go` to fully mirror the already-committed
+user-diff refactor in the same file, per `.agents/tasks/group-operation-plan.md`. Only
+`internal/sync.go` and `internal/sync_test.go` were modified. No existing test was changed;
+the internal caller at ~line 667 (4-arg/5-return) was left untouched.
 
-### `getUserOperation` (callee, 5-param signature kept)
-- Fixed syntax: `return, Update, ...` -> `return Update, ...`; `False` literals -> Go `false`.
-- Local-user guard changed from `awsUser.ExternalId == nil` (compile error — `ExternalId`
-  is a struct value) to `awsUser.ExternalId.Id == ""`.
-- Added the missing `googleUser != nil` branch in the local-user block -> `AdoptLocal`
-  via `aws.UpdateUser(...)` (previously fell through with no return).
-- Managed guard changed to `issuerArn == "" || awsUser.ExternalId.Issuer == issuerArn`
-  (ISSUER-THREADING DECISION): empty issuer => legacy Id-matching; configured issuer still
-  distinguishes foreign users.
-- Equal condition rewritten from the inverted `||` form to AND-of-all-equal:
-  `awsUser.Active == !googleUser.Suspended && Username match && GivenName match && FamilyName match`.
+### New `getGroupOperation` (callee)
+`func getGroupOperation(awsGroup *interfaces.Group, googleGroup *admin.Group, forceExternalIdUpdate bool, retainUnmatched bool, issuerArn string) (action OperationAction, group *interfaces.Group)`
+- Mirrors `getUserOperation` exactly, including the issuer-based managed-vs-foreign distinction
+  and the AdoptForeign path. Groups have only `DisplayName` to compare (no given/family name,
+  no active/suspended).
+- Decision table:
+  1. `awsGroup == nil` -> `Create, aws.NewGroup(googleGroup.Name, googleGroup.Id)`.
+  2. LOCAL (`ExternalId.Id == ""`): nil google -> retain ? `Retain, UpdateGroup(ID, DisplayName, ExtId)` : `Delete, awsGroup`; else `AdoptLocal, UpdateGroup(ID, Name, Id)`.
+  3. MANAGED (`issuerArn == "" || Issuer == issuerArn`): nil google -> `Delete, awsGroup`;
+     ExtId.Id == google.Id -> DisplayName == Name ? `Equal, awsGroup` : `Update, UpdateGroup(...)`;
+     ids differ -> force ? `UpdateForced, UpdateGroup(...)` : `Recreate, NewGroup(...)`.
+  4. FOREIGN (Issuer != issuerArn): nil google -> retain ? `Retain, UpdateGroup(...)` : `Delete, awsGroup`;
+     else `AdoptForeign, UpdateGroup(...)`.
+- Reuses the existing `OperationAction` constants; none added.
 
-### `getUserOperations` (orchestrator)
-- Signature kept at 4 params / 5 returns: `(awsUsers, googleUsers, force, retain)` ->
-  `(add, delete, update, equals, retain)`. Dropped the stray `issuerArn` positional param.
-- `issuerArn := ""` hard-coded locally (config wiring is out of scope, per plan).
-- Removed the invalid `stats struct {...}` (no `var`) and the out-of-scope opening
-  `log.WithFields` referencing `gUser`/`awsUser`; replaced with `log.Debug("getUserOperations()")`.
-- `awsMapExtId` populated only when `awsUser.ExternalId.Id != ""` (mirrors sibling
-  `getGroupOperations`); `awsMapUsername` keyed by lowercased username.
-- Loop 1 (Google users): match by ExternalId then by username; capture the matched
-  `awsUser` (nil if unmatched) and call `getUserOperation`. Bucketing:
-  Equal->equals, Create->add, Delete->delete(awsUser), Recreate->delete(awsUser)+add(user),
-  UpdateForced/Update/AdoptLocal/AdoptForeign->update, Retain->retain.
-- Loop 2 (AWS users absent from Google): skip when present in `googleMapId`
-  (keyed by `awsUser.ExternalId.Id`) or `googleMapEmail` (keyed by lowercased username);
-  otherwise call `getUserOperation(awsUser, nil, ...)` and bucket Delete->delete, Retain->retain.
-- Final summary via a single valid `log.WithFields(...).Info("Change Summary: Users")`.
+### Reworked `getGroupOperations` (orchestrator)
+- Signature + 5-return contract kept:
+  `(awsGroups, googleGroups, force, retain) -> (add, delete, update, equals, retain)`.
+- `issuerArn := ""` hard-coded locally (legacy ExternalId matching; FOREIGN branch
+  unreachable from here, exactly like the user side).
+- Builds four maps mirroring the user side: `awsMap` (lowercased DisplayName), `awsMapExtId`
+  (non-empty ExternalId.Id), `googleMap` (lowercased Name, now `*admin.Group`), `googleMapId`
+  (Id, now `*admin.Group`). The two Google maps were changed from `map[string]struct{}` to
+  value maps to mirror the user side; the second loop still uses only the `found` boolean, so
+  behavior is unchanged.
+- Loop 1 (Google groups): match by ExtId then lowercased DisplayName, else nil; delegate to
+  `getGroupOperation` and bucket via the same switch as `getUserOperations`
+  (Create->add, Equal->equals, Update/UpdateForced/AdoptLocal/AdoptForeign->update,
+  Recreate->delete(awsGroup)+add(group), Delete->delete(awsGroup), Retain->retain).
+- Loop 2 (AWS groups absent from Google): skip when present in `googleMapId` or `googleMap`;
+  delegate with nil google and bucket Delete->delete(group), Retain->retain(group).
+- Ends with the Change Summary log labelled "Groups".
 
-### Caller (`SyncUsers`, ~line 659)
-- Fixed the broken line: `scfg` typo removed, dropped the `IssuerArn` arg, now captures 5
-  returns including `retainAWSUsers` (consumed by the suspend loop). Restored the
-  "Change Summary: users" log block (present on the base branch) so `unchangedAWSUsers`
-  is consumed.
+### New per-path unit tests (`internal/sync_test.go`)
+Inserted right after `TestGetGroupOperations_RetainUnmatched_SyncedGroupMatched`, mirroring the
+`TestGetUserOperation_*` style. One test per path (12 total): `TestGetGroupOperation_Create`,
+`_LocalUnmatched_Retain`, `_LocalUnmatched_Delete`, `_LocalMatched_AdoptLocal`,
+`_ManagedUnmatched_Delete`, `_ManagedMatched_Equal`, `_ManagedMatched_Update`,
+`_ManagedMismatched_UpdateForced`, `_ManagedMismatched_Recreate`, `_ForeignUnmatched_Retain`,
+`_ForeignUnmatched_Delete`, `_ForeignMatched_AdoptForeign`. The three Foreign tests set the
+awsGroup's `ExternalId.Issuer` to one arn and pass a different non-empty `issuerArn`.
 
-## Commands run and results (from WORKDIR)
+## Commands run and results (from the worktree)
 
-1. Mocks: already generated in the worktree; `make vet`/`make test` regenerate them via
-   `make generate-mock`. Confirmed present (9 mock files).
-2. `gofmt -l internal/sync.go` -> empty (clean). `internal/config/config.go` is flagged by
-   gofmt but that is PRE-EXISTING on the base branch and was NOT edited in this change
-   (verified: `git show <base>:internal/config/config.go | gofmt -l` also flags it).
+1. `make generate-mock` — ran as part of `make vet`; regenerated the 9 mock files with no diff
+   (git status shows only `internal/sync.go` and `internal/sync_test.go` modified).
+2. `gofmt -l internal/sync.go internal/sync_test.go` -> empty (clean) on both edited files.
 3. `go build ./...` -> clean, exit 0.
-4. `go test ./...` -> all packages pass:
+4. `go test ./... -count=1` -> all packages pass:
    `ok ssosync/internal`, `ok ssosync/internal/aws`, `ok ssosync/internal/aws/identitystore`,
    `ok ssosync/internal/config`, `ok ssosync/internal/google`, `ok ssosync/internal/http`,
    `ok ssosync/internal/interfaces`.
-5. `make vet` (golangci-lint v2.12.2 — primary acceptance gate) -> `0 issues.`, exit 0.
-6. `go test ./internal/ -run TestGetUserOperations -v` -> all 15 cases PASS:
-   NoChange, Add, UpdateAttribute, UpdateMissingExternalId, UpdatePrimaryEmail,
-   UpdateExternalId_DeleteRecreate, UpdateExternalId_ForceUpdate, DeleteNoExternalId,
-   DeleteExternalId, RetainUnmatched_LocalUserUnmatched, RetainUnmatched_LocalUserMatched,
-   RetainUnmatched_SyncedUserUnmatched, RetainUnmatched_SyncedUserMismatched,
-   RetainUnmatched_SyncedUserMatched, SuspendedStateChange.
+5. `make vet` (golangci-lint v3.7.1 — primary acceptance gate) -> `0 issues.`, exit 0.
+6. `go test ./internal/ -run TestGetGroupOperation -count=1 -v` -> all 14 existing
+   `TestGetGroupOperations_*` PASS unchanged AND all 12 new `TestGetGroupOperation_*` PASS.
+   The existing `TestGetUserOperation*`/`TestGetUserOperations*` also pass (same package).
 
 ## Notes
-- No test changes were needed; the corrected (non-inverted) Equal logic matches every
-  committed expectation.
-- `issuerArn` is intentionally hard-coded to `""` inside `getUserOperations`; wiring
-  `config.Config.IssuerArn` through is out of scope for this change.
+- No `OperationAction` constant, `operationName`, or `String()` change.
+- No existing test modified; the delegating rewrite preserves every `TestGetGroupOperations_*`
+  assertion (delete/recreate object choices match the user-side switch semantics).
+- `issuerArn` is intentionally hard-coded to `""` inside `getGroupOperations`; the
+  FOREIGN/AdoptForeign path is exercised only by the direct `getGroupOperation` unit tests.
