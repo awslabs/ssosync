@@ -1228,6 +1228,10 @@ func getGroupOperations(awsGroups []*interfaces.Group, googleGroups []*admin.Gro
 
 	log.Debug("getGroupOperations()")
 
+	stats := struct {
+		Equal, Create, AdoptLocal, AdoptForeign, Update, UpdateForced, Delete, Recreate, Retain int
+	}{}
+
 	awsMap := make(map[string]*interfaces.Group)
 	awsMapExtId := make(map[string]*interfaces.Group)
 	googleMap := make(map[string]*admin.Group)
@@ -1264,25 +1268,34 @@ func getGroupOperations(awsGroups []*interfaces.Group, googleGroups []*admin.Gro
 
 		switch action {
 		case Equal:
+			stats.Equal++
 			equals = append(equals, group)
 		case Create:
+			stats.Create++
 			add = append(add, group)
 		case Delete:
+			stats.Delete++
 			delete = append(delete, awsGroup)
 		case Recreate:
+			stats.Recreate++
 			log.WithField("group", group).Warn(action)
 			delete = append(delete, awsGroup)
 			add = append(add, group)
 		case UpdateForced:
+			stats.UpdateForced++
 			log.WithField("group", group).Warn(action)
 			update = append(update, group)
 		case Update:
+			stats.Update++
 			update = append(update, group)
 		case AdoptLocal:
+			stats.AdoptLocal++
 			update = append(update, group)
 		case AdoptForeign:
+			stats.AdoptForeign++
 			update = append(update, group)
 		case Retain:
+			stats.Retain++
 			update = append(update, group)
 		}
 	}
@@ -1302,18 +1315,25 @@ func getGroupOperations(awsGroups []*interfaces.Group, googleGroups []*admin.Gro
 
 		switch action {
 		case Delete:
+			stats.Delete++
 			delete = append(delete, group)
 		case Retain:
+			stats.Retain++
 			update = append(update, group)
 		}
 	}
 
 	log.WithFields(
 		log.Fields{
-			"unchanged": len(equals),
-			"create":    len(add),
-			"update":    len(update),
-			"delete":    len(delete)}).Info("Change Summary: Groups")
+			"equal":        stats.Equal,
+			"create":       stats.Create,
+			"adoptLocal":   stats.AdoptLocal,
+			"adoptForeign": stats.AdoptForeign,
+			"update":       stats.Update,
+			"updateForced": stats.UpdateForced,
+			"delete":       stats.Delete,
+			"recreate":     stats.Recreate,
+			"retain":       stats.Retain}).Info("Change Summary: Groups")
 
 	return add, delete, update, equals
 }
@@ -1387,6 +1407,10 @@ func getUserOperations(awsUsers []*interfaces.User, googleUsers []*admin.User, f
 
 	log.Debug("getUserOperations()")
 
+	stats := struct {
+		Equal, Create, AdoptLocal, AdoptForeign, Update, UpdateForced, Delete, Recreate, Retain int
+	}{}
+
 	awsMapUsername := make(map[string]*interfaces.User)
 	awsMapExtId := make(map[string]*interfaces.User)
 	googleMapEmail := make(map[string]*admin.User)
@@ -1423,25 +1447,34 @@ func getUserOperations(awsUsers []*interfaces.User, googleUsers []*admin.User, f
 
 		switch action {
 		case Equal:
+			stats.Equal++
 			equals = append(equals, user)
 		case Create:
+			stats.Create++
 			add = append(add, user)
 		case Delete:
+			stats.Delete++
 			delete = append(delete, awsUser)
 		case Recreate:
+			stats.Recreate++
 			log.WithField("user", user).Warn(action)
 			delete = append(delete, awsUser)
 			add = append(add, user)
 		case UpdateForced:
+			stats.UpdateForced++
 			log.WithField("user", user).Warn(action)
 			update = append(update, user)
 		case Update:
+			stats.Update++
 			update = append(update, user)
 		case AdoptLocal:
+			stats.AdoptLocal++
 			update = append(update, user)
 		case AdoptForeign:
+			stats.AdoptForeign++
 			update = append(update, user)
 		case Retain:
+			stats.Retain++
 			update = append(update, user)
 		}
 	}
@@ -1461,18 +1494,25 @@ func getUserOperations(awsUsers []*interfaces.User, googleUsers []*admin.User, f
 
 		switch action {
 		case Delete:
+			stats.Delete++
 			delete = append(delete, user)
 		case Retain:
+			stats.Retain++
 			update = append(update, user)
 		}
 	}
 
 	log.WithFields(
 		log.Fields{
-			"unchanged": len(equals),
-			"create":    len(add),
-			"update":    len(update),
-			"delete":    len(delete)}).Info("Change Summary: Users")
+			"equal":        stats.Equal,
+			"create":       stats.Create,
+			"adoptLocal":   stats.AdoptLocal,
+			"adoptForeign": stats.AdoptForeign,
+			"update":       stats.Update,
+			"updateForced": stats.UpdateForced,
+			"delete":       stats.Delete,
+			"recreate":     stats.Recreate,
+			"retain":       stats.Retain}).Info("Change Summary: Users")
 
 	return add, delete, update, equals
 }
