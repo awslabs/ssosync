@@ -655,21 +655,8 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 	}
 
 	// create list of changes by operations
-	addAWSUsers, delAWSUsers, updateAWSUsers, unchangedAWSUsers := getUserOperations(awsUsers, googleUsers, s.cfg.ForceExternalIdUpdate, s.cfg.RetainUnmatched, s.cfg.IssuerArn)
-	log.WithFields(
-		log.Fields{
-			"unchanged": len(unchangedAWSUsers),
-			"create":    len(addAWSUsers),
-			"update":    len(updateAWSUsers),
-			"delete":    len(delAWSUsers)}).Info("Change Summary: users")
-
+	addAWSUsers, delAWSUsers, updateAWSUsers, _ := getUserOperations(awsUsers, googleUsers, s.cfg.ForceExternalIdUpdate, s.cfg.RetainUnmatched, s.cfg.IssuerArn)
 	addAWSGroups, delAWSGroups, updateAWSGroups, unchangedAWSGroups := getGroupOperations(awsGroups, googleGroups, s.cfg.ForceExternalIdUpdate, s.cfg.RetainUnmatched, s.cfg.IssuerArn)
-	log.WithFields(
-		log.Fields{
-			"unchanged": len(unchangedAWSGroups),
-			"create":    len(addAWSGroups),
-			"update":    len(updateAWSGroups),
-			"delete":    len(delAWSGroups)}).Info("Change Summary: Groups")
 
 	// update aws users (updated in google)
 	log.Debug("updating aws users updated in google")
