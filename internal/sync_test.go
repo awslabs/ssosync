@@ -99,13 +99,12 @@ func TestGetGroupOperations_NoChange(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals, retain := getGroupOperations(awsGroups, googleGroups, false, false, "")
+	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, false, false, "")
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
 	assert.Len(t, update, 0)
 	assert.Len(t, equals, 1)
-	assert.Len(t, retain, 0)
 	assert.Equal(t, "Group 1", equals[0].DisplayName)
 	assert.Equal(t, "G1", equals[0].ExternalId.Id)
 }
@@ -121,13 +120,12 @@ func TestGetGroupOperations_Add(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals, retain := getGroupOperations(awsGroups, googleGroups, false, false, "")
+	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, false, false, "")
 
 	assert.Len(t, add, 1)
 	assert.Len(t, delete, 0)
 	assert.Len(t, update, 0)
 	assert.Len(t, equals, 0)
-	assert.Len(t, retain, 0)
 	assert.Equal(t, "Group 2", add[0].DisplayName)
 	assert.Equal(t, "G2", add[0].ExternalId.Id)
 }
@@ -143,13 +141,12 @@ func TestGetGroupOperations_Delete(t *testing.T) {
 
 	googleGroups := []*admin.Group{}
 
-	add, delete, update, equals, retain := getGroupOperations(awsGroups, googleGroups, false, false, "")
+	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, false, false, "")
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 1)
 	assert.Len(t, update, 0)
 	assert.Len(t, equals, 0)
-	assert.Len(t, retain, 0)
 	assert.Equal(t, "Group 1", delete[0].DisplayName)
 	assert.Equal(t, "G1", delete[0].ExternalId.Id)
 }
@@ -165,13 +162,12 @@ func TestGetGroupOperations_SyncedGroupMatched_Delete(t *testing.T) {
 
 	googleGroups := []*admin.Group{}
 
-	add, delete, update, equals, retain := getGroupOperations(awsGroups, googleGroups, false, true, "")
+	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, false, true, "")
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 1)
 	assert.Len(t, update, 0)
 	assert.Len(t, equals, 0)
-	assert.Len(t, retain, 0)
 	assert.Equal(t, "Group 1", delete[0].DisplayName)
 	assert.Equal(t, "G1", delete[0].ExternalId.Id)
 }
@@ -186,14 +182,13 @@ func TestGetGroupOperations_RetainUnmatched(t *testing.T) {
 
 	googleGroups := []*admin.Group{}
 
-	add, delete, update, equals, retain := getGroupOperations(awsGroups, googleGroups, false, true, "")
+	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, false, true, "")
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
-	assert.Len(t, update, 0)
+	assert.Len(t, update, 1)
 	assert.Len(t, equals, 0)
-	assert.Len(t, retain, 1)
-	assert.Equal(t, "Group 1", retain[0].DisplayName)
+	assert.Equal(t, "Group 1", update[0].DisplayName)
 }
 
 func TestGetGroupOperations_LocalGroupMatch(t *testing.T) {
@@ -212,13 +207,12 @@ func TestGetGroupOperations_LocalGroupMatch(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals, retain := getGroupOperations(awsGroups, googleGroups, false, false, "")
+	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, false, false, "")
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
 	assert.Len(t, update, 1)
 	assert.Len(t, equals, 0)
-	assert.Len(t, retain, 0)
 	assert.Equal(t, "Group 3", update[0].DisplayName)
 	assert.Equal(t, "G3", update[0].ExternalId.Id)
 }
@@ -240,13 +234,12 @@ func TestGetGroupOperations_SyncedGroupMatched_Update(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals, retain := getGroupOperations(awsGroups, googleGroups, false, false, "")
+	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, false, false, "")
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
 	assert.Len(t, update, 1)
 	assert.Len(t, equals, 0)
-	assert.Len(t, retain, 0)
 	assert.Equal(t, "Different Group Name", update[0].DisplayName)
 	assert.Equal(t, "G4", update[0].ExternalId.Id)
 }
@@ -268,13 +261,12 @@ func TestGetGroupOperations_ExternalIdUpdate_Update(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals, retain := getGroupOperations(awsGroups, googleGroups, true, false, "")
+	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, true, false, "")
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
 	assert.Len(t, update, 1)
 	assert.Len(t, equals, 0)
-	assert.Len(t, retain, 0)
 	assert.Equal(t, "Group 5", update[0].DisplayName)
 	assert.Equal(t, "G50", update[0].ExternalId.Id)
 }
@@ -296,13 +288,12 @@ func TestGetGroupOperations_ExternalIdUpdate_DeleteCreate(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals, retain := getGroupOperations(awsGroups, googleGroups, false, false, "")
+	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, false, false, "")
 
 	assert.Len(t, add, 1)
 	assert.Len(t, delete, 1)
 	assert.Len(t, update, 0)
 	assert.Len(t, equals, 0)
-	assert.Len(t, retain, 0)
 	assert.Equal(t, "Group 5", delete[0].DisplayName)
 	assert.Equal(t, "G5", delete[0].ExternalId.Id)
 	assert.Equal(t, "Group 5", add[0].DisplayName)
@@ -338,13 +329,12 @@ func TestGetUserOperations_NoChange(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals, retain := getUserOperations(awsUsers, googleUsers, false, false, "")
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, false, false, "")
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
 	assert.Len(t, update, 0)
 	assert.Len(t, equals, 1)
-	assert.Len(t, retain, 0)
 	assert.Equal(t, equals[0].ExternalId.Id, "G1")
 	assert.Equal(t, equals[0].Username, "user1@example.com")
 	assert.Equal(t, equals[0].Name.GivenName, "John")
@@ -366,13 +356,12 @@ func TestGetUserOperations_Add(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals, retain := getUserOperations(awsUsers, googleUsers, false, false, "")
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, false, false, "")
 
 	assert.Len(t, add, 1)
 	assert.Len(t, delete, 0)
 	assert.Len(t, update, 0)
 	assert.Len(t, equals, 0)
-	assert.Len(t, retain, 0)
 	assert.Equal(t, add[0].ExternalId.Id, "G7")
 	assert.Equal(t, add[0].Username, "user7@example.com")
 	assert.Equal(t, add[0].Name.GivenName, "Bob")
@@ -408,13 +397,12 @@ func TestGetUserOperations_UpdateAttribute(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals, retain := getUserOperations(awsUsers, googleUsers, false, false, "")
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, false, false, "")
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
 	assert.Len(t, update, 1)
 	assert.Len(t, equals, 0)
-	assert.Len(t, retain, 0)
 	assert.Equal(t, update[0].ExternalId.Id, "G2")
 	assert.Equal(t, update[0].Username, "user2@example.com")
 	assert.Equal(t, update[0].Name.GivenName, "Jane")
@@ -449,13 +437,12 @@ func TestGetUserOperations_UpdateMissingExternalId(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals, retain := getUserOperations(awsUsers, googleUsers, false, false, "")
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, false, false, "")
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
 	assert.Len(t, update, 1)
 	assert.Len(t, equals, 0)
-	assert.Len(t, retain, 0)
 	assert.Equal(t, update[0].ExternalId.Id, "G5")
 	assert.Equal(t, update[0].Username, "user5@example.com")
 	assert.Equal(t, update[0].Name.GivenName, "Jane")
@@ -491,13 +478,12 @@ func TestGetUserOperations_UpdatePrimaryEmail(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals, retain := getUserOperations(awsUsers, googleUsers, false, false, "")
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, false, false, "")
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
 	assert.Len(t, update, 1)
 	assert.Len(t, equals, 0)
-	assert.Len(t, retain, 0)
 	assert.Equal(t, update[0].ExternalId.Id, "G2")
 	assert.Equal(t, update[0].Username, "user20@example.com")
 	assert.Equal(t, update[0].Name.GivenName, "Jane")
@@ -533,13 +519,12 @@ func TestGetUserOperations_UpdateExternalId_DeleteRecreate(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals, retain := getUserOperations(awsUsers, googleUsers, false, false, "")
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, false, false, "")
 
 	assert.Len(t, add, 1)
 	assert.Len(t, delete, 1)
 	assert.Len(t, update, 0)
 	assert.Len(t, equals, 0)
-	assert.Len(t, retain, 0)
 	assert.Equal(t, delete[0].ExternalId.Id, "GX")
 	assert.Equal(t, delete[0].Username, "user6@example.com")
 	assert.Equal(t, delete[0].Name.GivenName, "Alan")
@@ -579,13 +564,12 @@ func TestGetUserOperations_UpdateExternalId_ForceUpdate(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals, retain := getUserOperations(awsUsers, googleUsers, true, false, "")
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, true, false, "")
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
 	assert.Len(t, update, 1)
 	assert.Len(t, equals, 0)
-	assert.Len(t, retain, 0)
 	assert.Equal(t, update[0].ExternalId.Id, "G6")
 	assert.Equal(t, update[0].Username, "user6@example.com")
 	assert.Equal(t, update[0].Name.GivenName, "Alan")
@@ -610,13 +594,12 @@ func TestGetUserOperations_DeleteNoExternalId(t *testing.T) {
 
 	googleUsers := []*admin.User{}
 
-	add, delete, update, equals, retain := getUserOperations(awsUsers, googleUsers, false, false, "")
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, false, false, "")
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 1)
 	assert.Len(t, update, 0)
 	assert.Len(t, equals, 0)
-	assert.Len(t, retain, 0)
 	assert.Equal(t, delete[0].Username, "user3@example.com")
 	assert.Equal(t, delete[0].Name.GivenName, "Bob")
 	assert.Equal(t, delete[0].Name.FamilyName, "Johnson")
@@ -641,13 +624,12 @@ func TestGetUserOperations_DeleteExternalId(t *testing.T) {
 
 	googleUsers := []*admin.User{}
 
-	add, delete, update, equals, retain := getUserOperations(awsUsers, googleUsers, false, false, "")
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, false, false, "")
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 1)
 	assert.Len(t, update, 0)
 	assert.Len(t, equals, 0)
-	assert.Len(t, retain, 0)
 	assert.Equal(t, delete[0].ExternalId.Id, "G4")
 	assert.Equal(t, delete[0].Username, "user4@example.com")
 	assert.Equal(t, delete[0].Name.GivenName, "Belinda")
@@ -672,17 +654,16 @@ func TestGetUserOperations_RetainUnmatched_LocalUserUnmatched(t *testing.T) {
 
 	googleUsers := []*admin.User{}
 
-	add, delete, update, equals, retain := getUserOperations(awsUsers, googleUsers, false, true, "")
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, false, true, "")
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
-	assert.Len(t, update, 0)
+	assert.Len(t, update, 1)
 	assert.Len(t, equals, 0)
-	assert.Len(t, retain, 1)
-	assert.Equal(t, retain[0].Username, "user4@example.com")
-	assert.Equal(t, retain[0].Name.GivenName, "Belinda")
-	assert.Equal(t, retain[0].Name.FamilyName, "Johnson")
-	assert.Equal(t, retain[0].Active, false)
+	assert.Equal(t, update[0].Username, "user4@example.com")
+	assert.Equal(t, update[0].Name.GivenName, "Belinda")
+	assert.Equal(t, update[0].Name.FamilyName, "Johnson")
+	assert.Equal(t, update[0].Active, false)
 }
 
 func TestGetUserOperations_RetainUnmatched_LocalUserMatched(t *testing.T) {
@@ -713,13 +694,12 @@ func TestGetUserOperations_RetainUnmatched_LocalUserMatched(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals, retain := getUserOperations(awsUsers, googleUsers, false, true, "")
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, false, true, "")
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
 	assert.Len(t, update, 1)
 	assert.Len(t, equals, 0)
-	assert.Len(t, retain, 0)
 	assert.Equal(t, update[0].ExternalId.Id, "G4")
 	assert.Equal(t, update[0].Username, "user4@example.com")
 	assert.Equal(t, update[0].Name.GivenName, "Belinda")
@@ -745,13 +725,12 @@ func TestGetUserOperations_RetainUnmatched_SyncedUserUnmatched(t *testing.T) {
 
 	googleUsers := []*admin.User{}
 
-	add, delete, update, equals, retain := getUserOperations(awsUsers, googleUsers, false, true, "")
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, false, true, "")
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 1)
 	assert.Len(t, update, 0)
 	assert.Len(t, equals, 0)
-	assert.Len(t, retain, 0)
 	assert.Equal(t, delete[0].ExternalId.Id, "G4")
 	assert.Equal(t, delete[0].Username, "user4@example.com")
 	assert.Equal(t, delete[0].Name.GivenName, "Belinda")
@@ -787,13 +766,12 @@ func TestGetUserOperations_RetainUnmatched_SyncedUserMismatched(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals, retain := getUserOperations(awsUsers, googleUsers, false, true, "")
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, false, true, "")
 
 	assert.Len(t, add, 1)
 	assert.Len(t, delete, 1)
 	assert.Len(t, update, 0)
 	assert.Len(t, equals, 0)
-	assert.Len(t, retain, 0)
 	assert.Equal(t, delete[0].ExternalId.Id, "GX")
 	assert.Equal(t, delete[0].Username, "user6@example.com")
 	assert.Equal(t, delete[0].Name.GivenName, "Alan")
@@ -833,13 +811,12 @@ func TestGetUserOperations_RetainUnmatched_SyncedUserMatched(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals, retain := getUserOperations(awsUsers, googleUsers, false, true, "")
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, false, true, "")
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
 	assert.Len(t, update, 0)
 	assert.Len(t, equals, 1)
-	assert.Len(t, retain, 0)
 	assert.Equal(t, equals[0].ExternalId.Id, "G6")
 	assert.Equal(t, equals[0].Username, "user6@example.com")
 	assert.Equal(t, equals[0].Name.GivenName, "Alan")
@@ -1246,13 +1223,12 @@ func TestGetGroupOperations_RetainUnmatched_LocalGroupMatched(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals, retain := getGroupOperations(awsGroups, googleGroups, false, true, "")
+	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, false, true, "")
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
 	assert.Len(t, update, 1)
 	assert.Len(t, equals, 0)
-	assert.Len(t, retain, 0)
 	assert.Equal(t, "Group 1", update[0].DisplayName)
 	assert.Equal(t, "G1", update[0].ExternalId.Id)
 }
@@ -1267,14 +1243,13 @@ func TestGetGroupOperations_RetainUnmatched_LocalGroupUnmatched(t *testing.T) {
 
 	googleGroups := []*admin.Group{}
 
-	add, delete, update, equals, retain := getGroupOperations(awsGroups, googleGroups, false, true, "")
+	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, false, true, "")
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
-	assert.Len(t, update, 0)
+	assert.Len(t, update, 1)
 	assert.Len(t, equals, 0)
-	assert.Len(t, retain, 1)
-	assert.Equal(t, "Group 1", retain[0].DisplayName)
+	assert.Equal(t, "Group 1", update[0].DisplayName)
 }
 
 func TestGetGroupOperations_RetainUnmatched_SyncedGroupUnMatched(t *testing.T) {
@@ -1288,13 +1263,12 @@ func TestGetGroupOperations_RetainUnmatched_SyncedGroupUnMatched(t *testing.T) {
 
 	googleGroups := []*admin.Group{}
 
-	add, delete, update, equals, retain := getGroupOperations(awsGroups, googleGroups, false, true, "")
+	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, false, true, "")
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 1)
 	assert.Len(t, update, 0)
 	assert.Len(t, equals, 0)
-	assert.Len(t, retain, 0)
 	assert.Equal(t, "Group 1", delete[0].DisplayName)
 	assert.Equal(t, "G1", delete[0].ExternalId.Id)
 }
@@ -1316,13 +1290,12 @@ func TestGetGroupOperations_RetainUnmatched_SyncedGroupMismatched(t *testing.T) 
 		},
 	}
 
-	add, delete, update, equals, retain := getGroupOperations(awsGroups, googleGroups, false, true, "")
+	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, false, true, "")
 
 	assert.Len(t, add, 1)
 	assert.Len(t, delete, 1)
 	assert.Len(t, update, 0)
 	assert.Len(t, equals, 0)
-	assert.Len(t, retain, 0)
 	assert.Equal(t, "Group 1", delete[0].DisplayName)
 	assert.Equal(t, "GX", delete[0].ExternalId.Id)
 	assert.Equal(t, "Group 1", add[0].DisplayName)
@@ -1346,13 +1319,12 @@ func TestGetGroupOperations_RetainUnmatched_SyncedGroupMatched(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals, retain := getGroupOperations(awsGroups, googleGroups, false, true, "")
+	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, false, true, "")
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
 	assert.Len(t, update, 0)
 	assert.Len(t, equals, 1)
-	assert.Len(t, retain, 0)
 	assert.Equal(t, "Group 1", equals[0].DisplayName)
 	assert.Equal(t, "G1", equals[0].ExternalId.Id)
 }
@@ -1627,7 +1599,7 @@ func TestGetUserOperations_SuspendedStateChange(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals, retain := getUserOperations(awsUsers, googleUsers, false, false, "")
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, false, false, "")
 
 	// Should update user1 (suspended state changed)
 	assert.Len(t, update, 1)
@@ -1637,7 +1609,6 @@ func TestGetUserOperations_SuspendedStateChange(t *testing.T) {
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
 	assert.Len(t, equals, 0)
-	assert.Len(t, retain, 0)
 }
 
 func TestGetGroupUsersOperations(t *testing.T) {
@@ -2349,14 +2320,13 @@ func TestGetUserOperations_ForeignIssuer_UnmatchedRetain(t *testing.T) {
 
 	googleUsers := []*admin.User{}
 
-	add, delete, update, equals, retain := getUserOperations(awsUsers, googleUsers, false, true, issuerArn)
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, false, true, issuerArn)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
-	assert.Len(t, update, 0)
+	assert.Len(t, update, 1)
 	assert.Len(t, equals, 0)
-	assert.Len(t, retain, 1)
-	assert.False(t, retain[0].Active)
+	assert.False(t, update[0].Active)
 }
 
 // Foreign unmatched with retainUnmatched=false -> delete.
@@ -2384,13 +2354,12 @@ func TestGetUserOperations_ForeignIssuer_UnmatchedDelete(t *testing.T) {
 
 	googleUsers := []*admin.User{}
 
-	add, delete, update, equals, retain := getUserOperations(awsUsers, googleUsers, false, false, issuerArn)
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, false, false, issuerArn)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 1)
 	assert.Len(t, update, 0)
 	assert.Len(t, equals, 0)
-	assert.Len(t, retain, 0)
 }
 
 // Foreign matched (Google counterpart exists, ExternalId.Id == Google Id,
@@ -2429,13 +2398,12 @@ func TestGetUserOperations_ForeignIssuer_MatchedAdoptForeign(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals, retain := getUserOperations(awsUsers, googleUsers, false, false, issuerArn)
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, false, false, issuerArn)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
 	assert.Len(t, update, 1)
 	assert.Len(t, equals, 0)
-	assert.Len(t, retain, 0)
 	assert.Equal(t, "G8", update[0].ExternalId.Id)
 }
 
@@ -2475,13 +2443,12 @@ func TestGetUserOperations_ManagedIssuer_Equals(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals, retain := getUserOperations(awsUsers, googleUsers, false, false, issuerArn)
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, false, false, issuerArn)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
 	assert.Len(t, update, 0)
 	assert.Len(t, equals, 1)
-	assert.Len(t, retain, 0)
 	assert.Equal(t, "G8", equals[0].ExternalId.Id)
 }
 
@@ -2502,14 +2469,13 @@ func TestGetGroupOperations_ForeignIssuer_UnmatchedRetain(t *testing.T) {
 
 	googleGroups := []*admin.Group{}
 
-	add, delete, update, equals, retain := getGroupOperations(awsGroups, googleGroups, false, true, issuerArn)
+	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, false, true, issuerArn)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
-	assert.Len(t, update, 0)
+	assert.Len(t, update, 1)
 	assert.Len(t, equals, 0)
-	assert.Len(t, retain, 1)
-	assert.Equal(t, "Group 8", retain[0].DisplayName)
+	assert.Equal(t, "Group 8", update[0].DisplayName)
 }
 
 // Foreign unmatched group with retainUnmatched=false -> delete.
@@ -2529,13 +2495,12 @@ func TestGetGroupOperations_ForeignIssuer_UnmatchedDelete(t *testing.T) {
 
 	googleGroups := []*admin.Group{}
 
-	add, delete, update, equals, retain := getGroupOperations(awsGroups, googleGroups, false, false, issuerArn)
+	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, false, false, issuerArn)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 1)
 	assert.Len(t, update, 0)
 	assert.Len(t, equals, 0)
-	assert.Len(t, retain, 0)
 }
 
 // Foreign matched group (Google counterpart exists, ExternalId.Id == Google Id,
@@ -2562,13 +2527,12 @@ func TestGetGroupOperations_ForeignIssuer_MatchedAdoptForeign(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals, retain := getGroupOperations(awsGroups, googleGroups, false, false, issuerArn)
+	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, false, false, issuerArn)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
 	assert.Len(t, update, 1)
 	assert.Len(t, equals, 0)
-	assert.Len(t, retain, 0)
 	assert.Equal(t, "G8", update[0].ExternalId.Id)
 }
 
@@ -2596,12 +2560,11 @@ func TestGetGroupOperations_ManagedIssuer_Equals(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals, retain := getGroupOperations(awsGroups, googleGroups, false, false, issuerArn)
+	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, false, false, issuerArn)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
 	assert.Len(t, update, 0)
 	assert.Len(t, equals, 1)
-	assert.Len(t, retain, 0)
 	assert.Equal(t, "G8", equals[0].ExternalId.Id)
 }

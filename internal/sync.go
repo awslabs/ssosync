@@ -655,23 +655,21 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 	}
 
 	// create list of changes by operations
-	addAWSUsers, delAWSUsers, updateAWSUsers, unchangedAWSUsers, retainAWSUsers := getUserOperations(awsUsers, googleUsers, s.cfg.ForceExternalIdUpdate, s.cfg.RetainUnmatched, s.cfg.IssuerArn)
+	addAWSUsers, delAWSUsers, updateAWSUsers, unchangedAWSUsers := getUserOperations(awsUsers, googleUsers, s.cfg.ForceExternalIdUpdate, s.cfg.RetainUnmatched, s.cfg.IssuerArn)
 	log.WithFields(
 		log.Fields{
 			"unchanged": len(unchangedAWSUsers),
 			"create":    len(addAWSUsers),
 			"update":    len(updateAWSUsers),
-			"delete":    len(delAWSUsers),
-			"retain":    len(retainAWSUsers)}).Info("Change Summary: users")
+			"delete":    len(delAWSUsers)}).Info("Change Summary: users")
 
-	addAWSGroups, delAWSGroups, updateAWSGroups, unchangedAWSGroups, retainAWSGroups := getGroupOperations(awsGroups, googleGroups, s.cfg.ForceExternalIdUpdate, s.cfg.RetainUnmatched, s.cfg.IssuerArn)
+	addAWSGroups, delAWSGroups, updateAWSGroups, unchangedAWSGroups := getGroupOperations(awsGroups, googleGroups, s.cfg.ForceExternalIdUpdate, s.cfg.RetainUnmatched, s.cfg.IssuerArn)
 	log.WithFields(
 		log.Fields{
 			"unchanged": len(unchangedAWSGroups),
 			"create":    len(addAWSGroups),
 			"update":    len(updateAWSGroups),
-			"delete":    len(delAWSGroups),
-			"retain":    len(retainAWSGroups)}).Info("Change Summary: Groups")
+			"delete":    len(delAWSGroups)}).Info("Change Summary: Groups")
 
 	// update aws users (updated in google)
 	log.Debug("updating aws users updated in google")
@@ -680,26 +678,6 @@ func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) erro
 		log := log.WithFields(log.Fields{"user": awsUser.Username})
 
 		log.Warn("updating user")
-		_, err = s.aws.UpdateUser(aws.UpdateUser(
-			awsUser.ID,
-			awsUser.Name.GivenName,
-			awsUser.Name.FamilyName,
-			awsUser.Username,
-			awsUser.Active,
-			awsUser.ExternalId.Id))
-		if err != nil {
-			log.WithField("user", awsUser).Error("error updating user")
-			return err
-		}
-	}
-
-	// update aws users (updated in google)
-	log.Debug("suspending aws users not matched with users in google")
-	for _, awsUser := range retainAWSUsers {
-
-		log := log.WithFields(log.Fields{"user": awsUser.Username})
-
-		log.Warn("suspending retained user")
 		_, err = s.aws.UpdateUser(aws.UpdateUser(
 			awsUser.ID,
 			awsUser.Name.GivenName,
@@ -1246,7 +1224,7 @@ func getGroupOperation(awsGroup *interfaces.Group, googleGroup *admin.Group, for
 }
 
 // getGroupOperations returns the groups of AWS that must be added, deleted, updated, are equals and retained
-func getGroupOperations(awsGroups []*interfaces.Group, googleGroups []*admin.Group, forceExternalIdUpdate bool, retainUnmatched bool, issuerArn string) (add []*interfaces.Group, delete []*interfaces.Group, update []*interfaces.Group, equals []*interfaces.Group, retain []*interfaces.Group) {
+func getGroupOperations(awsGroups []*interfaces.Group, googleGroups []*admin.Group, forceExternalIdUpdate bool, retainUnmatched bool, issuerArn string) (add []*interfaces.Group, delete []*interfaces.Group, update []*interfaces.Group, equals []*interfaces.Group) {
 
 	log.Debug("getGroupOperations()")
 
@@ -1305,7 +1283,7 @@ func getGroupOperations(awsGroups []*interfaces.Group, googleGroups []*admin.Gro
 		case AdoptForeign:
 			update = append(update, group)
 		case Retain:
-			retain = append(retain, group)
+			update = append(update, group)
 		}
 	}
 
@@ -1326,7 +1304,7 @@ func getGroupOperations(awsGroups []*interfaces.Group, googleGroups []*admin.Gro
 		case Delete:
 			delete = append(delete, group)
 		case Retain:
-			retain = append(retain, group)
+			update = append(update, group)
 		}
 	}
 
@@ -1335,10 +1313,9 @@ func getGroupOperations(awsGroups []*interfaces.Group, googleGroups []*admin.Gro
 			"unchanged": len(equals),
 			"create":    len(add),
 			"update":    len(update),
-			"delete":    len(delete),
-			"retain":    len(retain)}).Info("Change Summary: Groups")
+			"delete":    len(delete)}).Info("Change Summary: Groups")
 
-	return add, delete, update, equals, retain
+	return add, delete, update, equals
 }
 
 // getUserOperation returns the action to perform for this user and the desired user state
@@ -1406,7 +1383,7 @@ func getUserOperation(awsUser *interfaces.User, googleUser *admin.User, forceExt
 }
 
 // getUserOperations returns the users of AWS that must be added, deleted, updated, are equals and retained
-func getUserOperations(awsUsers []*interfaces.User, googleUsers []*admin.User, forceExternalIdUpdate bool, retainUnmatched bool, issuerArn string) (add []*interfaces.User, delete []*interfaces.User, update []*interfaces.User, equals []*interfaces.User, retain []*interfaces.User) {
+func getUserOperations(awsUsers []*interfaces.User, googleUsers []*admin.User, forceExternalIdUpdate bool, retainUnmatched bool, issuerArn string) (add []*interfaces.User, delete []*interfaces.User, update []*interfaces.User, equals []*interfaces.User) {
 
 	log.Debug("getUserOperations()")
 
@@ -1465,7 +1442,7 @@ func getUserOperations(awsUsers []*interfaces.User, googleUsers []*admin.User, f
 		case AdoptForeign:
 			update = append(update, user)
 		case Retain:
-			retain = append(retain, user)
+			update = append(update, user)
 		}
 	}
 
@@ -1486,7 +1463,7 @@ func getUserOperations(awsUsers []*interfaces.User, googleUsers []*admin.User, f
 		case Delete:
 			delete = append(delete, user)
 		case Retain:
-			retain = append(retain, user)
+			update = append(update, user)
 		}
 	}
 
@@ -1495,10 +1472,9 @@ func getUserOperations(awsUsers []*interfaces.User, googleUsers []*admin.User, f
 			"unchanged": len(equals),
 			"create":    len(add),
 			"update":    len(update),
-			"delete":    len(delete),
-			"retain":    len(retain)}).Info("Change Summary: Users")
+			"delete":    len(delete)}).Info("Change Summary: Users")
 
-	return add, delete, update, equals, retain
+	return add, delete, update, equals
 }
 
 // groupUsersOperations returns the groups and its users of AWS that must be delete from these groups and what are equals
