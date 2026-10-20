@@ -79,6 +79,37 @@ type CacheMetrics struct {
 	TotalUsers int
 }
 
+// operations
+type OperationAction int
+
+const (
+	Equal OperationAction = iota
+	Create
+	AdoptLocal
+	AdoptForeign
+	Update
+	UpdateForced
+	Delete
+	Recreate
+	Retain
+)
+
+var operationName = map[OperationAction]string{
+	Equal:        "no action required.",
+	Create:       "create new user",
+	AdoptLocal:   "adopt local (manual) user",
+	AdoptForeign: "adopt user managed by previous external IdP",
+	Update:       "update user attributes",
+	UpdateForced: "force updated; user's externalId has changed",
+	Delete:       "delete; managed user has unmatched.",
+	Recreate:     "delete & add; user's externalId has changed, delete existing user and create new user to prevent permission inheritence.",
+	Retain:       "retain, unmatched user (manual or created by previous external IdP)",
+}
+
+func (operationAction OperationAction) String() string {
+	return operationName[operationAction]
+}
+
 // New will create a new SyncGSuite object
 func New(cfg *config.Config, a aws.Client, g google.Client, ids interfaces.IdentityStoreAPI) SyncGSuite {
 	return &syncGSuite{
@@ -1233,93 +1264,165 @@ func getGroupOperations(awsGroups []*interfaces.Group, googleGroups []*admin.Gro
 	return add, delete, update, equals, retain
 }
 
-// getUserOperations returns the users of AWS that must be added, deleted, updated and are equals
+// getUserOperation returns the action to perform for this user and the desired user state
+func getUserOperation(awsUser *interfaces.User, googleUser *admin.User, forceExternalIdUpdate bool, retainUnmatched bool, issuerArn string) (action OperationAction, user *interfaces.User) {
+	log.Debug("getUserOperation()")
+
+	if awsUser == nil {
+		// User doesn't exist
+		return Create, aws.NewUser(googleUser.Name.GivenName, googleUser.Name.FamilyName, googleUser.PrimaryEmail, !googleUser.Suspended, googleUser.Id)
+	}
+
+	if awsUser.ExternalId.Id == "" {
+		// local (manually created) user, it has no ExternalId
+		if googleUser == nil {
+			if retainUnmatched {
+				// user not found in Google but retain flag enabled
+				return Retain, aws.UpdateUser(awsUser.ID, awsUser.Name.GivenName, awsUser.Name.FamilyName, awsUser.Username, false, awsUser.ExternalId.Id)
+			}
+			// user not found in Google
+			return Delete, awsUser
+		}
+		// matching Google user found, adopt the local user
+		return AdoptLocal, aws.UpdateUser(awsUser.ID, googleUser.Name.GivenName, googleUser.Name.FamilyName, googleUser.PrimaryEmail, !googleUser.Suspended, googleUser.Id)
+	}
+
+	if issuerArn == "" || awsUser.ExternalId.Issuer == issuerArn {
+		// ssosync managed user
+		if googleUser == nil {
+			// user not found in Google
+			return Delete, awsUser
+		}
+		if awsUser.ExternalId.Id == googleUser.Id {
+			// user matches on ExternalId
+			if awsUser.Active == !googleUser.Suspended &&
+				awsUser.Username == googleUser.PrimaryEmail &&
+				awsUser.Name.GivenName == googleUser.Name.GivenName &&
+				awsUser.Name.FamilyName == googleUser.Name.FamilyName {
+				// no action required
+				return Equal, awsUser
+			}
+			// user needs updating
+			return Update, aws.UpdateUser(awsUser.ID, googleUser.Name.GivenName, googleUser.Name.FamilyName, googleUser.PrimaryEmail, !googleUser.Suspended, googleUser.Id)
+		}
+		// both users exist but ExternalId doesn't match
+		// have they been deleted and recreated?
+		if forceExternalIdUpdate {
+			// Force Retention of existing user and update External Id to match
+			// this may lead to privilege inheritence
+			return UpdateForced, aws.UpdateUser(awsUser.ID, googleUser.Name.GivenName, googleUser.Name.FamilyName, googleUser.PrimaryEmail, !googleUser.Suspended, googleUser.Id)
+		}
+		// Do the safe thing and delete the existing user and create a new one to avoid privilege inheritence
+		return Recreate, aws.UpdateUser(awsUser.ID, googleUser.Name.GivenName, googleUser.Name.FamilyName, googleUser.PrimaryEmail, !googleUser.Suspended, googleUser.Id)
+	}
+
+	// There must be an ExternalId setup, its come from a different SCIM provisioning instance/external IdP
+	if googleUser == nil {
+		if retainUnmatched {
+			// user not found in Google but retain flag enabled
+			return Retain, aws.UpdateUser(awsUser.ID, awsUser.Name.GivenName, awsUser.Name.FamilyName, awsUser.Username, false, awsUser.ExternalId.Id)
+		}
+		// user not found in Google
+		return Delete, awsUser
+	}
+	return AdoptForeign, aws.UpdateUser(awsUser.ID, googleUser.Name.GivenName, googleUser.Name.FamilyName, googleUser.PrimaryEmail, !googleUser.Suspended, googleUser.Id)
+}
+
+// getUserOperations returns the users of AWS that must be added, deleted, updated, are equals and retained
 func getUserOperations(awsUsers []*interfaces.User, googleUsers []*admin.User, forceExternalIdUpdate bool, retainUnmatched bool) (add []*interfaces.User, delete []*interfaces.User, update []*interfaces.User, equals []*interfaces.User, retain []*interfaces.User) {
 
 	log.Debug("getUserOperations()")
-	awsMap := make(map[string]*interfaces.User)
+	// issuerArn is not wired from config into this function yet; an empty
+	// value makes every managed user fall back to legacy ExternalId matching.
+	issuerArn := ""
+
+	awsMapUsername := make(map[string]*interfaces.User)
 	awsMapExtId := make(map[string]*interfaces.User)
-	googleMap := make(map[string]*admin.User)
+	googleMapEmail := make(map[string]*admin.User)
 	googleMapId := make(map[string]*admin.User)
 
 	for _, awsUser := range awsUsers {
-		awsMapExtId[awsUser.ExternalId.Id] = awsUser
-		awsMap[strings.ToLower(awsUser.Username)] = awsUser
+		awsMapUsername[strings.ToLower(awsUser.Username)] = awsUser
+		if awsUser.ExternalId.Id != "" {
+			awsMapExtId[awsUser.ExternalId.Id] = awsUser
+		}
 	}
 
 	for _, gUser := range googleUsers {
 		googleMapId[gUser.Id] = gUser
-		googleMap[strings.ToLower(gUser.PrimaryEmail)] = gUser
+		googleMapEmail[strings.ToLower(gUser.PrimaryEmail)] = gUser
 	}
 
 	// Look for Google users in AWS
 	for _, gUser := range googleUsers {
-		if awsUser, found := awsMapExtId[gUser.Id]; found {
-			if awsUser.Active == gUser.Suspended ||
-				awsUser.Username != gUser.PrimaryEmail ||
-				awsUser.Name.GivenName != gUser.Name.GivenName ||
-				awsUser.Name.FamilyName != gUser.Name.FamilyName {
-				log.WithFields(log.Fields{
-					"gUser":   gUser,
-					"awsUser": awsUser,
-				}).Debug("update")
-				update = append(update, aws.UpdateUser(awsUser.ID, gUser.Name.GivenName, gUser.Name.FamilyName, gUser.PrimaryEmail, !gUser.Suspended, gUser.Id))
-			} else {
-				log.WithFields(log.Fields{
-					"gUser":   gUser,
-					"awsUser": awsUser,
-				}).Debug("equals")
-				equals = append(equals, awsUser)
-			}
-		} else if awsUser, found := awsMap[strings.ToLower(gUser.PrimaryEmail)]; found {
-			if len(awsUser.ExternalId.Id) > 0 {
-				if forceExternalIdUpdate {
-					log.WithFields(log.Fields{
-						"gUser":   gUser,
-						"awsUser": awsUser,
-					}).Warn("New google user with the same primary email address but a different id, Force option set, so retaining the existing user and updating its ExternalId. Caution this may lead inherited privileges.")
-					update = append(update, aws.UpdateUser(awsUser.ID, gUser.Name.GivenName, gUser.Name.FamilyName, gUser.PrimaryEmail, !gUser.Suspended, gUser.Id))
-				} else {
-					log.WithFields(log.Fields{
-						"gUser":   gUser,
-						"awsUser": awsUser,
-					}).Warn("New google user with the same primary email address but a different id, delete AWS user and create a new AWS user.")
-					delete = append(delete, aws.UpdateUser(awsUser.ID, awsUser.Name.GivenName, awsUser.Name.FamilyName, awsUser.Username, awsUser.Active, awsUser.ExternalId.Id))
-					add = append(add, aws.NewUser(gUser.Name.GivenName, gUser.Name.FamilyName, gUser.PrimaryEmail, !gUser.Suspended, gUser.Id))
-				}
-			} else {
-				log.WithFields(log.Fields{
-					"gUser":   gUser,
-					"awsUser": awsUser,
-				}).Debug("A local user that matches the primary email address of a google user has been found, adopting to be synced.")
-				update = append(update, aws.UpdateUser(awsUser.ID, gUser.Name.GivenName, gUser.Name.FamilyName, gUser.PrimaryEmail, !gUser.Suspended, gUser.Id))
-			}
-		} else {
-			log.WithFields(log.Fields{
-				"gUser": gUser,
-			}).Debug("add")
-			add = append(add, aws.NewUser(gUser.Name.GivenName, gUser.Name.FamilyName, gUser.PrimaryEmail, !gUser.Suspended, gUser.Id))
+		var awsUser *interfaces.User
+
+		if match, found := awsMapExtId[gUser.Id]; found {
+			// Found by ExternalId.Id
+			awsUser = match
+		} else if match, found := awsMapUsername[strings.ToLower(gUser.PrimaryEmail)]; found {
+			// Found by PrimaryEmail/username
+			awsUser = match
+		}
+
+		// awsUser is nil when the Google user was not found in AWS at all
+		action, user := getUserOperation(awsUser, gUser, forceExternalIdUpdate, retainUnmatched, issuerArn)
+
+		log.WithField("user", user).Info(action)
+
+		switch action {
+		case Equal:
+			equals = append(equals, user)
+		case Create:
+			add = append(add, user)
+		case Delete:
+			delete = append(delete, awsUser)
+		case Recreate:
+			log.WithField("user", user).Warn(action)
+			delete = append(delete, awsUser)
+			add = append(add, user)
+		case UpdateForced:
+			log.WithField("user", user).Warn(action)
+			update = append(update, user)
+		case Update:
+			update = append(update, user)
+		case AdoptLocal:
+			update = append(update, user)
+		case AdoptForeign:
+			update = append(update, user)
+		case Retain:
+			retain = append(retain, user)
 		}
 	}
 
-	//  Look for AWS users not found in Google
+	// Look for AWS users not found in Google
 	for _, awsUser := range awsUsers {
-		if _, found := googleMapId[awsUser.ExternalId.Id]; !found {
-			if _, found := googleMap[strings.ToLower(awsUser.Username)]; !found {
-				if retainUnmatched && len(awsUser.ExternalId.Id) == 0 {
-					log.WithFields(log.Fields{
-						"awsUser": awsUser,
-					}).Warn("Retained: deletion suppressed, suspend instead")
-					retain = append(retain, aws.UpdateUser(awsUser.ID, awsUser.Name.GivenName, awsUser.Name.FamilyName, awsUser.Username, false, awsUser.ExternalId.Id))
-				} else {
-					log.WithFields(log.Fields{
-						"awsUser": awsUser,
-					}).Debug("delete")
-					delete = append(delete, aws.UpdateUser(awsUser.ID, awsUser.Name.GivenName, awsUser.Name.FamilyName, awsUser.Username, awsUser.Active, awsUser.ExternalId.Id))
-				}
-			}
+		if _, found := googleMapId[awsUser.ExternalId.Id]; found {
+			continue
+		}
+		if _, found := googleMapEmail[strings.ToLower(awsUser.Username)]; found {
+			continue
+		}
+
+		action, user := getUserOperation(awsUser, nil, forceExternalIdUpdate, retainUnmatched, issuerArn)
+
+		log.WithField("user", user).Info(action)
+
+		switch action {
+		case Delete:
+			delete = append(delete, user)
+		case Retain:
+			retain = append(retain, user)
 		}
 	}
+
+	log.WithFields(
+		log.Fields{
+			"unchanged": len(equals),
+			"create":    len(add),
+			"update":    len(update),
+			"delete":    len(delete),
+			"retain":    len(retain)}).Info("Change Summary: Users")
 
 	return add, delete, update, equals, retain
 }
