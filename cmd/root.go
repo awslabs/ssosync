@@ -169,6 +169,7 @@ func initConfig() {
 		"google_admin",
 		"customer_id",
 		"google_credentials",
+		"attribute_map_file",
 		"scim_access_token",
 		"scim_endpoint",
 		"log_level",
@@ -197,6 +198,16 @@ func initConfig() {
 
 	if cfg.IsLambda {
 		configLambda()
+	} else {
+		// CLI path: resolve the attribute map from --attribute-map-file. The
+		// Lambda path resolves its own value from the ATTRIBUTE_MAP env var in
+		// configLambda(), mirroring how GoogleCredentials is a path for the CLI
+		// but resolved contents for Lambda. (groups sync method only)
+		am, err := config.LoadAttributeMapsFromFile(cfg.AttributeMapFile)
+		if err != nil {
+			log.Fatal(errors.Wrap(err, "cannot load attribute map file").Error())
+		}
+		cfg.AttributeMap = am
 	}
 
 	// config logger
@@ -413,6 +424,17 @@ func configLambda() {
 	cfg.CustomerID = getEnvSensitive("CUSTOMER_ID", config.DefaultCustomerID)
 	cfg.GoogleAdmin = getEnvSensitive("GOOGLE_ADMIN", config.DefaultGoogleAdmin)
 	cfg.GoogleCredentials = getEnvSensitive("GOOGLE_CREDENTIALS", config.DefaultGoogleCredentials)
+	// ATTRIBUTE_MAP accepts a Secrets Manager ARN, an SSM Parameter Store ARN
+	// (both resolved to their stored JSON string by getEnvSensitive) or inline
+	// JSON. The resolved string is parsed by the same shared loader used by the
+	// CLI file flag. Empty -> DefaultAttributeMap, matching credentials
+	// unset-value behaviour. (groups sync method only)
+	attrMapRaw := getEnvSensitive("ATTRIBUTE_MAP", config.DefaultAttributeMapFile)
+	attrMap, err := config.LoadAttributeMapsFromString(attrMapRaw)
+	if err != nil {
+		log.Fatal(errors.Wrap(err, "cannot load attribute map from ATTRIBUTE_MAP").Error())
+	}
+	cfg.AttributeMap = attrMap
 	cfg.SCIMEndpoint = getEnvSensitive("SCIM_ENDPOINT", config.DefaultSCIMEndpoint)
 	cfg.SCIMAccessToken = getEnvSensitive("SCIM_ACCESS_TOKEN", config.DefaultSCIMAccessToken)
 
@@ -465,6 +487,7 @@ func addFlags(_ *cobra.Command, cfg *config.Config) {
 	rootCmd.Flags().StringVarP(&cfg.SCIMAccessToken, "access-token", "t", config.DefaultSCIMAccessToken, "AWS SSO SCIM API Access Token")
 	rootCmd.Flags().StringVarP(&cfg.SCIMEndpoint, "endpoint", "e", config.DefaultSCIMEndpoint, "AWS SSO SCIM API Endpoint")
 	rootCmd.Flags().StringVarP(&cfg.GoogleCredentials, "google-credentials", "c", config.DefaultGoogleCredentials, "path to Google Workspace credentials file")
+	rootCmd.Flags().StringVar(&cfg.AttributeMapFile, "attribute-map-file", config.DefaultAttributeMapFile, "path to a JSON file containing the attribute map (groups sync method only); when unset the built-in default mapping is used")
 	rootCmd.Flags().StringVarP(&cfg.GoogleAdmin, "google-admin", "u", config.DefaultGoogleAdmin, "Google Workspace admin user email")
 	rootCmd.Flags().StringVar(&cfg.CustomerID, "customer-id", config.DefaultCustomerID, "Google Workspace customer ID to operate against (defaults to 'my_customer')")
 	rootCmd.Flags().StringSliceVar(&cfg.IgnoreUsers, "ignore-users", config.DefaultIgnoreUsers, "ignores these Google Workspace users")
