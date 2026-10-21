@@ -1975,10 +1975,7 @@ func ConvertSdkUserObjToNative(user identitystore_types.User) *interfaces.User {
 		ExternalIds: getExternalIds(user.ExternalIds),
 		Schemas:     []string{constants.SCIMSchemaUser},
 		Username:    derefString(user.UserName),
-		Name: struct {
-			FamilyName string `json:"familyName"`
-			GivenName  string `json:"givenName"`
-		}{
+		Name: interfaces.UserName{
 			FamilyName: familyName,
 			GivenName:  givenName,
 		},

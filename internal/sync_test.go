@@ -306,10 +306,7 @@ func TestGetUserOperations_NoChange(t *testing.T) {
 			ID:         "A1",
 			Username:   "user1@example.com",
 			ExternalId: interfaces.ExternalId{Id: "G1"},
-			Name: struct {
-				FamilyName string `json:"familyName"`
-				GivenName  string `json:"givenName"`
-			}{
+			Name: interfaces.UserName{
 				GivenName:  "John",
 				FamilyName: "Doe",
 			},
@@ -374,10 +371,7 @@ func TestGetUserOperations_UpdateAttribute(t *testing.T) {
 			ID:         "A2",
 			Username:   "user2@example.com",
 			ExternalId: interfaces.ExternalId{Id: "G2"},
-			Name: struct {
-				FamilyName string `json:"familyName"`
-				GivenName  string `json:"givenName"`
-			}{
+			Name: interfaces.UserName{
 				GivenName:  "Jane",
 				FamilyName: "Smith",
 			},
@@ -414,10 +408,7 @@ func TestGetUserOperations_UpdateMissingExternalId(t *testing.T) {
 		{
 			ID:       "A5",
 			Username: "user5@example.com",
-			Name: struct {
-				FamilyName string `json:"familyName"`
-				GivenName  string `json:"givenName"`
-			}{
+			Name: interfaces.UserName{
 				GivenName:  "Jane",
 				FamilyName: "Doe",
 			},
@@ -455,10 +446,7 @@ func TestGetUserOperations_UpdatePrimaryEmail(t *testing.T) {
 			ID:         "A2",
 			Username:   "user2@example.com",
 			ExternalId: interfaces.ExternalId{Id: "G2"},
-			Name: struct {
-				FamilyName string `json:"familyName"`
-				GivenName  string `json:"givenName"`
-			}{
+			Name: interfaces.UserName{
 				GivenName:  "Jane",
 				FamilyName: "Smith",
 			},
@@ -496,10 +484,7 @@ func TestGetUserOperations_UpdateExternalId_DeleteRecreate(t *testing.T) {
 			ID:         "A6",
 			ExternalId: interfaces.ExternalId{Id: "GX"},
 			Username:   "user6@example.com",
-			Name: struct {
-				FamilyName string `json:"familyName"`
-				GivenName  string `json:"givenName"`
-			}{
+			Name: interfaces.UserName{
 				GivenName:  "Alan",
 				FamilyName: "Brown",
 			},
@@ -541,10 +526,7 @@ func TestGetUserOperations_UpdateExternalId_ForceUpdate(t *testing.T) {
 			ID:         "A6",
 			ExternalId: interfaces.ExternalId{Id: "GX"},
 			Username:   "user6@example.com",
-			Name: struct {
-				FamilyName string `json:"familyName"`
-				GivenName  string `json:"givenName"`
-			}{
+			Name: interfaces.UserName{
 				GivenName:  "Alan",
 				FamilyName: "Brown",
 			},
@@ -581,10 +563,7 @@ func TestGetUserOperations_DeleteNoExternalId(t *testing.T) {
 		{
 			ID:       "A3",
 			Username: "user3@example.com",
-			Name: struct {
-				FamilyName string `json:"familyName"`
-				GivenName  string `json:"givenName"`
-			}{
+			Name: interfaces.UserName{
 				GivenName:  "Bob",
 				FamilyName: "Johnson",
 			},
@@ -611,10 +590,7 @@ func TestGetUserOperations_DeleteExternalId(t *testing.T) {
 			ID:         "A4",
 			Username:   "user4@example.com",
 			ExternalId: interfaces.ExternalId{Id: "G4"},
-			Name: struct {
-				FamilyName string `json:"familyName"`
-				GivenName  string `json:"givenName"`
-			}{
+			Name: interfaces.UserName{
 				GivenName:  "Belinda",
 				FamilyName: "Johnson",
 			},
@@ -641,10 +617,7 @@ func TestGetUserOperations_RetainUnmatched_LocalUserUnmatched(t *testing.T) {
 		{
 			ID:       "A4",
 			Username: "user4@example.com",
-			Name: struct {
-				FamilyName string `json:"familyName"`
-				GivenName  string `json:"givenName"`
-			}{
+			Name: interfaces.UserName{
 				GivenName:  "Belinda",
 				FamilyName: "Johnson",
 			},
@@ -671,10 +644,7 @@ func TestGetUserOperations_RetainUnmatched_LocalUserMatched(t *testing.T) {
 		{
 			ID:       "A4",
 			Username: "user4@example.com",
-			Name: struct {
-				FamilyName string `json:"familyName"`
-				GivenName  string `json:"givenName"`
-			}{
+			Name: interfaces.UserName{
 				GivenName:  "Belinda",
 				FamilyName: "Johnson",
 			},
@@ -712,10 +682,7 @@ func TestGetUserOperations_RetainUnmatched_SyncedUserUnmatched(t *testing.T) {
 			ID:         "A4",
 			Username:   "user4@example.com",
 			ExternalId: interfaces.ExternalId{Id: "G4"},
-			Name: struct {
-				FamilyName string `json:"familyName"`
-				GivenName  string `json:"givenName"`
-			}{
+			Name: interfaces.UserName{
 				GivenName:  "Belinda",
 				FamilyName: "Johnson",
 			},
@@ -743,10 +710,7 @@ func TestGetUserOperations_RetainUnmatched_SyncedUserMismatched(t *testing.T) {
 			ID:         "A6",
 			ExternalId: interfaces.ExternalId{Id: "GX"},
 			Username:   "user6@example.com",
-			Name: struct {
-				FamilyName string `json:"familyName"`
-				GivenName  string `json:"givenName"`
-			}{
+			Name: interfaces.UserName{
 				GivenName:  "Alan",
 				FamilyName: "Brown",
 			},
@@ -788,10 +752,7 @@ func TestGetUserOperations_RetainUnmatched_SyncedUserMatched(t *testing.T) {
 			ID:         "A6",
 			ExternalId: interfaces.ExternalId{Id: "G6"},
 			Username:   "user6@example.com",
-			Name: struct {
-				FamilyName string `json:"familyName"`
-				GivenName  string `json:"givenName"`
-			}{
+			Name: interfaces.UserName{
 				GivenName:  "Alan",
 				FamilyName: "Brown",
 			},
@@ -856,10 +817,7 @@ func TestGetUserOperation_LocalUnmatched_Retain(t *testing.T) {
 	awsUser := &interfaces.User{
 		ID:       "A4",
 		Username: "user4@example.com",
-		Name: struct {
-			FamilyName string `json:"familyName"`
-			GivenName  string `json:"givenName"`
-		}{
+		Name: interfaces.UserName{
 			GivenName:  "Belinda",
 			FamilyName: "Johnson",
 		},
@@ -881,10 +839,7 @@ func TestGetUserOperation_LocalUnmatched_Delete(t *testing.T) {
 	awsUser := &interfaces.User{
 		ID:       "A4",
 		Username: "user4@example.com",
-		Name: struct {
-			FamilyName string `json:"familyName"`
-			GivenName  string `json:"givenName"`
-		}{
+		Name: interfaces.UserName{
 			GivenName:  "Belinda",
 			FamilyName: "Johnson",
 		},
@@ -905,10 +860,7 @@ func TestGetUserOperation_LocalMatched_AdoptLocal(t *testing.T) {
 	awsUser := &interfaces.User{
 		ID:       "A5",
 		Username: "user5@example.com",
-		Name: struct {
-			FamilyName string `json:"familyName"`
-			GivenName  string `json:"givenName"`
-		}{
+		Name: interfaces.UserName{
 			GivenName:  "Jane",
 			FamilyName: "Doe",
 		},
@@ -941,10 +893,7 @@ func TestGetUserOperation_ManagedUnmatched_Delete(t *testing.T) {
 		ID:         "A1",
 		Username:   "user1@example.com",
 		ExternalId: interfaces.ExternalId{Id: "G1"},
-		Name: struct {
-			FamilyName string `json:"familyName"`
-			GivenName  string `json:"givenName"`
-		}{
+		Name: interfaces.UserName{
 			GivenName:  "John",
 			FamilyName: "Doe",
 		},
@@ -965,10 +914,7 @@ func TestGetUserOperation_ManagedMatched_Equal(t *testing.T) {
 		ID:         "A1",
 		Username:   "user1@example.com",
 		ExternalId: interfaces.ExternalId{Id: "G1"},
-		Name: struct {
-			FamilyName string `json:"familyName"`
-			GivenName  string `json:"givenName"`
-		}{
+		Name: interfaces.UserName{
 			GivenName:  "John",
 			FamilyName: "Doe",
 		},
@@ -1001,10 +947,7 @@ func TestGetUserOperation_ManagedMatched_Update(t *testing.T) {
 		ID:         "A2",
 		Username:   "user2@example.com",
 		ExternalId: interfaces.ExternalId{Id: "G2"},
-		Name: struct {
-			FamilyName string `json:"familyName"`
-			GivenName  string `json:"givenName"`
-		}{
+		Name: interfaces.UserName{
 			GivenName:  "Jane",
 			FamilyName: "Smith",
 		},
@@ -1037,10 +980,7 @@ func TestGetUserOperation_ManagedMismatched_UpdateForced(t *testing.T) {
 		ID:         "A6",
 		Username:   "user6@example.com",
 		ExternalId: interfaces.ExternalId{Id: "GX"},
-		Name: struct {
-			FamilyName string `json:"familyName"`
-			GivenName  string `json:"givenName"`
-		}{
+		Name: interfaces.UserName{
 			GivenName:  "Alan",
 			FamilyName: "Brown",
 		},
@@ -1073,10 +1013,7 @@ func TestGetUserOperation_ManagedMismatched_Recreate(t *testing.T) {
 		ID:         "A6",
 		Username:   "user6@example.com",
 		ExternalId: interfaces.ExternalId{Id: "GX"},
-		Name: struct {
-			FamilyName string `json:"familyName"`
-			GivenName  string `json:"givenName"`
-		}{
+		Name: interfaces.UserName{
 			GivenName:  "Alan",
 			FamilyName: "Brown",
 		},
@@ -1113,10 +1050,7 @@ func TestGetUserOperation_ForeignUnmatched_Retain(t *testing.T) {
 			Id:     "G8",
 			Issuer: "arn:aws:identitystore::111111111111:identitystore/d-other/provisioningtenant/other",
 		},
-		Name: struct {
-			FamilyName string `json:"familyName"`
-			GivenName  string `json:"givenName"`
-		}{
+		Name: interfaces.UserName{
 			GivenName:  "Carol",
 			FamilyName: "White",
 		},
@@ -1145,10 +1079,7 @@ func TestGetUserOperation_ForeignUnmatched_Delete(t *testing.T) {
 			Id:     "G8",
 			Issuer: "arn:aws:identitystore::111111111111:identitystore/d-other/provisioningtenant/other",
 		},
-		Name: struct {
-			FamilyName string `json:"familyName"`
-			GivenName  string `json:"givenName"`
-		}{
+		Name: interfaces.UserName{
 			GivenName:  "Carol",
 			FamilyName: "White",
 		},
@@ -1175,10 +1106,7 @@ func TestGetUserOperation_ForeignMatched_AdoptForeign(t *testing.T) {
 			Id:     "G8",
 			Issuer: "arn:aws:identitystore::111111111111:identitystore/d-other/provisioningtenant/other",
 		},
-		Name: struct {
-			FamilyName string `json:"familyName"`
-			GivenName  string `json:"givenName"`
-		}{
+		Name: interfaces.UserName{
 			GivenName:  "Carol",
 			FamilyName: "White",
 		},
@@ -1577,10 +1505,7 @@ func TestGetUserOperations_SuspendedStateChange(t *testing.T) {
 		{
 			ID:       "1",
 			Username: "user1@example.com",
-			Name: struct {
-				FamilyName string `json:"familyName"`
-				GivenName  string `json:"givenName"`
-			}{
+			Name: interfaces.UserName{
 				GivenName:  "John",
 				FamilyName: "Doe",
 			},
@@ -2307,10 +2232,7 @@ func TestGetUserOperations_ForeignIssuer_UnmatchedRetain(t *testing.T) {
 				Id:     "G8",
 				Issuer: "arn:aws:identitystore::111111111111:identitystore/d-other/provisioningtenant/other",
 			},
-			Name: struct {
-				FamilyName string `json:"familyName"`
-				GivenName  string `json:"givenName"`
-			}{
+			Name: interfaces.UserName{
 				GivenName:  "Carol",
 				FamilyName: "White",
 			},
@@ -2341,10 +2263,7 @@ func TestGetUserOperations_ForeignIssuer_UnmatchedDelete(t *testing.T) {
 				Id:     "G8",
 				Issuer: "arn:aws:identitystore::111111111111:identitystore/d-other/provisioningtenant/other",
 			},
-			Name: struct {
-				FamilyName string `json:"familyName"`
-				GivenName  string `json:"givenName"`
-			}{
+			Name: interfaces.UserName{
 				GivenName:  "Carol",
 				FamilyName: "White",
 			},
@@ -2375,10 +2294,7 @@ func TestGetUserOperations_ForeignIssuer_MatchedAdoptForeign(t *testing.T) {
 				Id:     "G8",
 				Issuer: "arn:aws:identitystore::111111111111:identitystore/d-other/provisioningtenant/other",
 			},
-			Name: struct {
-				FamilyName string `json:"familyName"`
-				GivenName  string `json:"givenName"`
-			}{
+			Name: interfaces.UserName{
 				GivenName:  "Carol",
 				FamilyName: "White",
 			},
@@ -2420,10 +2336,7 @@ func TestGetUserOperations_ManagedIssuer_Equals(t *testing.T) {
 				Id:     "G8",
 				Issuer: issuerArn,
 			},
-			Name: struct {
-				FamilyName string `json:"familyName"`
-				GivenName  string `json:"givenName"`
-			}{
+			Name: interfaces.UserName{
 				GivenName:  "Carol",
 				FamilyName: "White",
 			},

@@ -39,10 +39,7 @@ func NewUser(firstName string, lastName string, email string, active bool, exter
 		Schemas:    []string{"urn:ietf:params:scim:schemas:core:2.0:User"},
 		Username:   email,
 		ExternalId: interfaces.ExternalId{Id: externalId},
-		Name: struct {
-			FamilyName string `json:"familyName"`
-			GivenName  string `json:"givenName"`
-		}{
+		Name: interfaces.UserName{
 			FamilyName: lastName,
 			GivenName:  firstName,
 		},
@@ -73,10 +70,7 @@ func UpdateUser(id string, firstName string, lastName string, email string, acti
 		ID:         id,
 		Username:   email,
 		ExternalId: interfaces.ExternalId{Id: externalId},
-		Name: struct {
-			FamilyName string `json:"familyName"`
-			GivenName  string `json:"givenName"`
-		}{
+		Name: interfaces.UserName{
 			FamilyName: lastName,
 			GivenName:  firstName,
 		},
