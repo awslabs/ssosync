@@ -1,3 +1,21 @@
+## v2.10.0
+
+### Highlights
+
+- **Configurable attribute mapping (groups sync method).** You can now control how Google Workspace user attributes are mapped onto AWS IAM Identity Center (SCIM) user fields via a JSON attribute map. Supply it with the new `--attribute-map-file` CLI flag or, for Lambda, the `ATTRIBUTE_MAP` environment variable (which accepts a Secrets Manager secret ARN, an SSM Parameter Store ARN, or the inline JSON, mirroring the credentials pattern). When unset, a built-in default mapping is used. See the README "Attribute mapping" section for the syntax and the copy-pasteable default.
+- Expanded the internal user/group model to the full set of IAM Identity Center SCIM attributes (full name, title, locale, timezone, phone numbers, addresses, and the enterprise extension: organization, department, cost center, division, manager, employee number). Groups remain `displayName`-only, as AWS SCIM accepts only `externalId`/`displayName`/`members` for groups.
+- Expanded the default attribute map beyond the previous minimal set to also populate `Title`, `Enterprise.Organization`, `Enterprise.Department`, and `Enterprise.CostCenter` from the user's primary Google organization. Additional attributes (`Enterprise.Manager`, `Enterprise.Division`, `Enterprise.EmployeeNumber`, `ProfileURL`, single-element emails/addresses/phone numbers) are supported but opt-in, not in the default.
+- Multi-valued Google fields use a deterministic selection rule: a type-qualified source path (e.g. `relations[type=manager].value`) selects the matching entry, an unqualified path selects the entry marked `primary`, and otherwise the field resolves to nothing. There is no positional/first-match fallback, so results are stable run-to-run.
+- Attribute maps are validated at load time; an unsupported target field, unsupported source attribute, or empty key/value causes a hard failure with a detailed, actionable error listing the supported values.
+
+### Breaking / behavioural changes
+
+> [!IMPORTANT]
+> **Clear-to-consistent user sync.** The `groups` sync method now makes the IAM Identity Store user fully consistent with the mapped Google user. Any supported SCIM attribute that the attribute map does **not** populate is **cleared** on the Identity Store user. On the first run after upgrading, user attributes that were previously left untouched (for example Title, phone numbers, addresses, or locale set outside of ssosync) may be cleared unless they are covered by your attribute map. **Run with `--dry-run` first** to review the changes before a live sync.
+
+> [!NOTE]
+> The default attribute map now reads organization-derived fields (Title, Organization, Department, Cost Center) from the user's **primary** Google organization. A user with organization data but no organization marked primary will have these fields left empty (and therefore cleared). Confirm with a `--dry-run` against your directory that these fields resolve as expected before a live run.
+
 ## v2.9.3 - 2026-10-21
 
 ### Changelog
