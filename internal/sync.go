@@ -1465,11 +1465,11 @@ func getGroupOperation(awsGroup *interfaces.Group, googleGroup *interfaces.Group
 func getGroupOperations(awsGroups []*interfaces.Group, googleGroups []*admin.Group, cfg *config.Config, attrMap config.AttributeMap) (add []*interfaces.Group, delete []*interfaces.Group, update []*interfaces.Group, equals []*interfaces.Group) {
 
 	log.Debug("getGroupOperations()")
-	log.WithFields(log.Fields{"kind": "group", "expectedIssuer": issuerArn, "issuerCheckDisabled": issuerArn == ""}).Debug(ExpectedIssuerMsg)
 
 	forceExternalIdUpdate := cfg.ForceExternalIdUpdate
 	retainUnmatched := cfg.RetainUnmatched
 	issuerArn := cfg.IssuerArn
+	log.WithFields(log.Fields{"kind": "group", "expectedIssuer": issuerArn, "issuerCheckDisabled": issuerArn == ""}).Debug(ExpectedIssuerMsg)
 
 	stats := struct {
 		Equal, Create, AdoptLocal, AdoptForeign, Update, UpdateForced, Delete, Recreate, Retain int
@@ -1699,11 +1699,11 @@ func getUserOperation(awsUser *interfaces.User, googleUser *interfaces.User, for
 func getUserOperations(awsUsers []*interfaces.User, googleUsers []*admin.User, cfg *config.Config, attrMap config.AttributeMap) (add []*interfaces.User, delete []*interfaces.User, update []*interfaces.User, equals []*interfaces.User) {
 
 	log.Debug("getUserOperations()")
-	log.WithFields(log.Fields{"kind": "user", "expectedIssuer": issuerArn, "issuerCheckDisabled": issuerArn == ""}).Debug(ExpectedIssuerMsg)
 
 	forceExternalIdUpdate := cfg.ForceExternalIdUpdate
 	retainUnmatched := cfg.RetainUnmatched
 	issuerArn := cfg.IssuerArn
+	log.WithFields(log.Fields{"kind": "user", "expectedIssuer": issuerArn, "issuerCheckDisabled": issuerArn == ""}).Debug(ExpectedIssuerMsg)
 
 	stats := struct {
 		Equal, Create, AdoptLocal, AdoptForeign, Update, UpdateForced, Delete, Recreate, Retain int
