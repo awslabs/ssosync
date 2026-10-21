@@ -28,13 +28,14 @@ import (
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/aws"
-	aws_config "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/aws/arn"
-	"github.com/aws/aws-sdk-go-v2/service/ssoadmin"
+	aws_config "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/codepipeline"
 	"github.com/aws/aws-sdk-go-v2/service/codepipeline/types"
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
+	"github.com/aws/aws-sdk-go-v2/service/ssoadmin"
+	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/aws/aws-secretsmanager-caching-go/v2/secretcache"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
@@ -209,7 +210,8 @@ func initConfig() {
 
 	if cfg.SCIMEndpoint != "" {
 		cfg.Region = getRegion()
-		cfg.IdentityStoreID =  getIdentityStoreId()
+		cfg.IdentityStoreID = getIdentityStoreId()
+		cfg.IssuerArn = getIssuerArn()
 	}
 
 }
@@ -217,16 +219,16 @@ func initConfig() {
 var secretCache *secretcache.Cache
 
 func getEnvSensitive(key string, fallback string) string {
-    EnvVar := getEnvStr(key, fallback)
-    if a, err := arn.Parse(EnvVar); err == nil {
-        switch a.Service {
-        case "secretsmanager":
-            return getSecretFromCache(EnvVar)
-        case "ssm":
-            return getEncryptParam(EnvVar)
-        }
-    }
-    return EnvVar // not an ARN -> use the literal value
+	EnvVar := getEnvStr(key, fallback)
+	if a, err := arn.Parse(EnvVar); err == nil {
+		switch a.Service {
+		case "secretsmanager":
+			return getSecretFromCache(EnvVar)
+		case "ssm":
+			return getEncryptParam(EnvVar)
+		}
+	}
+	return EnvVar // not an ARN -> use the literal value
 }
 
 func getEnvStr(key string, fallback string) string {
@@ -265,6 +267,37 @@ func getRegion() string {
 	return Region
 }
 
+func getIssuerId() string {
+	r, _ := regexp.Compile(`amazonaws\.com/([^/]+)/scim`)
+	log.WithField("SCIMEndpoint", cfg.SCIMEndpoint).Debug("getIssuerId()")
+	IssuerId := ""
+	if matches := r.FindStringSubmatch(cfg.SCIMEndpoint); len(matches) > 1 {
+		IssuerId = matches[1]
+	}
+	log.WithField("IssuerId", IssuerId).Info("getIssuerId()")
+	return IssuerId
+}
+
+func getAccountId() string {
+	ctx := context.Background()
+
+	log.WithField("cfg.Region", cfg.Region).Info("getAccountId()")
+	awsCfg, err := aws_config.LoadDefaultConfig(ctx, aws_config.WithRegion(cfg.Region))
+	if err != nil {
+		log.Fatal(errors.Wrap(err, "getAccountId(): failed to load AWS config").Error())
+	}
+
+	client := sts.NewFromConfig(awsCfg)
+	output, err := client.GetCallerIdentity(ctx, &sts.GetCallerIdentityInput{})
+	if err != nil {
+		log.Fatal(errors.Wrap(err, "getAccountId(): failed to get caller identity").Error())
+	}
+
+	AccountId := aws.ToString(output.Account)
+	log.WithField("AccountId", AccountId).Info("getAccountId()")
+	return AccountId
+}
+
 func getIdentityStoreId() string {
 	ctx := context.Background()
 
@@ -285,8 +318,19 @@ func getIdentityStoreId() string {
 	}
 
 	IdentityStoreId := aws.ToString(output.Instances[0].IdentityStoreId)
-		log.WithField("IdentityStoreId", IdentityStoreId).Info("getIdentityStoreId()")
+	log.WithField("IdentityStoreId", IdentityStoreId).Info("getIdentityStoreId()")
 	return IdentityStoreId
+}
+
+func getIssuerArn() string {
+	IssuerArn := strings.ToLower(fmt.Sprintf(
+		"arn:aws:identitystore::%s:identitystore/%s/provisioningtenant/%s",
+		getAccountId(),
+		getIdentityStoreId(),
+		getIssuerId(),
+	))
+	log.WithField("IssuerArn", IssuerArn).Info("getIssuerArn()")
+	return IssuerArn
 }
 
 func configLambda() {
@@ -375,7 +419,7 @@ func addFlags(_ *cobra.Command, cfg *config.Config) {
 	rootCmd.Flags().StringSliceVar(&cfg.PrecacheOrgUnits, "precache-ous", config.DefaultPrecacheOrgUnits, "A common separated list of Google Workspace OrgUnitPathis e.g.'/', to precache all users within the organization or '/OU_1/OU 2,/OU3'. Precaching is disabled by default.")
 	rootCmd.PersistentFlags().BoolVarP(&cfg.CacheMetrics, "cache-metrics", "", config.DefaultCacheMetrics, "Gather metrics for cache hits/miss, and output at end of run to help refine OrgUnitPath string.")
 	rootCmd.PersistentFlags().BoolVarP(&cfg.ForceExternalIdUpdate, "force-externalid-update", "", config.DefaultForceExternalIdUpdate, "By default a when the ExternalId of Identity store user mismatches with the Google Workspace directory user with the same email address, the user id removed and a new user created to prevent inheritance of privileges from the old user. When set this flag forces the existing user to be updated, and means there is a risk of silent permission inheritance. If an email address is re-assigned in the Google Workspace Directory")
-	rootCmd.PersistentFlags().BoolVarP(&cfg.RetainUnmatched, "retain-unmatched", "r", config.DefaultRetainUnmatched, "Explicitly retains all users and groups that exist in the IAM Identity Store but can't be match with the Google Workspace directory.")
+	rootCmd.PersistentFlags().BoolVarP(&cfg.RetainUnmatched, "retain-unmatched", "r", config.DefaultRetainUnmatched, "Retain 'local' users and groups that exist in the IAM Identity Store but cannot be matched to the Google Workspace directory, instead of deleting them. A 'local' user or group is one which has been created in the Identity Store directly and not synced via SCIM, from any external identity provider.")
 }
 
 func logConfig(cfg *config.Config) {

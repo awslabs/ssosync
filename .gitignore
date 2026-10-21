@@ -51,3 +51,4 @@ coverage.html
 .pnpm-store
 .secrets.json
 google-service-account.json
+/.worktrees

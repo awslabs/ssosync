@@ -43,6 +43,8 @@ type Config struct {
 	Region string `mapstructure:"region"`
 	// IdentityStoreID is the ID of the identity store
 	IdentityStoreID string `mapstructure:"identity_store_id"`
+	// ExtyernalId->Issuer
+	IssuerArn string `mapstructure:"issuer_Arn"`
 	// Precaching queries as a comma separated list of query strings
 	PrecacheOrgUnits []string
 	// Enabled Caching stats to help refine PrecacheOrgUnits configuration
@@ -56,7 +58,8 @@ type Config struct {
 	// are not preserved. This option is required when switching from a different external IdP (Microsoft Entra for example) 
 	// to Google Workspace Directory (with ssosync) and assignments need to be preserved.
 	ForceExternalIdUpdate bool
-	// Blocks the deletion of user and groups that exist in the IAM Identity Store but not in the Google Workspace Directory
+	// Blocks the deletion of 'local' user and groups that exist in the IAM Identity Store but not in the Google Workspace Directory, 
+	// a local user/group is defined as one where ExternalId is not set. If an ExternalId is set then, the will be deleted as normal.
 	RetainUnmatched bool
 	// User filter string
 	UserFilter string

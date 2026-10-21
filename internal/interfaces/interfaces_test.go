@@ -1,6 +1,8 @@
 package interfaces
 
 import (
+	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -11,7 +13,7 @@ func TestUser_Struct(t *testing.T) {
 		ID:          "user-123",
 		Schemas:     []string{"urn:ietf:params:scim:schemas:core:2.0:User"},
 		Username:    "test@example.com",
-		ExternalId:  "google-123",
+		ExternalId:  ExternalId{Id: "google-123"},
 		DisplayName: "Test User",
 		Active:      true,
 		Emails: []UserEmail{
@@ -37,7 +39,7 @@ func TestUser_Struct(t *testing.T) {
 
 	assert.Equal(t, "user-123", user.ID)
 	assert.Equal(t, "test@example.com", user.Username)
-	assert.Equal(t, "google-123", user.ExternalId)
+	assert.Equal(t, "google-123", user.ExternalId.Id)
 	assert.Equal(t, "Test User", user.DisplayName)
 	assert.True(t, user.Active)
 	assert.Len(t, user.Emails, 1)
@@ -53,14 +55,14 @@ func TestUser_Struct(t *testing.T) {
 func TestGroup_Struct(t *testing.T) {
 	group := Group{
 		ID:          "group-123",
-		ExternalId:  "google-123",
+		ExternalId:  ExternalId{Id: "google-123"},
 		Schemas:     []string{"urn:ietf:params:scim:schemas:core:2.0:Group"},
 		DisplayName: "Test Group",
 		Members:     []string{"user-1", "user-2"},
 	}
 
 	assert.Equal(t, "group-123", group.ID)
-	assert.Equal(t, "google-123", group.ExternalId)
+	assert.Equal(t, "google-123", group.ExternalId.Id)
 	assert.Equal(t, "Test Group", group.DisplayName)
 	assert.Len(t, group.Members, 2)
 	assert.Contains(t, group.Members, "user-1")
@@ -115,4 +117,46 @@ func TestGroupFilterResults_Struct(t *testing.T) {
 	assert.Len(t, results.Resources, 2)
 	assert.Equal(t, "group-1", results.Resources[0].ID)
 	assert.Equal(t, "group-2", results.Resources[1].ID)
+}
+
+// TestExternalId_MarshalJSON_BareString verifies that ExternalId serializes to
+// a bare JSON string (its Id), preserving the SCIM wire format, and that an
+// enclosing User/Group emits externalId as a plain string rather than an object.
+func TestExternalId_MarshalJSON_BareString(t *testing.T) {
+	b, err := json.Marshal(ExternalId{Id: "x", Issuer: "y"})
+	assert.NoError(t, err)
+	assert.Equal(t, `"x"`, string(b))
+
+	ub, err := json.Marshal(User{ExternalId: ExternalId{Id: "x"}})
+	assert.NoError(t, err)
+	assert.Contains(t, string(ub), `"externalId":"x"`)
+	assert.False(t, strings.Contains(string(ub), `"externalId":{`))
+
+	gb, err := json.Marshal(Group{ExternalId: ExternalId{Id: "x"}})
+	assert.NoError(t, err)
+	assert.Contains(t, string(gb), `"externalId":"x"`)
+	assert.False(t, strings.Contains(string(gb), `"externalId":{`))
+}
+
+// TestExternalId_MarshalJSON_EmptyOmitted verifies that an empty external id is
+// omitted from the SCIM wire body entirely (matching the previous string
+// field's omitempty behavior) rather than being emitted as "externalId":"".
+func TestExternalId_MarshalJSON_EmptyOmitted(t *testing.T) {
+	ub, err := json.Marshal(User{Username: "test@example.com"})
+	assert.NoError(t, err)
+	assert.NotContains(t, string(ub), `"externalId"`)
+
+	gb, err := json.Marshal(Group{DisplayName: "Test Group"})
+	assert.NoError(t, err)
+	assert.NotContains(t, string(gb), `"externalId"`)
+}
+
+// TestExternalId_UnmarshalJSON_BareString verifies that a bare JSON string is
+// read into the Id field, with Issuer left empty.
+func TestExternalId_UnmarshalJSON_BareString(t *testing.T) {
+	var e ExternalId
+	err := json.Unmarshal([]byte(`"x"`), &e)
+	assert.NoError(t, err)
+	assert.Equal(t, "x", e.Id)
+	assert.Equal(t, "", e.Issuer)
 }

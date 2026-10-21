@@ -71,7 +71,7 @@ However, in the situation where an email address has been re-assigned to a diffe
 > **Region** and **IdentityStoreID** are no longer configurable parameters. Region is extracted programmatically from the **SCIM Endpoint** URL, and IdentityStoreID is resolved automatically via the IAM Identity Center `ListInstances` API. These parameters are still present in `template.yaml` to avoid breaking deployment tooling for anyone passing a parameter file to the CloudFormation Stack. They will be fully removed in v3.x.
 
 > [!CAUTION]
-> When using ssosync with an instance of IAM Identity Center integrated with AWS Control Tower. AWS Control Tower creates a number of groups and users (directly via the Identity Store API), when an external identity provider is configured these users and groups are can not be used to log in. However it is important to remember that because ssosync implemements a uni-directional sync it will make the IAM Identity Store match the subset of your Google Workspaces directory you specify, including removing these groups and users created by AWS Control Tower. If you wish to retain unmatched users/groups, then the `retain-unmatched` option can be enabled, however these users will not be able to authenticate unless a matching user existings in the Google Workspace Directory.
+> When using ssosync with an instance of IAM Identity Center integrated with AWS Control Tower. AWS Control Tower creates a number of groups and users (directly via the Identity Store API), when an external identity provider is configured these users and groups are can not be used to log in. However it is important to remember that because ssosync implemements a uni-directional sync it will make the IAM Identity Store match the subset of your Google Workspaces directory you specify, including removing these groups and users created by AWS Control Tower. If you wish to retain unmatched local users/groups, then the `retain-unmatched` option can be enabled. This will retain 'local' users and groups (those where an ExternalId has not be set), users will be set to suspended, since these users will not be able to authenticate unless a matching user existings in the Google Workspace Directory. If a matching user is created in Google Workspace Directory, then it will be re-activated.
 
 > [!WARNING]
 > There are breaking changes for versions `>= 0.02`
@@ -81,8 +81,11 @@ However, in the situation where an email address has been re-assigned to a diffe
 
 > [!WARNING]
 > `>= 2.0.0` this makes use of the **Identity Store API** which means:
-> * if deploying the lambda from the [AWS Serverless Application Repository](https://console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync) then it needs to be deployed into the [IAM Identity Center delegated administration](https://docs.aws.amazon.com/singlesignon/latest/userguide/delegated-admin.html) account. Technically you could deploy in the management account but we would recommend against this.
-> * if you are running the project as a cli tool, then the environment will need to be using credentials of a user in the [IAM Identity Center delegated administration](https://docs.aws.amazon.com/singlesignon/latest/userguide/delegated-admin.html) account, with appropriate permissions.
+> * it should be run from a linked account, not the Organization management account.
+> * if deploying the lambda from the [AWS Serverless Application Repository](https://console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync), deploy it into a linked account; the function's execution role carries the IAM permissions it needs.
+> * if you are running the project as a cli tool, then the environment needs credentials for a principal in that linked account with the appropriate Identity Store and `sso:ListInstances` permissions.
+>
+> **Note:** guidance before `v2.5.0` required deployment into the [IAM Identity Center delegated administration](https://docs.aws.amazon.com/singlesignon/latest/userguide/delegated-admin.html) account. From `v2.5.0` this is no longer necessary — ssosync works from an ordinary linked account without delegated administration. See the Installation section below.
 
 > [!WARNING]
 > `>= 2.1.0` make use of named IAM resources, so if deploying via CICD or IaC template will require **CAPABILITY_NAMED_IAM** to be specified.
@@ -109,9 +112,11 @@ However, in the situation where an email address has been re-assigned to a diffe
 
 The recommended installation is:
 * [Setup IAM Identity Center](https://docs.aws.amazon.com/singlesignon/latest/userguide/get-started-enable-identity-center.html), in the management account of your organization
-* Created a linked account `Identity` Account from which to manage IAM Identity Center
-* [Delegate administration](https://docs.aws.amazon.com/singlesignon/latest/userguide/delegated-admin.html) to the `Identity` account
-* Deploy the [SSOSync app](https://console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync) from the AWS Serverless Application Repository
+* Create a linked account (for example an `Identity` account) from which to run ssosync
+* Deploy the [SSOSync app](https://console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync) from the AWS Serverless Application Repository into that linked account
+
+> [!NOTE]
+> From `v2.5.0` ssosync no longer requires IAM Identity Center **delegated administration**. It operates through the Identity Store and SCIM APIs using only the IAM permissions granted to its execution role, so the best practice is now to deploy it in an ordinary linked account without delegating IAM Identity Center administration to that account. Deploying into the management account is still not recommended.
 
 You can also:
 You can `go get github.com/awslabs/ssosync` or grab a Release binary from the release page. The binary
@@ -124,21 +129,43 @@ SSO Sync requires configuration from both Google Workspace and AWS sides.
 
 ### Google Workspace Setup
 
-1. **Enable Admin SDK API**
-   - Go to [Google Cloud Console](https://console.developers.google.com/apis)
-   - Select *API & Services* > *Enable APIs and Services*
-   - Search for *Admin SDK* and *Enable* the API
+ssosync reads your directory as a **service account** that impersonates a Google Workspace admin via **domain-wide delegation**. The steps below produce the two things ssosync needs: a `credentials.json` key file and the email address of an admin for the service account to impersonate.
 
-2. **Create Service Account**
-   - Follow this [delegation tutorial](https://developers.google.com/admin-sdk/directory/v1/guides/delegation)
-   - Save the JSON credentials file as `credentials.json`
-   - Grant domain-wide delegation with these scopes:
-     - `https://www.googleapis.com/auth/admin.directory.group.readonly`
-     - `https://www.googleapis.com/auth/admin.directory.group.member.readonly`
-     - `https://www.googleapis.com/auth/admin.directory.user.readonly`
+These steps mirror the [AWS Control Tower workshop](https://catalog.workshops.aws/control-tower/en-US/authentication-authorization/google-workspace/3-provisioning-scim), which you can follow for a fully guided walkthrough.
 
-3. **Specify Admin User**
-   - You'll need the email address of a Google Workspace admin user
+> **Note:** steps 1–4 are performed in the Google Cloud Console and steps 5–6 in the Google Admin console. You need a Google Cloud account that can create projects/service accounts **and** a Google Workspace **super admin** to grant the domain-wide delegation in step 5.
+
+1. **Create (or select) a Google Cloud project**
+   - Go to the [Google Cloud Console](https://console.cloud.google.com/) and create a new project (or select an existing one) to own the service account.
+
+2. **Enable the Admin SDK API**
+   - In the same project, go to *APIs & Services* > *Enabled APIs & services* > *Enable APIs and Services*.
+   - Search for **Admin SDK API** and click **Enable**. The service account cannot read the directory until this API is enabled on the project.
+
+3. **Create a service account and a JSON key**
+   - Go to *APIs & Services* > *Credentials* (or *IAM & Admin* > *Service Accounts*) and click **Create credentials** > **Service account**.
+   - Give it a name (for example `ssosync`) and click **Create and continue**. No project roles are required (the access is granted in Google Workspace, not in Google Cloud), so you can skip the optional role/grant steps and click **Done**.
+   - Open the new service account, go to the **Keys** tab, and choose **Add key** > **Create new key** > **JSON**. A JSON key file downloads automatically.
+   - Rename the downloaded file to **`credentials.json`**. This is the file ssosync uses (`--google-credentials` / `GOOGLE_CREDENTIALS`). Keep it secret; anyone with it can read your directory.
+
+4. **Copy the service account's Client ID**
+   - Still on the service account, expand **Advanced settings** (or the **Details** tab) and copy the numeric **Client ID** (also called the *Unique ID* / OAuth2 client ID). You need it for the next step.
+
+5. **Grant domain-wide delegation in the Admin console**
+   - Sign in to the [Google Admin console](https://admin.google.com/) as a **super admin**.
+   - Go to **Security** > **Access and data control** > **API controls**, then under *Domain wide delegation* select **Manage Domain Wide Delegation**.
+   - Click **Add new** and enter:
+     - **Client ID**: the Client ID you copied in step 4.
+     - **OAuth scopes** (comma-separated, read-only):
+       - `https://www.googleapis.com/auth/admin.directory.group.readonly`
+       - `https://www.googleapis.com/auth/admin.directory.group.member.readonly`
+       - `https://www.googleapis.com/auth/admin.directory.user.readonly`
+   - Click **Authorize**. Only these three read-only scopes are needed; do not grant broader access.
+
+6. **Choose the admin user to impersonate**
+   - ssosync must impersonate an existing **Google Workspace admin** that can read the directory. Note that user's email address — it is the value you pass as `--google-admin` (`GOOGLE_ADMIN`). A super admin always works; a custom admin role with the Users and Groups read privileges is sufficient.
+
+> **Tip:** `credentials.json` holds the service account key (the *who ssosync authenticates as*) and `GOOGLE_ADMIN` is the admin it impersonates (the *who it acts on behalf of*). You need both.
 
 ### AWS Setup
 
@@ -229,7 +256,7 @@ export SSOSYNC_DRY_RUN="true"
 | `--dry-run` / `-n` | `SSOSYNC_DRY_RUN` | Enable dry-run mode | `false` |
 | `--suspended` | `SSOSYNC_SYNC_SUSPENDED` | Include suspended users when syncing | `false` |
 | `--force-externalid-update` | `SSOSYNC_FORCE_EXTERNAL_ID_UPDATE` | When a Google user shares the same primary email as an existing Identity Store user but has a different ID, update the existing user's `ExternalId` in place instead of deleting and recreating it. Enabling this option carrys the risk of silent permission inheritance, is an email address is re-assigned to a different user in the Google Workspace Directory. See [Preserving assignments when migrating IdPs](#preserving-assignments-when-migrating-idps). | `false` |
-| `--retain-unmatched` / `-r` | `SSOSYNC_RETAIN_UNMATCHED` | Retain users and groups that exist in the IAM Identity Store but cannot be matched to the Google Workspace directory, instead of deleting them. See [Retaining unmatched users and groups](#retaining-unmatched-users-and-groups). | `false` |
+| `--retain-unmatched` / `-r` | `SSOSYNC_RETAIN_UNMATCHED` | Retain 'local' users and groups that exist in the IAM Identity Store but cannot be matched to the Google Workspace directory, instead of deleting them. A 'local' user or group is one which has been created in the Identity Store directly and not synced via SCIM, from any external identity provider. See [Retaining unmatched users and groups](#retaining-unmatched-users-and-groups). | `false` |
 | `--debug` / `-d` | `SSOSYNC_DEBUG` | Enable verbose / debug logging (forces log level to `debug`) | `false` |
 | `--log-level` | `SSOSYNC_LOG_LEVEL` | Log level (debug, info, warn, error) | `info` |
 | `--log-format` | `SSOSYNC_LOG_FORMAT` | Log format (text, json) | `text` |
@@ -253,16 +280,83 @@ If an existing Identity Store user matches a Google Workspace user by email addr
 
 ssosync performs a uni-directional sync: by default any user or group that exists in the IAM Identity Store but cannot be matched to the subset of your Google Workspace directory you are syncing is **deleted** so the Identity Store mirrors Google Workspace.
 
-Setting `--retain-unmatched` (or `SSOSYNC_RETAIN_UNMATCHED=true`) blocks those deletions. Users and groups that exist in the Identity Store but have no match in the Google Workspace directory are left in place instead of being removed.
+Setting `--retain-unmatched` (or `SSOSYNC_RETAIN_UNMATCHED=true`) blocks the deletion of 'local' users and groups. Users and groups that exist in the Identity Store (and don't have an `ExternalId` set) and have no match in the Google Workspace directory are left in place instead of being removed. Users are have an `ExternalId` set, are assumed to have been previous synced by ssosync and are there managed as usual. If a local user or group matches with one in Google Workspace directory, then the `ExternalId` is set and it becomes managed by ssosync.
+
+This option does not prevent deletion when a Google Workspace user has the same email address as an Identity Store user but a different, non-empty `ExternalId`. By default, ssosync deletes the old Identity Store user and creates a new one to avoid carrying the old user's permissions forward. The replacement has the same email address but a different Identity Store ID, so compare its group memberships and account assignments after the sync. Use `--force-externalid-update` to update the existing user in place only when preserving those assignments is intended; this carries the permission-inheritance risk described above.
 
 This is useful when the Identity Store also contains identities managed outside of ssosync (for example users and groups created by AWS Control Tower) that you do not want removed on each sync.
 
 > [!CAUTION]
-> Retaining unmatched identities means the Identity Store will no longer be an exact mirror of your Google Workspace directory. Users removed from Google Workspace will not be removed from the Identity Store while this flag is set.
+> If you want to be able to test what changes would be performed by ssosync with a specific configuration against your existing Identity Store, then `--dry-run` is recommended. In this mode ssosync, simulates the changes it would make but doesn't make any changes at all to the identity store. This is highly recommended when making configuration changes.
+
+##### Usecases
+
+###### local user - Matched
+- `ExternalId` unset
+-   primary email address matches
+**Outcome**
+User is updated with their ExternalId (and any other fields that differ) from the Google Workspace Directory. They have been adopted and are managed by ssosync, and will be treated as a **synced user** in the next execution.
+
+###### synced user - unMatched
+- `ExternalId` set but doesn't match
+-  primary email address doesn't match
+**Outcome**
+the user is **deleted**.
+
+###### synced user - miss-Matched
+- `ExternalId` set but doesn't match
+-  primary email address matches
+**Outcome**
+Default is to delete the user and create a new user, this ensures the 'new user' doesn't inherit privileges from the previous user that happen to be assigned the same email address. This behavior can be overridden so the exist user is updated and it retains the privileges, if the `--force-externalid-update` is also set.
+
+###### synced user - Matched
+- `ExternalId` set and matches
+- primary email address is not inspected
+**Outcome**
+User is compared to the matching user in Google, if it differs in anyway (including primary email address) its updated to match.
+
+###### local group - unMatched
+- `ExternalId` unset
+-  `DisplayName` doesn't match
+**Outcome**
+The group is retained . 
+
+###### local group - Matched
+- `ExternalId` unset
+-  `DisplayName` does match
+**Outcome**
+Groups is updated with their ExternalId from the Google Workspace Directory. They have been adopted and are managed by ssosync
+
+###### synced group - unMatched
+- `ExternalId` set but doesn't match
+**Outcome**
+the group is **deleted**.
+
+###### synced group - Matched
+- `ExternalId` set and matches
+-  `DisplayName` is not inspected
+**Outcome**
+Group is compared to the matching group in Google, if it differs in anyway its updated to match.
+
 
 ### Filtering Examples
 
 #### Group Filtering
+
+The `--group-match` value is passed through to the Google Admin SDK `groups.list` query, so it supports the following query fields and operators:
+
+| Field | Prefix (`:`) | Exact (`=`) | Example |
+|-------|:---:|:---:|---------|
+| `name` | ✓ | ✓ | `name:AWS*` or `name=Administrators` |
+| `email` | ✓ | ✓ | `email:aws-*` or `email=aws-admins@company.com` |
+| `memberKey` | — | ✓ | `memberKey=user@company.com` |
+
+- Use `:` for prefix/wildcard matching (e.g. `name:AWS*`)
+- Use `=` for exact matching (e.g. `name=Administrators`)
+- Use `memberKey=<email>` to match every group that a specific user (or group) is a direct member of. This is an exact match only; the value must be the full primary email address of the member and wildcards are not supported. When `memberKey` is used you **must** supply your real Google Workspace customer ID via `--customer-id` (`SSOSYNC_CUSTOMER_ID`); the default `my_customer` placeholder is not accepted for member-key queries.
+- Combine multiple patterns with `,` (each pattern is run as a separate query and the results are merged)
+- Use `*` alone to sync all groups (and, with the `groups` sync method, their member users)
+
 ```bash
 # Sync groups starting with "AWS"
 --group-match "name:AWS*"
@@ -273,9 +367,31 @@ This is useful when the Identity Store also contains identities managed outside 
 # Sync specific group
 --group-match "name=Administrators"
 
+# Sync every group that a specific user belongs to
+--group-match "memberKey=user@company.com"
+
 # Sync all groups
 --group-match "*"
 ```
+
+##### Syncing groups regardless of naming strategy with `memberKey`
+
+Google's directory query syntax only matches group `name` and `email` with prefix/wildcard patterns, so the common prefix/suffix convention (e.g. `name:aws-*`) requires you to name every group you want synced accordingly. If your groups don't follow a shared naming convention, you can use `memberKey` with a dedicated "marker" group instead, so any group can be synced regardless of its name.
+
+1. Create a single marker group in Google Workspace, for example:
+   - **Name**: `Any group with this as a member will be synced to IAM Identity Center`
+   - **Description**: `Any group with this as a member will be synced to IAM Identity Center`
+   - **Email**: `aws-ssosync@your-domain.com`
+2. Add this marker group as a **member** of every group you want ssosync to sync. (Groups can be members of other groups in Google Workspace.)
+3. Set the group match to the marker group's email:
+
+   ```bash
+   --group-match "memberKey=aws-ssosync@your-domain.com"
+   ```
+
+ssosync then selects every group that has the marker group as a member, no matter what those groups are named. To add or remove a group from the sync scope later, just add or remove the marker group from its membership.
+
+> **Note:** `memberKey` queries require your real Google Workspace customer ID. Set `--customer-id` (`SSOSYNC_CUSTOMER_ID`) to your actual customer ID rather than leaving it as the `my_customer` default.
 
 #### User Filtering
 
