@@ -20,6 +20,10 @@ import (
 	"errors"
 	"strings"
 
+	"ssosync/internal/config"
+	"ssosync/internal/constants"
+	"ssosync/internal/interfaces"
+
 	"golang.org/x/oauth2/google"
 	admin "google.golang.org/api/admin/directory/v1"
 	"google.golang.org/api/option"
@@ -273,4 +277,109 @@ func (c *client) getGroups(query string) ([]*admin.Group, error) {
 		return nil, errors.New("google api return 0 groups?")
 	}
 	return g, err
+}
+
+// mapFromGoogleUser builds an interfaces.User from a Google admin.User using the
+// supplied attribute map. It sits ALONGSIDE the existing Google -> interfaces
+// construction (which remains the live path via the aws package constructors):
+// this function is purely additive and is NOT wired into internal/sync.go or any
+// other live sync path. Scope is the groups sync method only.
+//
+// attrMap keys are interfaces.User target field paths; values are admin.User
+// source attribute paths (see config.AttributeMap / config.DefaultUserAttributeMap).
+// With DefaultUserAttributeMap the output matches the current live construction
+// for the covered fields: Username <- primaryEmail, Name.GivenName <-
+// name.givenName, Name.FamilyName <- name.familyName, and Active <- !suspended
+// (the "suspended" source is logically inverted here, in the mapper, not in the
+// map).
+//
+// The zero-width-space (\u200B) -> space normalization applied to GivenName and
+// FamilyName matches getUsers above, so a mapper handed an un-normalized
+// admin.User produces the same values the live path emits after getUsers has
+// normalized it.
+//
+// Schemas is set exactly as the live aws.NewUser/UpdateUser constructors do:
+// []string{constants.SCIMSchemaUser}.
+//
+// Fields the live path also sets but that the default map does NOT cover are
+// intentionally left unset here (DisplayName, Emails, Addresses, ExternalId, ID);
+// a richer attribute map in a later phase may add them.
+//
+// Deferred extension points (documented, NOT implemented this phase):
+//
+//	(a) Custom-schema resolution via admin.User.CustomSchemas
+//	    (map[string]googleapi.RawMessage): a dotted "schema.field" key would be
+//	    split into schema name + field name and the RawMessage decoded.
+//	(b) The multi-valued interface{} sub-objects (Emails, Addresses,
+//	    Organizations, Phones, Relations, ...) need a JSON round-trip through the
+//	    SDK's typed structs to be read.
+//	(c) Custom-schema data is NOT fetched today because client.go never sets
+//	    Projection("full")/Projection("custom") on the Users.List calls, so
+//	    admin.User.CustomSchemas is nil on every fetched user.
+//
+// See /Users/crpates/GitHub/ssosync/.agents/tasks/google-admin-schema-findings.md.
+func mapFromGoogleUser(u *admin.User, attrMap config.AttributeMap) interfaces.User {
+	user := interfaces.User{
+		Schemas: []string{constants.SCIMSchemaUser},
+	}
+
+	for targetField, sourceAttr := range attrMap {
+		switch targetField {
+		case "Name.GivenName":
+			if u.Name != nil {
+				user.Name.GivenName = strings.ReplaceAll(u.Name.GivenName, string('\u200B'), " ")
+			}
+		case "Name.FamilyName":
+			if u.Name != nil {
+				user.Name.FamilyName = strings.ReplaceAll(u.Name.FamilyName, string('\u200B'), " ")
+			}
+		case "Username":
+			user.Username = u.PrimaryEmail
+		case "Active":
+			// Active is the logical inverse of Google's "suspended" flag; the
+			// inversion is applied here, in the mapper, not in the map.
+			user.Active = !u.Suspended
+		}
+		_ = sourceAttr
+	}
+
+	return user
+}
+
+// mapFromGoogleGroup builds an interfaces.Group from a Google admin.Group using
+// the supplied attribute map. Like mapFromGoogleUser it sits ALONGSIDE the live
+// aws.NewGroup/UpdateGroup construction and is NOT wired into internal/sync.go or
+// any live sync path. Scope is the groups sync method only.
+//
+// attrMap keys are interfaces.Group target field paths; values are admin.Group
+// source attribute paths (see config.AttributeMap / config.DefaultGroupAttributeMap).
+// With DefaultGroupAttributeMap, DisplayName is resolved from admin.Group.Name.
+// Note: the live path sets group DisplayName from admin.Group.Email, not Name;
+// this default map's use of Name is a deliberate, documented divergence while the
+// mapper is not yet wired in (see config.DefaultGroupAttributeMap). The same
+// \u200B -> space normalization used for user names is applied here for symmetry.
+//
+// Schemas is set exactly as the live constructors do:
+// []string{constants.SCIMSchemaGroup}. Members, ExternalId and ID are set by the
+// live path but are out of scope for the default group map, so they are left
+// unset here.
+//
+// admin.Group has NO custom-schema field (a Google Directory API limitation), so
+// the group map is limited to the fixed admin.Group fields; there is no
+// custom-schema extension point for groups. See
+// /Users/crpates/GitHub/ssosync/.agents/tasks/google-admin-schema-findings.md.
+func mapFromGoogleGroup(g *admin.Group, attrMap config.AttributeMap) interfaces.Group {
+	group := interfaces.Group{
+		Schemas: []string{constants.SCIMSchemaGroup},
+	}
+
+	for targetField, sourceAttr := range attrMap {
+		switch targetField {
+		case "DisplayName":
+			group.DisplayName = strings.ReplaceAll(g.Name, string('\u200B'), " ")
+		}
+		_ = sourceAttr
+	}
+
+	return group
 }
