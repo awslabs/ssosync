@@ -113,9 +113,12 @@ const (
 // VALUE is the Google SOURCE attribute path (the field mapped FROM on
 // admin.User / admin.Group, e.g. "name.givenName" or "primaryEmail").
 //
-// Only standard Google attributes are supported this phase: custom-schema
-// attributes (admin.User.CustomSchemas) are not resolved yet. See the deferred
-// extension points documented on the mapper functions in internal/google.
+// Standard Google attributes are supported, including multi-valued fields
+// resolved by primary-entry selection (e.g. "organizations[primary].title",
+// "relations[type=manager].value"). Custom-schema attributes
+// (admin.User.CustomSchemas, dotted "schema.field" paths) are NOT resolved yet
+// and remain a future opt-in requiring a Users.List projection change. See the
+// deferred extension point documented on the mapper functions in internal/google.
 type AttributeMap map[string]string
 
 // AttributeMaps pairs the user and group attribute maps that together make up a
@@ -144,19 +147,37 @@ var (
 	// DefaultIncludeGroups is the default set of groups to sync.
 	DefaultIncludeGroups []string = nil
 
-	// DefaultUserAttributeMap reproduces the currently implemented
-	// Google -> interfaces.User field mappings for the groups sync method.
-	// KEY = interfaces.User target field path; VALUE = admin.User source
-	// attribute path.
+	// DefaultUserAttributeMap is the default Google -> interfaces.User field
+	// mapping for the groups sync method. KEY = interfaces.User target field
+	// path; VALUE = admin.User source attribute path.
+	//
+	// It carries the four behaviour-preserving scalars (GivenName, FamilyName,
+	// Username, Active) plus the SAFE SET enrichment (Title and the
+	// Enterprise.Department/Organization/CostCenter fields) sourced from the
+	// user's primary organization. These safe-set fields are both resolvable
+	// from Google and accepted by AWS IAM Identity Center SCIM, so defaulting
+	// them enriches synced users; a user with no organization data keeps them
+	// empty (the resolver is empty-safe and Enterprise stays nil), so steady
+	// state is churn-free (attrmap-design §5, §8).
 	//
 	// Note on "Active": it is the logical INVERSE of Google's "suspended" flag
 	// (Active == !Suspended). The map stores the raw source path "suspended";
 	// the MAPPER applies the inversion, not the map.
 	DefaultUserAttributeMap AttributeMap = AttributeMap{
-		"Name.GivenName":  "name.givenName",
-		"Name.FamilyName": "name.familyName",
-		"Username":        "primaryEmail",
-		"Active":          "suspended",
+		"Name.GivenName":          "name.givenName",
+		"Name.FamilyName":         "name.familyName",
+		"Username":                "primaryEmail",
+		"Active":                  "suspended",
+		"Title":                   "organizations[primary].title",
+		"Enterprise.Department":   "organizations[primary].department",
+		"Enterprise.Organization": "organizations[primary].name",
+		"Enterprise.CostCenter":   "organizations[primary].costCenter",
+		// NOTE: Enterprise.Manager is deliberately NOT defaulted (opt-in only,
+		// see attrmap-design §5.7): Google's relation value is a free-form name,
+		// not a guaranteed AWS-resolvable manager.value reference. The resolver
+		// and validator support "relations[type=manager].value" for tenants that
+		// opt in, but it is left out of the default to avoid stamping a
+		// possibly-garbage manager reference onto every tenant.
 	}
 
 	// DefaultGroupAttributeMap reproduces the Google -> interfaces.Group field

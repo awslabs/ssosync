@@ -33,6 +33,37 @@ func TestDefaultAttributeMap(t *testing.T) {
 	assert.Equal(DefaultGroupAttributeMap, DefaultAttributeMap.Group)
 }
 
+func TestDefaultUserAttributeMap_SafeSetEntries(t *testing.T) {
+	assert := assert.New(t)
+
+	// The default user map is exactly the four behaviour-preserving scalars plus
+	// the four safe-set enrichment fields.
+	assert.Equal(AttributeMap{
+		"Name.GivenName":          "name.givenName",
+		"Name.FamilyName":         "name.familyName",
+		"Username":                "primaryEmail",
+		"Active":                  "suspended",
+		"Title":                   "organizations[primary].title",
+		"Enterprise.Department":   "organizations[primary].department",
+		"Enterprise.Organization": "organizations[primary].name",
+		"Enterprise.CostCenter":   "organizations[primary].costCenter",
+	}, DefaultUserAttributeMap)
+
+	// Opt-in-only targets must NOT be in the default map.
+	_, hasManager := DefaultUserAttributeMap["Enterprise.Manager"]
+	assert.False(hasManager, "Enterprise.Manager must not be defaulted")
+	for _, optIn := range []string{"Enterprise.Division", "Enterprise.EmployeeNumber", "ProfileURL", "Emails", "Addresses", "PhoneNumbers"} {
+		_, has := DefaultUserAttributeMap[optIn]
+		assert.False(has, "%s must not be defaulted", optIn)
+	}
+}
+
+func TestDefaultGroupAttributeMap_Unchanged(t *testing.T) {
+	assert := assert.New(t)
+
+	assert.Equal(AttributeMap{"DisplayName": "name"}, DefaultGroupAttributeMap)
+}
+
 func TestConfigValidate_Success(t *testing.T) {
 	cfg := &Config{
 		GoogleAdmin:     "admin@example.com",

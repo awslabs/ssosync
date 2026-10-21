@@ -407,6 +407,162 @@ func TestGetUserOperations_SynthesizedEmailsAddresses_Equal(t *testing.T) {
 	assert.Equal(t, equals[0].ExternalId.Id, "G1")
 }
 
+// TestGetUserOperations_EnrichmentFromOrganization verifies the Step D default
+// map enrichment: a Google user with a primary organization but an AWS record
+// that does not yet carry Title/Enterprise is classified as Update, and the
+// desired user written to AWS carries the enriched Title and Enterprise.* values.
+func TestGetUserOperations_EnrichmentFromOrganization(t *testing.T) {
+	awsUsers := []*interfaces.User{
+		{
+			ID:          "A1",
+			Username:    "user1@example.com",
+			ExternalId:  interfaces.ExternalId{Id: "G1"},
+			Name:        interfaces.UserName{GivenName: "John", FamilyName: "Doe"},
+			DisplayName: "John Doe",
+			Active:      true,
+			// No Title / Enterprise yet: the record predates the enrichment.
+		},
+	}
+
+	googleUsers := []*admin.User{
+		{
+			Id:           "G1",
+			PrimaryEmail: "user1@example.com",
+			Name:         &admin.UserName{GivenName: "John", FamilyName: "Doe"},
+			Organizations: []admin.UserOrganization{
+				{
+					Title:      "Staff Engineer",
+					Department: "Platform",
+					Name:       "ExampleCorp",
+					CostCenter: "CC-100",
+					Primary:    true,
+				},
+			},
+			Suspended: false,
+		},
+	}
+
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, false, ""), config.DefaultUserAttributeMap)
+
+	assert.Len(t, add, 0)
+	assert.Len(t, delete, 0)
+	assert.Len(t, equals, 0)
+	if assert.Len(t, update, 1) {
+		assert.Equal(t, "Staff Engineer", update[0].Title)
+		if assert.NotNil(t, update[0].Enterprise) {
+			assert.Equal(t, "Platform", update[0].Enterprise.Department)
+			assert.Equal(t, "ExampleCorp", update[0].Enterprise.Organization)
+			assert.Equal(t, "CC-100", update[0].Enterprise.CostCenter)
+		}
+	}
+}
+
+// TestGetUserOperations_EnrichedSteadyState_Equal verifies NFR4 / criterion 6:
+// once the AWS record already carries the enriched Title/Enterprise (plus the
+// synthesized primary work email/address), a user whose Google organization is
+// unchanged compares Equal, so there is no churn.
+func TestGetUserOperations_EnrichedSteadyState_Equal(t *testing.T) {
+	awsUsers := []*interfaces.User{
+		{
+			ID:          "A1",
+			Username:    "user1@example.com",
+			ExternalId:  interfaces.ExternalId{Id: "G1"},
+			Name:        interfaces.UserName{GivenName: "John", FamilyName: "Doe"},
+			DisplayName: "John Doe",
+			Active:      true,
+			Title:       "Staff Engineer",
+			Enterprise: &interfaces.EnterpriseUser{
+				Department:   "Platform",
+				Organization: "ExampleCorp",
+				CostCenter:   "CC-100",
+			},
+			// As ConvertSdkUserObjToNative produces for a managed user.
+			Emails: []interfaces.UserEmail{{
+				Value:   "user1@example.com",
+				Type:    "work",
+				Primary: true,
+			}},
+			Addresses: []interfaces.UserAddress{{Type: "work"}},
+		},
+	}
+
+	googleUsers := []*admin.User{
+		{
+			Id:           "G1",
+			PrimaryEmail: "user1@example.com",
+			Name:         &admin.UserName{GivenName: "John", FamilyName: "Doe"},
+			Organizations: []admin.UserOrganization{
+				{
+					Title:      "Staff Engineer",
+					Department: "Platform",
+					Name:       "ExampleCorp",
+					CostCenter: "CC-100",
+					Primary:    true,
+				},
+			},
+			Suspended: false,
+		},
+	}
+
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, false, ""), config.DefaultUserAttributeMap)
+
+	assert.Len(t, add, 0)
+	assert.Len(t, delete, 0)
+	assert.Len(t, update, 0, "enriched steady-state user must not churn")
+	assert.Len(t, equals, 1)
+	assert.Equal(t, equals[0].ExternalId.Id, "G1")
+}
+
+// TestGetUserOperations_EnrichedTitleChanged verifies a changed Google org title
+// trips Update and the desired user carries the new title.
+func TestGetUserOperations_EnrichedTitleChanged(t *testing.T) {
+	awsUsers := []*interfaces.User{
+		{
+			ID:          "A1",
+			Username:    "user1@example.com",
+			ExternalId:  interfaces.ExternalId{Id: "G1"},
+			Name:        interfaces.UserName{GivenName: "John", FamilyName: "Doe"},
+			DisplayName: "John Doe",
+			Active:      true,
+			Title:       "Engineer",
+			Enterprise: &interfaces.EnterpriseUser{
+				Department:   "Platform",
+				Organization: "ExampleCorp",
+				CostCenter:   "CC-100",
+			},
+			Emails:    []interfaces.UserEmail{{Value: "user1@example.com", Type: "work", Primary: true}},
+			Addresses: []interfaces.UserAddress{{Type: "work"}},
+		},
+	}
+
+	googleUsers := []*admin.User{
+		{
+			Id:           "G1",
+			PrimaryEmail: "user1@example.com",
+			Name:         &admin.UserName{GivenName: "John", FamilyName: "Doe"},
+			Organizations: []admin.UserOrganization{
+				{
+					Title:      "Senior Engineer",
+					Department: "Platform",
+					Name:       "ExampleCorp",
+					CostCenter: "CC-100",
+					Primary:    true,
+				},
+			},
+			Suspended: false,
+		},
+	}
+
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, false, ""), config.DefaultUserAttributeMap)
+
+	assert.Len(t, add, 0)
+	assert.Len(t, delete, 0)
+	assert.Len(t, equals, 0)
+	if assert.Len(t, update, 1) {
+		assert.Equal(t, "Senior Engineer", update[0].Title)
+	}
+}
+
 func TestGetUserOperations_Add(t *testing.T) {
 	awsUsers := []*interfaces.User{}
 
