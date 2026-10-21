@@ -17,6 +17,18 @@ import (
 	admin "google.golang.org/api/admin/directory/v1"
 )
 
+// opsConfig builds a minimal *config.Config carrying only the fields that
+// getUserOperations/getGroupOperations read, so existing operation tests can
+// pass the same ForceExternalIdUpdate/RetainUnmatched/IssuerArn values they
+// previously passed positionally.
+func opsConfig(forceExternalIdUpdate, retainUnmatched bool, issuerArn string) *config.Config {
+	return &config.Config{
+		ForceExternalIdUpdate: forceExternalIdUpdate,
+		RetainUnmatched:       retainUnmatched,
+		IssuerArn:             issuerArn,
+	}
+}
+
 func TestNew(t *testing.T) {
 	cfg := &config.Config{}
 	awsClient := mocks.NewMockAwsClient(t)
@@ -99,7 +111,7 @@ func TestGetGroupOperations_NoChange(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, false, false, "")
+	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, opsConfig(false, false, ""), config.DefaultGroupAttributeMap)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
@@ -120,7 +132,7 @@ func TestGetGroupOperations_Add(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, false, false, "")
+	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, opsConfig(false, false, ""), config.DefaultGroupAttributeMap)
 
 	assert.Len(t, add, 1)
 	assert.Len(t, delete, 0)
@@ -141,7 +153,7 @@ func TestGetGroupOperations_Delete(t *testing.T) {
 
 	googleGroups := []*admin.Group{}
 
-	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, false, false, "")
+	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, opsConfig(false, false, ""), config.DefaultGroupAttributeMap)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 1)
@@ -162,7 +174,7 @@ func TestGetGroupOperations_SyncedGroupMatched_Delete(t *testing.T) {
 
 	googleGroups := []*admin.Group{}
 
-	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, false, true, "")
+	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, opsConfig(false, true, ""), config.DefaultGroupAttributeMap)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 1)
@@ -182,7 +194,7 @@ func TestGetGroupOperations_RetainUnmatched(t *testing.T) {
 
 	googleGroups := []*admin.Group{}
 
-	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, false, true, "")
+	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, opsConfig(false, true, ""), config.DefaultGroupAttributeMap)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
@@ -207,7 +219,7 @@ func TestGetGroupOperations_LocalGroupMatch(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, false, false, "")
+	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, opsConfig(false, false, ""), config.DefaultGroupAttributeMap)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
@@ -234,7 +246,7 @@ func TestGetGroupOperations_SyncedGroupMatched_Update(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, false, false, "")
+	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, opsConfig(false, false, ""), config.DefaultGroupAttributeMap)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
@@ -261,7 +273,7 @@ func TestGetGroupOperations_ExternalIdUpdate_Update(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, true, false, "")
+	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, opsConfig(true, false, ""), config.DefaultGroupAttributeMap)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
@@ -288,7 +300,7 @@ func TestGetGroupOperations_ExternalIdUpdate_DeleteCreate(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, false, false, "")
+	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, opsConfig(false, false, ""), config.DefaultGroupAttributeMap)
 
 	assert.Len(t, add, 1)
 	assert.Len(t, delete, 1)
@@ -326,7 +338,7 @@ func TestGetUserOperations_NoChange(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, false, false, "")
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, false, ""), config.DefaultUserAttributeMap)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
@@ -353,7 +365,7 @@ func TestGetUserOperations_Add(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, false, false, "")
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, false, ""), config.DefaultUserAttributeMap)
 
 	assert.Len(t, add, 1)
 	assert.Len(t, delete, 0)
@@ -391,7 +403,7 @@ func TestGetUserOperations_UpdateAttribute(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, false, false, "")
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, false, ""), config.DefaultUserAttributeMap)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
@@ -428,7 +440,7 @@ func TestGetUserOperations_UpdateMissingExternalId(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, false, false, "")
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, false, ""), config.DefaultUserAttributeMap)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
@@ -466,7 +478,7 @@ func TestGetUserOperations_UpdatePrimaryEmail(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, false, false, "")
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, false, ""), config.DefaultUserAttributeMap)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
@@ -504,7 +516,7 @@ func TestGetUserOperations_UpdateExternalId_DeleteRecreate(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, false, false, "")
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, false, ""), config.DefaultUserAttributeMap)
 
 	assert.Len(t, add, 1)
 	assert.Len(t, delete, 1)
@@ -546,7 +558,7 @@ func TestGetUserOperations_UpdateExternalId_ForceUpdate(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, true, false, "")
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(true, false, ""), config.DefaultUserAttributeMap)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
@@ -573,7 +585,7 @@ func TestGetUserOperations_DeleteNoExternalId(t *testing.T) {
 
 	googleUsers := []*admin.User{}
 
-	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, false, false, "")
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, false, ""), config.DefaultUserAttributeMap)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 1)
@@ -600,7 +612,7 @@ func TestGetUserOperations_DeleteExternalId(t *testing.T) {
 
 	googleUsers := []*admin.User{}
 
-	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, false, false, "")
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, false, ""), config.DefaultUserAttributeMap)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 1)
@@ -627,7 +639,7 @@ func TestGetUserOperations_RetainUnmatched_LocalUserUnmatched(t *testing.T) {
 
 	googleUsers := []*admin.User{}
 
-	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, false, true, "")
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, true, ""), config.DefaultUserAttributeMap)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
@@ -664,7 +676,7 @@ func TestGetUserOperations_RetainUnmatched_LocalUserMatched(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, false, true, "")
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, true, ""), config.DefaultUserAttributeMap)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
@@ -692,7 +704,7 @@ func TestGetUserOperations_RetainUnmatched_SyncedUserUnmatched(t *testing.T) {
 
 	googleUsers := []*admin.User{}
 
-	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, false, true, "")
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, true, ""), config.DefaultUserAttributeMap)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 1)
@@ -730,7 +742,7 @@ func TestGetUserOperations_RetainUnmatched_SyncedUserMismatched(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, false, true, "")
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, true, ""), config.DefaultUserAttributeMap)
 
 	assert.Len(t, add, 1)
 	assert.Len(t, delete, 1)
@@ -772,7 +784,7 @@ func TestGetUserOperations_RetainUnmatched_SyncedUserMatched(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, false, true, "")
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, true, ""), config.DefaultUserAttributeMap)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
@@ -1154,7 +1166,7 @@ func TestGetGroupOperations_RetainUnmatched_LocalGroupMatched(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, false, true, "")
+	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, opsConfig(false, true, ""), config.DefaultGroupAttributeMap)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
@@ -1174,7 +1186,7 @@ func TestGetGroupOperations_RetainUnmatched_LocalGroupUnmatched(t *testing.T) {
 
 	googleGroups := []*admin.Group{}
 
-	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, false, true, "")
+	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, opsConfig(false, true, ""), config.DefaultGroupAttributeMap)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
@@ -1194,7 +1206,7 @@ func TestGetGroupOperations_RetainUnmatched_SyncedGroupUnMatched(t *testing.T) {
 
 	googleGroups := []*admin.Group{}
 
-	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, false, true, "")
+	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, opsConfig(false, true, ""), config.DefaultGroupAttributeMap)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 1)
@@ -1221,7 +1233,7 @@ func TestGetGroupOperations_RetainUnmatched_SyncedGroupMismatched(t *testing.T) 
 		},
 	}
 
-	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, false, true, "")
+	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, opsConfig(false, true, ""), config.DefaultGroupAttributeMap)
 
 	assert.Len(t, add, 1)
 	assert.Len(t, delete, 1)
@@ -1250,7 +1262,7 @@ func TestGetGroupOperations_RetainUnmatched_SyncedGroupMatched(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, false, true, "")
+	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, opsConfig(false, true, ""), config.DefaultGroupAttributeMap)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
@@ -1522,7 +1534,7 @@ func TestGetUserOperations_SuspendedStateChange(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, false, false, "")
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, false, ""), config.DefaultUserAttributeMap)
 
 	// Should update user1 (suspended state changed)
 	assert.Len(t, update, 1)
@@ -2240,7 +2252,7 @@ func TestGetUserOperations_ForeignIssuer_UnmatchedRetain(t *testing.T) {
 
 	googleUsers := []*admin.User{}
 
-	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, false, true, issuerArn)
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, true, issuerArn), config.DefaultUserAttributeMap)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
@@ -2271,7 +2283,7 @@ func TestGetUserOperations_ForeignIssuer_UnmatchedDelete(t *testing.T) {
 
 	googleUsers := []*admin.User{}
 
-	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, false, false, issuerArn)
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, false, issuerArn), config.DefaultUserAttributeMap)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 1)
@@ -2312,7 +2324,7 @@ func TestGetUserOperations_ForeignIssuer_MatchedAdoptForeign(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, false, false, issuerArn)
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, false, issuerArn), config.DefaultUserAttributeMap)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
@@ -2354,7 +2366,7 @@ func TestGetUserOperations_ManagedIssuer_Equals(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, false, false, issuerArn)
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, false, issuerArn), config.DefaultUserAttributeMap)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
@@ -2380,7 +2392,7 @@ func TestGetGroupOperations_ForeignIssuer_UnmatchedRetain(t *testing.T) {
 
 	googleGroups := []*admin.Group{}
 
-	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, false, true, issuerArn)
+	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, opsConfig(false, true, issuerArn), config.DefaultGroupAttributeMap)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
@@ -2406,7 +2418,7 @@ func TestGetGroupOperations_ForeignIssuer_UnmatchedDelete(t *testing.T) {
 
 	googleGroups := []*admin.Group{}
 
-	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, false, false, issuerArn)
+	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, opsConfig(false, false, issuerArn), config.DefaultGroupAttributeMap)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 1)
@@ -2438,7 +2450,7 @@ func TestGetGroupOperations_ForeignIssuer_MatchedAdoptForeign(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, false, false, issuerArn)
+	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, opsConfig(false, false, issuerArn), config.DefaultGroupAttributeMap)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
@@ -2471,11 +2483,76 @@ func TestGetGroupOperations_ManagedIssuer_Equals(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, false, false, issuerArn)
+	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, opsConfig(false, false, issuerArn), config.DefaultGroupAttributeMap)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
 	assert.Len(t, update, 0)
 	assert.Len(t, equals, 1)
 	assert.Equal(t, "G8", equals[0].ExternalId.Id)
+}
+
+// TestGetUserOperations_CustomAttrMap_ChangesMatching proves that the discrete
+// attrMap parameter is actually used end-to-end: remapping Username away from
+// primaryEmail to name.givenName changes which AWS user the Google user matches
+// on the Username-fallback path. The AWS user has no ExternalId, so matching can
+// only happen via Username.
+func TestGetUserOperations_CustomAttrMap_ChangesMatching(t *testing.T) {
+	// AWS user whose Username equals the Google user's GivenName (lowercased),
+	// but NOT the Google user's primaryEmail.
+	awsUsers := []*interfaces.User{
+		{
+			ID:       "A99",
+			Username: "bob",
+			Name: interfaces.UserName{
+				GivenName:  "Bob",
+				FamilyName: "Smith",
+			},
+			Active: true,
+		},
+	}
+
+	googleUsers := []*admin.User{
+		{
+			Id:           "G99",
+			PrimaryEmail: "bob.smith@example.com",
+			Name: &admin.UserName{
+				GivenName:  "Bob",
+				FamilyName: "Smith",
+			},
+			Suspended: false,
+		},
+	}
+
+	// Custom map: Username is sourced from name.givenName instead of primaryEmail.
+	customMap := config.AttributeMap{
+		"Name.GivenName":  "name.givenName",
+		"Name.FamilyName": "name.familyName",
+		"Username":        "name.givenName",
+		"Active":          "suspended",
+	}
+
+	// With the custom map the mapped Username == "Bob", which matches the AWS
+	// user "bob" on the Username-fallback path: the local user is adopted.
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, false, ""), customMap)
+
+	assert.Len(t, add, 0)
+	assert.Len(t, delete, 0)
+	assert.Len(t, update, 1)
+	assert.Len(t, equals, 0)
+	assert.Equal(t, "G99", update[0].ExternalId.Id)
+	assert.Equal(t, "Bob", update[0].Username)
+
+	// Contrast: with the DEFAULT map the mapped Username == primaryEmail
+	// ("bob.smith@example.com"), which does NOT match the AWS user "bob", so the
+	// Google user is created and the unmatched local AWS user is deleted.
+	add, delete, update, equals = getUserOperations(awsUsers, googleUsers, opsConfig(false, false, ""), config.DefaultUserAttributeMap)
+
+	assert.Len(t, add, 1)
+	assert.Len(t, delete, 1)
+	assert.Len(t, update, 0)
+	assert.Len(t, equals, 0)
+	assert.Equal(t, "G99", add[0].ExternalId.Id)
+	assert.Equal(t, "bob.smith@example.com", add[0].Username)
+	assert.Equal(t, "A99", delete[0].ID)
 }
