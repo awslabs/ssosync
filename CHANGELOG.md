@@ -1,3 +1,12 @@
+## v2.9.3 - 2026-10-21
+
+### Changelog
+
+* a65b6fb7f26767dc7d7700bc2886de1d937e123b 358 where a user externalid does not match the user in google workspaces improve the behavior (#377)
+* ee8fa280ef03cc51ee428f2c81862b702d72271c Update CHANGELOG and Quick Start templates (#380)
+* 74b3d653b6559e44c1a144eee7c51fc55c5df4d9 Update release.yml
+* 3088682d37b0f7e662108c16af802fefe6992867 refactor: rename sync entrypoints to clarify modern vs legacy (#381)
+
 ## v2.9.2 - 2026-10-19
 
 ### Changelog
