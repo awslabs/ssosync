@@ -27,6 +27,7 @@ Metadata:
           - PrecacheOrgUnits
           - ExternalIdChange
           - RetainUnmatched
+          - AttributeMap
       - Label:
           default: "Lambda Configuration"
         Parameters:
@@ -325,6 +326,12 @@ Parameters:
       - groups
       - users_groups
 
+  AttributeMap:
+    Type: String
+    Description: |
+      [optional] Attribute map controlling how Google user attributes map onto IAM Identity Center (SCIM) fields (groups sync method only). Provide inline attribute-map JSON, the Arn of a Secrets Manager secret, or the Arn of an SSM Parameter Store entry that contains it. Leave empty to use the built-in default mapping.
+    Default: ""
+
 Conditions:
   SetFunctionName: !Not 
     - !Equals [!Ref FunctionName, "" ]
@@ -356,6 +363,8 @@ Conditions:
   DisablePrecaching: !Equals [!Ref PrecacheOrgUnits, ""]
   SetForceExternalIdUpdate: !Equals [!Ref ExternalIdChange, "update"]
   SetRetainUnmatched: !Equals [!Ref RetainUnmatched, "retain"]
+  SetAttributeMap: !Not
+    - !Equals [!Ref AttributeMap, ""]
   OnSchedule: !And
     - !Condition CreateFunction
     - !Not
@@ -583,6 +592,7 @@ Resources:
           PRECACHE_ORG_UNITS: !If [DisablePrecaching, !Ref AWS::NoValue, !Ref PrecacheOrgUnits]
           FORCE_EXTERNAL_ID_UPDATE: !If [SetForceExternalIdUpdate, 'True', !Ref AWS::NoValue]
           RETAIN_UNMATCHED: !If [SetRetainUnmatched, 'True', !Ref AWS::NoValue]
+          ATTRIBUTE_MAP: !If [SetAttributeMap, !Ref AttributeMap, !Ref AWS::NoValue]
 
   PermissionForEventsToInvokeLambda:
     Type: AWS::Lambda::Permission

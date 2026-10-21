@@ -242,6 +242,7 @@ export SSOSYNC_DRY_RUN="true"
 |------|---------------------|-------------|---------|
 | `--google-admin` / `-u` | `SSOSYNC_GOOGLE_ADMIN` | Google Workspace admin email | Required |
 | `--google-credentials` / `-c` | `SSOSYNC_GOOGLE_CREDENTIALS` | Path to Google credentials JSON | `credentials.json` |
+| `--attribute-map-file` | `SSOSYNC_ATTRIBUTE_MAP_FILE` | Path to a JSON file containing the attribute map (`groups` sync method only); when unset the built-in default mapping is used. See [Attribute mapping](#attribute-mapping). | `""` |
 | `--customer-id` | `SSOSYNC_CUSTOMER_ID` | Google Workspace customer ID | `my_customer` |
 | `--endpoint` / `-e` | `SSOSYNC_SCIM_ENDPOINT` | AWS SCIM endpoint URL | Required |
 | `--access-token` / `-t` | `SSOSYNC_SCIM_ACCESS_TOKEN` | AWS SCIM access token | Required |
@@ -440,6 +441,109 @@ For complete query syntax, see:
 - [Google Groups Search](https://developers.google.com/admin-sdk/directory/v1/guides/search-groups)
 - [Google Users Search](https://developers.google.com/admin-sdk/directory/v1/guides/search-users)
 
+## Attribute mapping
+
+The attribute map controls how Google Workspace user attributes are mapped onto the AWS IAM Identity Center (SCIM) user fields. It applies to the `groups` sync method — the modern, default method (internally `Sync`). The legacy `users_groups` path is unaffected.
+
+Groups map `DisplayName` from the Google group name only. AWS SCIM accepts only `externalId`, `displayName` and `members` for groups, so there is nothing else to map; a group's description is **not** SCIM-settable.
+
+When no map is supplied, ssosync uses a built-in default. You can override it with your own JSON, either per-field (any block you omit keeps its default) or wholesale.
+
+### JSON syntax
+
+The attribute map is a JSON object with two optional blocks, `user` and `group`. Within each block, the **key** is the SCIM / interface target field path and the **value** is the Google source attribute path:
+
+```json
+{
+  "user":  { "<SCIM target field>": "<Google source attribute>", ... },
+  "group": { "<SCIM target field>": "<Google source attribute>", ... }
+}
+```
+
+A block that is omitted falls back to its built-in default. A block that is present **replaces** that block's mapping entirely (it is not merged into the default). The map is validated when it is loaded: any unsupported target field or source attribute, or any empty key/value, fails the load with a message listing the supported values.
+
+### Default map
+
+The following JSON is exactly the built-in default. Copying it verbatim changes nothing — it reproduces the default behaviour — so it is a safe starting point to copy and then customise:
+
+```json
+{
+  "user": {
+    "Name.GivenName": "name.givenName",
+    "Name.FamilyName": "name.familyName",
+    "Username": "primaryEmail",
+    "Active": "suspended",
+    "Title": "organizations[primary].title",
+    "Enterprise.Department": "organizations[primary].department",
+    "Enterprise.Organization": "organizations[primary].name",
+    "Enterprise.CostCenter": "organizations[primary].costCenter"
+  },
+  "group": {
+    "DisplayName": "name"
+  }
+}
+```
+
+Notes on the defaults:
+
+- `Active` is the logical inverse of Google's `suspended` flag (`Active == !suspended`). The map stores the raw source `suspended`; ssosync applies the inversion.
+- `DisplayName` for users is always derived as `"GivenName FamilyName"` after the name fields are resolved; it is not a configurable map entry.
+- Group `DisplayName` maps from the Google group name (`admin.Group.Name`).
+
+### Supported fields
+
+The validator's allow-lists are the single source of truth for what is valid. Target fields and source attributes are split into those included in the default map (**defaulted**) and those supported but left out of the default (**opt-in**).
+
+**User target fields**
+
+| Target field | Default source | Status |
+|---|---|---|
+| `Name.GivenName` | `name.givenName` | defaulted |
+| `Name.FamilyName` | `name.familyName` | defaulted |
+| `Username` | `primaryEmail` | defaulted |
+| `Active` | `suspended` (inverted) | defaulted |
+| `Title` | `organizations[primary].title` | defaulted |
+| `Enterprise.Department` | `organizations[primary].department` | defaulted |
+| `Enterprise.Organization` | `organizations[primary].name` | defaulted |
+| `Enterprise.CostCenter` | `organizations[primary].costCenter` | defaulted |
+| `Enterprise.Manager` | `relations[type=manager].value` | opt-in |
+| `Enterprise.Division` | `organizations[primary].domain` | opt-in |
+| `Enterprise.EmployeeNumber` | (no clean scalar source) | opt-in |
+| `ProfileURL` | `websites[primary].value` | opt-in |
+| `Emails` | `emails[primary].address` | opt-in |
+| `Addresses` | `addresses[primary].formatted` | opt-in |
+| `PhoneNumbers` | `phones[primary].value` | opt-in |
+
+**Supported Google source attributes**
+
+- Defaulted: `name.givenName`, `name.familyName`, `primaryEmail`, `suspended`, `organizations[primary].title`, `organizations[primary].department`, `organizations[primary].name`, `organizations[primary].costCenter`.
+- Opt-in: `relations[type=manager].value`, `organizations[primary].domain`, `websites[primary].value`, `emails[primary].address`, `addresses[primary].formatted`, `phones[primary].value`.
+
+**Group target fields / sources:** `DisplayName` ← `name` (the only supported group mapping).
+
+`Enterprise.Manager` yields the manager's **email** as a proxy key — it is sourced from Google's relation value, not a SCIM user-id reference — so whether AWS accepts it depends on your deployment (your directory must populate the manager relation with a value AWS can resolve). It is left out of the default for that reason.
+
+### Selection rule for multi-valued Google fields
+
+Several Google fields are multi-valued (`organizations`, `relations`, `phones`, `addresses`, `emails`, `websites`). The source path selects a single entry deterministically:
+
+- A **type-qualified** path such as `relations[type=manager].value` selects the entry whose type matches (case-insensitive); if no entry matches, nothing is selected.
+- An **unqualified** `[primary]` path selects the entry marked primary; if no entry is marked primary, nothing is selected.
+
+There is no first-entry or index fallback, so the result is stable from one run to the next (no run-to-run churn). A consequence: a user who has organization data but **no primary organization** gets no `Title`/`Department`/`Organization`/`CostCenter` — and, per the next section, any such field already set on the AWS user is then cleared.
+
+### Important: clear-to-consistent behaviour
+
+The sync makes the AWS user **consistent** with the mapped Google user. Any supported SCIM field that the map does **not** populate is **cleared** on the AWS user.
+
+> [!CAUTION]
+> Enabling richer mapping — or even the defaults, for users who lack a primary organization — can clear values that already exist on an AWS user. Before changing the attribute map (or adopting the defaults) against an existing Identity Store, run ssosync with `--dry-run` to see exactly what would change. See the dry-run note under [Retaining unmatched users and groups](#retaining-unmatched-users-and-groups).
+
+### Supplying the map
+
+- **CLI:** `--attribute-map-file <path>` points to a JSON file (mirrors `--google-credentials`). When unset, the built-in defaults are used.
+- **Lambda:** the `ATTRIBUTE_MAP` environment variable. Like `GOOGLE_CREDENTIALS`, it accepts a Secrets Manager secret ARN, an SSM Parameter Store ARN, or the inline attribute-map JSON. When unset, the built-in defaults are used.
+
 ## 🔧 Development
 
 ### Prerequisites
@@ -548,6 +652,11 @@ GOOGLE_CREDENTIALS=<secret-arn or ssm-parameter-arn>
 SCIM_ENDPOINT=<secret-arn or ssm-parameter-arn>
 SCIM_ACCESS_TOKEN=<secret-arn or ssm-parameter-arn>
 CUSTOMER_ID=<secret-arn, ssm-parameter-arn, or plain value>
+
+# Optional attribute map (groups sync method only). Accepts a Secrets Manager ARN,
+# an SSM Parameter Store ARN, or inline attribute-map JSON. Unset => built-in defaults.
+# See the Attribute mapping section.
+ATTRIBUTE_MAP=<secret-arn, ssm-parameter-arn, or inline JSON>
 
 # Optional environment variables
 LOG_LEVEL=info
