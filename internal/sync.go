@@ -40,9 +40,9 @@ import (
 
 // SyncGSuite is the interface for synchronizing users/groups
 type SyncGSuite interface {
-	SyncUsers(string) error
-	SyncGroups(string) error
-	SyncGroupsUsers(string, string) error
+	LegacySyncUsers(string) error
+	LegacySyncGroups(string) error
+	Sync(string, string) error
 }
 
 // SyncGSuite is an object type that will synchronize real users and groups
@@ -190,7 +190,7 @@ func (s *syncGSuite) outputCacheMetrics() {
 	log.WithFields(log.Fields{"Cache Stats": s.cacheMetrics}).Info("Caching Performance, orgPaths with a high Miss rate compared with the TotalUsers consider precaching")
 }
 
-// SyncUsers will Sync Google Users to AWS SSO SCIM
+// LegacySyncUsers will Sync Google Users to AWS SSO SCIM
 // References:
 // * https://developers.google.com/admin-sdk/directory/v1/guides/search-users
 // query possible values:
@@ -202,7 +202,7 @@ func (s *syncGSuite) outputCacheMetrics() {
 //	manager='janesmith@example.com'
 //	orgName=Engineering orgTitle:Manager
 //	EmploymentData.projects:'GeneGnomes'
-func (s *syncGSuite) SyncUsers(query string) error {
+func (s *syncGSuite) LegacySyncUsers(query string) error {
 	log.Debug("get deleted users")
 	deletedUsers, err := s.google.GetDeletedUsers()
 	if err != nil {
@@ -311,7 +311,7 @@ func (s *syncGSuite) SyncUsers(query string) error {
 		awsUsersByUsername[awsUser.Username] = awsUser
 	}
 
-	// setUser upserts the synced user into s.users so SyncGroups can use it
+	// setUser upserts the synced user into s.users so LegacySyncGroups can use it
 	// for membership sync. It re-fetches by email to obtain the SCIM ID.
 	setUser := func(username string) error {
 		uu, err := s.aws.FindUserByEmail(username)
@@ -412,7 +412,7 @@ func (s *syncGSuite) SyncUsers(query string) error {
 	return nil
 }
 
-// SyncGroups will sync groups from Google -> AWS SSO
+// LegacySyncGroups will sync groups from Google -> AWS SSO
 // References:
 // * https://developers.google.com/admin-sdk/directory/v1/guides/search-groups
 // query possible values:
@@ -424,7 +424,7 @@ func (s *syncGSuite) SyncUsers(query string) error {
 //	name:contact* email:contact*
 //	name:Admin* email:aws-*
 //	email:aws-*
-func (s *syncGSuite) SyncGroups(query string) error {
+func (s *syncGSuite) LegacySyncGroups(query string) error {
 	log.WithField("query", query).Debug("get google groups")
 	googleGroups, err := s.google.GetGroups(query)
 	if err != nil {
@@ -585,7 +585,7 @@ func (s *syncGSuite) SyncGroups(query string) error {
 	return nil
 }
 
-// SyncGroupsUsers will sync groups and its members from Google -> AWS SSO SCIM
+// Sync will sync groups and its members from Google -> AWS SSO SCIM
 // allowing filter groups base on google api filter query parameter
 // References:
 // * https://developers.google.com/admin-sdk/directory/v1/guides/search-groups
@@ -606,7 +606,7 @@ func (s *syncGSuite) SyncGroups(query string) error {
 //  4. add groups in aws and add its members, these were added in google
 //  5. validate equals aws an google groups members
 //  6. delete groups in aws, these were deleted in google
-func (s *syncGSuite) SyncGroupsUsers(queryGroups string, queryUsers string) error {
+func (s *syncGSuite) Sync(queryGroups string, queryUsers string) error {
 
 	log.WithField("queryGroup", queryGroups).Info("get google groups")
 	log.WithField("queryUsers", queryUsers).Info("get google users")
@@ -1653,20 +1653,20 @@ func DoSync(ctx context.Context, cfg *config.Config) error {
 
 	log.WithField("sync_method", cfg.SyncMethod).Info("syncing")
 	if cfg.SyncMethod == config.DefaultSyncMethod {
-		err = c.SyncGroupsUsers(cfg.GroupMatch, cfg.UserMatch)
+		err = c.Sync(cfg.GroupMatch, cfg.UserMatch)
 		if err != nil {
 			return err
 		}
 	} else {
 		if cfg.UserMatch != "" {
-			err = c.SyncUsers(cfg.UserMatch)
+			err = c.LegacySyncUsers(cfg.UserMatch)
 			if err != nil {
 				return err
 			}
 		}
 
 		if cfg.GroupMatch != "" {
-			err = c.SyncGroups(cfg.GroupMatch)
+			err = c.LegacySyncGroups(cfg.GroupMatch)
 			if err != nil {
 				return err
 			}
