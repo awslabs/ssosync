@@ -19,23 +19,38 @@ import (
 	"ssosync/internal/interfaces"
 )
 
-// NewGroup creates an object representing a group with the given name
-func NewGroup(groupName string, externalId string) *Group {
+// buildGroup builds a SCIM-ready *Group from an already-mapped
+// *interfaces.Group. The supported SCIM group attribute set is DisplayName
+// only (ExternalId and Members are correlation identity / membership). Members
+// is normalised to a non-nil empty slice when the input carries none, matching
+// the previous constructor behaviour. The ID is handled by the callers
+// (NewGroup leaves it empty, UpdateGroup stamps it from the input).
+func buildGroup(g *interfaces.Group) *Group {
+	members := g.Members
+	if members == nil {
+		members = []string{} // Initialize as empty slice, not nil
+	}
+
 	return &Group{
 		Schemas:     []string{constants.SCIMSchemaGroup},
-		DisplayName: groupName,
-		ExternalId:  interfaces.ExternalId{Id: externalId},
-		Members:     []string{}, // Initialize as empty slice, not nil
+		DisplayName: g.DisplayName,
+		ExternalId:  g.ExternalId,
+		Members:     members,
 	}
 }
 
-// NewGroup creates an object representing a group with the given name
-func UpdateGroup(id string, groupName string, externalId string) *Group {
-	return &Group{
-		Schemas:     []string{constants.SCIMSchemaGroup},
-		ID:          id,
-		DisplayName: groupName,
-		ExternalId:  interfaces.ExternalId{Id: externalId},
-		Members:     []string{}, // Initialize as empty slice, not nil
-	}
+// NewGroup builds a SCIM-ready create payload from an already-mapped
+// *interfaces.Group. The returned object has an empty ID.
+func NewGroup(g *interfaces.Group) *Group {
+	return buildGroup(g)
+}
+
+// UpdateGroup builds a SCIM-ready update payload from an already-mapped
+// *interfaces.Group. The AWS record ID is taken from g.ID and is OPTIONAL: an
+// empty g.ID yields an object with an empty ID and the constructor still
+// functions.
+func UpdateGroup(g *interfaces.Group) *Group {
+	group := buildGroup(g)
+	group.ID = g.ID
+	return group
 }

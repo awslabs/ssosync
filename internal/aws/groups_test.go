@@ -18,13 +18,14 @@ import (
 	"testing"
 
 	"ssosync/internal/constants"
+	"ssosync/internal/interfaces"
 
 	"github.com/stretchr/testify/assert"
 )
 
 func TestNewGroup(t *testing.T) {
 	displayName := "Test Group"
-	group := NewGroup(displayName, "google_id")
+	group := NewGroup(&interfaces.Group{DisplayName: displayName, ExternalId: interfaces.ExternalId{Id: "google_id"}})
 
 	assert.NotNil(t, group)
 	assert.Equal(t, displayName, group.DisplayName)
@@ -35,7 +36,7 @@ func TestNewGroup(t *testing.T) {
 }
 
 func TestNewGroupWithEmptyName(t *testing.T) {
-	group := NewGroup("", "google_id")
+	group := NewGroup(&interfaces.Group{ExternalId: interfaces.ExternalId{Id: "google_id"}})
 
 	assert.NotNil(t, group)
 	assert.Equal(t, "", group.DisplayName)
@@ -43,7 +44,7 @@ func TestNewGroupWithEmptyName(t *testing.T) {
 }
 
 func TestNewGroupSchemas(t *testing.T) {
-	group := NewGroup("Test Group", "google_id")
+	group := NewGroup(&interfaces.Group{DisplayName: "Test Group", ExternalId: interfaces.ExternalId{Id: "google_id"}})
 
 	assert.Len(t, group.Schemas, 1)
 	assert.Equal(t, constants.SCIMSchemaGroup, group.Schemas[0])
@@ -51,9 +52,31 @@ func TestNewGroupSchemas(t *testing.T) {
 }
 
 func TestNewGroupMembers(t *testing.T) {
-	group := NewGroup("Test Group", "google_id")
+	group := NewGroup(&interfaces.Group{DisplayName: "Test Group", ExternalId: interfaces.ExternalId{Id: "google_id"}})
 
 	// New groups should have empty members slice
 	assert.NotNil(t, group.Members)
 	assert.Len(t, group.Members, 0)
+}
+
+// TestUpdateGroup confirms UpdateGroup carries the ID and attributes across.
+func TestUpdateGroup(t *testing.T) {
+	group := UpdateGroup(&interfaces.Group{ID: "aws-gid", DisplayName: "Test Group", ExternalId: interfaces.ExternalId{Id: "google_id"}})
+
+	assert.NotNil(t, group)
+	assert.Equal(t, "aws-gid", group.ID)
+	assert.Equal(t, "Test Group", group.DisplayName)
+	assert.Equal(t, group.ExternalId.Id, "google_id")
+	assert.Contains(t, group.Schemas, constants.SCIMSchemaGroup)
+	assert.NotNil(t, group.Members)
+}
+
+// TestUpdateGroup_EmptyID confirms the AWS record ID is optional on UpdateGroup.
+func TestUpdateGroup_EmptyID(t *testing.T) {
+	group := UpdateGroup(&interfaces.Group{DisplayName: "Test Group"})
+
+	assert.NotNil(t, group)
+	assert.Equal(t, "", group.ID)
+	assert.Equal(t, "Test Group", group.DisplayName)
+	assert.NotNil(t, group.Members)
 }
