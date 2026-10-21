@@ -81,8 +81,11 @@ However, in the situation where an email address has been re-assigned to a diffe
 
 > [!WARNING]
 > `>= 2.0.0` this makes use of the **Identity Store API** which means:
-> * if deploying the lambda from the [AWS Serverless Application Repository](https://console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync) then it needs to be deployed into the [IAM Identity Center delegated administration](https://docs.aws.amazon.com/singlesignon/latest/userguide/delegated-admin.html) account. Technically you could deploy in the management account but we would recommend against this.
-> * if you are running the project as a cli tool, then the environment will need to be using credentials of a user in the [IAM Identity Center delegated administration](https://docs.aws.amazon.com/singlesignon/latest/userguide/delegated-admin.html) account, with appropriate permissions.
+> * it should be run from a linked account, not the Organization management account.
+> * if deploying the lambda from the [AWS Serverless Application Repository](https://console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync), deploy it into a linked account; the function's execution role carries the IAM permissions it needs.
+> * if you are running the project as a cli tool, then the environment needs credentials for a principal in that linked account with the appropriate Identity Store and `sso:ListInstances` permissions.
+>
+> **Note:** guidance before `v2.5.0` required deployment into the [IAM Identity Center delegated administration](https://docs.aws.amazon.com/singlesignon/latest/userguide/delegated-admin.html) account. From `v2.5.0` this is no longer necessary — ssosync works from an ordinary linked account without delegated administration. See the Installation section below.
 
 > [!WARNING]
 > `>= 2.1.0` make use of named IAM resources, so if deploying via CICD or IaC template will require **CAPABILITY_NAMED_IAM** to be specified.
@@ -109,9 +112,11 @@ However, in the situation where an email address has been re-assigned to a diffe
 
 The recommended installation is:
 * [Setup IAM Identity Center](https://docs.aws.amazon.com/singlesignon/latest/userguide/get-started-enable-identity-center.html), in the management account of your organization
-* Created a linked account `Identity` Account from which to manage IAM Identity Center
-* [Delegate administration](https://docs.aws.amazon.com/singlesignon/latest/userguide/delegated-admin.html) to the `Identity` account
-* Deploy the [SSOSync app](https://console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync) from the AWS Serverless Application Repository
+* Create a linked account (for example an `Identity` account) from which to run ssosync
+* Deploy the [SSOSync app](https://console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync) from the AWS Serverless Application Repository into that linked account
+
+> [!NOTE]
+> From `v2.5.0` ssosync no longer requires IAM Identity Center **delegated administration**. It operates through the Identity Store and SCIM APIs using only the IAM permissions granted to its execution role, so the best practice is now to deploy it in an ordinary linked account without delegating IAM Identity Center administration to that account. Deploying into the management account is still not recommended.
 
 You can also:
 You can `go get github.com/awslabs/ssosync` or grab a Release binary from the release page. The binary
@@ -315,6 +320,21 @@ Group is compared to the matching group in Google, if it differs in anyway its u
 ### Filtering Examples
 
 #### Group Filtering
+
+The `--group-match` value is passed through to the Google Admin SDK `groups.list` query, so it supports the following query fields and operators:
+
+| Field | Prefix (`:`) | Exact (`=`) | Example |
+|-------|:---:|:---:|---------|
+| `name` | ✓ | ✓ | `name:AWS*` or `name=Administrators` |
+| `email` | ✓ | ✓ | `email:aws-*` or `email=aws-admins@company.com` |
+| `memberKey` | — | ✓ | `memberKey=user@company.com` |
+
+- Use `:` for prefix/wildcard matching (e.g. `name:AWS*`)
+- Use `=` for exact matching (e.g. `name=Administrators`)
+- Use `memberKey=<email>` to match every group that a specific user (or group) is a direct member of. This is an exact match only; the value must be the full primary email address of the member and wildcards are not supported. When `memberKey` is used you **must** supply your real Google Workspace customer ID via `--customer-id` (`SSOSYNC_CUSTOMER_ID`); the default `my_customer` placeholder is not accepted for member-key queries.
+- Combine multiple patterns with `,` (each pattern is run as a separate query and the results are merged)
+- Use `*` alone to sync all groups (and, with the `groups` sync method, their member users)
+
 ```bash
 # Sync groups starting with "AWS"
 --group-match "name:AWS*"
@@ -325,9 +345,31 @@ Group is compared to the matching group in Google, if it differs in anyway its u
 # Sync specific group
 --group-match "name=Administrators"
 
+# Sync every group that a specific user belongs to
+--group-match "memberKey=user@company.com"
+
 # Sync all groups
 --group-match "*"
 ```
+
+##### Syncing groups regardless of naming strategy with `memberKey`
+
+Google's directory query syntax only matches group `name` and `email` with prefix/wildcard patterns, so the common prefix/suffix convention (e.g. `name:aws-*`) requires you to name every group you want synced accordingly. If your groups don't follow a shared naming convention, you can use `memberKey` with a dedicated "marker" group instead, so any group can be synced regardless of its name.
+
+1. Create a single marker group in Google Workspace, for example:
+   - **Name**: `Any group with this as a member will be synced to IAM Identity Center`
+   - **Description**: `Any group with this as a member will be synced to IAM Identity Center`
+   - **Email**: `aws-ssosync@your-domain.com`
+2. Add this marker group as a **member** of every group you want ssosync to sync. (Groups can be members of other groups in Google Workspace.)
+3. Set the group match to the marker group's email:
+
+   ```bash
+   --group-match "memberKey=aws-ssosync@your-domain.com"
+   ```
+
+ssosync then selects every group that has the marker group as a member, no matter what those groups are named. To add or remove a group from the sync scope later, just add or remove the marker group from its membership.
+
+> **Note:** `memberKey` queries require your real Google Workspace customer ID. Set `--customer-id` (`SSOSYNC_CUSTOMER_ID`) to your actual customer ID rather than leaving it as the `my_customer` default.
 
 #### User Filtering
 
