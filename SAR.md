@@ -14,15 +14,21 @@ Before you start, [enable AWS IAM Identity Center](https://docs.aws.amazon.com/s
 
 ### Google
 
-First, set up your API. In the project you want to use, go to the [Console](https://console.developers.google.com/apis) and select *API & Services* > *Enable APIs and Services*. Search for *Admin SDK* and *Enable* the API.
+ssosync reads your directory as a **service account** that impersonates a Google Workspace admin via **domain-wide delegation**. These steps produce the two things ssosync needs: the `credentials.json` key (`GoogleCredentials`) and the admin email it impersonates (`GoogleAdminEmail`). The [AWS Control Tower workshop](https://catalog.workshops.aws/control-tower/en-US/authentication-authorization/google-workspace/3-provisioning-scim) provides a fully guided walkthrough.
 
-Follow this [tutorial](https://developers.google.com/admin-sdk/directory/v1/guides/delegation) to create a service account to sync your users. Save the JSON file created during the process and rename it to `credentials.json`.
+Steps 1–4 are done in the [Google Cloud Console](https://console.cloud.google.com/); step 5 is done in the [Google Admin console](https://admin.google.com/) and requires a **super admin**.
 
-In the domain-wide delegation for the Admin API, grant the following scopes:
+1. **Create or select a Google Cloud project** to own the service account.
+2. **Enable the Admin SDK API** in that project (*APIs & Services* > *Enable APIs and Services* > search for *Admin SDK API* > **Enable**). The service account cannot read the directory until this API is enabled.
+3. **Create a service account** (*APIs & Services* > *Credentials* > **Create credentials** > **Service account**). No Google Cloud roles are required. Then, on the service account's **Keys** tab, choose **Add key** > **Create new key** > **JSON**, and rename the downloaded file to `credentials.json`. This is the value for `GoogleCredentials`. Keep it secret.
+4. **Copy the service account's Client ID** from its **Advanced settings** / **Details** (the numeric OAuth2 client / unique ID).
+5. **Grant domain-wide delegation** in the Admin console: **Security** > **Access and data control** > **API controls** > **Manage Domain Wide Delegation** > **Add new**. Enter the Client ID from step 4 and the following read-only scopes, then click **Authorize**:
 
-```
-https://www.googleapis.com/auth/admin.directory.group.readonly,https://www.googleapis.com/auth/admin.directory.group.member.readonly,https://www.googleapis.com/auth/admin.directory.user.readonly
-```
+   ```
+   https://www.googleapis.com/auth/admin.directory.group.readonly,https://www.googleapis.com/auth/admin.directory.group.member.readonly,https://www.googleapis.com/auth/admin.directory.user.readonly
+   ```
+
+6. **Choose the admin to impersonate.** Note the email address of an existing Google Workspace admin that can read the directory (a super admin always works). This is the value for `GoogleAdminEmail`.
 
 ### AWS
 

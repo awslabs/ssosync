@@ -129,21 +129,43 @@ SSO Sync requires configuration from both Google Workspace and AWS sides.
 
 ### Google Workspace Setup
 
-1. **Enable Admin SDK API**
-   - Go to [Google Cloud Console](https://console.developers.google.com/apis)
-   - Select *API & Services* > *Enable APIs and Services*
-   - Search for *Admin SDK* and *Enable* the API
+ssosync reads your directory as a **service account** that impersonates a Google Workspace admin via **domain-wide delegation**. The steps below produce the two things ssosync needs: a `credentials.json` key file and the email address of an admin for the service account to impersonate.
 
-2. **Create Service Account**
-   - Follow this [delegation tutorial](https://developers.google.com/admin-sdk/directory/v1/guides/delegation)
-   - Save the JSON credentials file as `credentials.json`
-   - Grant domain-wide delegation with these scopes:
-     - `https://www.googleapis.com/auth/admin.directory.group.readonly`
-     - `https://www.googleapis.com/auth/admin.directory.group.member.readonly`
-     - `https://www.googleapis.com/auth/admin.directory.user.readonly`
+These steps mirror the [AWS Control Tower workshop](https://catalog.workshops.aws/control-tower/en-US/authentication-authorization/google-workspace/3-provisioning-scim), which you can follow for a fully guided walkthrough.
 
-3. **Specify Admin User**
-   - You'll need the email address of a Google Workspace admin user
+> **Note:** steps 1–4 are performed in the Google Cloud Console and steps 5–6 in the Google Admin console. You need a Google Cloud account that can create projects/service accounts **and** a Google Workspace **super admin** to grant the domain-wide delegation in step 5.
+
+1. **Create (or select) a Google Cloud project**
+   - Go to the [Google Cloud Console](https://console.cloud.google.com/) and create a new project (or select an existing one) to own the service account.
+
+2. **Enable the Admin SDK API**
+   - In the same project, go to *APIs & Services* > *Enabled APIs & services* > *Enable APIs and Services*.
+   - Search for **Admin SDK API** and click **Enable**. The service account cannot read the directory until this API is enabled on the project.
+
+3. **Create a service account and a JSON key**
+   - Go to *APIs & Services* > *Credentials* (or *IAM & Admin* > *Service Accounts*) and click **Create credentials** > **Service account**.
+   - Give it a name (for example `ssosync`) and click **Create and continue**. No project roles are required (the access is granted in Google Workspace, not in Google Cloud), so you can skip the optional role/grant steps and click **Done**.
+   - Open the new service account, go to the **Keys** tab, and choose **Add key** > **Create new key** > **JSON**. A JSON key file downloads automatically.
+   - Rename the downloaded file to **`credentials.json`**. This is the file ssosync uses (`--google-credentials` / `GOOGLE_CREDENTIALS`). Keep it secret; anyone with it can read your directory.
+
+4. **Copy the service account's Client ID**
+   - Still on the service account, expand **Advanced settings** (or the **Details** tab) and copy the numeric **Client ID** (also called the *Unique ID* / OAuth2 client ID). You need it for the next step.
+
+5. **Grant domain-wide delegation in the Admin console**
+   - Sign in to the [Google Admin console](https://admin.google.com/) as a **super admin**.
+   - Go to **Security** > **Access and data control** > **API controls**, then under *Domain wide delegation* select **Manage Domain Wide Delegation**.
+   - Click **Add new** and enter:
+     - **Client ID**: the Client ID you copied in step 4.
+     - **OAuth scopes** (comma-separated, read-only):
+       - `https://www.googleapis.com/auth/admin.directory.group.readonly`
+       - `https://www.googleapis.com/auth/admin.directory.group.member.readonly`
+       - `https://www.googleapis.com/auth/admin.directory.user.readonly`
+   - Click **Authorize**. Only these three read-only scopes are needed; do not grant broader access.
+
+6. **Choose the admin user to impersonate**
+   - ssosync must impersonate an existing **Google Workspace admin** that can read the directory. Note that user's email address — it is the value you pass as `--google-admin` (`GOOGLE_ADMIN`). A super admin always works; a custom admin role with the Users and Groups read privileges is sufficient.
+
+> **Tip:** `credentials.json` holds the service account key (the *who ssosync authenticates as*) and `GOOGLE_ADMIN` is the admin it impersonates (the *who it acts on behalf of*). You need both.
 
 ### AWS Setup
 
