@@ -53,12 +53,12 @@ type Config struct {
 	DryRun bool
 	// sync suspended user, if true suspended user and their group memberships are sync'd into IAM Identity Center
 	SyncSuspended bool
-	// Force preservation of Identity Store UserId, when Google Workspace Directory UserId change but email addresses 
+	// Force preservation of Identity Store UserId, when Google Workspace Directory UserId change but email addresses
 	// still match. Default behaviour orginial user is deleted and a new user created to ensure excessive privileges
-	// are not preserved. This option is required when switching from a different external IdP (Microsoft Entra for example) 
+	// are not preserved. This option is required when switching from a different external IdP (Microsoft Entra for example)
 	// to Google Workspace Directory (with ssosync) and assignments need to be preserved.
 	ForceExternalIdUpdate bool
-	// Blocks the deletion of 'local' user and groups that exist in the IAM Identity Store but not in the Google Workspace Directory, 
+	// Blocks the deletion of 'local' user and groups that exist in the IAM Identity Store but not in the Google Workspace Directory,
 	// a local user/group is defined as one where ExternalId is not set. If an ExternalId is set then, the will be deleted as normal.
 	RetainUnmatched bool
 	// User filter string
@@ -79,22 +79,35 @@ const (
 	// DefaultCustomerID is the default Google Workspace customer ID.
 	DefaultCustomerID = "my_customer"
 	// DefaultSyncMethod is the default sync method to use.
-	DefaultUserMatch = ""
-	DefaultGroupMatch = "*"
-	DefaultSCIMEndpoint = ""
+	DefaultUserMatch       = ""
+	DefaultGroupMatch      = "*"
+	DefaultSCIMEndpoint    = ""
 	DefaultSCIMAccessToken = ""
-	DefaultSyncMethod = "groups"
-	DefaultCacheMetrics = false
-	DefaultDryRun = false
-	DefaultSyncSuspended = false
+	DefaultSyncMethod      = "groups"
+	DefaultCacheMetrics    = false
+	DefaultDryRun          = false
+	DefaultSyncSuspended   = false
 	// Default behaviour orginial user is deleted and a new user created to ensure excessive privileges
 	// are not preserved.
 	DefaultForceExternalIdUpdate = false
-	DefaultRetainUnmatched = false
+	DefaultRetainUnmatched       = false
 )
 
-// Slice-typed defaults cannot be declared as constants in Go, so they are
-// defined as package-level variables.
+// AttributeMap describes how a Google Workspace Directory source attribute is
+// mapped onto an interfaces.User / interfaces.Group target field.
+//
+// Direction: the KEY is the interface TARGET field path (the field mapped TO on
+// interfaces.User / interfaces.Group, e.g. "Name.GivenName" or "Username"); the
+// VALUE is the Google SOURCE attribute path (the field mapped FROM on
+// admin.User / admin.Group, e.g. "name.givenName" or "primaryEmail").
+//
+// Only standard Google attributes are supported this phase: custom-schema
+// attributes (admin.User.CustomSchemas) are not resolved yet. See the deferred
+// extension points documented on the mapper functions in internal/google.
+type AttributeMap map[string]string
+
+// Slice-typed and map-typed defaults cannot be declared as constants in Go, so
+// they are defined as package-level variables.
 var (
 	// DefaultIgnoreUsers is the default set of users to ignore.
 	DefaultIgnoreUsers []string = nil
@@ -104,6 +117,34 @@ var (
 	DefaultPrecacheOrgUnits []string = nil
 	// DefaultIncludeGroups is the default set of groups to sync.
 	DefaultIncludeGroups []string = nil
+
+	// DefaultUserAttributeMap reproduces the currently implemented
+	// Google -> interfaces.User field mappings for the groups sync method.
+	// KEY = interfaces.User target field path; VALUE = admin.User source
+	// attribute path.
+	//
+	// Note on "Active": it is the logical INVERSE of Google's "suspended" flag
+	// (Active == !Suspended). The map stores the raw source path "suspended";
+	// the MAPPER applies the inversion, not the map.
+	DefaultUserAttributeMap AttributeMap = AttributeMap{
+		"Name.GivenName":  "name.givenName",
+		"Name.FamilyName": "name.familyName",
+		"Username":        "primaryEmail",
+		"Active":          "suspended",
+	}
+
+	// DefaultGroupAttributeMap reproduces the Google -> interfaces.Group field
+	// mapping for the groups sync method. KEY = interfaces.Group target field
+	// path; VALUE = admin.Group source attribute path.
+	//
+	// Note: the live sync path sets DisplayName from the group's email
+	// (admin.Group.Email), whereas this default map resolves DisplayName from
+	// admin.Group.Name. This is a deliberate, documented divergence while the
+	// mapper sits alongside the live path and is not yet wired in; a future
+	// wiring step reconciles it intentionally rather than by accident.
+	DefaultGroupAttributeMap AttributeMap = AttributeMap{
+		"DisplayName": "name",
+	}
 )
 
 // New returns a new Config
