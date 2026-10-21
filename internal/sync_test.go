@@ -322,7 +322,11 @@ func TestGetUserOperations_NoChange(t *testing.T) {
 				GivenName:  "John",
 				FamilyName: "Doe",
 			},
-			Active: true,
+			// DisplayName mirrors what the mapper derives for the Google user
+			// ("GivenName FamilyName"); a real ssosync-managed AWS user carries
+			// it, so the full-attribute comparison still reports Equal.
+			DisplayName: "John Doe",
+			Active:      true,
 		},
 	}
 
@@ -348,6 +352,59 @@ func TestGetUserOperations_NoChange(t *testing.T) {
 	assert.Equal(t, equals[0].Username, "user1@example.com")
 	assert.Equal(t, equals[0].Name.GivenName, "John")
 	assert.Equal(t, equals[0].Name.FamilyName, "Doe")
+}
+
+// TestGetUserOperations_SynthesizedEmailsAddresses_Equal is a regression guard
+// for the Emails/Addresses asymmetry: a real ssosync-managed AWS user returned
+// by ConvertSdkUserObjToNative carries a synthesized primary work email
+// (== Username) and a {Type:"work"} address, while the default-mapped Google
+// user carries neither. usersEqual must normalize both operands through the same
+// builder so the user compares Equal (no spurious Update every run) rather than
+// being re-classified as Update on each sync.
+func TestGetUserOperations_SynthesizedEmailsAddresses_Equal(t *testing.T) {
+	awsUsers := []*interfaces.User{
+		{
+			ID:         "A1",
+			Username:   "user1@example.com",
+			ExternalId: interfaces.ExternalId{Id: "G1"},
+			Name: interfaces.UserName{
+				GivenName:  "John",
+				FamilyName: "Doe",
+			},
+			DisplayName: "John Doe",
+			Active:      true,
+			// As ConvertSdkUserObjToNative produces for an ssosync-created user:
+			// the Identity Store returns the synthesized work email and address.
+			Emails: []interfaces.UserEmail{{
+				Value:   "user1@example.com",
+				Type:    "work",
+				Primary: true,
+			}},
+			Addresses: []interfaces.UserAddress{{
+				Type: "work",
+			}},
+		},
+	}
+
+	googleUsers := []*admin.User{
+		{
+			Id:           "G1",
+			PrimaryEmail: "user1@example.com",
+			Name: &admin.UserName{
+				GivenName:  "John",
+				FamilyName: "Doe",
+			},
+			Suspended: false,
+		},
+	}
+
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, false, ""), config.DefaultUserAttributeMap)
+
+	assert.Len(t, add, 0)
+	assert.Len(t, delete, 0)
+	assert.Len(t, update, 0, "steady-state managed user must not be re-classified as Update")
+	assert.Len(t, equals, 1)
+	assert.Equal(t, equals[0].ExternalId.Id, "G1")
 }
 
 func TestGetUserOperations_Add(t *testing.T) {
@@ -761,9 +818,10 @@ func TestGetUserOperations_RetainUnmatched_SyncedUserMismatched(t *testing.T) {
 func TestGetUserOperations_RetainUnmatched_SyncedUserMatched(t *testing.T) {
 	awsUsers := []*interfaces.User{
 		{
-			ID:         "A6",
-			ExternalId: interfaces.ExternalId{Id: "G6"},
-			Username:   "user6@example.com",
+			ID:          "A6",
+			ExternalId:  interfaces.ExternalId{Id: "G6"},
+			Username:    "user6@example.com",
+			DisplayName: "Alan Brown",
 			Name: interfaces.UserName{
 				GivenName:  "Alan",
 				FamilyName: "Brown",
@@ -1148,6 +1206,92 @@ func TestGetUserOperation_ForeignMatched_AdoptForeign(t *testing.T) {
 	assert.Equal(t, user.Username, "user8@example.com")
 	assert.Equal(t, user.Name.GivenName, "Carol")
 	assert.Equal(t, user.Name.FamilyName, "White")
+}
+
+// TestUsersEqual_SupportedFieldDiffers confirms usersEqual now compares the full
+// canonical supported attribute set: a difference in any supported field (Title,
+// PhoneNumbers, Enterprise.*) makes the users unequal, while two users identical
+// across the whole supported set compare equal.
+func TestUsersEqual_SupportedFieldDiffers(t *testing.T) {
+	base := func() *interfaces.User {
+		return &interfaces.User{
+			Username:    "user@example.com",
+			Name:        interfaces.UserName{GivenName: "Jane", FamilyName: "Doe"},
+			DisplayName: "Jane Doe",
+			Active:      true,
+		}
+	}
+
+	// Identical across the whole supported set -> equal.
+	assert.True(t, usersEqual(base(), base()))
+
+	// Title differs -> not equal.
+	withTitle := base()
+	withTitle.Title = "Engineer"
+	assert.False(t, usersEqual(base(), withTitle))
+
+	// PhoneNumbers differ -> not equal.
+	withPhone := base()
+	withPhone.PhoneNumbers = []interfaces.UserPhoneNumber{{Value: "+1-555-0100", Type: "work", Primary: true}}
+	assert.False(t, usersEqual(base(), withPhone))
+
+	// Enterprise.Department differs -> not equal.
+	withEnterprise := base()
+	withEnterprise.Enterprise = &interfaces.EnterpriseUser{Department: "Eng"}
+	assert.False(t, usersEqual(base(), withEnterprise))
+
+	// Emails/Addresses asymmetry: an AWS-side user carrying the synthesized work
+	// email/address compares Equal to a Google-side user carrying neither,
+	// because both operands are normalized through the same builder (the builder
+	// synthesizes the same work email == Username and work address). Without the
+	// normalization this would spuriously report a difference.
+	awsSide := base()
+	awsSide.Emails = []interfaces.UserEmail{{Value: "user@example.com", Type: "work", Primary: true}}
+	awsSide.Addresses = []interfaces.UserAddress{{Type: "work"}}
+	assert.True(t, usersEqual(awsSide, base()))
+}
+
+// TestGetUserOperation_ClearToConsistent confirms clear-to-consistent semantics:
+// an AWS user with a Title that the attribute map does not populate is reported
+// as an Update, and the returned desired object has an empty (cleared) Title
+// while the mapped Google attributes are preserved.
+func TestGetUserOperation_ClearToConsistent(t *testing.T) {
+	awsUser := &interfaces.User{
+		ID:         "A9",
+		Username:   "user9@example.com",
+		ExternalId: interfaces.ExternalId{Id: "G9"},
+		Name: interfaces.UserName{
+			GivenName:  "Sam",
+			FamilyName: "Green",
+		},
+		Active: true,
+		Title:  "Engineer", // expanded field the default map does not populate
+	}
+
+	// Mapped Google user as the default map produces it: no Title.
+	googleUser := &interfaces.User{
+		ExternalId: interfaces.ExternalId{Id: "G9"},
+		Username:   "user9@example.com",
+		Name: interfaces.UserName{
+			GivenName:  "Sam",
+			FamilyName: "Green",
+		},
+		Active: true,
+	}
+
+	action, user := getUserOperation(awsUser, googleUser, false, false, "")
+
+	assert.Equal(t, Update, action)
+	assert.NotNil(t, user)
+	// The desired object stamps the AWS record ID so the update targets it.
+	assert.Equal(t, "A9", user.ID)
+	// Title is cleared to make AWS consistent with Google.
+	assert.Equal(t, "", user.Title)
+	// Mapped Google attributes are preserved.
+	assert.Equal(t, "user9@example.com", user.Username)
+	assert.Equal(t, "Sam", user.Name.GivenName)
+	assert.Equal(t, "Green", user.Name.FamilyName)
+	assert.Equal(t, true, user.Active)
 }
 
 func TestGetGroupOperations_RetainUnmatched_LocalGroupMatched(t *testing.T) {
@@ -2350,7 +2494,8 @@ func TestGetUserOperations_ManagedIssuer_Equals(t *testing.T) {
 				GivenName:  "Carol",
 				FamilyName: "White",
 			},
-			Active: true,
+			DisplayName: "Carol White",
+			Active:      true,
 		},
 	}
 
