@@ -18,6 +18,7 @@ package google
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
 	"ssosync/internal/config"
@@ -279,31 +280,42 @@ func (c *client) getGroups(query string) ([]*admin.Group, error) {
 	return g, err
 }
 
-// mapFromGoogleUser builds an interfaces.User from a Google admin.User using the
-// supplied attribute map. It sits ALONGSIDE the existing Google -> interfaces
-// construction (which remains the live path via the aws package constructors):
-// this function is purely additive and is NOT wired into internal/sync.go or any
-// other live sync path. Scope is the groups sync method only.
+// mapFromGoogleUser builds an interfaces.User from a Google admin.User, DRIVEN by
+// the supplied attribute map. For every entry it resolves the Google SOURCE
+// attribute (the map VALUE) from the admin.User and assigns it to the interface
+// TARGET field (the map KEY). The map is the single description of which source
+// feeds which target; this function only knows how to read each supported source
+// path and write each supported target field.
 //
-// attrMap keys are interfaces.User target field paths; values are admin.User
-// source attribute paths (see config.AttributeMap / config.DefaultUserAttributeMap).
-// With DefaultUserAttributeMap the output matches the current live construction
-// for the covered fields: Username <- primaryEmail, Name.GivenName <-
-// name.givenName, Name.FamilyName <- name.familyName, and Active <- !suspended
-// (the "suspended" source is logically inverted here, in the mapper, not in the
-// map).
+// With config.DefaultUserAttributeMap the output matches the live groups-sync
+// construction (aws.NewUser) for the covered fields:
+//
+//	Name.GivenName  <- name.givenName
+//	Name.FamilyName <- name.familyName
+//	Username        <- primaryEmail
+//	Active          <- suspended   (logically inverted: Active == !suspended)
+//
+// The "suspended" -> Active inversion is applied while RESOLVING that entry
+// (Active = !u.Suspended), not stored in the map.
+//
+// Structural fields that are identity, not configurable attributes, are set
+// regardless of the map, exactly as the live path does:
+//   - Schemas = []string{constants.SCIMSchemaUser}
+//   - ExternalId.Id = u.Id (the Google user id the live getUserOperation feeds
+//     into aws.NewUser/UpdateUser as the external id)
+//   - DisplayName = "GivenName FamilyName" (the derivation aws.NewUser applies),
+//     computed AFTER the map has populated the name fields.
 //
 // The zero-width-space (\u200B) -> space normalization applied to GivenName and
 // FamilyName matches getUsers above, so a mapper handed an un-normalized
 // admin.User produces the same values the live path emits after getUsers has
 // normalized it.
 //
-// Schemas is set exactly as the live aws.NewUser/UpdateUser constructors do:
-// []string{constants.SCIMSchemaUser}.
-//
-// Fields the live path also sets but that the default map does NOT cover are
-// intentionally left unset here (DisplayName, Emails, Addresses, ExternalId, ID);
-// a richer attribute map in a later phase may add them.
+// The attribute map is validated at load time (config.ParseAttributeMaps), so by
+// the time it reaches here every entry is a known target<-source pair. A
+// genuinely-unexpected unresolved entry is therefore an internal invariant
+// breach, reported via the returned error rather than silently dropping the
+// field. Standard source paths only this phase.
 //
 // Deferred extension points (documented, NOT implemented this phase):
 //
@@ -318,68 +330,148 @@ func (c *client) getGroups(query string) ([]*admin.Group, error) {
 //	    admin.User.CustomSchemas is nil on every fetched user.
 //
 // See /Users/crpates/GitHub/ssosync/.agents/tasks/google-admin-schema-findings.md.
-func mapFromGoogleUser(u *admin.User, attrMap config.AttributeMap) interfaces.User {
+func mapFromGoogleUser(u *admin.User, attrMap config.AttributeMap) (interfaces.User, error) {
 	user := interfaces.User{
-		Schemas: []string{constants.SCIMSchemaUser},
+		Schemas:    []string{constants.SCIMSchemaUser},
+		ExternalId: interfaces.ExternalId{Id: u.Id},
 	}
 
 	for targetField, sourceAttr := range attrMap {
 		switch targetField {
 		case "Name.GivenName":
-			if u.Name != nil {
-				user.Name.GivenName = strings.ReplaceAll(u.Name.GivenName, string('\u200B'), " ")
+			v, err := resolveGoogleUserSource(u, sourceAttr)
+			if err != nil {
+				return interfaces.User{}, err
 			}
+			user.Name.GivenName = v.(string)
 		case "Name.FamilyName":
-			if u.Name != nil {
-				user.Name.FamilyName = strings.ReplaceAll(u.Name.FamilyName, string('\u200B'), " ")
+			v, err := resolveGoogleUserSource(u, sourceAttr)
+			if err != nil {
+				return interfaces.User{}, err
 			}
+			user.Name.FamilyName = v.(string)
 		case "Username":
-			user.Username = u.PrimaryEmail
+			v, err := resolveGoogleUserSource(u, sourceAttr)
+			if err != nil {
+				return interfaces.User{}, err
+			}
+			user.Username = v.(string)
 		case "Active":
-			// Active is the logical inverse of Google's "suspended" flag; the
-			// inversion is applied here, in the mapper, not in the map.
-			user.Active = !u.Suspended
+			v, err := resolveGoogleUserSource(u, sourceAttr)
+			if err != nil {
+				return interfaces.User{}, err
+			}
+			user.Active = v.(bool)
+		default:
+			return interfaces.User{}, fmt.Errorf("mapFromGoogleUser: unsupported target field %q (map validated at load time, this is an internal error)", targetField)
 		}
-		_ = sourceAttr
 	}
 
-	return user
+	// DisplayName derivation matches aws.NewUser/UpdateUser exactly and must run
+	// after the name fields have been resolved from the map.
+	user.DisplayName = strings.Join([]string{user.Name.GivenName, user.Name.FamilyName}, " ")
+
+	return user, nil
 }
 
-// mapFromGoogleGroup builds an interfaces.Group from a Google admin.Group using
-// the supplied attribute map. Like mapFromGoogleUser it sits ALONGSIDE the live
-// aws.NewGroup/UpdateGroup construction and is NOT wired into internal/sync.go or
-// any live sync path. Scope is the groups sync method only.
+// resolveGoogleUserSource reads a single supported Google admin.User source
+// attribute path and returns its value. The "suspended" -> Active inversion is
+// applied here so the caller assigns a ready-to-use bool. Name sub-fields get
+// the same zero-width-space -> space normalization getUsers applies. An
+// unrecognised path is an internal error (the load-time validator rejects
+// unknown sources before they ever reach here).
+func resolveGoogleUserSource(u *admin.User, sourceAttr string) (interface{}, error) {
+	switch sourceAttr {
+	case "name.givenName":
+		if u.Name == nil {
+			return "", nil
+		}
+		return strings.ReplaceAll(u.Name.GivenName, string('\u200B'), " "), nil
+	case "name.familyName":
+		if u.Name == nil {
+			return "", nil
+		}
+		return strings.ReplaceAll(u.Name.FamilyName, string('\u200B'), " "), nil
+	case "primaryEmail":
+		return u.PrimaryEmail, nil
+	case "suspended":
+		// Active is the logical inverse of Google's "suspended" flag.
+		return !u.Suspended, nil
+	default:
+		return nil, fmt.Errorf("mapFromGoogleUser: unsupported source attribute %q (map validated at load time, this is an internal error)", sourceAttr)
+	}
+}
+
+// mapFromGoogleGroup builds an interfaces.Group from a Google admin.Group, DRIVEN
+// by the supplied attribute map, in the same resolve-source-assign-target style
+// as mapFromGoogleUser.
 //
-// attrMap keys are interfaces.Group target field paths; values are admin.Group
-// source attribute paths (see config.AttributeMap / config.DefaultGroupAttributeMap).
-// With DefaultGroupAttributeMap, DisplayName is resolved from admin.Group.Name.
-// Note: the live path sets group DisplayName from admin.Group.Email, not Name;
-// this default map's use of Name is a deliberate, documented divergence while the
-// mapper is not yet wired in (see config.DefaultGroupAttributeMap). The same
-// \u200B -> space normalization used for user names is applied here for symmetry.
+// With config.DefaultGroupAttributeMap, DisplayName <- name. This is
+// behaviour-preserving: the live groups-sync path (getGroupOperation) builds its
+// desired group state with aws.NewGroup(googleGroup.Name, ...) / aws.UpdateGroup
+// (..., googleGroup.Name, ...), i.e. it uses admin.Group.Name for DisplayName.
+// So the default map reproduces the live value exactly; there is no divergence.
 //
-// Schemas is set exactly as the live constructors do:
-// []string{constants.SCIMSchemaGroup}. Members, ExternalId and ID are set by the
-// live path but are out of scope for the default group map, so they are left
-// unset here.
+// Structural identity fields are set regardless of the map, as the live path
+// does: Schemas = []string{constants.SCIMSchemaGroup} and ExternalId.Id = g.Id
+// (the Google group id the live getGroupOperation feeds into aws.NewGroup/
+// UpdateGroup as the external id). The same \u200B -> space normalization used
+// for user names is applied to DisplayName for symmetry.
+//
+// The map is validated at load time, so every entry is a known target<-source
+// pair here; an unexpected unresolved entry is an internal invariant breach and
+// is returned as an error rather than silently dropped.
 //
 // admin.Group has NO custom-schema field (a Google Directory API limitation), so
 // the group map is limited to the fixed admin.Group fields; there is no
 // custom-schema extension point for groups. See
 // /Users/crpates/GitHub/ssosync/.agents/tasks/google-admin-schema-findings.md.
-func mapFromGoogleGroup(g *admin.Group, attrMap config.AttributeMap) interfaces.Group {
+func mapFromGoogleGroup(g *admin.Group, attrMap config.AttributeMap) (interfaces.Group, error) {
 	group := interfaces.Group{
-		Schemas: []string{constants.SCIMSchemaGroup},
+		Schemas:    []string{constants.SCIMSchemaGroup},
+		ExternalId: interfaces.ExternalId{Id: g.Id},
 	}
 
 	for targetField, sourceAttr := range attrMap {
 		switch targetField {
 		case "DisplayName":
-			group.DisplayName = strings.ReplaceAll(g.Name, string('\u200B'), " ")
+			v, err := resolveGoogleGroupSource(g, sourceAttr)
+			if err != nil {
+				return interfaces.Group{}, err
+			}
+			group.DisplayName = v
+		default:
+			return interfaces.Group{}, fmt.Errorf("mapFromGoogleGroup: unsupported target field %q (map validated at load time, this is an internal error)", targetField)
 		}
-		_ = sourceAttr
 	}
 
-	return group
+	return group, nil
+}
+
+// resolveGoogleGroupSource reads a single supported Google admin.Group source
+// attribute path and returns its value, with the same zero-width-space -> space
+// normalization applied to user names. An unrecognised path is an internal error
+// (the load-time validator rejects unknown sources before they reach here).
+func resolveGoogleGroupSource(g *admin.Group, sourceAttr string) (string, error) {
+	switch sourceAttr {
+	case "name":
+		return strings.ReplaceAll(g.Name, string('\u200B'), " "), nil
+	default:
+		return "", fmt.Errorf("mapFromGoogleGroup: unsupported source attribute %q (map validated at load time, this is an internal error)", sourceAttr)
+	}
+}
+
+// MapFromGoogleUser is the exported entry point to the attribute-map-driven
+// Google admin.User -> interfaces.User mapper, for callers outside this package
+// (the groups sync path in internal/sync.go). It delegates to mapFromGoogleUser.
+func MapFromGoogleUser(u *admin.User, attrMap config.AttributeMap) (interfaces.User, error) {
+	return mapFromGoogleUser(u, attrMap)
+}
+
+// MapFromGoogleGroup is the exported entry point to the attribute-map-driven
+// Google admin.Group -> interfaces.Group mapper, for callers outside this
+// package (the groups sync path in internal/sync.go). It delegates to
+// mapFromGoogleGroup.
+func MapFromGoogleGroup(g *admin.Group, attrMap config.AttributeMap) (interfaces.Group, error) {
+	return mapFromGoogleGroup(g, attrMap)
 }

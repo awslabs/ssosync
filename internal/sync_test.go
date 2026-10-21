@@ -791,14 +791,17 @@ func TestGetUserOperations_RetainUnmatched_SyncedUserMatched(t *testing.T) {
 
 // Path: awsUser == nil (no existing AWS user) -> Create.
 func TestGetUserOperation_Create(t *testing.T) {
-	googleUser := &admin.User{
-		Id:           "G7",
-		PrimaryEmail: "user7@example.com",
-		Name: &admin.UserName{
+	// Mapped interface view of the Google user (default map: Username <-
+	// primaryEmail, Active <- !suspended, ExternalId.Id <- id), as
+	// getUserOperations would produce via the mapper.
+	googleUser := &interfaces.User{
+		ExternalId: interfaces.ExternalId{Id: "G7"},
+		Username:   "user7@example.com",
+		Name: interfaces.UserName{
 			GivenName:  "Bob",
 			FamilyName: "Smith",
 		},
-		Suspended: false,
+		Active: true,
 	}
 
 	action, user := getUserOperation(nil, googleUser, false, false, "")
@@ -867,14 +870,14 @@ func TestGetUserOperation_LocalMatched_AdoptLocal(t *testing.T) {
 		Active: true,
 	}
 
-	googleUser := &admin.User{
-		Id:           "G5",
-		PrimaryEmail: "user5@example.com",
-		Name: &admin.UserName{
+	googleUser := &interfaces.User{
+		ExternalId: interfaces.ExternalId{Id: "G5"},
+		Username:   "user5@example.com",
+		Name: interfaces.UserName{
 			GivenName:  "Jane",
 			FamilyName: "Doe",
 		},
-		Suspended: false,
+		Active: true,
 	}
 
 	action, user := getUserOperation(awsUser, googleUser, false, false, "")
@@ -921,14 +924,14 @@ func TestGetUserOperation_ManagedMatched_Equal(t *testing.T) {
 		Active: true,
 	}
 
-	googleUser := &admin.User{
-		Id:           "G1",
-		PrimaryEmail: "user1@example.com",
-		Name: &admin.UserName{
+	googleUser := &interfaces.User{
+		ExternalId: interfaces.ExternalId{Id: "G1"},
+		Username:   "user1@example.com",
+		Name: interfaces.UserName{
 			GivenName:  "John",
 			FamilyName: "Doe",
 		},
-		Suspended: false,
+		Active: true,
 	}
 
 	action, user := getUserOperation(awsUser, googleUser, false, false, "")
@@ -954,14 +957,14 @@ func TestGetUserOperation_ManagedMatched_Update(t *testing.T) {
 		Active: true,
 	}
 
-	googleUser := &admin.User{
-		Id:           "G2",
-		PrimaryEmail: "user2@example.com",
-		Name: &admin.UserName{
+	googleUser := &interfaces.User{
+		ExternalId: interfaces.ExternalId{Id: "G2"},
+		Username:   "user2@example.com",
+		Name: interfaces.UserName{
 			GivenName:  "Jane",
 			FamilyName: "Updated", // Name changed
 		},
-		Suspended: false,
+		Active: true,
 	}
 
 	action, user := getUserOperation(awsUser, googleUser, false, false, "")
@@ -987,14 +990,14 @@ func TestGetUserOperation_ManagedMismatched_UpdateForced(t *testing.T) {
 		Active: true,
 	}
 
-	googleUser := &admin.User{
-		Id:           "G6",
-		PrimaryEmail: "user6@example.com",
-		Name: &admin.UserName{
+	googleUser := &interfaces.User{
+		ExternalId: interfaces.ExternalId{Id: "G6"},
+		Username:   "user6@example.com",
+		Name: interfaces.UserName{
 			GivenName:  "Alan",
 			FamilyName: "Brown",
 		},
-		Suspended: false,
+		Active: true,
 	}
 
 	action, user := getUserOperation(awsUser, googleUser, true, false, "")
@@ -1020,14 +1023,14 @@ func TestGetUserOperation_ManagedMismatched_Recreate(t *testing.T) {
 		Active: true,
 	}
 
-	googleUser := &admin.User{
-		Id:           "G6",
-		PrimaryEmail: "user6@example.com",
-		Name: &admin.UserName{
+	googleUser := &interfaces.User{
+		ExternalId: interfaces.ExternalId{Id: "G6"},
+		Username:   "user6@example.com",
+		Name: interfaces.UserName{
 			GivenName:  "Alan",
 			FamilyName: "Brown",
 		},
-		Suspended: false,
+		Active: true,
 	}
 
 	action, user := getUserOperation(awsUser, googleUser, false, false, "")
@@ -1113,14 +1116,14 @@ func TestGetUserOperation_ForeignMatched_AdoptForeign(t *testing.T) {
 		Active: true,
 	}
 
-	googleUser := &admin.User{
-		Id:           "G8",
-		PrimaryEmail: "user8@example.com",
-		Name: &admin.UserName{
+	googleUser := &interfaces.User{
+		ExternalId: interfaces.ExternalId{Id: "G8"},
+		Username:   "user8@example.com",
+		Name: interfaces.UserName{
 			GivenName:  "Carol",
 			FamilyName: "White",
 		},
-		Suspended: false,
+		Active: true,
 	}
 
 	issuerArn := "arn:aws:identitystore::920862271044:identitystore/d-9a671d7705/provisioningtenant/ssosync"
@@ -1259,10 +1262,11 @@ func TestGetGroupOperations_RetainUnmatched_SyncedGroupMatched(t *testing.T) {
 
 // Path: awsGroup == nil (no existing AWS group) -> Create.
 func TestGetGroupOperation_Create(t *testing.T) {
-	googleGroup := &admin.Group{
-		Id:    "G1",
-		Name:  "Group 1",
-		Email: "group1@example.com",
+	// Mapped interface view of the Google group (default map: DisplayName <- name,
+	// ExternalId.Id <- id), as getGroupOperations would produce via the mapper.
+	googleGroup := &interfaces.Group{
+		DisplayName: "Group 1",
+		ExternalId:  interfaces.ExternalId{Id: "G1"},
 	}
 
 	action, group := getGroupOperation(nil, googleGroup, false, false, "")
@@ -1310,10 +1314,9 @@ func TestGetGroupOperation_LocalMatched_AdoptLocal(t *testing.T) {
 		DisplayName: "Group 3",
 	}
 
-	googleGroup := &admin.Group{
-		Id:    "G3",
-		Name:  "Group 3",
-		Email: "group3@example.com",
+	googleGroup := &interfaces.Group{
+		DisplayName: "Group 3",
+		ExternalId:  interfaces.ExternalId{Id: "G3"},
 	}
 
 	action, group := getGroupOperation(awsGroup, googleGroup, false, false, "")
@@ -1348,10 +1351,9 @@ func TestGetGroupOperation_ManagedMatched_Equal(t *testing.T) {
 		ExternalId:  interfaces.ExternalId{Id: "G1"},
 	}
 
-	googleGroup := &admin.Group{
-		Id:    "G1",
-		Name:  "Group 1",
-		Email: "group1@example.com",
+	googleGroup := &interfaces.Group{
+		DisplayName: "Group 1",
+		ExternalId:  interfaces.ExternalId{Id: "G1"},
 	}
 
 	action, group := getGroupOperation(awsGroup, googleGroup, false, false, "")
@@ -1370,10 +1372,9 @@ func TestGetGroupOperation_ManagedMatched_Update(t *testing.T) {
 		ExternalId:  interfaces.ExternalId{Id: "G4"},
 	}
 
-	googleGroup := &admin.Group{
-		Id:    "G4",
-		Name:  "Different Group Name",
-		Email: "group4@example.com",
+	googleGroup := &interfaces.Group{
+		DisplayName: "Different Group Name",
+		ExternalId:  interfaces.ExternalId{Id: "G4"},
 	}
 
 	action, group := getGroupOperation(awsGroup, googleGroup, false, false, "")
@@ -1392,10 +1393,9 @@ func TestGetGroupOperation_ManagedMismatched_UpdateForced(t *testing.T) {
 		ExternalId:  interfaces.ExternalId{Id: "GX"},
 	}
 
-	googleGroup := &admin.Group{
-		Id:    "G50",
-		Name:  "Group 5",
-		Email: "group5@example.com",
+	googleGroup := &interfaces.Group{
+		DisplayName: "Group 5",
+		ExternalId:  interfaces.ExternalId{Id: "G50"},
 	}
 
 	action, group := getGroupOperation(awsGroup, googleGroup, true, false, "")
@@ -1414,10 +1414,9 @@ func TestGetGroupOperation_ManagedMismatched_Recreate(t *testing.T) {
 		ExternalId:  interfaces.ExternalId{Id: "GX"},
 	}
 
-	googleGroup := &admin.Group{
-		Id:    "G50",
-		Name:  "Group 5",
-		Email: "group5@example.com",
+	googleGroup := &interfaces.Group{
+		DisplayName: "Group 5",
+		ExternalId:  interfaces.ExternalId{Id: "G50"},
 	}
 
 	action, group := getGroupOperation(awsGroup, googleGroup, false, false, "")
@@ -1484,10 +1483,9 @@ func TestGetGroupOperation_ForeignMatched_AdoptForeign(t *testing.T) {
 		},
 	}
 
-	googleGroup := &admin.Group{
-		Id:    "G8",
-		Name:  "Group 8",
-		Email: "group8@example.com",
+	googleGroup := &interfaces.Group{
+		DisplayName: "Group 8",
+		ExternalId:  interfaces.ExternalId{Id: "G8"},
 	}
 
 	issuerArn := "arn:aws:identitystore::920862271044:identitystore/d-9a671d7705/provisioningtenant/ssosync"

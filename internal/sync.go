@@ -1149,13 +1149,54 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 	return gGroups, gUsers, gGroupsUsers, nil
 }
 
-// getGroupOperation returns the action to perform for this group and the desired group state
-func getGroupOperation(awsGroup *interfaces.Group, googleGroup *admin.Group, forceExternalIdUpdate bool, retainUnmatched bool, issuerArn string) (action OperationAction, group *interfaces.Group) {
+// usersEqual reports whether two users are equal for the purpose of the
+// Equal-vs-Update decision in getUserOperation.
+//
+// The compared set is EXACTLY the set compared inline before the attribute map
+// was wired in, so the decision is behaviour-preserving:
+//
+//	Active, Username, Name.GivenName, Name.FamilyName
+//
+// The newly added schema fields (Title, PhoneNumbers, Addresses, Enterprise,
+// etc.) are deliberately NOT compared here. Widening this set is a conscious
+// future change (it would make previously-Equal users start reporting Update),
+// not something to fold into this behaviour-preserving step.
+func usersEqual(a, b *interfaces.User) bool {
+	return a.Active == b.Active &&
+		a.Username == b.Username &&
+		a.Name.GivenName == b.Name.GivenName &&
+		a.Name.FamilyName == b.Name.FamilyName
+}
+
+// groupsEqual reports whether two groups are equal for the purpose of the
+// Equal-vs-Update decision in getGroupOperation.
+//
+// The compared set is EXACTLY the set compared inline before the attribute map
+// was wired in, so the decision is behaviour-preserving:
+//
+//	DisplayName
+//
+// Widening this set (for example to compare Members here) is a conscious future
+// change, not part of this behaviour-preserving step.
+func groupsEqual(a, b *interfaces.Group) bool {
+	return a.DisplayName == b.DisplayName
+}
+
+// getGroupOperation returns the action to perform for this group and the desired
+// group state.
+//
+// googleGroup is the ALREADY-MAPPED interface view of the Google group (produced
+// by google.MapFromGoogleGroup), or nil to signal "not found in Google". Reading
+// the mapped object here (DisplayName, ExternalId.Id) instead of the raw
+// admin.Group keeps all Google field selection in the mapper. With the default
+// map the mapped DisplayName == admin.Group.Name and ExternalId.Id ==
+// admin.Group.Id, so every decision is identical to pre-change.
+func getGroupOperation(awsGroup *interfaces.Group, googleGroup *interfaces.Group, forceExternalIdUpdate bool, retainUnmatched bool, issuerArn string) (action OperationAction, group *interfaces.Group) {
 	log.Debug("getGroupOperation()")
 
 	if awsGroup == nil {
 		// Group doesn't exist
-		return Create, aws.NewGroup(googleGroup.Name, googleGroup.Id)
+		return Create, aws.NewGroup(googleGroup.DisplayName, googleGroup.ExternalId.Id)
 	}
 
 	if awsGroup.ExternalId.Id == "" {
@@ -1169,7 +1210,7 @@ func getGroupOperation(awsGroup *interfaces.Group, googleGroup *admin.Group, for
 			return Delete, awsGroup
 		}
 		// matching Google group found, adopt the local group
-		return AdoptLocal, aws.UpdateGroup(awsGroup.ID, googleGroup.Name, googleGroup.Id)
+		return AdoptLocal, aws.UpdateGroup(awsGroup.ID, googleGroup.DisplayName, googleGroup.ExternalId.Id)
 	}
 
 	if issuerArn == "" || awsGroup.ExternalId.Issuer == issuerArn {
@@ -1178,24 +1219,24 @@ func getGroupOperation(awsGroup *interfaces.Group, googleGroup *admin.Group, for
 			// group not found in Google
 			return Delete, awsGroup
 		}
-		if awsGroup.ExternalId.Id == googleGroup.Id {
+		if awsGroup.ExternalId.Id == googleGroup.ExternalId.Id {
 			// group matches on ExternalId
-			if awsGroup.DisplayName == googleGroup.Name {
+			if groupsEqual(awsGroup, googleGroup) {
 				// no action required
 				return Equal, awsGroup
 			}
 			// group needs updating
-			return Update, aws.UpdateGroup(awsGroup.ID, googleGroup.Name, googleGroup.Id)
+			return Update, aws.UpdateGroup(awsGroup.ID, googleGroup.DisplayName, googleGroup.ExternalId.Id)
 		}
 		// both groups exist but ExternalId doesn't match
 		// have they been deleted and recreated?
 		if forceExternalIdUpdate {
 			// Force Retention of existing group and update External Id to match
 			// this may lead to privilege inheritence
-			return UpdateForced, aws.UpdateGroup(awsGroup.ID, googleGroup.Name, googleGroup.Id)
+			return UpdateForced, aws.UpdateGroup(awsGroup.ID, googleGroup.DisplayName, googleGroup.ExternalId.Id)
 		}
 		// Do the safe thing and delete the existing group and create a new one to avoid privilege inheritence
-		return Recreate, aws.NewGroup(googleGroup.Name, googleGroup.Id)
+		return Recreate, aws.NewGroup(googleGroup.DisplayName, googleGroup.ExternalId.Id)
 	}
 
 	// There must be an ExternalId setup, its come from a different SCIM provisioning instance/external IdP
@@ -1207,7 +1248,7 @@ func getGroupOperation(awsGroup *interfaces.Group, googleGroup *admin.Group, for
 		// group not found in Google
 		return Delete, awsGroup
 	}
-	return AdoptForeign, aws.UpdateGroup(awsGroup.ID, googleGroup.Name, googleGroup.Id)
+	return AdoptForeign, aws.UpdateGroup(awsGroup.ID, googleGroup.DisplayName, googleGroup.ExternalId.Id)
 }
 
 // getGroupOperations returns the groups of AWS that must be added, deleted, updated, are equals and retained
@@ -1221,8 +1262,12 @@ func getGroupOperations(awsGroups []*interfaces.Group, googleGroups []*admin.Gro
 
 	awsMap := make(map[string]*interfaces.Group)
 	awsMapExtId := make(map[string]*interfaces.Group)
-	googleMap := make(map[string]*admin.Group)
-	googleMapId := make(map[string]*admin.Group)
+	// The google-side lookup maps hold the MAPPED interface view of each Google
+	// group (via google.MapFromGoogleGroup using the default map), so all Google
+	// field selection lives in the mapper. Step B will swap the default map for a
+	// configured map passed in; the signature is unchanged in Step A.
+	googleMap := make(map[string]*interfaces.Group)
+	googleMapId := make(map[string]*interfaces.Group)
 
 	for _, awsGroup := range awsGroups {
 		awsMap[strings.ToLower(awsGroup.DisplayName)] = awsGroup
@@ -1232,24 +1277,40 @@ func getGroupOperations(awsGroups []*interfaces.Group, googleGroups []*admin.Gro
 	}
 
 	for _, gGroup := range googleGroups {
-		googleMap[strings.ToLower(gGroup.Name)] = gGroup
-		googleMapId[gGroup.Id] = gGroup
+		mapped, err := google.MapFromGoogleGroup(gGroup, config.DefaultGroupAttributeMap)
+		if err != nil {
+			// The attribute map is validated at load time, so a mapping error
+			// here is an internal invariant breach, not user input. Abort rather
+			// than proceed with a half-mapped group. The plural signature is
+			// intentionally unchanged (see Step A constraints), so this is
+			// surfaced via log.Fatal, matching the credentials loaders.
+			log.WithError(err).Fatal("getGroupOperations(): failed to map Google group")
+		}
+		mappedGroup := mapped
+		googleMap[strings.ToLower(mappedGroup.DisplayName)] = &mappedGroup
+		googleMapId[mappedGroup.ExternalId.Id] = &mappedGroup
 	}
 
 	// Look for Google groups in AWS
 	for _, gGroup := range googleGroups {
+		mapped, err := google.MapFromGoogleGroup(gGroup, config.DefaultGroupAttributeMap)
+		if err != nil {
+			log.WithError(err).Fatal("getGroupOperations(): failed to map Google group")
+		}
+		mappedGroup := mapped
+
 		var awsGroup *interfaces.Group
 
-		if match, found := awsMapExtId[gGroup.Id]; found {
+		if match, found := awsMapExtId[mappedGroup.ExternalId.Id]; found {
 			// Found by ExternalId.Id
 			awsGroup = match
-		} else if match, found := awsMap[strings.ToLower(gGroup.Name)]; found {
+		} else if match, found := awsMap[strings.ToLower(mappedGroup.DisplayName)]; found {
 			// Found by DisplayName
 			awsGroup = match
 		}
 
 		// awsGroup is nil when the Google group was not found in AWS at all
-		action, group := getGroupOperation(awsGroup, gGroup, forceExternalIdUpdate, retainUnmatched, issuerArn)
+		action, group := getGroupOperation(awsGroup, &mappedGroup, forceExternalIdUpdate, retainUnmatched, issuerArn)
 
 		log.WithField("group", group).Info(action)
 
@@ -1325,13 +1386,22 @@ func getGroupOperations(awsGroups []*interfaces.Group, googleGroups []*admin.Gro
 	return add, delete, update, equals
 }
 
-// getUserOperation returns the action to perform for this user and the desired user state
-func getUserOperation(awsUser *interfaces.User, googleUser *admin.User, forceExternalIdUpdate bool, retainUnmatched bool, issuerArn string) (action OperationAction, user *interfaces.User) {
+// getUserOperation returns the action to perform for this user and the desired
+// user state.
+//
+// googleUser is the ALREADY-MAPPED interface view of the Google user (produced
+// by google.MapFromGoogleUser), or nil to signal "not found in Google". Reading
+// the mapped object here (Username, Active, Name, ExternalId.Id) instead of the
+// raw admin.User keeps all Google field selection and the suspended->Active
+// inversion in the mapper. With the default map the mapped values equal the
+// pre-change raw values (Username == primaryEmail, Active == !suspended,
+// ExternalId.Id == admin.User.Id), so every decision is identical to pre-change.
+func getUserOperation(awsUser *interfaces.User, googleUser *interfaces.User, forceExternalIdUpdate bool, retainUnmatched bool, issuerArn string) (action OperationAction, user *interfaces.User) {
 	log.Debug("getUserOperation()")
 
 	if awsUser == nil {
 		// User doesn't exist
-		return Create, aws.NewUser(googleUser.Name.GivenName, googleUser.Name.FamilyName, googleUser.PrimaryEmail, !googleUser.Suspended, googleUser.Id)
+		return Create, aws.NewUser(googleUser.Name.GivenName, googleUser.Name.FamilyName, googleUser.Username, googleUser.Active, googleUser.ExternalId.Id)
 	}
 
 	if awsUser.ExternalId.Id == "" {
@@ -1345,7 +1415,7 @@ func getUserOperation(awsUser *interfaces.User, googleUser *admin.User, forceExt
 			return Delete, awsUser
 		}
 		// matching Google user found, adopt the local user
-		return AdoptLocal, aws.UpdateUser(awsUser.ID, googleUser.Name.GivenName, googleUser.Name.FamilyName, googleUser.PrimaryEmail, !googleUser.Suspended, googleUser.Id)
+		return AdoptLocal, aws.UpdateUser(awsUser.ID, googleUser.Name.GivenName, googleUser.Name.FamilyName, googleUser.Username, googleUser.Active, googleUser.ExternalId.Id)
 	}
 
 	if issuerArn == "" || awsUser.ExternalId.Issuer == issuerArn {
@@ -1354,27 +1424,24 @@ func getUserOperation(awsUser *interfaces.User, googleUser *admin.User, forceExt
 			// user not found in Google
 			return Delete, awsUser
 		}
-		if awsUser.ExternalId.Id == googleUser.Id {
+		if awsUser.ExternalId.Id == googleUser.ExternalId.Id {
 			// user matches on ExternalId
-			if awsUser.Active == !googleUser.Suspended &&
-				awsUser.Username == googleUser.PrimaryEmail &&
-				awsUser.Name.GivenName == googleUser.Name.GivenName &&
-				awsUser.Name.FamilyName == googleUser.Name.FamilyName {
+			if usersEqual(awsUser, googleUser) {
 				// no action required
 				return Equal, awsUser
 			}
 			// user needs updating
-			return Update, aws.UpdateUser(awsUser.ID, googleUser.Name.GivenName, googleUser.Name.FamilyName, googleUser.PrimaryEmail, !googleUser.Suspended, googleUser.Id)
+			return Update, aws.UpdateUser(awsUser.ID, googleUser.Name.GivenName, googleUser.Name.FamilyName, googleUser.Username, googleUser.Active, googleUser.ExternalId.Id)
 		}
 		// both users exist but ExternalId doesn't match
 		// have they been deleted and recreated?
 		if forceExternalIdUpdate {
 			// Force Retention of existing user and update External Id to match
 			// this may lead to privilege inheritence
-			return UpdateForced, aws.UpdateUser(awsUser.ID, googleUser.Name.GivenName, googleUser.Name.FamilyName, googleUser.PrimaryEmail, !googleUser.Suspended, googleUser.Id)
+			return UpdateForced, aws.UpdateUser(awsUser.ID, googleUser.Name.GivenName, googleUser.Name.FamilyName, googleUser.Username, googleUser.Active, googleUser.ExternalId.Id)
 		}
 		// Do the safe thing and delete the existing user and create a new one to avoid privilege inheritence
-		return Recreate, aws.UpdateUser(awsUser.ID, googleUser.Name.GivenName, googleUser.Name.FamilyName, googleUser.PrimaryEmail, !googleUser.Suspended, googleUser.Id)
+		return Recreate, aws.UpdateUser(awsUser.ID, googleUser.Name.GivenName, googleUser.Name.FamilyName, googleUser.Username, googleUser.Active, googleUser.ExternalId.Id)
 	}
 
 	// There must be an ExternalId setup, its come from a different SCIM provisioning instance/external IdP
@@ -1386,7 +1453,7 @@ func getUserOperation(awsUser *interfaces.User, googleUser *admin.User, forceExt
 		// user not found in Google
 		return Delete, awsUser
 	}
-	return AdoptForeign, aws.UpdateUser(awsUser.ID, googleUser.Name.GivenName, googleUser.Name.FamilyName, googleUser.PrimaryEmail, !googleUser.Suspended, googleUser.Id)
+	return AdoptForeign, aws.UpdateUser(awsUser.ID, googleUser.Name.GivenName, googleUser.Name.FamilyName, googleUser.Username, googleUser.Active, googleUser.ExternalId.Id)
 }
 
 // getUserOperations returns the users of AWS that must be added, deleted, updated, are equals and retained
@@ -1400,8 +1467,13 @@ func getUserOperations(awsUsers []*interfaces.User, googleUsers []*admin.User, f
 
 	awsMapUsername := make(map[string]*interfaces.User)
 	awsMapExtId := make(map[string]*interfaces.User)
-	googleMapEmail := make(map[string]*admin.User)
-	googleMapId := make(map[string]*admin.User)
+	// The google-side lookup maps hold the MAPPED interface view of each Google
+	// user (via google.MapFromGoogleUser using the default map), so all Google
+	// field selection and the suspended->Active inversion live in the mapper.
+	// Step B will swap the default map for a configured map passed in; the
+	// signature is unchanged in Step A.
+	googleMapEmail := make(map[string]*interfaces.User)
+	googleMapId := make(map[string]*interfaces.User)
 
 	for _, awsUser := range awsUsers {
 		awsMapUsername[strings.ToLower(awsUser.Username)] = awsUser
@@ -1411,24 +1483,40 @@ func getUserOperations(awsUsers []*interfaces.User, googleUsers []*admin.User, f
 	}
 
 	for _, gUser := range googleUsers {
-		googleMapId[gUser.Id] = gUser
-		googleMapEmail[strings.ToLower(gUser.PrimaryEmail)] = gUser
+		mapped, err := google.MapFromGoogleUser(gUser, config.DefaultUserAttributeMap)
+		if err != nil {
+			// The attribute map is validated at load time, so a mapping error
+			// here is an internal invariant breach, not user input. Abort rather
+			// than proceed with a half-mapped user. The plural signature is
+			// intentionally unchanged (see Step A constraints), so this is
+			// surfaced via log.Fatal, matching the credentials loaders.
+			log.WithError(err).Fatal("getUserOperations(): failed to map Google user")
+		}
+		mappedUser := mapped
+		googleMapId[mappedUser.ExternalId.Id] = &mappedUser
+		googleMapEmail[strings.ToLower(mappedUser.Username)] = &mappedUser
 	}
 
 	// Look for Google users in AWS
 	for _, gUser := range googleUsers {
+		mapped, err := google.MapFromGoogleUser(gUser, config.DefaultUserAttributeMap)
+		if err != nil {
+			log.WithError(err).Fatal("getUserOperations(): failed to map Google user")
+		}
+		mappedUser := mapped
+
 		var awsUser *interfaces.User
 
-		if match, found := awsMapExtId[gUser.Id]; found {
+		if match, found := awsMapExtId[mappedUser.ExternalId.Id]; found {
 			// Found by ExternalId.Id
 			awsUser = match
-		} else if match, found := awsMapUsername[strings.ToLower(gUser.PrimaryEmail)]; found {
-			// Found by PrimaryEmail/username
+		} else if match, found := awsMapUsername[strings.ToLower(mappedUser.Username)]; found {
+			// Found by Username (default-mapped from PrimaryEmail)
 			awsUser = match
 		}
 
 		// awsUser is nil when the Google user was not found in AWS at all
-		action, user := getUserOperation(awsUser, gUser, forceExternalIdUpdate, retainUnmatched, issuerArn)
+		action, user := getUserOperation(awsUser, &mappedUser, forceExternalIdUpdate, retainUnmatched, issuerArn)
 
 		log.WithField("user", user).Info(action)
 
