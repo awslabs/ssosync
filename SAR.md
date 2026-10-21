@@ -72,6 +72,7 @@ Sensitive values can be provided inline or as the ARN of a secret in [AWS Secret
 | `PrecacheOrgUnits` | `PRECACHE_ORG_UNITS` | Comma-separated list of Google OrgUnit paths to precache (e.g. `/OU1,/OU2/OU3`). Use `/` for the whole directory, or leave empty to disable precaching. | `/` |
 | `ExternalIdChange` | `FORCE_EXTERNAL_ID_UPDATE` | When a Google user is deleted and recreated (same email, new ID), either `update` the existing Identity Store user to preserve assignments, or `delete/recreate` to prevent permission inheritance. | `delete/recreate` |
 | `RetainUnmatched` | `RETAIN_UNMATCHED` | Retain 'local' users and groups that exist in the Identity Store but cannot be matched to Google Workspace, instead of deleting them (`remove` or `retain`). | `remove` |
+| `AttributeMap` | `ATTRIBUTE_MAP` | Attribute map controlling how Google user attributes map onto IAM Identity Center (SCIM) fields (`groups` sync method only). Accepts inline attribute-map JSON, a Secrets Manager ARN, or an SSM Parameter Store ARN. Leave empty to use the built-in default mapping. See [Attribute mapping](#attribute-mapping) below. | `""` |
 
 ### Lambda Configuration
 
@@ -128,6 +129,44 @@ ssosync then selects every group that has the marker group as a member, no matte
 Remember that `memberKey` requires `GoogleCustomerId` to be set to your real customer ID (not `my_customer`); the template fails deployment otherwise.
 
 For the complete query syntax see [Google Groups Search](https://developers.google.com/admin-sdk/directory/v1/guides/search-groups).
+
+## Attribute mapping
+
+The `AttributeMap` parameter (Lambda environment variable `ATTRIBUTE_MAP`) controls how Google Workspace user attributes are mapped onto the AWS IAM Identity Center (SCIM) user fields. It applies to the `groups` sync method only. Like the credentials parameters, it accepts inline attribute-map JSON, the ARN of a secret in AWS Secrets Manager, or the ARN of an SSM Parameter Store entry; ssosync resolves ARNs at runtime. Leaving it empty uses the built-in default mapping below.
+
+Groups map `DisplayName` from the Google group name only (AWS SCIM accepts only `externalId`, `displayName` and `members` for groups; a group description is not SCIM-settable).
+
+The following JSON is exactly the built-in default. Copying it verbatim changes nothing, so it is a safe starting point to copy and then customise:
+
+```json
+{
+  "user": {
+    "Name.GivenName": "name.givenName",
+    "Name.FamilyName": "name.familyName",
+    "Username": "primaryEmail",
+    "Active": "suspended",
+    "Title": "organizations[primary].title",
+    "Enterprise.Department": "organizations[primary].department",
+    "Enterprise.Organization": "organizations[primary].name",
+    "Enterprise.CostCenter": "organizations[primary].costCenter"
+  },
+  "group": {
+    "DisplayName": "name"
+  }
+}
+```
+
+Each block is optional: an omitted block keeps its default, and a present block replaces that block's mapping. Within a block the key is the SCIM target field and the value is the Google source attribute.
+
+- **Defaulted** user target fields: `Name.GivenName`, `Name.FamilyName`, `Username`, `Active`, `Title`, `Enterprise.Department`, `Enterprise.Organization`, `Enterprise.CostCenter`.
+- **Opt-in** user target fields (supported, not in the default): `Enterprise.Manager`, `Enterprise.Division`, `Enterprise.EmployeeNumber`, `ProfileURL`, `Emails`, `Addresses`, `PhoneNumbers`. `Enterprise.Manager` yields the manager's email as a proxy key (not a SCIM user-id reference), so whether AWS accepts it depends on your deployment.
+
+For the full JSON syntax, the supported source attributes, and the primary/type-qualified selection rule for multi-valued Google fields, see [Attribute mapping in the project README](https://github.com/awslabs/ssosync/blob/master/README.md#attribute-mapping).
+
+> [!CAUTION]
+> The sync makes the AWS user consistent with the mapped Google user: any supported SCIM field the map does not populate is cleared on the AWS user. Enabling richer mapping — or the defaults, for users who lack a primary organization — can clear values already present on an AWS user. Set `DryRun` to `dry-run` first to see exactly what would change before applying it.
+
+As with the rest of the deployment, the quick-start templates are the recommended way to set this up.
 
 ## Deployment patterns
 
