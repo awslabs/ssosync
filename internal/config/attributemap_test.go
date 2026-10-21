@@ -128,8 +128,67 @@ func TestParseAttributeMaps_UnsupportedTargetField(t *testing.T) {
 	msg := err.Error()
 	assert.Contains(msg, "attribute map (user block)")
 	assert.Contains(msg, `unsupported target field "Name.Givenname"`)
-	// The valid-set listing names the supported user target fields.
-	assert.Contains(msg, "Active, Name.FamilyName, Name.GivenName, Username")
+	// The valid-set listing names the supported user target fields, sorted.
+	assert.Contains(msg, "Active, Addresses, Emails, Enterprise.CostCenter, "+
+		"Enterprise.Department, Enterprise.Division, Enterprise.EmployeeNumber, "+
+		"Enterprise.Manager, Enterprise.Organization, Name.FamilyName, "+
+		"Name.GivenName, PhoneNumbers, ProfileURL, Title, Username")
+}
+
+func TestParseAttributeMaps_SafeSetTokensAccepted(t *testing.T) {
+	assert := assert.New(t)
+
+	content := `{"user":{
+		"Title":"organizations[primary].title",
+		"Enterprise.Department":"organizations[primary].department",
+		"Enterprise.Organization":"organizations[primary].name",
+		"Enterprise.CostCenter":"organizations[primary].costCenter"
+	}}`
+	am, err := ParseAttributeMaps([]byte(content))
+	assert.NoError(err)
+	assert.Equal("organizations[primary].title", am.User["Title"])
+	assert.Equal("organizations[primary].department", am.User["Enterprise.Department"])
+	assert.Equal("organizations[primary].name", am.User["Enterprise.Organization"])
+	assert.Equal("organizations[primary].costCenter", am.User["Enterprise.CostCenter"])
+}
+
+func TestParseAttributeMaps_OptInTokensAccepted(t *testing.T) {
+	assert := assert.New(t)
+
+	content := `{"user":{
+		"Enterprise.Manager":"relations[type=manager].value",
+		"Enterprise.Division":"organizations[primary].domain",
+		"Enterprise.EmployeeNumber":"organizations[primary].costCenter",
+		"ProfileURL":"websites[primary].value",
+		"Emails":"emails[primary].address",
+		"Addresses":"addresses[primary].formatted",
+		"PhoneNumbers":"phones[primary].value"
+	}}`
+	am, err := ParseAttributeMaps([]byte(content))
+	assert.NoError(err)
+	assert.Equal("relations[type=manager].value", am.User["Enterprise.Manager"])
+	assert.Equal("websites[primary].value", am.User["ProfileURL"])
+	assert.Equal("emails[primary].address", am.User["Emails"])
+	assert.Equal("addresses[primary].formatted", am.User["Addresses"])
+	assert.Equal("phones[primary].value", am.User["PhoneNumbers"])
+}
+
+func TestParseAttributeMaps_DeferredAddressSubFieldsRejected(t *testing.T) {
+	assert := assert.New(t)
+
+	// Only addresses[primary].formatted is registered this phase; the per-sub-field
+	// address paths are deliberately NOT supported yet (design §7.3).
+	_, err := ParseAttributeMaps([]byte(`{"user":{"Addresses":"addresses[primary].streetAddress"}}`))
+	assert.Error(err)
+	assert.Contains(err.Error(), `unsupported source attribute "addresses[primary].streetAddress"`)
+
+	_, err = ParseAttributeMaps([]byte(`{"user":{"Addresses":"addresses[primary].locality"}}`))
+	assert.Error(err)
+	assert.Contains(err.Error(), `unsupported source attribute "addresses[primary].locality"`)
+
+	// The supported formatted path, by contrast, is accepted.
+	_, err = ParseAttributeMaps([]byte(`{"user":{"Addresses":"addresses[primary].formatted"}}`))
+	assert.NoError(err)
 }
 
 func TestParseAttributeMaps_UnsupportedSourceAttr(t *testing.T) {

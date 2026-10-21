@@ -19,21 +19,53 @@ import (
 // that matters, and struct{} carries no per-entry payload.
 var (
 	// supportedUserTargetFields are the interfaces.User TARGET field paths the
-	// validator accepts as attribute-map keys for the user block this phase.
+	// validator accepts as attribute-map keys for the user block. The SAFE SET
+	// (defaulted in DefaultUserAttributeMap) and the OPT-IN-ONLY targets
+	// (supported here but deliberately not defaulted, see attrmap-design §5) are
+	// both listed; see the inline markers.
 	supportedUserTargetFields = map[string]struct{}{
-		"Name.GivenName":  {},
-		"Name.FamilyName": {},
-		"Username":        {},
-		"Active":          {},
+		// Existing / safe set.
+		"Name.GivenName":          {},
+		"Name.FamilyName":         {},
+		"Username":                {},
+		"Active":                  {},
+		"Title":                   {}, // safe set
+		"Enterprise.Department":   {}, // safe set
+		"Enterprise.Organization": {}, // safe set
+		"Enterprise.CostCenter":   {}, // safe set
+		// Opt-in only (supported, NOT defaulted).
+		"Enterprise.Manager":        {}, // opt-in (design §5.7)
+		"Enterprise.Division":       {}, // opt-in (design §5.2)
+		"Enterprise.EmployeeNumber": {}, // opt-in (design §5.3)
+		"ProfileURL":                {}, // opt-in (design §5.4)
+		"Emails":                    {}, // opt-in (design §5.5)
+		"Addresses":                 {}, // opt-in (design §5.5)
+		"PhoneNumbers":              {}, // opt-in (design §5.5)
 	}
 
 	// supportedUserSourceAttrs are the admin.User SOURCE attribute paths the
-	// validator accepts as attribute-map values for the user block this phase.
+	// validator accepts as attribute-map values for the user block. Multi-valued
+	// paths are primary-entry selected via a JSON round-trip in the resolver (see
+	// internal/google resolveGoogleUserSource). The SAFE SET and OPT-IN-ONLY
+	// sources are both listed; see the inline markers.
 	supportedUserSourceAttrs = map[string]struct{}{
+		// Existing / safe set scalars.
 		"name.givenName":  {},
 		"name.familyName": {},
 		"primaryEmail":    {},
 		"suspended":       {},
+		// Safe set (primary organization scalars).
+		"organizations[primary].title":      {}, // safe set
+		"organizations[primary].department": {}, // safe set
+		"organizations[primary].name":       {}, // safe set
+		"organizations[primary].costCenter": {}, // safe set
+		// Opt-in only (supported, NOT defaulted).
+		"relations[type=manager].value": {}, // opt-in (design §5.7)
+		"organizations[primary].domain": {}, // opt-in (design §5.2)
+		"websites[primary].value":       {}, // opt-in (design §5.4)
+		"emails[primary].address":       {}, // opt-in (design §5.5)
+		"addresses[primary].formatted":  {}, // opt-in (design §5.5 / §7.3: formatted only)
+		"phones[primary].value":         {}, // opt-in (design §5.5)
 	}
 
 	// supportedGroupTargetFields are the interfaces.Group TARGET field paths the

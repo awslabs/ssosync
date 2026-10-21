@@ -17,6 +17,7 @@ package google
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -96,6 +97,14 @@ func (c *client) getDeletedUsers() ([]*admin.User, error) {
 	u := make([]*admin.User, 0)
 	var err error
 
+	// The Users.List projection is intentionally left at its default (basic).
+	// The default attribute map only sources standard admin.User fields
+	// (name, primaryEmail, suspended, organizations), all returned by the basic
+	// projection. Custom-schema attributes (dotted "schema.field" source paths)
+	// remain a FUTURE opt-in: enabling them requires promoting this call to
+	// Projection("full") (or Projection("custom")+CustomFieldMask) so
+	// admin.User.CustomSchemas is populated. See the mapper doc comment and
+	// design §6/§7.2.
 	if err = c.service.Users.List().Customer(c.customerID).ShowDeleted("true").Pages(c.ctx, func(users *admin.Users) error {
 		u = append(u, users.Users...)
 		return nil
@@ -169,6 +178,15 @@ func (c *client) getUsers(query string, filter string) ([]*admin.User, error) {
 	if query == "" {
 		return nil, nil
 	}
+
+	// The Users.List projection is intentionally left at its default (basic).
+	// The default attribute map only sources standard admin.User fields
+	// (name, primaryEmail, suspended, organizations), all returned by the basic
+	// projection. Custom-schema attributes (dotted "schema.field" source paths)
+	// remain a FUTURE opt-in: enabling them requires promoting these calls to
+	// Projection("full") (or Projection("custom")+CustomFieldMask) so
+	// admin.User.CustomSchemas is populated. See the mapper doc comment and
+	// design §6/§7.2.
 
 	// If we have wildcard then fetch all users
 	if query == "*" {
@@ -315,19 +333,30 @@ func (c *client) getGroups(query string) ([]*admin.Group, error) {
 // the time it reaches here every entry is a known target<-source pair. A
 // genuinely-unexpected unresolved entry is therefore an internal invariant
 // breach, reported via the returned error rather than silently dropping the
-// field. Standard source paths only this phase.
+// field.
 //
-// Deferred extension points (documented, NOT implemented this phase):
+// Resolvable source paths this phase:
+//   - Scalar admin.User fields: name.givenName, name.familyName, primaryEmail,
+//     suspended (inverted to Active).
+//   - Multi-valued interface{} fields, resolved by a JSON round-trip into the
+//     SDK typed struct with PRIMARY-entry selection (see resolveGoogleUserSource):
+//     organizations[primary].{title,department,name,costCenter,domain},
+//     relations[type=manager].value, websites[primary].value,
+//     emails[primary].address, phones[primary].value,
+//     addresses[primary].formatted.
 //
-//	(a) Custom-schema resolution via admin.User.CustomSchemas
-//	    (map[string]googleapi.RawMessage): a dotted "schema.field" key would be
-//	    split into schema name + field name and the RawMessage decoded.
-//	(b) The multi-valued interface{} sub-objects (Emails, Addresses,
-//	    Organizations, Phones, Relations, ...) need a JSON round-trip through the
-//	    SDK's typed structs to be read.
-//	(c) Custom-schema data is NOT fetched today because client.go never sets
-//	    Projection("full")/Projection("custom") on the Users.List calls, so
-//	    admin.User.CustomSchemas is nil on every fetched user.
+// The resolver returns only scalars (string/bool); all SCIM element shaping for
+// the multi-valued targets (Emails, Addresses, PhoneNumbers) is performed here
+// in the mapper per design §5.5.
+//
+// Deferred extension point (documented, NOT implemented this phase):
+//
+//	Custom-schema resolution via admin.User.CustomSchemas
+//	(map[string]googleapi.RawMessage): a dotted "schema.field" key would be split
+//	into schema name + field name and the RawMessage decoded. It is NOT fetched
+//	today because getUsers/getDeletedUsers never set Projection("full")/
+//	Projection("custom") on the Users.List calls, so admin.User.CustomSchemas is
+//	nil on every fetched user. See the note at those call sites and design §6/§7.2.
 //
 // See /Users/crpates/GitHub/ssosync/.agents/tasks/google-admin-schema-findings.md.
 func mapFromGoogleUser(u *admin.User, attrMap config.AttributeMap) (interfaces.User, error) {
@@ -362,6 +391,102 @@ func mapFromGoogleUser(u *admin.User, attrMap config.AttributeMap) (interfaces.U
 				return interfaces.User{}, err
 			}
 			user.Active = v.(bool)
+		case "Title":
+			v, err := resolveGoogleUserSource(u, sourceAttr)
+			if err != nil {
+				return interfaces.User{}, err
+			}
+			user.Title = v.(string)
+		case "ProfileURL":
+			v, err := resolveGoogleUserSource(u, sourceAttr)
+			if err != nil {
+				return interfaces.User{}, err
+			}
+			user.ProfileURL = v.(string)
+		case "Enterprise.Department":
+			v, err := resolveGoogleUserSource(u, sourceAttr)
+			if err != nil {
+				return interfaces.User{}, err
+			}
+			if s := v.(string); s != "" {
+				ensureEnterprise(&user).Department = s
+			}
+		case "Enterprise.Organization":
+			v, err := resolveGoogleUserSource(u, sourceAttr)
+			if err != nil {
+				return interfaces.User{}, err
+			}
+			if s := v.(string); s != "" {
+				ensureEnterprise(&user).Organization = s
+			}
+		case "Enterprise.CostCenter":
+			v, err := resolveGoogleUserSource(u, sourceAttr)
+			if err != nil {
+				return interfaces.User{}, err
+			}
+			if s := v.(string); s != "" {
+				ensureEnterprise(&user).CostCenter = s
+			}
+		case "Enterprise.Division":
+			v, err := resolveGoogleUserSource(u, sourceAttr)
+			if err != nil {
+				return interfaces.User{}, err
+			}
+			if s := v.(string); s != "" {
+				ensureEnterprise(&user).Division = s
+			}
+		case "Enterprise.EmployeeNumber":
+			v, err := resolveGoogleUserSource(u, sourceAttr)
+			if err != nil {
+				return interfaces.User{}, err
+			}
+			if s := v.(string); s != "" {
+				ensureEnterprise(&user).EmployeeNumber = s
+			}
+		case "Enterprise.Manager":
+			v, err := resolveGoogleUserSource(u, sourceAttr)
+			if err != nil {
+				return interfaces.User{}, err
+			}
+			if s := v.(string); s != "" {
+				ensureEnterprise(&user).Manager = &interfaces.EnterpriseManager{Value: s}
+			}
+		case "Emails":
+			v, err := resolveGoogleUserSource(u, sourceAttr)
+			if err != nil {
+				return interfaces.User{}, err
+			}
+			if s := v.(string); s != "" {
+				user.Emails = []interfaces.UserEmail{{
+					Value:   s,
+					Type:    scimTypeOrWork(googleEntryType(u, sourceAttr)),
+					Primary: true,
+				}}
+			}
+		case "Addresses":
+			v, err := resolveGoogleUserSource(u, sourceAttr)
+			if err != nil {
+				return interfaces.User{}, err
+			}
+			if s := v.(string); s != "" {
+				user.Addresses = []interfaces.UserAddress{{
+					Formatted: s,
+					Type:      scimTypeOrWork(googleEntryType(u, sourceAttr)),
+					Primary:   true,
+				}}
+			}
+		case "PhoneNumbers":
+			v, err := resolveGoogleUserSource(u, sourceAttr)
+			if err != nil {
+				return interfaces.User{}, err
+			}
+			if s := v.(string); s != "" {
+				user.PhoneNumbers = []interfaces.UserPhoneNumber{{
+					Value:   s,
+					Type:    scimTypeOrWork(googleEntryType(u, sourceAttr)),
+					Primary: true,
+				}}
+			}
 		default:
 			return interfaces.User{}, fmt.Errorf("mapFromGoogleUser: unsupported target field %q (map validated at load time, this is an internal error)", targetField)
 		}
@@ -374,11 +499,82 @@ func mapFromGoogleUser(u *admin.User, attrMap config.AttributeMap) (interfaces.U
 	return user, nil
 }
 
+// ensureEnterprise lazily allocates user.Enterprise and returns it, so an
+// Enterprise sub-field is only materialized when a non-empty value is being
+// written. A user with no enterprise-sourced data therefore keeps
+// user.Enterprise == nil, matching aws.buildUser's u.Enterprise != nil gate and
+// keeping usersEqual's reflect.DeepEqual(Enterprise) churn-free (design §7.1 /
+// acceptance criterion 5).
+func ensureEnterprise(u *interfaces.User) *interfaces.EnterpriseUser {
+	if u.Enterprise == nil {
+		u.Enterprise = &interfaces.EnterpriseUser{}
+	}
+	return u.Enterprise
+}
+
+// scimTypeOrWork returns the Google entry's own type, defaulting to "work" when
+// it is empty. This matches aws.buildUser's synthesized "work" element so a
+// tenant that opts into Emails/Addresses/PhoneNumbers with work data stays
+// churn-free against a previously-synthesized record (design §5.5).
+func scimTypeOrWork(googleType string) string {
+	if googleType == "" {
+		return "work"
+	}
+	return googleType
+}
+
+// roundTripSlice re-materializes a Google admin.User interface{} multi-valued
+// field (which the SDK leaves as interface{} / []interface{} of maps) into the
+// SDK typed slice T by marshaling the value to JSON and unmarshaling into *[]T.
+// A nil field yields a nil slice and no error. A malformed value (should never
+// happen for SDK-sourced data) returns a defensive internal error.
+func roundTripSlice[T any](v interface{}, out *[]T) error {
+	if v == nil {
+		*out = nil
+		return nil
+	}
+	b, err := json.Marshal(v)
+	if err != nil {
+		return fmt.Errorf("resolveGoogleUserSource: marshal multi-valued field (map validated at load time, this is an internal error): %w", err)
+	}
+	if err := json.Unmarshal(b, out); err != nil {
+		return fmt.Errorf("resolveGoogleUserSource: unmarshal multi-valued field into %T (map validated at load time, this is an internal error): %w", *out, err)
+	}
+	return nil
+}
+
+// primaryIndex returns the index of the entry to use for a primary-selected
+// multi-valued field: the first entry whose primary(i) reports true, else 0 for
+// a non-empty slice, else -1 for an empty slice (no entry).
+func primaryIndex(n int, primary func(i int) bool) int {
+	for i := 0; i < n; i++ {
+		if primary(i) {
+			return i
+		}
+	}
+	if n > 0 {
+		return 0
+	}
+	return -1
+}
+
 // resolveGoogleUserSource reads a single supported Google admin.User source
-// attribute path and returns its value. The "suspended" -> Active inversion is
-// applied here so the caller assigns a ready-to-use bool. Name sub-fields get
-// the same zero-width-space -> space normalization getUsers applies. An
-// unrecognised path is an internal error (the load-time validator rejects
+// attribute path and returns its scalar value (string, or bool for the
+// "suspended" inversion). The "suspended" -> Active inversion is applied here so
+// the caller assigns a ready-to-use bool. Name sub-fields get the same
+// zero-width-space -> space normalization getUsers applies.
+//
+// Multi-valued interface{} fields (organizations, relations, websites, emails,
+// phones, addresses) are read via a JSON round-trip into the SDK typed struct
+// (roundTripSlice) followed by PRIMARY-entry selection (primaryIndex): the first
+// entry marked primary, else the first entry, else the empty string for an
+// absent/empty field. relations[type=manager] instead selects the first entry
+// whose Type == "manager" (case-insensitive), else the empty string. Element
+// SHAPING for the Emails/Addresses/PhoneNumbers targets is NOT done here; this
+// resolver only extracts the scalar, and the mapper builds the SCIM element
+// (design §7.1).
+//
+// An unrecognised path is an internal error (the load-time validator rejects
 // unknown sources before they ever reach here).
 func resolveGoogleUserSource(u *admin.User, sourceAttr string) (interface{}, error) {
 	switch sourceAttr {
@@ -397,8 +593,135 @@ func resolveGoogleUserSource(u *admin.User, sourceAttr string) (interface{}, err
 	case "suspended":
 		// Active is the logical inverse of Google's "suspended" flag.
 		return !u.Suspended, nil
+
+	case "organizations[primary].title",
+		"organizations[primary].department",
+		"organizations[primary].name",
+		"organizations[primary].costCenter",
+		"organizations[primary].domain":
+		var orgs []admin.UserOrganization
+		if err := roundTripSlice(u.Organizations, &orgs); err != nil {
+			return nil, err
+		}
+		i := primaryIndex(len(orgs), func(i int) bool { return orgs[i].Primary })
+		if i < 0 {
+			return "", nil
+		}
+		switch sourceAttr {
+		case "organizations[primary].title":
+			return orgs[i].Title, nil
+		case "organizations[primary].department":
+			return orgs[i].Department, nil
+		case "organizations[primary].name":
+			return orgs[i].Name, nil
+		case "organizations[primary].costCenter":
+			return orgs[i].CostCenter, nil
+		default: // organizations[primary].domain
+			return orgs[i].Domain, nil
+		}
+
+	case "relations[type=manager].value":
+		var rels []admin.UserRelation
+		if err := roundTripSlice(u.Relations, &rels); err != nil {
+			return nil, err
+		}
+		for _, r := range rels {
+			if strings.EqualFold(r.Type, "manager") {
+				return r.Value, nil
+			}
+		}
+		return "", nil
+
+	case "websites[primary].value":
+		var sites []admin.UserWebsite
+		if err := roundTripSlice(u.Websites, &sites); err != nil {
+			return nil, err
+		}
+		i := primaryIndex(len(sites), func(i int) bool { return sites[i].Primary })
+		if i < 0 {
+			return "", nil
+		}
+		return sites[i].Value, nil
+
+	case "emails[primary].address":
+		var emails []admin.UserEmail
+		if err := roundTripSlice(u.Emails, &emails); err != nil {
+			return nil, err
+		}
+		i := primaryIndex(len(emails), func(i int) bool { return emails[i].Primary })
+		if i < 0 {
+			return "", nil
+		}
+		return emails[i].Address, nil
+
+	case "phones[primary].value":
+		var phones []admin.UserPhone
+		if err := roundTripSlice(u.Phones, &phones); err != nil {
+			return nil, err
+		}
+		i := primaryIndex(len(phones), func(i int) bool { return phones[i].Primary })
+		if i < 0 {
+			return "", nil
+		}
+		return phones[i].Value, nil
+
+	case "addresses[primary].formatted":
+		var addrs []admin.UserAddress
+		if err := roundTripSlice(u.Addresses, &addrs); err != nil {
+			return nil, err
+		}
+		i := primaryIndex(len(addrs), func(i int) bool { return addrs[i].Primary })
+		if i < 0 {
+			return "", nil
+		}
+		return addrs[i].Formatted, nil
+
 	default:
 		return nil, fmt.Errorf("mapFromGoogleUser: unsupported source attribute %q (map validated at load time, this is an internal error)", sourceAttr)
+	}
+}
+
+// googleEntryType returns the Google "type" of the primary-selected entry for a
+// multi-valued source path that feeds a SCIM multi-valued target (Emails,
+// Addresses, PhoneNumbers). It re-runs the same round-trip + primary-selection
+// the resolver uses so the emitted SCIM element carries the Google entry's own
+// type (design §5.5). A malformed field or a path with no type yields the empty
+// string, which the caller defaults to "work" via scimTypeOrWork. Keeping this
+// read separate preserves the resolver's scalar-only contract.
+func googleEntryType(u *admin.User, sourceAttr string) string {
+	switch sourceAttr {
+	case "emails[primary].address":
+		var emails []admin.UserEmail
+		if err := roundTripSlice(u.Emails, &emails); err != nil {
+			return ""
+		}
+		i := primaryIndex(len(emails), func(i int) bool { return emails[i].Primary })
+		if i < 0 {
+			return ""
+		}
+		return emails[i].Type
+	case "addresses[primary].formatted":
+		var addrs []admin.UserAddress
+		if err := roundTripSlice(u.Addresses, &addrs); err != nil {
+			return ""
+		}
+		i := primaryIndex(len(addrs), func(i int) bool { return addrs[i].Primary })
+		if i < 0 {
+			return ""
+		}
+		return addrs[i].Type
+	case "phones[primary].value":
+		var phones []admin.UserPhone
+		if err := roundTripSlice(u.Phones, &phones); err != nil {
+			return ""
+		}
+		i := primaryIndex(len(phones), func(i int) bool { return phones[i].Primary })
+		if i < 0 {
+			return ""
+		}
+		return phones[i].Type
+	default:
+		return ""
 	}
 }
 
