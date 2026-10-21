@@ -19,7 +19,18 @@ func TestConfig(t *testing.T) {
 	assert.Equal(cfg.LogFormat, DefaultLogFormat)
 	assert.Equal(cfg.Debug, DefaultDebug)
 	assert.Equal(cfg.GoogleCredentials, DefaultGoogleCredentials)
+	assert.Equal(cfg.AttributeMapFile, DefaultAttributeMapFile)
+	assert.Equal(cfg.AttributeMap, DefaultAttributeMap)
 	assert.Equal(cfg.SyncMethod, DefaultSyncMethod)
+}
+
+func TestDefaultAttributeMap(t *testing.T) {
+	assert := assert.New(t)
+
+	// DefaultAttributeMap only references the existing maps; it does not
+	// redefine the mappings.
+	assert.Equal(DefaultUserAttributeMap, DefaultAttributeMap.User)
+	assert.Equal(DefaultGroupAttributeMap, DefaultAttributeMap.Group)
 }
 
 func TestConfigValidate_Success(t *testing.T) {
@@ -116,5 +127,6 @@ func TestConstants(t *testing.T) {
 	assert.Equal(t, "text", DefaultLogFormat)
 	assert.Equal(t, false, DefaultDebug)
 	assert.Equal(t, "credentials.json", DefaultGoogleCredentials)
+	assert.Equal(t, "", DefaultAttributeMapFile)
 	assert.Equal(t, "groups", DefaultSyncMethod)
 }

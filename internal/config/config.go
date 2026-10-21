@@ -13,6 +13,15 @@ type Config struct {
 	LogFormat string `mapstructure:"log_format"`
 	// GoogleCredentials ...
 	GoogleCredentials string `mapstructure:"google_credentials"`
+	// AttributeMapFile holds the path to a JSON file containing the attribute
+	// map (groups sync method only), mirroring how GoogleCredentials holds the
+	// credentials file path. Empty means use the built-in DefaultAttributeMap.
+	AttributeMapFile string `mapstructure:"attribute_map_file"`
+	// AttributeMap holds the loaded user/group attribute maps. It is populated
+	// by the attribute-map loader (from AttributeMapFile for the CLI, or the
+	// ATTRIBUTE_MAP env var for Lambda), not by viper, so it carries no
+	// mapstructure tag.
+	AttributeMap AttributeMaps
 	// GoogleAdmin ...
 	GoogleAdmin string `mapstructure:"google_admin"`
 	// CustomerID is the Google Workspace customer ID to operate against.
@@ -74,6 +83,9 @@ const (
 	DefaultDebug = false
 	// DefaultGoogleCredentials is the default credentials path
 	DefaultGoogleCredentials = "credentials.json"
+	// DefaultAttributeMapFile is the default attribute map file path.
+	// Empty means no file is provided, so DefaultAttributeMap is used.
+	DefaultAttributeMapFile = ""
 	// DefaultGoogleAdmin is the default service account email address
 	DefaultGoogleAdmin = ""
 	// DefaultCustomerID is the default Google Workspace customer ID.
@@ -105,6 +117,20 @@ const (
 // attributes (admin.User.CustomSchemas) are not resolved yet. See the deferred
 // extension points documented on the mapper functions in internal/google.
 type AttributeMap map[string]string
+
+// AttributeMaps pairs the user and group attribute maps that together make up a
+// loaded attribute map (groups sync method only).
+//
+// A single flat map is deliberately NOT used: the user target keys
+// (e.g. "Name.GivenName") and group target keys (e.g. "DisplayName") are carried
+// in two separate maps today, and the mapper functions (mapFromGoogleUser /
+// mapFromGoogleGroup) depend on that user/group distinction. Flattening would
+// discard it and be ambiguous to split back out in the loader, so the pair keeps
+// the two maps distinct end to end.
+type AttributeMaps struct {
+	User  AttributeMap `mapstructure:"user" json:"user"`
+	Group AttributeMap `mapstructure:"group" json:"group"`
+}
 
 // Slice-typed and map-typed defaults cannot be declared as constants in Go, so
 // they are defined as package-level variables.
@@ -145,6 +171,17 @@ var (
 	DefaultGroupAttributeMap AttributeMap = AttributeMap{
 		"DisplayName": "name",
 	}
+
+	// DefaultAttributeMap is the canonical combined default that the attribute
+	// map loader falls back to when no file/env value is provided (groups sync
+	// method only). It does NOT redefine any mapping; it only references the two
+	// existing maps above, so DefaultUserAttributeMap / DefaultGroupAttributeMap
+	// remain the single source of truth for the actual mappings and no existing
+	// reference or test is affected.
+	DefaultAttributeMap AttributeMaps = AttributeMaps{
+		User:  DefaultUserAttributeMap,
+		Group: DefaultGroupAttributeMap,
+	}
 )
 
 // New returns a new Config
@@ -155,6 +192,8 @@ func New() *Config {
 		LogFormat:         DefaultLogFormat,
 		SyncMethod:        DefaultSyncMethod,
 		GoogleCredentials: DefaultGoogleCredentials,
+		AttributeMapFile:  DefaultAttributeMapFile,
+		AttributeMap:      DefaultAttributeMap,
 		CustomerID:        DefaultCustomerID,
 	}
 }
