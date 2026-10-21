@@ -21,7 +21,7 @@ func TestLoadAttributeMapsFromFile_ValidFull(t *testing.T) {
 			"Username": "primaryEmail"
 		},
 		"group": {
-			"DisplayName": "email"
+			"DisplayName": "name"
 		}
 	}`
 	assert.NoError(os.WriteFile(path, []byte(content), 0o600))
@@ -33,7 +33,7 @@ func TestLoadAttributeMapsFromFile_ValidFull(t *testing.T) {
 		"Username":       "primaryEmail",
 	}, am.User)
 	assert.Equal(AttributeMap{
-		"DisplayName": "email",
+		"DisplayName": "name",
 	}, am.Group)
 }
 
@@ -43,13 +43,13 @@ func TestLoadAttributeMapsFromFile_ValidPartial(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "attrmap.json")
 	// Only the group sub-object is provided; user must fall back to default.
-	content := `{"group": {"DisplayName": "email"}}`
+	content := `{"group": {"DisplayName": "name"}}`
 	assert.NoError(os.WriteFile(path, []byte(content), 0o600))
 
 	am, err := LoadAttributeMapsFromFile(path)
 	assert.NoError(err)
 	assert.Equal(DefaultUserAttributeMap, am.User)
-	assert.Equal(AttributeMap{"DisplayName": "email"}, am.Group)
+	assert.Equal(AttributeMap{"DisplayName": "name"}, am.Group)
 }
 
 func TestLoadAttributeMapsFromFile_EmptyPathFallsBackToDefault(t *testing.T) {
@@ -106,5 +106,62 @@ func TestParseAttributeMaps_EmptyValueFailsValidation(t *testing.T) {
 
 	_, err := ParseAttributeMaps([]byte(`{"user":{"Username":""}}`))
 	assert.Error(err)
-	assert.Contains(err.Error(), "empty value")
+	assert.Contains(err.Error(), "empty source attribute")
+	assert.Contains(err.Error(), "user block")
+}
+
+func TestParseAttributeMaps_DefaultMapsPassValidation(t *testing.T) {
+	assert := assert.New(t)
+
+	am, err := ParseAttributeMaps([]byte(`{}`))
+	assert.NoError(err)
+	assert.Equal(DefaultUserAttributeMap, am.User)
+	assert.Equal(DefaultGroupAttributeMap, am.Group)
+}
+
+func TestParseAttributeMaps_UnsupportedTargetField(t *testing.T) {
+	assert := assert.New(t)
+
+	// Wrong case on a known field: "Name.Givenname" is not a supported target.
+	_, err := ParseAttributeMaps([]byte(`{"user":{"Name.Givenname":"name.givenName"}}`))
+	assert.Error(err)
+	msg := err.Error()
+	assert.Contains(msg, "attribute map (user block)")
+	assert.Contains(msg, `unsupported target field "Name.Givenname"`)
+	// The valid-set listing names the supported user target fields.
+	assert.Contains(msg, "Active, Name.FamilyName, Name.GivenName, Username")
+}
+
+func TestParseAttributeMaps_UnsupportedSourceAttr(t *testing.T) {
+	assert := assert.New(t)
+
+	// "email" is not a supported group source attribute (only "name" is).
+	_, err := ParseAttributeMaps([]byte(`{"group":{"DisplayName":"email"}}`))
+	assert.Error(err)
+	msg := err.Error()
+	assert.Contains(msg, "attribute map (group block)")
+	assert.Contains(msg, `unsupported source attribute "email"`)
+	assert.Contains(msg, "valid group source attributes are: name")
+}
+
+func TestParseAttributeMaps_EmptyKeyFailsValidation(t *testing.T) {
+	assert := assert.New(t)
+
+	_, err := ParseAttributeMaps([]byte(`{"user":{"":"primaryEmail"}}`))
+	assert.Error(err)
+	msg := err.Error()
+	assert.Contains(msg, "attribute map (user block)")
+	assert.Contains(msg, "empty target field")
+}
+
+func TestParseAttributeMaps_MultipleViolationsAggregated(t *testing.T) {
+	assert := assert.New(t)
+
+	// Two distinct problems in the user block: an unsupported target field and
+	// an unsupported source attribute. Both must be reported in one error.
+	_, err := ParseAttributeMaps([]byte(`{"user":{"Bogus":"name.givenName","Username":"notAnAttr"}}`))
+	assert.Error(err)
+	msg := err.Error()
+	assert.Contains(msg, `unsupported target field "Bogus"`)
+	assert.Contains(msg, `unsupported source attribute "notAnAttr"`)
 }
