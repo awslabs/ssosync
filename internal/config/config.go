@@ -163,11 +163,9 @@ var (
 	// mapping for the groups sync method. KEY = interfaces.Group target field
 	// path; VALUE = admin.Group source attribute path.
 	//
-	// Note: the live sync path sets DisplayName from the group's email
-	// (admin.Group.Email), whereas this default map resolves DisplayName from
-	// admin.Group.Name. This is a deliberate, documented divergence while the
-	// mapper sits alongside the live path and is not yet wired in; a future
-	// wiring step reconciles it intentionally rather than by accident.
+	// Note: DisplayName maps from the group name (DisplayName <- name, i.e.
+	// admin.Group.Name), which matches the live groups-sync path
+	// (aws.NewGroup/aws.UpdateGroup use the group name). There is no divergence.
 	DefaultGroupAttributeMap AttributeMap = AttributeMap{
 		"DisplayName": "name",
 	}

@@ -655,8 +655,8 @@ func (s *syncGSuite) Sync(queryGroups string, queryUsers string) error {
 	}
 
 	// create list of changes by operations
-	addAWSUsers, delAWSUsers, updateAWSUsers, _ := getUserOperations(awsUsers, googleUsers, s.cfg.ForceExternalIdUpdate, s.cfg.RetainUnmatched, s.cfg.IssuerArn)
-	addAWSGroups, delAWSGroups, updateAWSGroups, unchangedAWSGroups := getGroupOperations(awsGroups, googleGroups, s.cfg.ForceExternalIdUpdate, s.cfg.RetainUnmatched, s.cfg.IssuerArn)
+	addAWSUsers, delAWSUsers, updateAWSUsers, _ := getUserOperations(awsUsers, googleUsers, s.cfg, s.cfg.AttributeMap.User)
+	addAWSGroups, delAWSGroups, updateAWSGroups, unchangedAWSGroups := getGroupOperations(awsGroups, googleGroups, s.cfg, s.cfg.AttributeMap.Group)
 
 	// update aws users (updated in google)
 	log.Debug("updating aws users updated in google")
@@ -1252,9 +1252,13 @@ func getGroupOperation(awsGroup *interfaces.Group, googleGroup *interfaces.Group
 }
 
 // getGroupOperations returns the groups of AWS that must be added, deleted, updated, are equals and retained
-func getGroupOperations(awsGroups []*interfaces.Group, googleGroups []*admin.Group, forceExternalIdUpdate bool, retainUnmatched bool, issuerArn string) (add []*interfaces.Group, delete []*interfaces.Group, update []*interfaces.Group, equals []*interfaces.Group) {
+func getGroupOperations(awsGroups []*interfaces.Group, googleGroups []*admin.Group, cfg *config.Config, attrMap config.AttributeMap) (add []*interfaces.Group, delete []*interfaces.Group, update []*interfaces.Group, equals []*interfaces.Group) {
 
 	log.Debug("getGroupOperations()")
+
+	forceExternalIdUpdate := cfg.ForceExternalIdUpdate
+	retainUnmatched := cfg.RetainUnmatched
+	issuerArn := cfg.IssuerArn
 
 	stats := struct {
 		Equal, Create, AdoptLocal, AdoptForeign, Update, UpdateForced, Delete, Recreate, Retain int
@@ -1263,9 +1267,8 @@ func getGroupOperations(awsGroups []*interfaces.Group, googleGroups []*admin.Gro
 	awsMap := make(map[string]*interfaces.Group)
 	awsMapExtId := make(map[string]*interfaces.Group)
 	// The google-side lookup maps hold the MAPPED interface view of each Google
-	// group (via google.MapFromGoogleGroup using the default map), so all Google
-	// field selection lives in the mapper. Step B will swap the default map for a
-	// configured map passed in; the signature is unchanged in Step A.
+	// group (via google.MapFromGoogleGroup using the configured map passed in via
+	// attrMap), so all Google field selection lives in the mapper.
 	googleMap := make(map[string]*interfaces.Group)
 	googleMapId := make(map[string]*interfaces.Group)
 
@@ -1276,28 +1279,20 @@ func getGroupOperations(awsGroups []*interfaces.Group, googleGroups []*admin.Gro
 		}
 	}
 
+	// Map each Google group to its interface view exactly once, populate the
+	// google-side lookup maps, and perform the AWS lookup + op call using that
+	// same mapped pointer.
 	for _, gGroup := range googleGroups {
-		mapped, err := google.MapFromGoogleGroup(gGroup, config.DefaultGroupAttributeMap)
+		mapped, err := google.MapFromGoogleGroup(gGroup, attrMap)
 		if err != nil {
 			// The attribute map is validated at load time, so a mapping error
 			// here is an internal invariant breach, not user input. Abort rather
-			// than proceed with a half-mapped group. The plural signature is
-			// intentionally unchanged (see Step A constraints), so this is
-			// surfaced via log.Fatal, matching the credentials loaders.
+			// than proceed with a half-mapped group.
 			log.WithError(err).Fatal("getGroupOperations(): failed to map Google group")
 		}
 		mappedGroup := mapped
 		googleMap[strings.ToLower(mappedGroup.DisplayName)] = &mappedGroup
 		googleMapId[mappedGroup.ExternalId.Id] = &mappedGroup
-	}
-
-	// Look for Google groups in AWS
-	for _, gGroup := range googleGroups {
-		mapped, err := google.MapFromGoogleGroup(gGroup, config.DefaultGroupAttributeMap)
-		if err != nil {
-			log.WithError(err).Fatal("getGroupOperations(): failed to map Google group")
-		}
-		mappedGroup := mapped
 
 		var awsGroup *interfaces.Group
 
@@ -1457,9 +1452,13 @@ func getUserOperation(awsUser *interfaces.User, googleUser *interfaces.User, for
 }
 
 // getUserOperations returns the users of AWS that must be added, deleted, updated, are equals and retained
-func getUserOperations(awsUsers []*interfaces.User, googleUsers []*admin.User, forceExternalIdUpdate bool, retainUnmatched bool, issuerArn string) (add []*interfaces.User, delete []*interfaces.User, update []*interfaces.User, equals []*interfaces.User) {
+func getUserOperations(awsUsers []*interfaces.User, googleUsers []*admin.User, cfg *config.Config, attrMap config.AttributeMap) (add []*interfaces.User, delete []*interfaces.User, update []*interfaces.User, equals []*interfaces.User) {
 
 	log.Debug("getUserOperations()")
+
+	forceExternalIdUpdate := cfg.ForceExternalIdUpdate
+	retainUnmatched := cfg.RetainUnmatched
+	issuerArn := cfg.IssuerArn
 
 	stats := struct {
 		Equal, Create, AdoptLocal, AdoptForeign, Update, UpdateForced, Delete, Recreate, Retain int
@@ -1468,10 +1467,9 @@ func getUserOperations(awsUsers []*interfaces.User, googleUsers []*admin.User, f
 	awsMapUsername := make(map[string]*interfaces.User)
 	awsMapExtId := make(map[string]*interfaces.User)
 	// The google-side lookup maps hold the MAPPED interface view of each Google
-	// user (via google.MapFromGoogleUser using the default map), so all Google
-	// field selection and the suspended->Active inversion live in the mapper.
-	// Step B will swap the default map for a configured map passed in; the
-	// signature is unchanged in Step A.
+	// user (via google.MapFromGoogleUser using the configured map passed in via
+	// attrMap), so all Google field selection and the suspended->Active inversion
+	// live in the mapper.
 	googleMapEmail := make(map[string]*interfaces.User)
 	googleMapId := make(map[string]*interfaces.User)
 
@@ -1482,28 +1480,20 @@ func getUserOperations(awsUsers []*interfaces.User, googleUsers []*admin.User, f
 		}
 	}
 
+	// Map each Google user to its interface view exactly once, populate the
+	// google-side lookup maps, and perform the AWS lookup + op call using that
+	// same mapped pointer.
 	for _, gUser := range googleUsers {
-		mapped, err := google.MapFromGoogleUser(gUser, config.DefaultUserAttributeMap)
+		mapped, err := google.MapFromGoogleUser(gUser, attrMap)
 		if err != nil {
 			// The attribute map is validated at load time, so a mapping error
 			// here is an internal invariant breach, not user input. Abort rather
-			// than proceed with a half-mapped user. The plural signature is
-			// intentionally unchanged (see Step A constraints), so this is
-			// surfaced via log.Fatal, matching the credentials loaders.
+			// than proceed with a half-mapped user.
 			log.WithError(err).Fatal("getUserOperations(): failed to map Google user")
 		}
 		mappedUser := mapped
 		googleMapId[mappedUser.ExternalId.Id] = &mappedUser
 		googleMapEmail[strings.ToLower(mappedUser.Username)] = &mappedUser
-	}
-
-	// Look for Google users in AWS
-	for _, gUser := range googleUsers {
-		mapped, err := google.MapFromGoogleUser(gUser, config.DefaultUserAttributeMap)
-		if err != nil {
-			log.WithError(err).Fatal("getUserOperations(): failed to map Google user")
-		}
-		mappedUser := mapped
 
 		var awsUser *interfaces.User
 
