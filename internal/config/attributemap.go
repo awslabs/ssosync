@@ -43,29 +43,40 @@ var (
 		"PhoneNumbers":              {}, // opt-in (design §5.5)
 	}
 
-	// supportedUserSourceAttrs are the admin.User SOURCE attribute paths the
-	// validator accepts as attribute-map values for the user block. Multi-valued
-	// paths are primary-entry selected via a JSON round-trip in the resolver (see
-	// internal/google resolveGoogleUserSource). The SAFE SET and OPT-IN-ONLY
-	// sources are both listed; see the inline markers.
-	supportedUserSourceAttrs = map[string]struct{}{
-		// Existing / safe set scalars.
+	// supportedUserSourceScalars are the scalar admin.User SOURCE paths the
+	// validator accepts as-is (exact string match) for the user block.
+	supportedUserSourceScalars = map[string]struct{}{
 		"name.givenName":  {},
 		"name.familyName": {},
 		"primaryEmail":    {},
 		"suspended":       {},
-		// Safe set (primary organization scalars).
-		"organizations[primary].title":      {}, // safe set
-		"organizations[primary].department": {}, // safe set
-		"organizations[primary].name":       {}, // safe set
-		"organizations[primary].costCenter": {}, // safe set
-		// Opt-in only (supported, NOT defaulted).
-		"relations[type=manager].value": {}, // opt-in (design §5.7)
-		"organizations[primary].domain": {}, // opt-in (design §5.2)
-		"websites[primary].value":       {}, // opt-in (design §5.4)
-		"emails[primary].address":       {}, // opt-in (design §5.5)
-		"addresses[primary].formatted":  {}, // opt-in (design §5.5 / §7.3: formatted only)
-		"phones[primary].value":         {}, // opt-in (design §5.5)
+	}
+
+	// supportedUserMultiValuedSubfields is the CLOSED (field -> {subfield}) table
+	// the validator accepts for type-qualified multi-valued source paths of the
+	// form <field>[<selector>].<subfield> (design §5.2). The base path (field)
+	// and sub-field are validated exactly against this table; the SELECTOR value
+	// (the type string) is validated structurally only (any non-empty type=<v>,
+	// or primary), since the Google type labels are tenant data.
+	//
+	// The address sub-fields other than "formatted"
+	// (streetAddress/locality/region/postalCode/country) are deliberately NOT
+	// listed, so e.g. addresses[type=work].streetAddress is REJECTED this phase.
+	// They ARE AWS-accepted (live Limitations marks addresses "Yes, single value
+	// only" with all sub-fields "Yes"; the CreateUser example includes them —
+	// https://docs.aws.amazon.com/singlesignon/latest/developerguide/createuser.html
+	// and https://docs.aws.amazon.com/singlesignon/latest/developerguide/limitations.html)
+	// but are DEFERRED: composing five Google source tokens into one UserAddress
+	// element needs multi-source->single-target composition logic that is out of
+	// scope this phase. "formatted" (a single scalar) is the one opened address
+	// source.
+	supportedUserMultiValuedSubfields = map[string]map[string]struct{}{
+		"organizations": {"title": {}, "department": {}, "name": {}, "costCenter": {}, "domain": {}},
+		"relations":     {"value": {}},
+		"websites":      {"value": {}},
+		"emails":        {"address": {}},
+		"phones":        {"value": {}},
+		"addresses":     {"formatted": {}},
 	}
 
 	// supportedGroupTargetFields are the interfaces.Group TARGET field paths the
@@ -109,10 +120,10 @@ func ParseAttributeMaps(data []byte) (AttributeMaps, error) {
 		result.Group = parsed.Group
 	}
 
-	if err := validateAttributeMap("user", result.User, supportedUserTargetFields, supportedUserSourceAttrs); err != nil {
+	if err := validateAttributeMap("user", result.User, supportedUserTargetFields, validateUserSource); err != nil {
 		return AttributeMaps{}, err
 	}
-	if err := validateAttributeMap("group", result.Group, supportedGroupTargetFields, supportedGroupSourceAttrs); err != nil {
+	if err := validateAttributeMap("group", result.Group, supportedGroupTargetFields, exactSourceValidator(supportedGroupSourceAttrs)); err != nil {
 		return AttributeMaps{}, err
 	}
 
@@ -157,7 +168,11 @@ func LoadAttributeMapsFromFile(path string) (AttributeMaps, error) {
 // attribute):
 //   - neither key nor value may be empty/blank;
 //   - the key must be in supportedTargets for this block;
-//   - the value must be in supportedSources for this block.
+//   - the value must be accepted by validateSource for this block. The group
+//     block uses an exact closed set (exactSourceValidator); the user block uses
+//     the structural classifier (validateUserSource) that accepts scalars, any
+//     well-formed customSchemas.<schema>.<field> path, and type-qualified
+//     multi-valued paths with any non-empty type= selector.
 //
 // ALL violations across the block are collected and reported in a single error
 // so a user fixing a map sees every problem at once instead of one per run. Each
@@ -165,7 +180,7 @@ func LoadAttributeMapsFromFile(path string) (AttributeMaps, error) {
 // the sorted list of currently-supported values for that block, e.g.:
 //
 //	attribute map (user block): unsupported target field "Name.Givenname" - valid user target fields are: Active, Name.FamilyName, Name.GivenName, Username
-func validateAttributeMap(name string, m AttributeMap, supportedTargets, supportedSources map[string]struct{}) error {
+func validateAttributeMap(name string, m AttributeMap, supportedTargets map[string]struct{}, validateSource func(name, source string) string) error {
 	var violations []string
 
 	for k, v := range m {
@@ -190,10 +205,8 @@ func validateAttributeMap(name string, m AttributeMap, supportedTargets, support
 				violations = append(violations,
 					fmt.Sprintf("empty source attribute for target field %q - a %s attribute map value must not be empty", k, name))
 			}
-		} else if _, ok := supportedSources[v]; !ok {
-			violations = append(violations,
-				fmt.Sprintf("unsupported source attribute %q - valid %s source attributes are: %s",
-					v, name, sortedKeys(supportedSources)))
+		} else if msg := validateSource(name, v); msg != "" {
+			violations = append(violations, msg)
 		}
 	}
 
@@ -205,6 +218,155 @@ func validateAttributeMap(name string, m AttributeMap, supportedTargets, support
 	// iteration order.
 	sort.Strings(violations)
 	return fmt.Errorf("attribute map (%s block): %s", name, strings.Join(violations, "; "))
+}
+
+// exactSourceValidator returns a source validator that accepts only the exact
+// strings in the given set (used by the group block, whose sources are a fixed
+// closed list). It returns "" for an accepted source, else a Step-A error
+// fragment naming the offending token and the sorted accepted set.
+func exactSourceValidator(supportedSources map[string]struct{}) func(name, source string) string {
+	return func(name, source string) string {
+		if _, ok := supportedSources[source]; ok {
+			return ""
+		}
+		return fmt.Sprintf("unsupported source attribute %q - valid %s source attributes are: %s",
+			source, name, sortedKeys(supportedSources))
+	}
+}
+
+// validateUserSource validates a user-block SOURCE value per the design §5.2/§5.3
+// classifier: scalar (exact set), custom (customSchemas. prefix, structural
+// only), or multi-valued (<field>[<selector>].<subfield>, structural base-path +
+// sub-field closed table with any non-empty type= selector or primary). It
+// returns "" when accepted, else a Step-A error fragment naming the offending
+// token, WHY it is invalid, and the accepted forms.
+func validateUserSource(name, source string) string {
+	// Scalar fast-path.
+	if _, ok := supportedUserSourceScalars[source]; ok {
+		return ""
+	}
+
+	// Custom-schema source: structural-only acceptance (design §5.3).
+	if strings.HasPrefix(source, "customSchemas.") {
+		return validateCustomSource(name, source)
+	}
+
+	// Multi-valued: <field>[<selector>].<subfield>.
+	open := strings.IndexByte(source, '[')
+	if open <= 0 {
+		return unsupportedUserSourceMsg(name, source)
+	}
+	close := strings.IndexByte(source[open:], ']')
+	if close < 0 {
+		return unsupportedUserSourceMsg(name, source)
+	}
+	close += open
+	field := source[:open]
+	selector := source[open+1 : close]
+	rest := source[close+1:]
+	if !strings.HasPrefix(rest, ".") || len(rest) < 2 {
+		return unsupportedUserSourceMsg(name, source)
+	}
+	subfield := rest[1:]
+
+	subs, ok := supportedUserMultiValuedSubfields[field]
+	if !ok {
+		return fmt.Sprintf("unsupported source attribute %q - valid %s source base paths are: %s",
+			source, name, sortedKeys(mapKeysAsSet(supportedUserMultiValuedSubfields)))
+	}
+	if _, ok := subs[subfield]; !ok {
+		return fmt.Sprintf("unsupported source attribute %q - valid %s sub-fields for %q are: %s",
+			source, name, field, sortedKeys(subs))
+	}
+	if !validSelector(selector) {
+		return fmt.Sprintf("malformed selector in source attribute %q - valid selectors are: [primary], [type=<value>]",
+			source)
+	}
+	return ""
+}
+
+// validateCustomSource validates a customSchemas.-prefixed user source
+// structurally (design §5.3): it must parse into a non-empty schema and
+// non-empty field via the first-dot rule, with an OPTIONAL trailing selector
+// that MUST be type=<non-empty value>. [primary] is REJECTED for a custom source
+// (Google custom multi-valued entries carry no primary flag).
+func validateCustomSource(name, source string) string {
+	path := source
+	selector := ""
+	hasSelector := false
+	if open := strings.IndexByte(source, '['); open >= 0 {
+		close := strings.IndexByte(source[open:], ']')
+		if close < 0 {
+			return customSourceMsg(name, source)
+		}
+		close += open
+		// Anything after the closing ] is malformed for a custom source.
+		if close != len(source)-1 {
+			return customSourceMsg(name, source)
+		}
+		selector = source[open+1 : close]
+		path = source[:open]
+		hasSelector = true
+	}
+
+	schema, field, ok := parseCustomSchemaPathForValidation(path)
+	if !ok || schema == "" || field == "" {
+		return customSourceMsg(name, source)
+	}
+
+	if hasSelector {
+		v, isType := strings.CutPrefix(selector, "type=")
+		if !isType || v == "" {
+			return customSourceMsg(name, source)
+		}
+	}
+	return ""
+}
+
+// parseCustomSchemaPathForValidation mirrors the resolver's first-dot parse rule
+// for a selector-free customSchemas.<schema>.<field> path.
+func parseCustomSchemaPathForValidation(path string) (schema, field string, ok bool) {
+	remainder, has := strings.CutPrefix(path, "customSchemas.")
+	if !has {
+		return "", "", false
+	}
+	parts := strings.SplitN(remainder, ".", 2)
+	if len(parts) != 2 {
+		return "", "", false
+	}
+	return parts[0], parts[1], true
+}
+
+// validSelector reports whether a standard multi-valued selector is accepted:
+// "primary" or "type=<non-empty value>".
+func validSelector(selector string) bool {
+	if selector == "primary" {
+		return true
+	}
+	if v, ok := strings.CutPrefix(selector, "type="); ok {
+		return v != ""
+	}
+	return false
+}
+
+func unsupportedUserSourceMsg(name, source string) string {
+	return fmt.Sprintf("unsupported source attribute %q - valid %s source attributes are scalars (%s), multi-valued <field>[<selector>].<subfield> over base paths (%s), or customSchemas.<SchemaName>.<fieldName>",
+		source, name, sortedKeys(supportedUserSourceScalars), sortedKeys(mapKeysAsSet(supportedUserMultiValuedSubfields)))
+}
+
+func customSourceMsg(name, source string) string {
+	return fmt.Sprintf("malformed custom-schema source %q - a %s custom source must be customSchemas.<SchemaName>.<fieldName> (optionally with a [type=<value>] selector; [primary] is not valid for custom sources)",
+		source, name)
+}
+
+// mapKeysAsSet returns the keys of a (field -> subfields) table as a string-set
+// so sortedKeys can render them.
+func mapKeysAsSet(m map[string]map[string]struct{}) map[string]struct{} {
+	out := make(map[string]struct{}, len(m))
+	for k := range m {
+		out[k] = struct{}{}
+	}
+	return out
 }
 
 // sortedKeys returns the keys of a string-set in ascending order, for stable,

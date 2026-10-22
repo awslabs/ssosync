@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	admin "google.golang.org/api/admin/directory/v1"
+	"google.golang.org/api/googleapi"
 )
 
 // opsConfig builds a minimal *config.Config carrying only the fields that
@@ -435,6 +436,7 @@ func TestGetUserOperations_EnrichmentFromOrganization(t *testing.T) {
 					Department: "Platform",
 					Name:       "ExampleCorp",
 					CostCenter: "CC-100",
+					Type:       "work",
 					Primary:    true,
 				},
 			},
@@ -497,6 +499,7 @@ func TestGetUserOperations_EnrichedSteadyState_Equal(t *testing.T) {
 					Department: "Platform",
 					Name:       "ExampleCorp",
 					CostCenter: "CC-100",
+					Type:       "work",
 					Primary:    true,
 				},
 			},
@@ -546,6 +549,7 @@ func TestGetUserOperations_EnrichedTitleChanged(t *testing.T) {
 					Department: "Platform",
 					Name:       "ExampleCorp",
 					CostCenter: "CC-100",
+					Type:       "work",
 					Primary:    true,
 				},
 			},
@@ -3732,4 +3736,209 @@ func TestGetUserOperations_ShuffledNoPrimaryNoChurn(t *testing.T) {
 		assert.Len(t, update, 0, tc.name+": no primary -> nothing selected -> no churn in any ordering")
 		assert.Len(t, equals, 1, tc.name)
 	}
+}
+
+// --- run-178: type-qualified + custom-schema getUserOperations coverage ---
+
+func reverseAdminOrgs(in []admin.UserOrganization) []admin.UserOrganization {
+	out := make([]admin.UserOrganization, len(in))
+	for i := range in {
+		out[len(in)-1-i] = in[i]
+	}
+	return out
+}
+
+func rotateAdminOrgs(in []admin.UserOrganization) []admin.UserOrganization {
+	if len(in) < 2 {
+		return append([]admin.UserOrganization(nil), in...)
+	}
+	return append(append([]admin.UserOrganization(nil), in[1:]...), in[0])
+}
+
+// Default map [type=work]: a Google user with a work-typed org enriches an AWS
+// record that does not yet carry Title/Enterprise (Update), carrying the work
+// org's values.
+func TestGetUserOperations_DefaultMapTypeWork_Enrichment(t *testing.T) {
+	awsUsers := []*interfaces.User{
+		{
+			ID: "A1", Username: "user1@example.com",
+			ExternalId:  interfaces.ExternalId{Id: "G1"},
+			Name:        interfaces.UserName{GivenName: "John", FamilyName: "Doe"},
+			DisplayName: "John Doe", Active: true,
+		},
+	}
+	googleUsers := []*admin.User{
+		{
+			Id: "G1", PrimaryEmail: "user1@example.com",
+			Name: &admin.UserName{GivenName: "John", FamilyName: "Doe"},
+			Organizations: []admin.UserOrganization{
+				{Title: "Other", Type: "other", Primary: true},
+				{Title: "Staff Engineer", Department: "Platform", Name: "ExampleCorp", CostCenter: "CC-100", Type: "work", Primary: false},
+			},
+		},
+	}
+
+	add, del, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, false, ""), config.DefaultUserAttributeMap)
+	assert.Len(t, add, 0)
+	assert.Len(t, del, 0)
+	assert.Len(t, equals, 0)
+	if assert.Len(t, update, 1) {
+		assert.Equal(t, "Staff Engineer", update[0].Title)
+		if assert.NotNil(t, update[0].Enterprise) {
+			assert.Equal(t, "Platform", update[0].Enterprise.Department)
+		}
+	}
+}
+
+// Default map [type=work]: a user whose only org is untyped/primary-but-not-work
+// resolves to NOTHING; an AWS record that carried Title/Enterprise is cleared
+// (Update), and once AWS reflects the clear the user is Equal (steady state).
+func TestGetUserOperations_DefaultMapTypeWork_UntypedOrgClears(t *testing.T) {
+	googleUsers := []*admin.User{
+		{
+			Id: "G1", PrimaryEmail: "user1@example.com",
+			Name: &admin.UserName{GivenName: "John", FamilyName: "Doe"},
+			Organizations: []admin.UserOrganization{
+				// Primary but NOT typed work -> under [type=work] resolves to nothing.
+				{Title: "Staff Engineer", Department: "Platform", Type: "", Primary: true},
+			},
+		},
+	}
+
+	// AWS record still carries the previously-enriched values.
+	awsPopulated := []*interfaces.User{
+		{
+			ID: "A1", Username: "user1@example.com",
+			ExternalId:  interfaces.ExternalId{Id: "G1"},
+			Name:        interfaces.UserName{GivenName: "John", FamilyName: "Doe"},
+			DisplayName: "John Doe", Active: true,
+			Title:      "Staff Engineer",
+			Enterprise: &interfaces.EnterpriseUser{Department: "Platform"},
+			Emails:     []interfaces.UserEmail{{Value: "user1@example.com", Type: "work", Primary: true}},
+			Addresses:  []interfaces.UserAddress{{Type: "work"}},
+		},
+	}
+
+	add, del, update, equals := getUserOperations(awsPopulated, googleUsers, opsConfig(false, false, ""), config.DefaultUserAttributeMap)
+	assert.Len(t, add, 0)
+	assert.Len(t, del, 0)
+	assert.Len(t, equals, 0)
+	if assert.Len(t, update, 1) {
+		assert.Equal(t, "", update[0].Title, "untyped work org clears Title under [type=work]")
+		assert.Nil(t, update[0].Enterprise, "Enterprise cleared to nil")
+	}
+
+	// Steady state: AWS now reflects the cleared record -> Equal, no churn.
+	awsCleared := []*interfaces.User{
+		{
+			ID: "A1", Username: "user1@example.com",
+			ExternalId:  interfaces.ExternalId{Id: "G1"},
+			Name:        interfaces.UserName{GivenName: "John", FamilyName: "Doe"},
+			DisplayName: "John Doe", Active: true,
+			Emails:    []interfaces.UserEmail{{Value: "user1@example.com", Type: "work", Primary: true}},
+			Addresses: []interfaces.UserAddress{{Type: "work"}},
+		},
+	}
+	add, del, update, equals = getUserOperations(awsCleared, googleUsers, opsConfig(false, false, ""), config.DefaultUserAttributeMap)
+	assert.Len(t, add, 0)
+	assert.Len(t, del, 0)
+	assert.Len(t, update, 0, "cleared steady-state user must not churn")
+	assert.Len(t, equals, 1)
+}
+
+// Shuffled multi-valued order with exactly one work-typed org produces no
+// spurious Update in any ordering (churn-freedom for the type= selector).
+func TestGetUserOperations_TypeWorkShuffledNoChurn(t *testing.T) {
+	awsUsers := []*interfaces.User{
+		{
+			ID: "A1", Username: "user1@example.com",
+			ExternalId:  interfaces.ExternalId{Id: "G1"},
+			Name:        interfaces.UserName{GivenName: "John", FamilyName: "Doe"},
+			DisplayName: "John Doe", Active: true,
+			Title:      "Staff Engineer",
+			Enterprise: &interfaces.EnterpriseUser{Department: "Platform", Organization: "ExampleCorp", CostCenter: "CC-100"},
+			Emails:     []interfaces.UserEmail{{Value: "user1@example.com", Type: "work", Primary: true}},
+			Addresses:  []interfaces.UserAddress{{Type: "work"}},
+		},
+	}
+	orgs := []admin.UserOrganization{
+		{Title: "Other", Department: "DO", Name: "OrgO", CostCenter: "CCO", Type: "other", Primary: true},
+		{Title: "Staff Engineer", Department: "Platform", Name: "ExampleCorp", CostCenter: "CC-100", Type: "work", Primary: false},
+		{Title: "Home", Department: "DH", Name: "OrgH", CostCenter: "CCH", Type: "home", Primary: false},
+	}
+	build := func(o []admin.UserOrganization) []*admin.User {
+		return []*admin.User{
+			{
+				Id: "G1", PrimaryEmail: "user1@example.com",
+				Name:          &admin.UserName{GivenName: "John", FamilyName: "Doe"},
+				Organizations: o,
+			},
+		}
+	}
+	for _, tc := range []struct {
+		name string
+		g    []*admin.User
+	}{
+		{"identity", build(orgs)},
+		{"reversed", build(reverseAdminOrgs(orgs))},
+		{"rotated", build(rotateAdminOrgs(orgs))},
+	} {
+		add, del, update, equals := getUserOperations(awsUsers, tc.g, opsConfig(false, false, ""), config.DefaultUserAttributeMap)
+		assert.Len(t, add, 0, tc.name)
+		assert.Len(t, del, 0, tc.name)
+		assert.Len(t, update, 0, tc.name+": stable work-typed selection -> no churn")
+		assert.Len(t, equals, 1, tc.name)
+	}
+}
+
+// Custom-schema source at the getUserOperations level: a user with a custom
+// schema field enriches, then is Equal once AWS reflects it.
+func TestGetUserOperations_CustomSchemaSource_EnrichThenSteady(t *testing.T) {
+	custMap := config.AttributeMap{
+		"Name.GivenName":        "name.givenName",
+		"Name.FamilyName":       "name.familyName",
+		"Username":              "primaryEmail",
+		"Active":                "suspended",
+		"Enterprise.CostCenter": "customSchemas.EmploymentData.costCenter",
+	}
+	googleUsers := []*admin.User{
+		{
+			Id: "G1", PrimaryEmail: "user1@example.com",
+			Name:          &admin.UserName{GivenName: "John", FamilyName: "Doe"},
+			CustomSchemas: map[string]googleapi.RawMessage{"EmploymentData": googleapi.RawMessage(`{"costCenter":"CC-777"}`)},
+		},
+	}
+
+	awsUsers := []*interfaces.User{
+		{
+			ID: "A1", Username: "user1@example.com",
+			ExternalId:  interfaces.ExternalId{Id: "G1"},
+			Name:        interfaces.UserName{GivenName: "John", FamilyName: "Doe"},
+			DisplayName: "John Doe", Active: true,
+		},
+	}
+	add, del, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, false, ""), custMap)
+	assert.Len(t, add, 0)
+	assert.Len(t, del, 0)
+	assert.Len(t, equals, 0)
+	if assert.Len(t, update, 1) {
+		if assert.NotNil(t, update[0].Enterprise) {
+			assert.Equal(t, "CC-777", update[0].Enterprise.CostCenter)
+		}
+	}
+
+	awsEnriched := []*interfaces.User{
+		{
+			ID: "A1", Username: "user1@example.com",
+			ExternalId:  interfaces.ExternalId{Id: "G1"},
+			Name:        interfaces.UserName{GivenName: "John", FamilyName: "Doe"},
+			DisplayName: "John Doe", Active: true,
+			Enterprise: &interfaces.EnterpriseUser{CostCenter: "CC-777"},
+		},
+	}
+	add, del, update, equals = getUserOperations(awsEnriched, googleUsers, opsConfig(false, false, ""), custMap)
+	assert.Len(t, add, 0)
+	assert.Len(t, del, 0)
+	assert.Len(t, update, 0, "custom-schema steady state must not churn")
+	assert.Len(t, equals, 1)
 }

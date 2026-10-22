@@ -191,6 +191,122 @@ func TestParseAttributeMaps_DeferredAddressSubFieldsRejected(t *testing.T) {
 	assert.NoError(err)
 }
 
+func TestParseAttributeMaps_TypeQualifiedSourcesAccepted(t *testing.T) {
+	assert := assert.New(t)
+
+	content := `{"user":{
+		"Title":"organizations[type=work].title",
+		"Enterprise.Department":"organizations[type=work].department",
+		"Enterprise.Manager":"relations[type=manager].value",
+		"Emails":"emails[type=home].address",
+		"PhoneNumbers":"phones[type=mobile].value",
+		"Addresses":"addresses[type=work].formatted",
+		"ProfileURL":"websites[type=work].value"
+	}}`
+	am, err := ParseAttributeMaps([]byte(content))
+	assert.NoError(err)
+	assert.Equal("organizations[type=work].title", am.User["Title"])
+	assert.Equal("emails[type=home].address", am.User["Emails"])
+}
+
+func TestParseAttributeMaps_CustomSourcesAccepted(t *testing.T) {
+	assert := assert.New(t)
+
+	content := `{"user":{
+		"Enterprise.CostCenter":"customSchemas.EmploymentData.costCenter",
+		"Title":"customSchemas.Single_Sign-On.providerId",
+		"Enterprise.Division":"customSchemas.Contact.ids[type=gitlab]"
+	}}`
+	am, err := ParseAttributeMaps([]byte(content))
+	assert.NoError(err)
+	assert.Equal("customSchemas.EmploymentData.costCenter", am.User["Enterprise.CostCenter"])
+	assert.Equal("customSchemas.Single_Sign-On.providerId", am.User["Title"])
+	assert.Equal("customSchemas.Contact.ids[type=gitlab]", am.User["Enterprise.Division"])
+}
+
+func TestParseAttributeMaps_CustomSourceToUnsupportedTargetRejected(t *testing.T) {
+	assert := assert.New(t)
+
+	// Well-formed custom source, but routed to an unsupported target KEY: it
+	// must fail on the TARGET (closed target vocabulary, design §5.1).
+	_, err := ParseAttributeMaps([]byte(`{"user":{"CustomThing":"customSchemas.X.y"}}`))
+	assert.Error(err)
+	assert.Contains(err.Error(), `unsupported target field "CustomThing"`)
+}
+
+func TestParseAttributeMaps_MalformedCustomSourceRejected(t *testing.T) {
+	assert := assert.New(t)
+
+	for _, src := range []string{
+		"customSchemas.EmploymentData", // no field segment
+		"customSchemas.",               // no remainder
+		"customSchemas..field",         // empty schema
+		"customSchemas.Schema.",        // empty field
+	} {
+		_, err := ParseAttributeMaps([]byte(`{"user":{"Title":"` + src + `"}}`))
+		assert.Error(err, src)
+		assert.Contains(err.Error(), "malformed custom-schema source", src)
+	}
+}
+
+func TestParseAttributeMaps_PrimarySelectorRejectedForCustomSource(t *testing.T) {
+	assert := assert.New(t)
+
+	_, err := ParseAttributeMaps([]byte(`{"user":{"Title":"customSchemas.X.y[primary]"}}`))
+	assert.Error(err)
+	msg := err.Error()
+	assert.Contains(msg, "malformed custom-schema source")
+	assert.Contains(msg, "[primary] is not valid for custom sources")
+}
+
+func TestParseAttributeMaps_DeferredAddressTypeSubFieldsRejected(t *testing.T) {
+	assert := assert.New(t)
+
+	// Even under the type selector, addresses sub-fields other than formatted
+	// stay rejected this phase (design §5.2 / §1.3).
+	_, err := ParseAttributeMaps([]byte(`{"user":{"Addresses":"addresses[type=work].streetAddress"}}`))
+	assert.Error(err)
+	assert.Contains(err.Error(), `unsupported source attribute "addresses[type=work].streetAddress"`)
+}
+
+func TestParseAttributeMaps_MalformedSelectorRejected(t *testing.T) {
+	assert := assert.New(t)
+
+	// Empty type= value.
+	_, err := ParseAttributeMaps([]byte(`{"user":{"Title":"organizations[type=].title"}}`))
+	assert.Error(err)
+	assert.Contains(err.Error(), "malformed selector")
+
+	// Unknown selector keyword.
+	_, err = ParseAttributeMaps([]byte(`{"user":{"Title":"organizations[latest].title"}}`))
+	assert.Error(err)
+	assert.Contains(err.Error(), "malformed selector")
+}
+
+func TestParseAttributeMaps_UnknownBasePathRejected(t *testing.T) {
+	assert := assert.New(t)
+
+	_, err := ParseAttributeMaps([]byte(`{"user":{"Title":"departments[type=work].name"}}`))
+	assert.Error(err)
+	assert.Contains(err.Error(), `unsupported source attribute "departments[type=work].name"`)
+}
+
+// Atomic-landing guard (design §7.1/§13): the empty document and a group-only
+// partial document must BOTH load under the new organizations[type=work].*
+// default. This FAILS if the default is flipped without the validator learning
+// to accept type= selectors.
+func TestParseAttributeMaps_AtomicLandingDefaultLoads(t *testing.T) {
+	assert := assert.New(t)
+
+	am, err := ParseAttributeMaps([]byte(`{}`))
+	assert.NoError(err)
+	assert.Equal("organizations[type=work].title", am.User["Title"])
+
+	am, err = ParseAttributeMaps([]byte(`{"group":{"DisplayName":"name"}}`))
+	assert.NoError(err)
+	assert.Equal(DefaultUserAttributeMap, am.User)
+}
+
 func TestParseAttributeMaps_UnsupportedSourceAttr(t *testing.T) {
 	assert := assert.New(t)
 
