@@ -473,10 +473,10 @@ The following JSON is exactly the built-in default. Copying it verbatim changes 
     "Name.FamilyName": "name.familyName",
     "Username": "primaryEmail",
     "Active": "suspended",
-    "Title": "organizations[primary].title",
-    "Enterprise.Department": "organizations[primary].department",
-    "Enterprise.Organization": "organizations[primary].name",
-    "Enterprise.CostCenter": "organizations[primary].costCenter"
+    "Title": "organizations[type=work].title",
+    "Enterprise.Department": "organizations[type=work].department",
+    "Enterprise.Organization": "organizations[type=work].name",
+    "Enterprise.CostCenter": "organizations[type=work].costCenter"
   },
   "group": {
     "DisplayName": "name"
@@ -490,54 +490,96 @@ Notes on the defaults:
 - `DisplayName` for users is always derived as `"GivenName FamilyName"` after the name fields are resolved; it is not a configurable map entry.
 - Group `DisplayName` maps from the Google group name (`admin.Group.Name`).
 
+> [!IMPORTANT]
+> The organization-derived defaults (`Title` and the three `Enterprise.*` fields) now source from `organizations[type=work].*` — previously `organizations[primary].*`. The `[type=work]` selector matches the first organization whose Google type is `work` (case-insensitive) and ignores the primary flag. Because there is **no** first-entry fallback (see [Selection rule](#selection-rule-for-multi-valued-google-fields)), a user whose work organization is typed something other than `work` (empty type, `other`, a custom label), or who has no matching organization, resolves to nothing for all four fields — and those fields are then **cleared** on the AWS user under clear-to-consistent. If you want the previous behaviour, set your own map with `organizations[primary].*` (still fully supported). Run `--dry-run` after upgrading to preview the change.
+
 ### Supported fields
 
-The validator's allow-lists are the single source of truth for what is valid. Target fields and source attributes are split into those included in the default map (**defaulted**) and those supported but left out of the default (**opt-in**).
+The validator's allow-lists are the single source of truth for what is valid. Target fields are split into those included in the default map (**defaulted**) and those supported but left out of the default (**opt-in**). Opt-in targets have **no** built-in source — you choose the source attribute when you map them.
 
 **User target fields**
 
-| Target field | Default source | Status |
+| Target field | Status | Default source |
 |---|---|---|
-| `Name.GivenName` | `name.givenName` | defaulted |
-| `Name.FamilyName` | `name.familyName` | defaulted |
-| `Username` | `primaryEmail` | defaulted |
-| `Active` | `suspended` (inverted) | defaulted |
-| `Title` | `organizations[primary].title` | defaulted |
-| `Enterprise.Department` | `organizations[primary].department` | defaulted |
-| `Enterprise.Organization` | `organizations[primary].name` | defaulted |
-| `Enterprise.CostCenter` | `organizations[primary].costCenter` | defaulted |
-| `Enterprise.Manager` | `relations[type=manager].value` | opt-in |
-| `Enterprise.Division` | `organizations[primary].domain` | opt-in |
-| `Enterprise.EmployeeNumber` | (no clean scalar source) | opt-in |
-| `ProfileURL` | `websites[primary].value` | opt-in |
-| `Emails` | `emails[primary].address` | opt-in |
-| `Addresses` | `addresses[primary].formatted` | opt-in |
-| `PhoneNumbers` | `phones[primary].value` | opt-in |
+| `Name.GivenName` | defaulted | `name.givenName` |
+| `Name.FamilyName` | defaulted | `name.familyName` |
+| `Username` | defaulted | `primaryEmail` |
+| `Active` | defaulted | `suspended` (inverted) |
+| `Title` | defaulted | `organizations[type=work].title` |
+| `Enterprise.Department` | defaulted | `organizations[type=work].department` |
+| `Enterprise.Organization` | defaulted | `organizations[type=work].name` |
+| `Enterprise.CostCenter` | defaulted | `organizations[type=work].costCenter` |
+| `Enterprise.Manager` | opt-in | — (you choose, e.g. `relations[type=manager].value`) |
+| `Enterprise.Division` | opt-in | — |
+| `Enterprise.EmployeeNumber` | opt-in | — |
+| `ProfileURL` | opt-in | — |
+| `Emails` | opt-in | — |
+| `Addresses` | opt-in | — |
+| `PhoneNumbers` | opt-in | — |
 
-**Supported Google source attributes**
+**Supported Google source grammar**
 
-- Defaulted: `name.givenName`, `name.familyName`, `primaryEmail`, `suspended`, `organizations[primary].title`, `organizations[primary].department`, `organizations[primary].name`, `organizations[primary].costCenter`.
-- Opt-in: `relations[type=manager].value`, `organizations[primary].domain`, `websites[primary].value`, `emails[primary].address`, `addresses[primary].formatted`, `phones[primary].value`.
+A user source value is one of three shapes:
 
-**Group target fields / sources:** `DisplayName` ← `name` (the only supported group mapping).
+- **Scalar** — matched exactly. The supported scalar sources are: `name.givenName`, `name.familyName`, `primaryEmail`, `suspended`.
+- **Multi-valued** — `<field>[<selector>].<subfield>`, where `<selector>` is `primary` or `type=<value>` (see [Selection rule](#selection-rule-for-multi-valued-google-fields)). The supported base fields and their sub-fields are:
 
-`Enterprise.Manager` yields the manager's **email** as a proxy key — it is sourced from Google's relation value, not a SCIM user-id reference — so whether AWS accepts it depends on your deployment (your directory must populate the manager relation with a value AWS can resolve). It is left out of the default for that reason.
+  | Base field | Supported sub-fields |
+  |---|---|
+  | `organizations` | `title`, `department`, `name`, `costCenter`, `domain` |
+  | `relations` | `value` |
+  | `websites` | `value` |
+  | `emails` | `address` |
+  | `phones` | `value` |
+  | `addresses` | `formatted` |
+
+  Address sub-fields other than `formatted` (`streetAddress`, `locality`, `region`, `postalCode`, `country`) are **not** supported yet, so e.g. `addresses[type=work].streetAddress` is rejected.
+
+- **Custom schema** — `customSchemas.<SchemaName>.<fieldName>` (see [User-defined (custom) schema sources](#user-defined-custom-schema-sources)).
+
+**Group target fields / sources:** `DisplayName` ← `name` (the only supported group mapping). Groups have no custom-schema sources.
+
+`Enterprise.Manager` (opt-in, not defaulted) maps from a relation value such as `relations[type=manager].value`, which Google stores as the manager's **email address** (a proxy key, not a SCIM user-id reference). This **works** where your deployment's manager relation holds an email that the Identity Store can resolve. It is opt-in rather than defaulted because it depends on your directory populating that relation; add it to your map when you want manager data synced.
+
+### User-defined (custom) schema sources
+
+Google user-defined (custom) schema attributes can be used as sources with the syntax `customSchemas.<SchemaName>.<fieldName>`. The path is split on the **first** dot after the `customSchemas.` prefix: everything before that dot is the schema name, everything after is the field name. Schema and field names may contain hyphens and underscores (for example `customSchemas.Single_Sign-On.samlRole`); a field name may contain further dots, but a schema name may not.
+
+A custom field may be a scalar or an array of `{type, value}` objects:
+
+- A **scalar** custom field is used as-is: `customSchemas.EmploymentData.employeeId`.
+- An **array** custom field is selected with a type selector: `customSchemas.EmploymentData.ids[type=payroll]` picks the first element whose `type` matches (case-insensitive). The `[primary]` selector is **not** valid for custom paths.
+
+If a referenced custom schema or field is absent on a user, ssosync logs a `WARNING` and the source resolves to nothing — so the target field is then **cleared** under clear-to-consistent.
+
+Custom sources can only feed the closed set of core/enterprise SCIM target fields listed under [Supported fields](#supported-fields): AWS IAM Identity Center SCIM does not accept arbitrary custom extension schemas as targets. Groups have no custom schemas.
 
 ### Selection rule for multi-valued Google fields
 
 Several Google fields are multi-valued (`organizations`, `relations`, `phones`, `addresses`, `emails`, `websites`). The source path selects a single entry deterministically:
 
-- A **type-qualified** path such as `relations[type=manager].value` selects the entry whose type matches (case-insensitive); if no entry matches, nothing is selected.
-- An **unqualified** `[primary]` path selects the entry marked primary; if no entry is marked primary, nothing is selected.
+- A **type-qualified** path such as `relations[type=manager].value` selects the first entry whose type matches (case-insensitive); if no entry matches, nothing is selected.
+- A **`[primary]`** path selects the entry marked primary; if no entry is marked primary, nothing is selected.
 
-There is no first-entry or index fallback, so the result is stable from one run to the next (no run-to-run churn). A consequence: a user who has organization data but **no primary organization** gets no `Title`/`Department`/`Organization`/`CostCenter` — and, per the next section, any such field already set on the AWS user is then cleared.
+There is **no** first-entry or index fallback, so the result is stable from one run to the next (no run-to-run churn). A consequence: a user who has organization data but no organization matching the selector (for the defaults, no `work`-typed organization) gets no `Title`/`Department`/`Organization`/`CostCenter` — and, per the next section, any such field already set on the AWS user is then cleared.
 
-### Important: clear-to-consistent behaviour
+### Projection
 
-The sync makes the AWS user **consistent** with the mapped Google user. Any supported SCIM field that the map does **not** populate is **cleared** on the AWS user.
+ssosync fetches users from the Google Admin Directory API with `projection=full`, so user-defined (custom) schema attributes are available to the mapper. Standard fields are returned identically to the default projection, so this changes no standard-field behaviour.
+
+### Diagnostics and safety
+
+The sync makes the AWS user **consistent** with the mapped Google user (clear-to-consistent): any supported SCIM field that the map does **not** populate is **cleared** on the AWS user.
 
 > [!CAUTION]
-> Enabling richer mapping — or even the defaults, for users who lack a primary organization — can clear values that already exist on an AWS user. Before changing the attribute map (or adopting the defaults) against an existing Identity Store, run ssosync with `--dry-run` to see exactly what would change. See the dry-run note under [Retaining unmatched users and groups](#retaining-unmatched-users-and-groups).
+> **Always test a new or changed attribute map with `--dry-run` first.** Because of clear-to-consistent, an error in the attribute map — a typo, a `[type=X]` selector that matches nothing, or a missing custom field — resolves to nothing and **clears** the corresponding attribute on every affected AWS user. A dry run shows exactly which attributes would change before anything is written. This applies to adopting the defaults too, since the `[type=work]` org selector can clear org-sourced fields for users whose work organization is not typed `work`. See the dry-run note under [Retaining unmatched users and groups](#retaining-unmatched-users-and-groups).
+
+Two logging aids help you validate a custom map alongside `--dry-run`:
+
+- **DEBUG logging.** Enabling debug logs the raw Google source fields fetched for each user/group, the per-entry resolution (what each map entry resolved to, and why it resolved to nothing), and the full object produced at the entry and exit of the mapping function. This lets you compare the actual fetched Google data against your attribute map when a field maps unexpectedly. Debug output includes PII (names, emails, phone numbers, addresses, custom attributes) and is not redacted, so enable it only for troubleshooting.
+- **Pre-SCIM validation warnings.** Just before sending each mapped user/group to the SCIM API, ssosync logs a `WARN` when the object would likely be rejected by AWS — a required field is empty, a multi-valued field carries more than one value, the single email is not primary, or `userName`/group `displayName` is over its length limit or contains disallowed control characters. This is **warn-only**: the object is still sent and AWS remains the authoritative acceptance decision.
+
+Run `--dry-run`, read the pre-SCIM warnings, and (if a field still looks wrong) enable debug to compare source against map — together these are the way to validate a custom map safely before a live sync.
 
 ### Supplying the map
 

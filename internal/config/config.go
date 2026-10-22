@@ -114,11 +114,14 @@ const (
 // admin.User / admin.Group, e.g. "name.givenName" or "primaryEmail").
 //
 // Standard Google attributes are supported, including multi-valued fields
-// resolved by primary-entry selection (e.g. "organizations[primary].title",
-// "relations[type=manager].value"). Custom-schema attributes
-// (admin.User.CustomSchemas, dotted "schema.field" paths) are NOT resolved yet
-// and remain a future opt-in requiring a Users.List projection change. See the
-// deferred extension point documented on the mapper functions in internal/google.
+// resolved by a type-qualified selector (e.g. "organizations[type=work].title")
+// or a primary selector (e.g. "emails[primary].address",
+// "relations[type=manager].value"); in both cases there is no first-entry
+// fallback, so a selector that matches nothing resolves to nothing.
+// Custom-schema attributes are also supported via admin.User.CustomSchemas, as
+// "customSchemas.<SchemaName>.<fieldName>" paths (populated by the Users.List
+// projection=full fetch). See the mapper functions in internal/google for the
+// full source-path grammar.
 type AttributeMap map[string]string
 
 // AttributeMaps pairs the user and group attribute maps that together make up a
