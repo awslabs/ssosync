@@ -145,10 +145,10 @@ The following JSON is exactly the built-in default. Copying it verbatim changes 
     "Name.FamilyName": "name.familyName",
     "Username": "primaryEmail",
     "Active": "suspended",
-    "Title": "organizations[primary].title",
-    "Enterprise.Department": "organizations[primary].department",
-    "Enterprise.Organization": "organizations[primary].name",
-    "Enterprise.CostCenter": "organizations[primary].costCenter"
+    "Title": "organizations[type=work].title",
+    "Enterprise.Department": "organizations[type=work].department",
+    "Enterprise.Organization": "organizations[type=work].name",
+    "Enterprise.CostCenter": "organizations[type=work].costCenter"
   },
   "group": {
     "DisplayName": "name"
@@ -159,12 +159,16 @@ The following JSON is exactly the built-in default. Copying it verbatim changes 
 Each block is optional: an omitted block keeps its default, and a present block replaces that block's mapping. Within a block the key is the SCIM target field and the value is the Google source attribute.
 
 - **Defaulted** user target fields: `Name.GivenName`, `Name.FamilyName`, `Username`, `Active`, `Title`, `Enterprise.Department`, `Enterprise.Organization`, `Enterprise.CostCenter`.
-- **Opt-in** user target fields (supported, not in the default): `Enterprise.Manager`, `Enterprise.Division`, `Enterprise.EmployeeNumber`, `ProfileURL`, `Emails`, `Addresses`, `PhoneNumbers`. `Enterprise.Manager` yields the manager's email as a proxy key (not a SCIM user-id reference), so whether AWS accepts it depends on your deployment.
+- **Opt-in** user target fields (supported, not in the default): `Enterprise.Manager`, `Enterprise.Division`, `Enterprise.EmployeeNumber`, `ProfileURL`, `Emails`, `Addresses`, `PhoneNumbers`. `Enterprise.Manager` maps from a relation value such as `relations[type=manager].value`, which Google stores as the manager's email address; it works where your deployment's manager relation holds an email the Identity Store can resolve, and is opt-in because it depends on your directory populating that relation.
 
-For the full JSON syntax, the supported source attributes, and the primary/type-qualified selection rule for multi-valued Google fields, see [Attribute mapping in the project README](https://github.com/awslabs/ssosync/blob/master/README.md#attribute-mapping).
+The organization-derived defaults source from `organizations[type=work].*` (the first organization typed `work`, case-insensitive; previously `organizations[primary].*`). Google user-defined (custom) schema attributes can also be mapped as sources with `customSchemas.<SchemaName>.<fieldName>`.
+
+For the full JSON syntax, the supported source attributes, the custom-schema sources, and the type-qualified selection rule for multi-valued Google fields, see [Attribute mapping in the project README](https://github.com/awslabs/ssosync/blob/master/README.md#attribute-mapping).
 
 > [!CAUTION]
-> The sync makes the AWS user consistent with the mapped Google user: any supported SCIM field the map does not populate is cleared on the AWS user. Enabling richer mapping — or the defaults, for users who lack a primary organization — can clear values already present on an AWS user. Set `DryRun` to `dry-run` first to see exactly what would change before applying it.
+> The sync makes the AWS user consistent with the mapped Google user (clear-to-consistent): any supported SCIM field the map does not populate is cleared on the AWS user. Set `DryRun` to `dry-run` and run it **first** to preview exactly what would change before applying a new or changed map — an error in the map (a typo, a `[type=X]` that matches nothing, a missing custom field), or the `[type=work]` default itself for users whose work organization is not typed `work`, resolves to nothing and clears that attribute.
+
+When a field maps unexpectedly, enable debug logging (it dumps the raw Google source fields and the per-entry resolution) and watch for the pre-SCIM `WARN` lines ssosync emits when a mapped user/group would likely be rejected by the SCIM API — together they help you troubleshoot a custom map.
 
 As with the rest of the deployment, the quick-start templates are the recommended way to set this up.
 
