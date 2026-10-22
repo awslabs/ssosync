@@ -724,6 +724,7 @@ func (s *syncGSuite) Sync(queryGroups string, queryUsers string) error {
 		// awsUser is already the desired *interfaces.User produced by
 		// getUserOperation(s); pass it straight through so all supported
 		// attributes reach SCIM rather than re-unpacking only the scalar fields.
+		logFindings(validateUser(awsUser), "user", userValidateID(awsUser))
 		_, err = s.aws.UpdateUser(awsUser)
 		if err != nil {
 			log.WithField("user", awsUser).Error("error updating user")
@@ -738,6 +739,7 @@ func (s *syncGSuite) Sync(queryGroups string, queryUsers string) error {
 		log := log.WithFields(log.Fields{"user": awsUser.Username})
 
 		log.Info("creating user")
+		logFindings(validateUser(awsUser), "user", userValidateID(awsUser))
 		_, err := s.aws.CreateUser(awsUser)
 		if err != nil {
 			errHTTP := new(aws.ErrHTTPNotOK)
@@ -757,6 +759,7 @@ func (s *syncGSuite) Sync(queryGroups string, queryUsers string) error {
 		log.WithFields(log.Fields{"group": awsGroup}).Debug("Creating")
 
 		log.WithFields(log.Fields{"Name": awsGroup.DisplayName}).Info("creating group")
+		logFindings(validateGroup(awsGroup), "group", groupValidateID(awsGroup))
 		awsGroup, err := s.aws.CreateGroup(awsGroup)
 		if err != nil {
 			log.Error("creating group")
@@ -788,6 +791,7 @@ func (s *syncGSuite) Sync(queryGroups string, queryUsers string) error {
 		log.WithFields(log.Fields{"group": awsGroup}).Debug("Updating")
 
 		log.WithFields(log.Fields{"Name": awsGroup.DisplayName}).Info("updating group")
+		logFindings(validateGroup(awsGroup), "group", groupValidateID(awsGroup))
 		awsGroup, err := s.aws.UpdateGroup(awsGroup)
 		if err != nil {
 			log.Error("upating group")
