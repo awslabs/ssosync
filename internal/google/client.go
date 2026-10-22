@@ -340,6 +340,7 @@ func (c *client) getGroups(query string) ([]*admin.Group, error) {
 //     suspended (inverted to Active).
 //   - Multi-valued interface{} fields, resolved by a JSON round-trip into the
 //     SDK typed struct with PRIMARY-entry selection (see resolveGoogleUserSource):
+//     the entry marked primary, else NOTHING — there is no first-entry fallback:
 //     organizations[primary].{title,department,name,costCenter,domain},
 //     relations[type=manager].value, websites[primary].value,
 //     emails[primary].address, phones[primary].value,
@@ -544,16 +545,17 @@ func roundTripSlice[T any](v interface{}, out *[]T) error {
 }
 
 // primaryIndex returns the index of the entry to use for a primary-selected
-// multi-valued field: the first entry whose primary(i) reports true, else 0 for
-// a non-empty slice, else -1 for an empty slice (no entry).
+// multi-valued field: the first entry whose primary(i) reports true, else -1
+// when no entry is primary (an empty slice OR a non-empty slice with no primary
+// entry both yield -1). There is NO positional fallback: a multi-valued field
+// with no primary entry resolves to nothing. This keeps run-to-run selection
+// stable under clear-to-consistent + whole-set usersEqual, since Google does not
+// guarantee multi-valued ordering.
 func primaryIndex(n int, primary func(i int) bool) int {
 	for i := 0; i < n; i++ {
 		if primary(i) {
 			return i
 		}
-	}
-	if n > 0 {
-		return 0
 	}
 	return -1
 }
@@ -566,13 +568,15 @@ func primaryIndex(n int, primary func(i int) bool) int {
 //
 // Multi-valued interface{} fields (organizations, relations, websites, emails,
 // phones, addresses) are read via a JSON round-trip into the SDK typed struct
-// (roundTripSlice) followed by PRIMARY-entry selection (primaryIndex): the first
-// entry marked primary, else the first entry, else the empty string for an
-// absent/empty field. relations[type=manager] instead selects the first entry
-// whose Type == "manager" (case-insensitive), else the empty string. Element
-// SHAPING for the Emails/Addresses/PhoneNumbers targets is NOT done here; this
-// resolver only extracts the scalar, and the mapper builds the SCIM element
-// (design §7.1).
+// (roundTripSlice) followed by PRIMARY-entry selection (primaryIndex): the entry
+// marked primary, else NOTHING (empty string). There is no first-entry fallback,
+// so a multi-valued field with no primary entry resolves to the zero value —
+// this keeps run-to-run selection stable under clear-to-consistent + whole-set
+// usersEqual, since Google does not guarantee multi-valued ordering.
+// relations[type=manager] instead selects the first entry whose Type ==
+// "manager" (case-insensitive), else the empty string. Element SHAPING for the
+// Emails/Addresses/PhoneNumbers targets is NOT done here; this resolver only
+// extracts the scalar, and the mapper builds the SCIM element (design §7.1).
 //
 // An unrecognised path is an internal error (the load-time validator rejects
 // unknown sources before they ever reach here).
