@@ -1877,9 +1877,11 @@ func TestGetGroupUsersOperations(t *testing.T) {
 
 	s := &syncGSuite{
 		aws: mockAws,
+		cfg: &config.Config{AttributeMap: config.DefaultAttributeMap},
 	}
 
-	addUsers, deleteUsers, unchangedUsers, err := s.getGroupUsersOperations(googleGroupsUsers, awsGroupsUsers)
+	ids := newMemberIdentities(nil, config.DefaultAttributeMap.User, nil)
+	addUsers, deleteUsers, unchangedUsers, err := s.getGroupUsersOperations(googleGroupsUsers, awsGroupsUsers, ids)
 	assert.NoError(t, err)
 
 	// Should Add user2 in group1

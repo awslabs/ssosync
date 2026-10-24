@@ -19,8 +19,8 @@
 > **Validate attribute maps with `--dry-run` first.** Because of clear-to-consistent behaviour, an error in a custom attribute map (a typo, a `[type=X]` selector that matches nothing, or a missing custom field) can **clear** real attributes on a live run. Always test a new or changed attribute map with `--dry-run` — together with debug logging and the pre-SCIM validation warnings — before running it live.
 
 > [!NOTE]
-<<<<<<< HEAD
-> The default attribute map now reads organization-derived fields (Title, Organization, Department, Cost Center) from the user's **primary** Google organization. A user with organization data but no organization marked primary will have these fields left empty (and therefore cleared). Confirm with a `--dry-run` against your directory that these fields resolve as expected before a live run.
+> The default attribute map reads organization-derived fields (Title, Organization, Department, Cost Center) from the user's **work** organization (`organizations[type=work]`). A user whose organization is not typed `work` (or who has no matching organization) will have these fields left empty (and therefore cleared). Confirm with a `--dry-run` against your directory that these fields resolve as expected before a live run.
+
 ## v2.9.4 - 2026-10-28
 
 ### Changelog
@@ -29,10 +29,6 @@
 * c14b2416d8e7bfaa8c804daad18d33646eed69d8 Fix IssuerArn matching from any account and mixed-case tenants (#383) (#384)
 * e21d1fc9b090e0172490250fd7a695d2080ea00a Update .gitignore
 * 0661d145bc99324bc6704114e283055d20982893 Update CHANGELOG and Quick Start templates (#382)
-
-=======
-> The default attribute map reads organization-derived fields (Title, Organization, Department, Cost Center) from the user's **work** organization (`organizations[type=work]`). A user whose organization is not typed `work` (or who has no matching organization) will have these fields left empty (and therefore cleared). Confirm with a `--dry-run` against your directory that these fields resolve as expected before a live run.
->>>>>>> 8161d0d (docs: expand v2.10.0 CHANGELOG for type-qualified/custom-schema sources, [type=work] default, and validation/diagnostics)
 
 ## v2.9.3 - 2026-10-21
 

@@ -14,6 +14,12 @@ const (
 	// minimal-create wire output is unchanged; it is only relevant when the
 	// enterprise extension object is populated.
 	SCIMSchemaEnterpriseUser = "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User"
+
+	// IdentityStoreEnterpriseExtension is the Identity Store API extension name
+	// that must be requested (ListUsersInput.Extensions) for the enterprise
+	// attributes to be returned in types.User.Extensions. The Identity Store
+	// does not return extensions unless they are explicitly requested.
+	IdentityStoreEnterpriseExtension = "aws:identitystore:enterprise"
 )
 
 // HTTP Status Codes
