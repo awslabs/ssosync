@@ -333,6 +333,145 @@ Resources:
                 - Name: SmokeCodePipeline
               InputArtifacts:
                 - Name: Tests
+        # Attribute-map integration tests (cicd/tests/attribute_map/). They share
+        # one Identity Store, so every action runs in sequence (distinct RunOrder).
+        # Each live test resets the Identity Store to tests/attribute_map/baseline/.
+        - Name: AttributeMapTests
+          Actions:
+            - Name: InvalidMap
+              ActionTypeId:
+                Category: Test
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              RunOrder: 1
+              Configuration:
+                ProjectName: !Ref CodeBuildAttrMapInvalidMap
+              InputArtifacts:
+                - Name: Tests
+              OutputArtifacts:
+                - Name: AttrMapInvalidMap
+            - Name: DefaultMap
+              ActionTypeId:
+                Category: Test
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              RunOrder: 2
+              Configuration:
+                ProjectName: !Ref CodeBuildAttrMapDefaultMap
+              InputArtifacts:
+                - Name: Tests
+              OutputArtifacts:
+                - Name: AttrMapDefaultMap
+            - Name: Determinism
+              ActionTypeId:
+                Category: Test
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              RunOrder: 3
+              Configuration:
+                ProjectName: !Ref CodeBuildAttrMapDeterminism
+              InputArtifacts:
+                - Name: Tests
+              OutputArtifacts:
+                - Name: AttrMapDeterminism
+            - Name: RichMap
+              ActionTypeId:
+                Category: Test
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              RunOrder: 4
+              Configuration:
+                ProjectName: !Ref CodeBuildAttrMapRichMap
+              InputArtifacts:
+                - Name: Tests
+              OutputArtifacts:
+                - Name: AttrMapRichMap
+            - Name: ValidationWarnings
+              ActionTypeId:
+                Category: Test
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              RunOrder: 5
+              Configuration:
+                ProjectName: !Ref CodeBuildAttrMapValidationWarnings
+              InputArtifacts:
+                - Name: Tests
+              OutputArtifacts:
+                - Name: AttrMapValidationWarnings
+            - Name: UsernameRemap
+              ActionTypeId:
+                Category: Test
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              RunOrder: 6
+              Configuration:
+                ProjectName: !Ref CodeBuildAttrMapUsernameRemap
+              InputArtifacts:
+                - Name: Tests
+              OutputArtifacts:
+                - Name: AttrMapUsernameRemap
+            - Name: ManagerOptIn
+              ActionTypeId:
+                Category: Test
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              RunOrder: 7
+              Configuration:
+                ProjectName: !Ref CodeBuildAttrMapManagerOptIn
+              InputArtifacts:
+                - Name: Tests
+              OutputArtifacts:
+                - Name: AttrMapManagerOptIn
+            - Name: LambdaDefaultMap
+              ActionTypeId:
+                Category: Test
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              RunOrder: 8
+              Configuration:
+                ProjectName: !Ref CodeBuildAttrMapLambdaDefault
+              InputArtifacts:
+                - Name: Tests
+              OutputArtifacts:
+                - Name: AttrMapLambdaDefault
+            # Redeploy the function with maps/rich.json inline in ATTRIBUTE_MAP.
+            - Name: DeployInlineAttributeMap
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Version: '1'
+                Provider: CloudFormation
+              Configuration:
+                ActionMode: CREATE_UPDATE
+                Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND,CAPABILITY_NAMED_IAM
+                StackName: TestAccountExecution
+                RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
+                TemplateConfiguration: 'Tests::deploy/attributemap.json'
+                TemplatePath: 'Tests::deploy/stack.yml'
+              InputArtifacts:
+                - Name: Tests
+              RunOrder: 9
+            - Name: LambdaInlineMap
+              ActionTypeId:
+                Category: Test
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              RunOrder: 10
+              Configuration:
+                ProjectName: !Ref CodeBuildAttrMapLambdaInlineMap
+              InputArtifacts:
+                - Name: Tests
+              OutputArtifacts:
+                - Name: AttrMapLambdaInlineMap
         # Live proof of getUserOperations/getGroupOperations against the real
         # tenant (issue #383): expected IssuerArn == the real ExternalId Issuer,
         # managed records converge, multi-ExternalId records use this tenant's
@@ -582,6 +721,260 @@ Resources:
       LogGroupName: !Ref CodePipelineLogGroup
       LogStreamName: SSOSync-Smoke-Lambda
 
+  # --- Attribute-map integration tests (cicd/tests/attribute_map/) ---
+
+  CodeBuildAttrMapInvalidMap:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: SSOSync-AttrMap-InvalidMap
+      Description: "Attribute map: a malformed map stops ssosync at startup with a detailed error"
+      ServiceRole: !Ref CodeBuildTestRole
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: "tests/attribute_map/invalid_map/buildspec.yml"
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/amazonlinux-x86_64-standard:6.0
+        Type: LINUX_CONTAINER
+      Artifacts:
+        Name: SSOSync
+        Type: CODEPIPELINE
+      LogsConfig:
+        CloudWatchLogs:
+          GroupName: !Ref CodePipelineLogGroup
+          StreamName: !Ref CodeBuildAttrMapInvalidMapLogs
+          Status: ENABLED
+
+  CodeBuildAttrMapInvalidMapLogs:
+    Type: AWS::Logs::LogStream
+    Properties:
+      LogGroupName: !Ref CodePipelineLogGroup
+      LogStreamName: SSOSync-AttrMap-InvalidMap
+
+  CodeBuildAttrMapDefaultMap:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: SSOSync-AttrMap-DefaultMap
+      Description: "Attribute map: default map adopts the baseline and converges (CLI)"
+      ServiceRole: !Ref CodeBuildTestRole
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: "tests/attribute_map/default_map/buildspec.yml"
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/amazonlinux-x86_64-standard:6.0
+        Type: LINUX_CONTAINER
+      Artifacts:
+        Name: SSOSync
+        Type: CODEPIPELINE
+      LogsConfig:
+        CloudWatchLogs:
+          GroupName: !Ref CodePipelineLogGroup
+          StreamName: !Ref CodeBuildAttrMapDefaultMapLogs
+          Status: ENABLED
+
+  CodeBuildAttrMapDefaultMapLogs:
+    Type: AWS::Logs::LogStream
+    Properties:
+      LogGroupName: !Ref CodePipelineLogGroup
+      LogStreamName: SSOSync-AttrMap-DefaultMap
+
+  CodeBuildAttrMapDeterminism:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: SSOSync-AttrMap-Determinism
+      Description: "Attribute map: two dry-runs propose identical changes (CLI)"
+      ServiceRole: !Ref CodeBuildTestRole
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: "tests/attribute_map/determinism/buildspec.yml"
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/amazonlinux-x86_64-standard:6.0
+        Type: LINUX_CONTAINER
+      Artifacts:
+        Name: SSOSync
+        Type: CODEPIPELINE
+      LogsConfig:
+        CloudWatchLogs:
+          GroupName: !Ref CodePipelineLogGroup
+          StreamName: !Ref CodeBuildAttrMapDeterminismLogs
+          Status: ENABLED
+
+  CodeBuildAttrMapDeterminismLogs:
+    Type: AWS::Logs::LogStream
+    Properties:
+      LogGroupName: !Ref CodePipelineLogGroup
+      LogStreamName: SSOSync-AttrMap-Determinism
+
+  CodeBuildAttrMapRichMap:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: SSOSync-AttrMap-RichMap
+      Description: "Attribute map: selectors, custom schemas, opt-in fields, warn-and-clear, convergence (CLI)"
+      ServiceRole: !Ref CodeBuildTestRole
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: "tests/attribute_map/rich_map/buildspec.yml"
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/amazonlinux-x86_64-standard:6.0
+        Type: LINUX_CONTAINER
+      Artifacts:
+        Name: SSOSync
+        Type: CODEPIPELINE
+      LogsConfig:
+        CloudWatchLogs:
+          GroupName: !Ref CodePipelineLogGroup
+          StreamName: !Ref CodeBuildAttrMapRichMapLogs
+          Status: ENABLED
+
+  CodeBuildAttrMapRichMapLogs:
+    Type: AWS::Logs::LogStream
+    Properties:
+      LogGroupName: !Ref CodePipelineLogGroup
+      LogStreamName: SSOSync-AttrMap-RichMap
+
+  CodeBuildAttrMapValidationWarnings:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: SSOSync-AttrMap-ValidationWarnings
+      Description: "Attribute map: pre-SCIM validation warns without stopping the run (CLI, dry-run)"
+      ServiceRole: !Ref CodeBuildTestRole
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: "tests/attribute_map/validation_warnings/buildspec.yml"
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/amazonlinux-x86_64-standard:6.0
+        Type: LINUX_CONTAINER
+      Artifacts:
+        Name: SSOSync
+        Type: CODEPIPELINE
+      LogsConfig:
+        CloudWatchLogs:
+          GroupName: !Ref CodePipelineLogGroup
+          StreamName: !Ref CodeBuildAttrMapValidationWarningsLogs
+          Status: ENABLED
+
+  CodeBuildAttrMapValidationWarningsLogs:
+    Type: AWS::Logs::LogStream
+    Properties:
+      LogGroupName: !Ref CodePipelineLogGroup
+      LogStreamName: SSOSync-AttrMap-ValidationWarnings
+
+  CodeBuildAttrMapUsernameRemap:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: SSOSync-AttrMap-UsernameRemap
+      Description: "Attribute map: remapping Username updates managed users in place and converges (CLI)"
+      ServiceRole: !Ref CodeBuildTestRole
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: "tests/attribute_map/username_remap/buildspec.yml"
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/amazonlinux-x86_64-standard:6.0
+        Type: LINUX_CONTAINER
+      Artifacts:
+        Name: SSOSync
+        Type: CODEPIPELINE
+      LogsConfig:
+        CloudWatchLogs:
+          GroupName: !Ref CodePipelineLogGroup
+          StreamName: !Ref CodeBuildAttrMapUsernameRemapLogs
+          Status: ENABLED
+
+  CodeBuildAttrMapUsernameRemapLogs:
+    Type: AWS::Logs::LogStream
+    Properties:
+      LogGroupName: !Ref CodePipelineLogGroup
+      LogStreamName: SSOSync-AttrMap-UsernameRemap
+
+  CodeBuildAttrMapManagerOptIn:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: SSOSync-AttrMap-ManagerOptIn
+      Description: "Attribute map: opt-in manager (email) is accepted and converges (CLI)"
+      ServiceRole: !Ref CodeBuildTestRole
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: "tests/attribute_map/manager_optin/buildspec.yml"
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/amazonlinux-x86_64-standard:6.0
+        Type: LINUX_CONTAINER
+      Artifacts:
+        Name: SSOSync
+        Type: CODEPIPELINE
+      LogsConfig:
+        CloudWatchLogs:
+          GroupName: !Ref CodePipelineLogGroup
+          StreamName: !Ref CodeBuildAttrMapManagerOptInLogs
+          Status: ENABLED
+
+  CodeBuildAttrMapManagerOptInLogs:
+    Type: AWS::Logs::LogStream
+    Properties:
+      LogGroupName: !Ref CodePipelineLogGroup
+      LogStreamName: SSOSync-AttrMap-ManagerOptIn
+
+  CodeBuildAttrMapLambdaDefault:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: SSOSync-AttrMap-LambdaDefault
+      Description: "Attribute map: Lambda with the built-in default map adopts and converges"
+      ServiceRole: !Ref CodeBuildTestRole
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: "tests/attribute_map/lambda_default/buildspec.yml"
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/amazonlinux-x86_64-standard:6.0
+        Type: LINUX_CONTAINER
+      Artifacts:
+        Name: SSOSync
+        Type: CODEPIPELINE
+      LogsConfig:
+        CloudWatchLogs:
+          GroupName: !Ref CodePipelineLogGroup
+          StreamName: !Ref CodeBuildAttrMapLambdaDefaultLogs
+          Status: ENABLED
+
+  CodeBuildAttrMapLambdaDefaultLogs:
+    Type: AWS::Logs::LogStream
+    Properties:
+      LogGroupName: !Ref CodePipelineLogGroup
+      LogStreamName: SSOSync-AttrMap-LambdaDefault
+
+  CodeBuildAttrMapLambdaInlineMap:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: SSOSync-AttrMap-LambdaInlineMap
+      Description: "Attribute map: Lambda with an inline ATTRIBUTE_MAP uses it and converges"
+      ServiceRole: !Ref CodeBuildTestRole
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: "tests/attribute_map/lambda_inline_map/buildspec.yml"
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/amazonlinux-x86_64-standard:6.0
+        Type: LINUX_CONTAINER
+      Artifacts:
+        Name: SSOSync
+        Type: CODEPIPELINE
+      LogsConfig:
+        CloudWatchLogs:
+          GroupName: !Ref CodePipelineLogGroup
+          StreamName: !Ref CodeBuildAttrMapLambdaInlineMapLogs
+          Status: ENABLED
+
+  CodeBuildAttrMapLambdaInlineMapLogs:
+    Type: AWS::Logs::LogStream
+    Properties:
+      LogGroupName: !Ref CodePipelineLogGroup
+      LogStreamName: SSOSync-AttrMap-LambdaInlineMap
+
   CodeBuildUserGroupOperations:
     Type: AWS::CodeBuild::Project
     Properties:
@@ -642,6 +1035,15 @@ Resources:
               - !Sub ${CodeBuildStaging.Arn}
               - !Sub ${CodeBuildSmokeCLI.Arn}
               - !Sub ${CodeBuildSmokeLambda.Arn}
+              - !Sub ${CodeBuildAttrMapInvalidMap.Arn}
+              - !Sub ${CodeBuildAttrMapDefaultMap.Arn}
+              - !Sub ${CodeBuildAttrMapDeterminism.Arn}
+              - !Sub ${CodeBuildAttrMapRichMap.Arn}
+              - !Sub ${CodeBuildAttrMapValidationWarnings.Arn}
+              - !Sub ${CodeBuildAttrMapUsernameRemap.Arn}
+              - !Sub ${CodeBuildAttrMapManagerOptIn.Arn}
+              - !Sub ${CodeBuildAttrMapLambdaDefault.Arn}
+              - !Sub ${CodeBuildAttrMapLambdaInlineMap.Arn}
               - !Sub ${CodeBuildUserGroupOperations.Arn}
               Effect: Allow
             - Action:
@@ -882,10 +1284,6 @@ Resources:
                 - "identitystore:DeleteUser"
                 - "identitystore:DeleteGroup"
                 - "identitystore:CreateGroup"
-                # tests/user_group_operations (issue #383)
-                - "identitystore:CreateUser"
-                - "identitystore:UpdateUser"
-                - "identitystore:UpdateGroup"
                 - "identitystore:CreateGroupMembership"
                 - "identitystore:ListGroups"
                 - "identitystore:ListUsers"
@@ -893,8 +1291,23 @@ Resources:
                 - "identitystore:IsMemberInGroups"
                 - "identitystore:GetGroupMembershipId"
                 - "identitystore:DeleteGroupMembership"
+                # Attribute-map tests: tests/attribute_map/import.py creates the
+                # baseline users, and the ssosync CLI may describe records when
+                # reading back attributes.
+                - "identitystore:CreateUser"
+                - "identitystore:DescribeUser"
+                - "identitystore:DescribeGroup"
+                # tests/user_group_operations (issue #383)
+                - "identitystore:UpdateUser"
+                - "identitystore:UpdateGroup"
               Effect: Allow
               Resource: '*'
+            # Attribute-map Lambda tests read the function's log lines for assertions.
+            - Action:
+                - "logs:FilterLogEvents"
+              Effect: Allow
+              Resource:
+                - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/SSOSyncFunction:*
             - Action:
                 - "secretsmanager:Get*"
               Effect: Allow

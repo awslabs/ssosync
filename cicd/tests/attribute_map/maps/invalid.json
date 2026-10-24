@@ -1,0 +1,6 @@
+{
+  "user": {
+    "Name.Givenname": "name.givenName",
+    "Title": "organizations[type=work].nosuchsubfield"
+  }
+}

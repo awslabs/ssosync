@@ -1,0 +1,20 @@
+version: 0.2
+
+# Attribute-map integration test: default_map. See run.sh for what it checks.
+env:
+  shell: bash
+  secrets-manager:
+    GoogleAdminEmail: SSOSyncGoogleAdminEmail
+    SCIMEndpointUrl: SSOSyncSCIMEndpointUrl
+    SCIMAccessToken: SSOSyncSCIMAccessToken
+  variables:
+    GROUP_MATCH: "name:AWS*"
+
+phases:
+  build:
+    commands:
+      - bash tests/attribute_map/default_map/run.sh
+
+artifacts:
+  files:
+    - logs/**/*

@@ -1,0 +1,53 @@
+[
+    {
+        "DisplayName": "AWSSuspendedMember",
+        "Description": "",
+        "Members": [
+            "olaf@nothing2see.info"
+        ]
+    },
+    {
+        "DisplayName": "AWSExternalUsers",
+        "Description": "",
+        "Members": [
+            "crpates@nothing2see.info"
+        ]
+    },
+    {
+        "DisplayName": "AWSSecurityGroup",
+        "Description": "",
+        "Members": [
+            "crpates@nothing2see.info"
+        ]
+    },
+    {
+        "DisplayName": "Groups with this as a member will be synced to AWS IAM Identity Center",
+        "Description": "",
+        "Members": []
+    },
+    {
+        "DisplayName": "AWSNestedGroups",
+        "Description": "",
+        "Members": [
+            "acehole@nothing2see.info",
+            "crpates@nothing2see.info"
+        ]
+    },
+    {
+        "DisplayName": "AWSaliases",
+        "Description": "",
+        "Members": [
+            "acehole@nothing2see.info",
+            "dave2@nothing2see.info"
+        ]
+    },
+    {
+        "DisplayName": "AWSThirdTechnician",
+        "Description": "",
+        "Members": [
+            "dave2@nothing2see.info",
+            "crpates@nothing2see.info",
+            "acehole@nothing2see.info"
+        ]
+    }
+]

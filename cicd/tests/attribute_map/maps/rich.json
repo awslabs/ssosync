@@ -1,0 +1,20 @@
+{
+  "user": {
+    "Username": "primaryEmail",
+    "Name.GivenName": "name.givenName",
+    "Name.FamilyName": "name.familyName",
+    "Active": "suspended",
+    "Title": "organizations[primary].title",
+    "Enterprise.Organization": "organizations[type=work].name",
+    "Enterprise.Department": "organizations[type=work].department",
+    "Enterprise.CostCenter": "customSchemas.SSOSync-Test.CostCodes[type=work]",
+    "Enterprise.Division": "customSchemas.SSOSync-Test.DoesNotExist",
+    "Enterprise.EmployeeNumber": "customSchemas.NoSuchSchema.EmployeeId",
+    "ProfileURL": "websites[type=work].value",
+    "PhoneNumbers": "phones[primary].value",
+    "Addresses": "addresses[type=work].formatted"
+  },
+  "group": {
+    "DisplayName": "name"
+  }
+}

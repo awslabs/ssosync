@@ -25,6 +25,15 @@ phases:
         '$ARGS.named' > ./deploy/developer.json
       - cat ./deploy/developer.json
 
+      # Params for the AttributeMapTests Lambda inline-map test: the developer
+      # params plus maps/rich.json passed inline as the AttributeMap parameter
+      # (the function's ATTRIBUTE_MAP environment variable).
+      - |
+        jq --arg AttributeMap "$(jq -c . cicd/tests/attribute_map/maps/rich.json)" \
+          '.Parameters.AttributeMap = $AttributeMap' \
+          ./deploy/developer.json > ./deploy/attributemap.json
+      - cat ./deploy/attributemap.json
+
       # Update params with the values for this run for the management account
       - |
         jq -n \

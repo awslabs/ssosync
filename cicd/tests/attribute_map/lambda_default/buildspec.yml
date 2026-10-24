@@ -1,0 +1,16 @@
+version: 0.2
+
+# Attribute-map integration test: lambda_default. See run.sh for what it checks.
+env:
+  shell: bash
+  variables:
+    FUNCTION_NAME: SSOSyncFunction
+
+phases:
+  build:
+    commands:
+      - bash tests/attribute_map/lambda_default/run.sh
+
+artifacts:
+  files:
+    - logs/**/*
