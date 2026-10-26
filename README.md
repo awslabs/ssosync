@@ -535,7 +535,7 @@ A user source value is one of three shapes:
 
   Address sub-fields other than `formatted` (`streetAddress`, `locality`, `region`, `postalCode`, `country`) are **not** supported yet, so e.g. `addresses[type=work].streetAddress` is rejected.
 
-- **Custom schema** — `customSchemas.<SchemaName>.<fieldName>` (see [User-defined (custom) schema sources](#user-defined-custom-schema-sources)).
+- **Custom schema** — `customSchemas.<SchemaName>.<fieldName>`, single-valued custom fields only; multi-valued custom attributes are ignored with a warning (see [User-defined (custom) schema sources](#user-defined-custom-schema-sources)).
 
 **Group target fields / sources:** `DisplayName` ← `name` (the only supported group mapping). Groups have no custom-schema sources.
 
@@ -545,10 +545,14 @@ A user source value is one of three shapes:
 
 Google user-defined (custom) schema attributes can be used as sources with the syntax `customSchemas.<SchemaName>.<fieldName>`. The path is split on the **first** dot after the `customSchemas.` prefix: everything before that dot is the schema name, everything after is the field name. Schema and field names may contain hyphens and underscores (for example `customSchemas.Single_Sign-On.samlRole`); a field name may contain further dots, but a schema name may not.
 
-A custom field may be a scalar or an array of `{type, value}` objects:
+Only **single-valued** custom fields are supported. A single-valued custom field is used as-is: `customSchemas.EmploymentData.employeeId`.
 
-- A **scalar** custom field is used as-is: `customSchemas.EmploymentData.employeeId`.
-- An **array** custom field is selected with a type selector: `customSchemas.EmploymentData.ids[type=payroll]` picks the first element whose `type` matches (case-insensitive). The `[primary]` selector is **not** valid for custom paths.
+**Multi-valued custom fields are not supported** (a field defined with "multiValued" in the Google schema, which the Directory API returns as a list even when it holds one value). Google custom fields cannot be typed, so there is no type to select an element by, and ssosync does not pick an element by position, so that results stay stable from run to run. Multi-valued custom attributes are ignored, with a `WARNING`, in two places:
+
+- **When the map is loaded.** A custom source with a selector, such as `customSchemas.EmploymentData.ids[type=payroll]`, asks for one element of a multi-valued field. ssosync logs `attribute map: multi-valued custom-schema attributes are not supported; mapping ignored` with the `target` and `source`, and drops that entry. The rest of the map still loads. The `[primary]` selector is not valid for custom sources and fails the load.
+- **During a sync.** If a mapped custom field turns out to be multi-valued on a user, ssosync logs `attribute map: custom-schema field is multi-valued; multi-valued custom attributes are not supported, mapping ignored` with `reason=customFieldMultiValued`, the `schema`, `field`, `target` and `user`. The source then resolves to nothing for that user. With debug logging on, the per-entry trace shows the same entry as `resolved=""` with `reason=customFieldMultiValued`.
+
+Either way the target is left unmapped, so under clear-to-consistent it is **cleared** in AWS. If you need one of the values, keep it in a separate single-valued custom field and map that instead. Support for multi-valued custom attributes may be added later.
 
 If a referenced custom schema or field is absent on a user, ssosync logs a `WARNING` and the source resolves to nothing — so the target field is then **cleared** under clear-to-consistent.
 
@@ -572,7 +576,7 @@ ssosync fetches users from the Google Admin Directory API with `projection=full`
 The sync makes the AWS user **consistent** with the mapped Google user (clear-to-consistent): any supported SCIM field that the map does **not** populate is **cleared** on the AWS user.
 
 > [!CAUTION]
-> **Always test a new or changed attribute map with `--dry-run` first.** Because of clear-to-consistent, an error in the attribute map — a typo, a `[type=X]` selector that matches nothing, or a missing custom field — resolves to nothing and **clears** the corresponding attribute on every affected AWS user. A dry run shows exactly which attributes would change before anything is written. This applies to adopting the defaults too, since the `[type=work]` org selector can clear org-sourced fields for users whose work organization is not typed `work`. See the dry-run note under [Retaining unmatched users and groups](#retaining-unmatched-users-and-groups).
+> **Always test a new or changed attribute map with `--dry-run` first.** Because of clear-to-consistent, an error in the attribute map — a typo, a `[type=X]` selector that matches nothing, a missing custom field, or an ignored multi-valued custom field — resolves to nothing and **clears** the corresponding attribute on every affected AWS user. A dry run shows exactly which attributes would change before anything is written. This applies to adopting the defaults too, since the `[type=work]` org selector can clear org-sourced fields for users whose work organization is not typed `work`. See the dry-run note under [Retaining unmatched users and groups](#retaining-unmatched-users-and-groups).
 
 Two logging aids help you validate a custom map alongside `--dry-run`:
 

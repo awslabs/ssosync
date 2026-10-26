@@ -7,10 +7,10 @@
     "Title": "organizations[primary].title",
     "Enterprise.Organization": "organizations[type=work].name",
     "Enterprise.Department": "organizations[type=work].department",
-    "Enterprise.CostCenter": "customSchemas.SSOSync-Test.CostCodes[type=work]",
+    "Enterprise.CostCenter": "customSchemas.SSOSync-Test.CostCodes",
     "Enterprise.Division": "customSchemas.SSOSync-Test.DoesNotExist",
     "Enterprise.EmployeeNumber": "customSchemas.NoSuchSchema.EmployeeId",
-    "ProfileURL": "websites[type=work].value",
+    "ProfileURL": "customSchemas.SSOSync-Test.ProjectCodes",
     "PhoneNumbers": "phones[primary].value",
     "Addresses": "addresses[type=work].formatted"
   },

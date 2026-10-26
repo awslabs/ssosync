@@ -7,6 +7,8 @@ import (
 
 	. "ssosync/internal/config"
 
+	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus/hooks/test"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -214,14 +216,71 @@ func TestParseAttributeMaps_CustomSourcesAccepted(t *testing.T) {
 
 	content := `{"user":{
 		"Enterprise.CostCenter":"customSchemas.EmploymentData.costCenter",
-		"Title":"customSchemas.Single_Sign-On.providerId",
-		"Enterprise.Division":"customSchemas.Contact.ids[type=gitlab]"
+		"Title":"customSchemas.Single_Sign-On.providerId"
 	}}`
 	am, err := ParseAttributeMaps([]byte(content))
 	assert.NoError(err)
 	assert.Equal("customSchemas.EmploymentData.costCenter", am.User["Enterprise.CostCenter"])
 	assert.Equal("customSchemas.Single_Sign-On.providerId", am.User["Title"])
-	assert.Equal("customSchemas.Contact.ids[type=gitlab]", am.User["Enterprise.Division"])
+}
+
+// A [type=...] selector on a custom source asks for an element of a
+// multi-valued custom field, which is not supported: the entry is dropped with
+// a WARN and the rest of the map still loads.
+func TestParseAttributeMaps_MultiValuedCustomSourceWarnedAndIgnored(t *testing.T) {
+	assert := assert.New(t)
+	hook := test.NewGlobal()
+	defer hook.Reset()
+
+	content := `{"user":{
+		"Username":"primaryEmail",
+		"Enterprise.CostCenter":"customSchemas.EmploymentData.costCenter",
+		"Enterprise.Division":"customSchemas.Contact.ids[type=gitlab]"
+	}}`
+	am, err := ParseAttributeMaps([]byte(content))
+	assert.NoError(err)
+
+	_, kept := am.User["Enterprise.Division"]
+	assert.False(kept, "the multi-valued custom mapping must be ignored")
+	assert.Equal("customSchemas.EmploymentData.costCenter", am.User["Enterprise.CostCenter"])
+	assert.Equal("primaryEmail", am.User["Username"])
+
+	var warned int
+	for _, e := range hook.AllEntries() {
+		if e.Message == MultiValuedCustomSourceIgnoredMsg {
+			warned++
+			assert.Equal(log.WarnLevel, e.Level)
+			assert.Equal("Enterprise.Division", e.Data["target"])
+			assert.Equal("customSchemas.Contact.ids[type=gitlab]", e.Data["source"])
+		}
+	}
+	assert.Equal(1, warned)
+}
+
+// Dropping an entry must never modify the shared default map.
+func TestParseAttributeMaps_MultiValuedCustomSourceDoesNotMutateDefaults(t *testing.T) {
+	assert := assert.New(t)
+	before := len(DefaultAttributeMap.User)
+
+	_, err := ParseAttributeMaps([]byte(`{"group":{"DisplayName":"name"}}`))
+	assert.NoError(err)
+	am, err := ParseAttributeMaps([]byte(`{"user":{"Username":"primaryEmail","Title":"customSchemas.X.y[type=a]"}}`))
+	assert.NoError(err)
+
+	assert.Len(am.User, 1)
+	assert.Len(DefaultAttributeMap.User, before)
+}
+
+// A map with no multi-valued custom source logs no such warning.
+func TestParseAttributeMaps_NoMultiValuedCustomSourceNoWarning(t *testing.T) {
+	hook := test.NewGlobal()
+	defer hook.Reset()
+
+	_, err := ParseAttributeMaps([]byte(`{"user":{"Username":"primaryEmail","Title":"customSchemas.X.y"}}`))
+	assert.NoError(t, err)
+	for _, e := range hook.AllEntries() {
+		assert.NotEqual(t, MultiValuedCustomSourceIgnoredMsg, e.Message)
+	}
 }
 
 func TestParseAttributeMaps_CustomSourceToUnsupportedTargetRejected(t *testing.T) {

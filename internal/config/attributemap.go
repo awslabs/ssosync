@@ -7,6 +7,8 @@ import (
 	"os"
 	"sort"
 	"strings"
+
+	log "github.com/sirupsen/logrus"
 )
 
 // The supported* sets below are the SINGLE SOURCE OF TRUTH for what the
@@ -127,7 +129,37 @@ func ParseAttributeMaps(data []byte) (AttributeMaps, error) {
 		return AttributeMaps{}, err
 	}
 
+	result.User = dropMultiValuedCustomSources(result.User)
+
 	return result, nil
+}
+
+// MultiValuedCustomSourceIgnoredMsg is the WARN logged when the attribute map
+// selects an element of a multi-valued custom-schema field. Exported so the
+// tests can match it.
+const MultiValuedCustomSourceIgnoredMsg = "attribute map: multi-valued custom-schema attributes are not supported; mapping ignored"
+
+// dropMultiValuedCustomSources removes (with a WARN) every user entry whose
+// source selects an element of a custom-schema field with a [type=<value>]
+// selector. Google custom fields cannot be typed, and multi-valued custom
+// attributes are not supported yet, so such a mapping is ignored rather than
+// failing the load. The target is then simply unmapped (cleared under
+// clear-to-consistent). It returns a new map and never modifies m, which may be
+// the shared DefaultAttributeMap.User.
+func dropMultiValuedCustomSources(m AttributeMap) AttributeMap {
+	out := make(AttributeMap, len(m))
+	for target, source := range m {
+		if strings.HasPrefix(source, "customSchemas.") && strings.Contains(source, "[") {
+			log.WithFields(log.Fields{
+				"target": target,
+				"source": source,
+				"reason": "customSourceSelector",
+			}).Warn(MultiValuedCustomSourceIgnoredMsg)
+			continue
+		}
+		out[target] = source
+	}
+	return out
 }
 
 // LoadAttributeMapsFromString parses an attribute map from a raw string (used by
@@ -287,9 +319,11 @@ func validateUserSource(name, source string) string {
 
 // validateCustomSource validates a customSchemas.-prefixed user source
 // structurally (design §5.3): it must parse into a non-empty schema and
-// non-empty field via the first-dot rule, with an OPTIONAL trailing selector
-// that MUST be type=<non-empty value>. [primary] is REJECTED for a custom source
-// (Google custom multi-valued entries carry no primary flag).
+// non-empty field via the first-dot rule. A well-formed trailing
+// [type=<non-empty value>] selector is accepted here only so that
+// dropMultiValuedCustomSources can warn about it and ignore the entry
+// (multi-valued custom attributes are not supported). [primary] is REJECTED for
+// a custom source (Google custom multi-valued entries carry no primary flag).
 func validateCustomSource(name, source string) string {
 	path := source
 	selector := ""
@@ -355,7 +389,7 @@ func unsupportedUserSourceMsg(name, source string) string {
 }
 
 func customSourceMsg(name, source string) string {
-	return fmt.Sprintf("malformed custom-schema source %q - a %s custom source must be customSchemas.<SchemaName>.<fieldName> (optionally with a [type=<value>] selector; [primary] is not valid for custom sources)",
+	return fmt.Sprintf("malformed custom-schema source %q - a %s custom source must be customSchemas.<SchemaName>.<fieldName> (single-valued custom fields only; [primary] is not valid for custom sources)",
 		source, name)
 }
 

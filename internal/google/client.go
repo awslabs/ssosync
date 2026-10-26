@@ -355,10 +355,11 @@ func (c *client) getGroups(query string) ([]*admin.Group, error) {
 //     fallback: no match -> NOTHING. e.g. organizations[type=work].title,
 //     relations[type=manager].value, emails[primary].address.
 //   - Custom-schema fields via admin.User.CustomSchemas (populated by the
-//     Projection("full") fetch): customSchemas.<SchemaName>.<fieldName>, with an
-//     optional [type=<value>] selector for multi-valued custom fields (an array
-//     of {type,value} objects). A missing custom schema or field logs a WARN and
-//     resolves to NOTHING (clears the target); it does not fail the sync.
+//     Projection("full") fetch): customSchemas.<SchemaName>.<fieldName> for
+//     SINGLE-VALUED custom fields. A missing custom schema or field logs a WARN
+//     and resolves to NOTHING (clears the target); it does not fail the sync.
+//     A multi-valued custom field is not supported: it logs a WARN and the
+//     mapping is ignored (the target resolves to NOTHING).
 //
 // The resolver returns only scalars (string/bool); all SCIM element shaping for
 // the multi-valued targets (Emails, Addresses, PhoneNumbers) is performed here
@@ -394,63 +395,49 @@ func mapFromGoogleUser(u *admin.User, attrMap config.AttributeMap) (interfaces.U
 			if err != nil {
 				return interfaces.User{}, err
 			}
-			if !found {
-				warnCustomSourceAbsent(u, targetField, sourceAttr)
-			}
+			warnCustomSource(u, targetField, sourceAttr, found)
 			user.Name.GivenName = v.(string)
 		case "Name.FamilyName":
 			v, found, err := resolveGoogleUserSource(u, sourceAttr)
 			if err != nil {
 				return interfaces.User{}, err
 			}
-			if !found {
-				warnCustomSourceAbsent(u, targetField, sourceAttr)
-			}
+			warnCustomSource(u, targetField, sourceAttr, found)
 			user.Name.FamilyName = v.(string)
 		case "Username":
 			v, found, err := resolveGoogleUserSource(u, sourceAttr)
 			if err != nil {
 				return interfaces.User{}, err
 			}
-			if !found {
-				warnCustomSourceAbsent(u, targetField, sourceAttr)
-			}
+			warnCustomSource(u, targetField, sourceAttr, found)
 			user.Username = v.(string)
 		case "Active":
 			v, found, err := resolveGoogleUserSource(u, sourceAttr)
 			if err != nil {
 				return interfaces.User{}, err
 			}
-			if !found {
-				warnCustomSourceAbsent(u, targetField, sourceAttr)
-			}
+			warnCustomSource(u, targetField, sourceAttr, found)
 			user.Active = v.(bool)
 		case "Title":
 			v, found, err := resolveGoogleUserSource(u, sourceAttr)
 			if err != nil {
 				return interfaces.User{}, err
 			}
-			if !found {
-				warnCustomSourceAbsent(u, targetField, sourceAttr)
-			}
+			warnCustomSource(u, targetField, sourceAttr, found)
 			user.Title = v.(string)
 		case "ProfileURL":
 			v, found, err := resolveGoogleUserSource(u, sourceAttr)
 			if err != nil {
 				return interfaces.User{}, err
 			}
-			if !found {
-				warnCustomSourceAbsent(u, targetField, sourceAttr)
-			}
+			warnCustomSource(u, targetField, sourceAttr, found)
 			user.ProfileURL = v.(string)
 		case "Enterprise.Department":
 			v, found, err := resolveGoogleUserSource(u, sourceAttr)
 			if err != nil {
 				return interfaces.User{}, err
 			}
-			if !found {
-				warnCustomSourceAbsent(u, targetField, sourceAttr)
-			}
+			warnCustomSource(u, targetField, sourceAttr, found)
 			if s := v.(string); s != "" {
 				ensureEnterprise(&user).Department = s
 			}
@@ -459,9 +446,7 @@ func mapFromGoogleUser(u *admin.User, attrMap config.AttributeMap) (interfaces.U
 			if err != nil {
 				return interfaces.User{}, err
 			}
-			if !found {
-				warnCustomSourceAbsent(u, targetField, sourceAttr)
-			}
+			warnCustomSource(u, targetField, sourceAttr, found)
 			if s := v.(string); s != "" {
 				ensureEnterprise(&user).Organization = s
 			}
@@ -470,9 +455,7 @@ func mapFromGoogleUser(u *admin.User, attrMap config.AttributeMap) (interfaces.U
 			if err != nil {
 				return interfaces.User{}, err
 			}
-			if !found {
-				warnCustomSourceAbsent(u, targetField, sourceAttr)
-			}
+			warnCustomSource(u, targetField, sourceAttr, found)
 			if s := v.(string); s != "" {
 				ensureEnterprise(&user).CostCenter = s
 			}
@@ -481,9 +464,7 @@ func mapFromGoogleUser(u *admin.User, attrMap config.AttributeMap) (interfaces.U
 			if err != nil {
 				return interfaces.User{}, err
 			}
-			if !found {
-				warnCustomSourceAbsent(u, targetField, sourceAttr)
-			}
+			warnCustomSource(u, targetField, sourceAttr, found)
 			if s := v.(string); s != "" {
 				ensureEnterprise(&user).Division = s
 			}
@@ -492,9 +473,7 @@ func mapFromGoogleUser(u *admin.User, attrMap config.AttributeMap) (interfaces.U
 			if err != nil {
 				return interfaces.User{}, err
 			}
-			if !found {
-				warnCustomSourceAbsent(u, targetField, sourceAttr)
-			}
+			warnCustomSource(u, targetField, sourceAttr, found)
 			if s := v.(string); s != "" {
 				ensureEnterprise(&user).EmployeeNumber = s
 			}
@@ -503,9 +482,7 @@ func mapFromGoogleUser(u *admin.User, attrMap config.AttributeMap) (interfaces.U
 			if err != nil {
 				return interfaces.User{}, err
 			}
-			if !found {
-				warnCustomSourceAbsent(u, targetField, sourceAttr)
-			}
+			warnCustomSource(u, targetField, sourceAttr, found)
 			if s := v.(string); s != "" {
 				ensureEnterprise(&user).Manager = &interfaces.EnterpriseManager{Value: s}
 			}
@@ -514,9 +491,7 @@ func mapFromGoogleUser(u *admin.User, attrMap config.AttributeMap) (interfaces.U
 			if err != nil {
 				return interfaces.User{}, err
 			}
-			if !found {
-				warnCustomSourceAbsent(u, targetField, sourceAttr)
-			}
+			warnCustomSource(u, targetField, sourceAttr, found)
 			if s := v.(string); s != "" {
 				user.Emails = []interfaces.UserEmail{{
 					Value:   s,
@@ -529,9 +504,7 @@ func mapFromGoogleUser(u *admin.User, attrMap config.AttributeMap) (interfaces.U
 			if err != nil {
 				return interfaces.User{}, err
 			}
-			if !found {
-				warnCustomSourceAbsent(u, targetField, sourceAttr)
-			}
+			warnCustomSource(u, targetField, sourceAttr, found)
 			if s := v.(string); s != "" {
 				user.Addresses = []interfaces.UserAddress{{
 					Formatted: s,
@@ -544,9 +517,7 @@ func mapFromGoogleUser(u *admin.User, attrMap config.AttributeMap) (interfaces.U
 			if err != nil {
 				return interfaces.User{}, err
 			}
-			if !found {
-				warnCustomSourceAbsent(u, targetField, sourceAttr)
-			}
+			warnCustomSource(u, targetField, sourceAttr, found)
 			if s := v.(string); s != "" {
 				user.PhoneNumbers = []interfaces.UserPhoneNumber{{
 					Value:   s,
@@ -590,6 +561,60 @@ func scimTypeOrWork(googleType string) string {
 	return googleType
 }
 
+// warnCustomSource emits the custom-schema WARN that applies to one resolved
+// attribute-map entry, if any: absent schema/field (found=false), or a
+// multi-valued custom field (not supported; the mapping is ignored and the
+// target resolves to nothing). Non-custom sources never warn here.
+func warnCustomSource(u *admin.User, targetField, sourceAttr string, found bool) {
+	if !found {
+		warnCustomSourceAbsent(u, targetField, sourceAttr)
+		return
+	}
+	if customFieldIsMultiValued(u, sourceAttr) {
+		schema, field, _ := parseCustomSchemaPath(stripSelector(sourceAttr))
+		log.WithFields(log.Fields{
+			"reason": "customFieldMultiValued",
+			"schema": schema,
+			"field":  field,
+			"target": targetField,
+			"user":   customWarnUserID(u),
+		}).Warn(MultiValuedCustomFieldIgnoredMsg)
+	}
+}
+
+// MultiValuedCustomFieldIgnoredMsg is the WARN logged when a mapped custom-schema
+// field holds multiple values on a user. Exported so the tests can match it.
+const MultiValuedCustomFieldIgnoredMsg = "attribute map: custom-schema field is multi-valued; multi-valued custom attributes are not supported, mapping ignored"
+
+// customFieldIsMultiValued reports whether a custom-schema source names a
+// field present on the user as a JSON array (a Google multi-valued custom
+// field). It never errors; anything it cannot read is reported as false.
+func customFieldIsMultiValued(u *admin.User, sourceAttr string) bool {
+	schema, field, ok := parseCustomSchemaPath(stripSelector(sourceAttr))
+	if !ok {
+		return false
+	}
+	raw, present := u.CustomSchemas[schema]
+	if !present {
+		return false
+	}
+	var obj map[string]json.RawMessage
+	if json.Unmarshal(raw, &obj) != nil {
+		return false
+	}
+	trimmed := strings.TrimSpace(string(obj[field]))
+	return strings.HasPrefix(trimmed, "[")
+}
+
+// customWarnUserID identifies a user in custom-schema WARNs: primary email,
+// else the Google id.
+func customWarnUserID(u *admin.User) string {
+	if u.PrimaryEmail != "" {
+		return u.PrimaryEmail
+	}
+	return u.Id
+}
+
 // warnCustomSourceAbsent emits the structured WARN for a custom-schema source
 // that resolved to found=false (an ABSENT schema or field on this user). It
 // re-derives the schema-absent vs field-absent distinction by re-checking
@@ -612,16 +637,12 @@ func warnCustomSourceAbsent(u *admin.User, targetField, sourceAttr string) {
 	if _, present := u.CustomSchemas[schema]; !present {
 		reason = "customSchemaAbsent"
 	}
-	userID := u.PrimaryEmail
-	if userID == "" {
-		userID = u.Id
-	}
 	log.WithFields(log.Fields{
 		"reason": reason,
 		"schema": schema,
 		"field":  field,
 		"target": targetField,
-		"user":   userID,
+		"user":   customWarnUserID(u),
 	}).Warn("attribute map: custom-schema source not found on user; field cleared")
 }
 
@@ -673,6 +694,9 @@ func debugAbsentReason(u *admin.User, source string) string {
 // selector that matched nothing (noTypeMatch:<value>), or a present-but-empty
 // value (emptySourceValue).
 func debugEmptyReason(u *admin.User, source string) string {
+	if customFieldIsMultiValued(u, source) {
+		return "customFieldMultiValued"
+	}
 	if _, selector, _, ok := parseMultiValuedPath(source); ok {
 		if selector == "primary" {
 			return "noPrimaryEntry"
@@ -992,11 +1016,13 @@ func resolveGoogleUserSource(u *admin.User, sourceAttr string) (value interface{
 //   - field absent within a present schema              -> ("", false, nil).
 //   - present scalar (string/number/bool)              -> stringified, found=true.
 //   - present null / present-but-empty                 -> ("", true, nil).
-//   - selector-less array or object                    -> ("", true, nil) (a
-//     selector is needed to pick a scalar; NOT an absence, no warn).
-//   - [type=V] over an array of {type,value} objects   -> first match's value
-//     stringified, found=true; no match -> ("", true, nil); non-{type,value}
-//     elements are skipped; a scalar with a selector -> ("", true, nil).
+//   - array (a multi-valued custom field)              -> ("", true, nil):
+//     multi-valued custom attributes are NOT supported; the mapper logs a WARN
+//     (warnCustomSource) and the mapping is ignored.
+//   - object                                           -> ("", true, nil).
+//   - a scalar with a selector                         -> ("", true, nil)
+//     (selectors on custom sources are dropped at load time, see
+//     config.ParseAttributeMaps, so this is defensive only).
 //
 // The resolver NEVER errors on a strange custom JSON shape (the custom source
 // surface is open/unvalidated); only malformed RawMessage JSON that should never
@@ -1048,28 +1074,9 @@ func decodeCustomField(fieldRaw json.RawMessage, selector string) (interface{}, 
 
 	switch trimmed[0] {
 	case '[':
-		// Array: only a [type=<value>] selector can pick a scalar.
-		v, ok := strings.CutPrefix(selector, "type=")
-		if !ok {
-			return "", true, nil // selector-less array -> nothing, no warn
-		}
-		var entries []map[string]json.RawMessage
-		if err := json.Unmarshal(fieldRaw, &entries); err != nil {
-			// Not an array of objects; cannot match a type selector -> nothing.
-			return "", true, nil
-		}
-		for _, e := range entries {
-			typeRaw, hasType := e["type"]
-			valRaw, hasVal := e["value"]
-			if !hasType || !hasVal {
-				continue // not a {type,value} element, skip
-			}
-			var typ string
-			if json.Unmarshal(typeRaw, &typ) == nil && strings.EqualFold(typ, v) {
-				return jsonScalarToString(valRaw), true, nil
-			}
-		}
-		return "", true, nil // no type match
+		// Multi-valued custom field: not supported. Resolves to nothing; the
+		// mapper logs a WARN (warnCustomSource) and the mapping is ignored.
+		return "", true, nil
 	case '{':
 		// Object with no selector to pick a scalar -> nothing.
 		return "", true, nil

@@ -5,6 +5,8 @@ import (
 
 	"ssosync/internal/config"
 
+	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus/hooks/test"
 	"github.com/stretchr/testify/assert"
 	admin "google.golang.org/api/admin/directory/v1"
 	"google.golang.org/api/googleapi"
@@ -249,45 +251,87 @@ func TestMapFromGoogleUser_CustomFieldAbsentWarnsAndClears(t *testing.T) {
 	assert.Nil(t, got.Enterprise)
 }
 
-func TestMapFromGoogleUser_CustomMultiValuedTypeSelection(t *testing.T) {
-	u := &admin.User{
-		Id:           "C4",
-		PrimaryEmail: "c4@example.com",
-		Name:         &admin.UserName{GivenName: "C", FamilyName: "Four"},
-		CustomSchemas: cs(map[string]string{
-			"Contact": `{"ids":[{"type":"github","value":"octocat"},{"type":"gitlab","value":"glcat"}]}`,
-		}),
+// multiValuedWarnings returns the multi-valued custom-field WARNs logged.
+func multiValuedWarnings(hook *test.Hook) []*log.Entry {
+	var out []*log.Entry
+	for _, e := range hook.AllEntries() {
+		if e.Message == MultiValuedCustomFieldIgnoredMsg {
+			out = append(out, e)
+		}
 	}
-
-	m := config.AttributeMap{
-		"Username": "primaryEmail",
-		"Title":    "customSchemas.Contact.ids[type=gitlab]",
-	}
-
-	got, err := mapFromGoogleUser(u, m)
-	assert.NoError(t, err)
-	assert.Equal(t, "glcat", got.Title)
+	return out
 }
 
-func TestMapFromGoogleUser_CustomMultiValuedTypeNoMatch(t *testing.T) {
+// Multi-valued custom fields are not supported: whatever shape the values take
+// (bare values or {value} objects, as Google returns them), the mapping is
+// ignored with a WARN and the target resolves to nothing.
+func TestMapFromGoogleUser_CustomMultiValuedWarnedAndIgnored(t *testing.T) {
+	for name, field := range map[string]string{
+		"value objects": `[{"value":"PRJ-1"},{"value":"PRJ-2"}]`,
+		"bare values":   `["PRJ-1","PRJ-2"]`,
+		"single entry":  `[{"value":"PRJ-1"}]`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			hook := test.NewGlobal()
+			defer hook.Reset()
+
+			u := &admin.User{
+				Id:            "C4",
+				PrimaryEmail:  "c4@example.com",
+				Name:          &admin.UserName{GivenName: "C", FamilyName: "Four"},
+				CustomSchemas: cs(map[string]string{"Projects": `{"codes":` + field + `}`}),
+			}
+			got, err := mapFromGoogleUser(u, config.AttributeMap{
+				"Username":              "primaryEmail",
+				"Enterprise.CostCenter": "customSchemas.Projects.codes",
+			})
+			assert.NoError(t, err)
+			assert.Nil(t, got.Enterprise, "a multi-valued custom field must not be mapped")
+
+			warns := multiValuedWarnings(hook)
+			if assert.Len(t, warns, 1) {
+				assert.Equal(t, log.WarnLevel, warns[0].Level)
+				assert.Equal(t, "customFieldMultiValued", warns[0].Data["reason"])
+				assert.Equal(t, "Projects", warns[0].Data["schema"])
+				assert.Equal(t, "codes", warns[0].Data["field"])
+				assert.Equal(t, "Enterprise.CostCenter", warns[0].Data["target"])
+				assert.Equal(t, "c4@example.com", warns[0].Data["user"])
+			}
+		})
+	}
+}
+
+// Single-valued custom fields, absent fields and empty values never log the
+// multi-valued warning.
+func TestMapFromGoogleUser_CustomSingleValuedNoMultiValuedWarning(t *testing.T) {
+	hook := test.NewGlobal()
+	defer hook.Reset()
+
 	u := &admin.User{
-		Id:           "C5",
-		PrimaryEmail: "c5@example.com",
-		Name:         &admin.UserName{GivenName: "C", FamilyName: "Five"},
-		CustomSchemas: cs(map[string]string{
-			"Contact": `{"ids":[{"type":"github","value":"octocat"}]}`,
-		}),
+		Id:            "C5",
+		PrimaryEmail:  "c5@example.com",
+		Name:          &admin.UserName{GivenName: "C", FamilyName: "Five"},
+		CustomSchemas: cs(map[string]string{"S": `{"cc":"CC-1","empty":"","nothing":null}`}),
 	}
-
-	m := config.AttributeMap{
-		"Username": "primaryEmail",
-		"Title":    "customSchemas.Contact.ids[type=gitlab]",
-	}
-
-	got, err := mapFromGoogleUser(u, m)
+	got, err := mapFromGoogleUser(u, config.AttributeMap{
+		"Username":              "primaryEmail",
+		"Enterprise.CostCenter": "customSchemas.S.cc",
+		"Title":                 "customSchemas.S.empty",
+		"Enterprise.Division":   "customSchemas.S.nothing",
+		"ProfileURL":            "customSchemas.S.missing",
+	})
 	assert.NoError(t, err)
-	// No type match -> nothing, found=true (no warn).
-	assert.Equal(t, "", got.Title)
+	if assert.NotNil(t, got.Enterprise) {
+		assert.Equal(t, "CC-1", got.Enterprise.CostCenter)
+	}
+	assert.Empty(t, multiValuedWarnings(hook))
+}
+
+// The debug trace classifies a multi-valued custom field distinctly.
+func TestDebugEmptyReason_CustomMultiValued(t *testing.T) {
+	u := &admin.User{CustomSchemas: cs(map[string]string{"P": `{"codes":["a","b"],"one":"x"}`})}
+	assert.Equal(t, "customFieldMultiValued", debugEmptyReason(u, "customSchemas.P.codes"))
+	assert.Equal(t, "emptySourceValue", debugEmptyReason(u, "customSchemas.P.one"))
 }
 
 func TestMapFromGoogleUser_CustomSelectorlessArrayOrObjectResolvesToNothing(t *testing.T) {
@@ -421,35 +465,26 @@ func TestMapFromGoogleUser_ShuffledOrderTypeSelectorStable(t *testing.T) {
 	assert.Equal(t, "Work Title", base.Title)
 }
 
-func TestMapFromGoogleUser_ShuffledOrderCustomTypeSelectorStable(t *testing.T) {
-	// Custom multi-valued arrays in different orders must select the same value.
+func TestMapFromGoogleUser_ShuffledOrderCustomMultiValuedStillIgnored(t *testing.T) {
+	// Multi-valued custom arrays in any order are ignored the same way (no
+	// order-dependent selection).
 	variants := []string{
-		`{"ids":[{"type":"github","value":"octocat"},{"type":"gitlab","value":"glcat"},{"type":"bitbucket","value":"bbcat"}]}`,
-		`{"ids":[{"type":"bitbucket","value":"bbcat"},{"type":"gitlab","value":"glcat"},{"type":"github","value":"octocat"}]}`,
-		`{"ids":[{"type":"gitlab","value":"glcat"},{"type":"github","value":"octocat"},{"type":"bitbucket","value":"bbcat"}]}`,
+		`{"ids":[{"value":"octocat"},{"value":"glcat"},{"value":"bbcat"}]}`,
+		`{"ids":[{"value":"bbcat"},{"value":"glcat"},{"value":"octocat"}]}`,
 	}
-
-	m := config.AttributeMap{
-		"Username": "primaryEmail",
-		"Title":    "customSchemas.Contact.ids[type=gitlab]",
-	}
-
-	var results []string
 	for i, v := range variants {
 		u := &admin.User{
-			Id:           "S2",
-			PrimaryEmail: "s2@example.com",
-			Name:         &admin.UserName{GivenName: "Shuf", FamilyName: "Custom"},
-			CustomSchemas: cs(map[string]string{
-				"Contact": v,
-			}),
+			Id:            "S2",
+			PrimaryEmail:  "s2@example.com",
+			Name:          &admin.UserName{GivenName: "Shuf", FamilyName: "Custom"},
+			CustomSchemas: cs(map[string]string{"Contact": v}),
 		}
-		got, err := mapFromGoogleUser(u, m)
+		got, err := mapFromGoogleUser(u, config.AttributeMap{
+			"Username": "primaryEmail",
+			"Title":    "customSchemas.Contact.ids",
+		})
 		assert.NoError(t, err, i)
-		results = append(results, got.Title)
-	}
-	for _, r := range results {
-		assert.Equal(t, "glcat", r)
+		assert.Equal(t, "", got.Title, i)
 	}
 }
 
