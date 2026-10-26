@@ -196,7 +196,7 @@ func collectLeaves(v reflect.Value, path []pathStep, name string, out *[]leaf) {
 		for i := 0; i < v.NumField(); i++ {
 			collectLeaves(v.Field(i), next(pathStep{'f', i}), name+"."+v.Type().Field(i).Name, out)
 		}
-	case reflect.Ptr:
+	case reflect.Pointer:
 		if v.IsNil() {
 			*out = append(*out, leaf{path, name})
 			return

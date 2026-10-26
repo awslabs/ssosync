@@ -1929,16 +1929,9 @@ func (ids *memberIdentities) google(g *admin.User) (*interfaces.User, error) {
 	return &mapped, nil
 }
 
-// sameUser reports whether a mapped Google user and an AWS user are the same
-// person: equal non-empty ExternalId.Id, or case-insensitively equal Username.
-func sameUser(gm, a *interfaces.User) bool {
-	if gm.ExternalId.Id != "" && gm.ExternalId.Id == a.ExternalId.Id {
-		return true
-	}
-	return strings.EqualFold(gm.Username, a.Username)
-}
-
-// userIndex is a set of users matched with sameUser semantics.
+// userIndex is a set of users. A user is contained when its non-empty
+// ExternalId.Id is present, or its Username matches case-insensitively; empty
+// ExternalIds never match each other.
 type userIndex struct {
 	byExtID map[string]struct{}
 	byName  map[string]struct{}
