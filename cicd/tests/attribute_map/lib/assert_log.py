@@ -29,6 +29,11 @@ Usage:
       "DRY RUN: Would ..." actions and the same attribute-map resolutions
       (compared order-independently, ignoring timestamps).
 
+  assert_log.py dryrun    LOG
+      The log is from a --dry-run, and its Change Summary reports exactly the
+      changes that WOULD have been made live: every summary count is matched by
+      the corresponding "DRY RUN: Would ..." action lines (see DRYRUN_ACTIONS).
+
 Exit status is 0 on pass and 1 on failure, with the reason printed.
 """
 
@@ -247,6 +252,69 @@ def cmd_same(args):
     fail("the two runs made different decisions")
 
 
+# In dry-run mode the Change Summary is computed exactly as in a live run, and
+# Sync then calls the dry client for each change, which logs one line per
+# action instead of writing. Each action line is therefore owed by these
+# Change Summary counters (internal/sync.go: the update list carries Update,
+# UpdateForced, AdoptLocal, AdoptForeign and Retain; Recreate is a delete plus a
+# create).
+DRYRUN_ACTIONS = {
+    "Change Summary: Users": {
+        "DRY RUN: Would create user": ["create", "recreate"],
+        "DRY RUN: Would update user": ["update", "updateForced", "adoptLocal", "adoptForeign", "retain"],
+        "DRY RUN: Would delete user": ["delete", "recreate"],
+    },
+    "Change Summary: Groups": {
+        "DRY RUN: Would create group": ["create", "recreate"],
+        "DRY RUN: Would update group": ["update", "updateForced", "adoptLocal", "adoptForeign", "retain"],
+        "DRY RUN: Would delete group": ["delete", "recreate"],
+    },
+}
+DRYRUN_MARKER = "This is a DRY RUN - actions will *not* be actually performed"
+
+
+def cmd_dryrun(args):
+    records = load(args.log)
+    if not any(r.get("msg") == DRYRUN_MARKER for r in records):
+        fail(f"no {DRYRUN_MARKER!r} line: not a dry-run log")
+
+    def actions(msg):
+        # Only the SCIM dry client's lines (internal/aws/client_dry.go), which
+        # carry a "user" or "group" field. The dry Identity Store wrapper logs
+        # look-alike messages keyed by displayName/userName/userId/groupId.
+        return sum(1 for r in records
+                   if r.get("msg") == msg and ("user" in r or "group" in r))
+
+    for summary_msg, owed in DRYRUN_ACTIONS.items():
+        rec = find_one(records, summary_msg)
+        if rec is None:
+            fail(f"no '{summary_msg}' line found (did the sync run to completion?)")
+            continue
+        for action_msg, keys in owed.items():
+            want = sum(int(rec.get(k, 0) or 0) for k in keys)
+            got = actions(action_msg)
+            label = f"{summary_msg} ({'+'.join(keys)}={want}) vs {action_msg!r}={got}"
+            if got != want:
+                fail(label)
+            else:
+                print(f"ok:   {label}")
+
+    # Group members: removals are only made for groups with a member summary,
+    # so they match exactly; additions can also go to groups created or updated
+    # in this run (which have no member summary), so they are at least the total.
+    totals, _ = member_totals(records)
+    removed = actions("DRY RUN: Would remove user from group")
+    added = actions("DRY RUN: Would add user to group")
+    if removed != totals["remove"]:
+        fail(f"Group Members remove={totals['remove']} vs 'Would remove user from group'={removed}")
+    else:
+        print(f"ok:   Group Members remove={totals['remove']} vs 'Would remove user from group'={removed}")
+    if added < totals["add"]:
+        fail(f"Group Members add={totals['add']} vs 'Would add user to group'={added}, expected at least the summary")
+    else:
+        print(f"ok:   Group Members add={totals['add']} vs 'Would add user to group'={added} (>=)")
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -274,6 +342,9 @@ def main():
     m.add_argument("log1")
     m.add_argument("log2")
 
+    d = sub.add_parser("dryrun")
+    d.add_argument("log")
+
     args = p.parse_args()
     if args.cmd == "summary":
         cmd_summary(args)
@@ -286,6 +357,8 @@ def main():
         cmd_count(args, eq=0)
     elif args.cmd == "same":
         cmd_same(args)
+    elif args.cmd == "dryrun":
+        cmd_dryrun(args)
 
     sys.exit(1 if failures else 0)
 

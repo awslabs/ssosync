@@ -99,11 +99,21 @@ reset_and_adopt() {
 
 # assert_converged <map-file|""> <log-file>
 # A dry-run after a live sync must propose no user, group or membership change.
+# In dry-run mode the Change Summary reports what WOULD change in a live run, so
+# convergence means every summary count is zero (and, consistently, there are no
+# "DRY RUN: Would ..." actions). Returns non-zero if ANY step fails.
 assert_converged() {
-  local map=$1 log=$2
-  run_ssosync dry "$map" "$log"
-  assert_log converged "$log"
+  local map=$1 log=$2 rc=0
+  run_ssosync dry "$map" "$log" || rc=1
+  assert_log converged "$log" || rc=1
+  assert_log dryrun "$log" || rc=1
+  return $rc
 }
+
+# assert_dry_run <log-file>
+# The log is from a dry run whose Change Summary matches the actions it says it
+# WOULD have taken (one "DRY RUN: Would ..." line per summarised change).
+assert_dry_run() { assert_log dryrun "$1"; }
 
 # invoke_lambda <log-file>
 # Invokes FUNCTION_NAME synchronously, fails on FunctionError, then collects the

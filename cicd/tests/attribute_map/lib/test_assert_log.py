@@ -188,6 +188,76 @@ class AssertLogTest(unittest.TestCase):
         a = self.log([{"msg": "unrelated"}])
         self.assertEqual(run("same", a, a)[0], 1)
 
+    # dryrun
+    MARKER = {"msg": "This is a DRY RUN - actions will *not* be actually performed"}
+
+    def test_dryrun_summary_matches_actions(self):
+        p = self.log([
+            self.MARKER,
+            users(update=2, adoptLocal=1, create=1, recreate=1, delete=1),
+            groups(update=1),
+            {"msg": "Change Summary: Group Members", "add": 1, "remove": 1},
+            *[{"msg": "DRY RUN: Would update user", "user": f"u{i}"} for i in range(3)],
+            {"msg": "DRY RUN: Would create user", "user": "c1"},
+            {"msg": "DRY RUN: Would create user", "user": "r1"},
+            {"msg": "DRY RUN: Would delete user", "user": "d1"},
+            {"msg": "DRY RUN: Would delete user", "user": "r1"},
+            {"msg": "DRY RUN: Would update group", "group": "g1"},
+            {"msg": "DRY RUN: Would add user to group", "user": "a", "group": "g"},
+            {"msg": "DRY RUN: Would add user to group", "user": "b", "group": "new"},
+            {"msg": "DRY RUN: Would remove user from group", "user": "c", "group": "g"},
+        ])
+        rc, out = run("dryrun", p)
+        self.assertEqual(rc, 0, out)
+
+    def test_dryrun_no_changes(self):
+        p = self.log([self.MARKER, users(equal=4), groups(equal=2)])
+        self.assertEqual(run("dryrun", p)[0], 0)
+
+    def test_dryrun_fails_when_actions_missing(self):
+        p = self.log([self.MARKER, users(update=2), groups(),
+                      {"msg": "DRY RUN: Would update user", "user": "u1"}])
+        rc, out = run("dryrun", p)
+        self.assertEqual(rc, 1)
+        self.assertIn("Would update user", out)
+
+    def test_dryrun_fails_on_unreported_action(self):
+        p = self.log([self.MARKER, users(), groups(),
+                      {"msg": "DRY RUN: Would delete user", "user": "x"}])
+        self.assertEqual(run("dryrun", p)[0], 1)
+
+    def test_dryrun_member_removals_exact_additions_at_least(self):
+        base = [self.MARKER, users(), groups(),
+                {"msg": "Change Summary: Group Members", "add": 2, "remove": 1}]
+        ok = self.log(base + [
+            {"msg": "DRY RUN: Would remove user from group", "user": "a", "group": "g"},
+            *[{"msg": "DRY RUN: Would add user to group", "user": f"u{i}", "group": "g"} for i in range(3)],
+        ])
+        self.assertEqual(run("dryrun", ok)[0], 0)
+        too_few_adds = self.log(base + [
+            {"msg": "DRY RUN: Would remove user from group", "user": "a", "group": "g"},
+            {"msg": "DRY RUN: Would add user to group", "user": "u", "group": "g"},
+        ])
+        self.assertEqual(run("dryrun", too_few_adds)[0], 1)
+        extra_remove = self.log(base + [
+            {"msg": "DRY RUN: Would remove user from group", "user": "a", "group": "g"},
+            {"msg": "DRY RUN: Would remove user from group", "user": "b", "group": "g"},
+            *[{"msg": "DRY RUN: Would add user to group", "user": f"u{i}", "group": "g"} for i in range(2)],
+        ])
+        self.assertEqual(run("dryrun", extra_remove)[0], 1)
+
+    def test_dryrun_ignores_identity_store_lookalikes(self):
+        p = self.log([self.MARKER, users(), groups(),
+                      {"msg": "DRY RUN: Would create group", "displayName": "x"},
+                      {"msg": "DRY RUN: Would delete user", "userId": "u-1"}])
+        self.assertEqual(run("dryrun", p)[0], 0)
+
+    def test_dryrun_requires_dry_run_marker(self):
+        p = self.log([users(), groups()])
+        rc, out = run("dryrun", p)
+        self.assertEqual(rc, 1)
+        self.assertIn("not a dry-run log", out)
+
     def test_same_ignores_unrelated_lines(self):
         a = self.log([users(), {"msg": "noise 1"}])
         b = self.log([users(), {"msg": "noise 2"}])
