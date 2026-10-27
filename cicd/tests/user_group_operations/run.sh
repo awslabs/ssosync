@@ -22,6 +22,13 @@
 # and the S8 scenarios are SKIPPED (with the API error) if it cannot, unless
 # UGO_FOREIGN_REQUIRED=true, which makes a skip fail the test.
 #
+# S5/S6 (and S8) create LOCAL records, which only the Identity Store API can do.
+# Its writes are refused from an account outside the instance owner without
+# delegated administration (NonDelegated): there S5/S6 are SKIPPED and proven by
+# the Management/Delegated runs; a refusal in any other account FAILS the test.
+# Everything else, including S7, changes records through SCIM, which works from
+# every account (as ssosync itself does).
+#
 # Every change is undone (see lib.sh); S6/S7 give the dedicated test records new
 # Identity Store ids, so they must be a Google test user/group with no
 # permission-set assignments:
@@ -226,8 +233,11 @@ s6_adopt_local() {
 
 s7_create() {
   undo repair run_ssosync "$LOG_DIR/S7_undo_sync.log"
-  ids_delete_user "$TU_ID" || return 1
-  ids_delete_group "$TG_ID" || return 1
+  # Delete through SCIM (as ssosync itself writes), not the Identity Store API:
+  # SCIM works from every account, whereas Identity Store writes are refused in
+  # an account outside the instance owner without delegated administration.
+  scim DELETE "/Users/$TU_ID" > /dev/null || return 1
+  scim DELETE "/Groups/$TG_ID" > /dev/null || return 1
 
   local dry="$LOG_DIR/S7_dry.log" live="$LOG_DIR/S7_live.log" conv="$LOG_DIR/S7_converge.log"
   expect run_ssosync "$dry" --dry-run
@@ -240,10 +250,29 @@ s7_create() {
   refresh_test_records "$conv" || S_FAIL=1
 }
 
+# --- Identity Store API write access -------------------------------------------
+# S5, S6 and S8 must create records with the Identity Store API (only it can
+# create LOCAL records; SCIM always creates managed ones). Those writes are
+# refused when the test runs in an account outside the instance owner without
+# delegated administration (no resource-based policy allows them), while
+# ssosync itself never needs them (it writes through SCIM). Probe once.
+IDS_WRITE_SKIP=""
+probe_identity_store_writes() {
+  local gid err="$LOG_DIR/ids_write_probe.err"
+  if gid=$(ids_create_group "ugo-writeprobe-$TS" 2> "$err"); then
+    echo "ok:   the Identity Store API accepts writes from this account"
+    ids_delete_group "$gid" || echo "ERROR: could not delete write-probe group $gid"
+  else
+    IDS_WRITE_SKIP="the Identity Store API refused writes from this account: $(tr '\n' ' ' < "$err")"
+    echo "NOTE: $IDS_WRITE_SKIP"
+  fi
+}
+
 # --- S8: foreign issuers (needs the Identity Store API to write ExternalIds) --
 FOREIGN_SKIP=""
 probe_foreign() {
   local gid err="$LOG_DIR/S8_probe.err"
+  if [ -n "$IDS_WRITE_SKIP" ]; then FOREIGN_SKIP="$IDS_WRITE_SKIP"; return 0; fi
   gid=$(ids_create_group "ugo-probe-$TS") || { FOREIGN_SKIP="could not create the probe group"; return 0; }
   if ids_set_external_ids group "$gid" "$(ext_json "$FOREIGN_ISSUER" "ugo-probe-$TS")" 2> "$err"; then
     echo "ok:   the Identity Store API can write a foreign-issuer ExternalId"
@@ -326,7 +355,24 @@ fi
 scenario S2 "Update (managed, attribute changed)" s2_update
 scenario S3 "Recreate / UpdateForced (managed, ExternalId changed)" s3_externalid_change
 scenario S4 "Delete, never retained (managed, not in Google)" s4_managed_orphan
-scenario S5 "Delete / Retain (local, not in Google)" s5_local_unmatched
+
+# Local-record scenarios need Identity Store API writes. Refused writes are
+# expected only in the NonDelegated account (outside the instance owner, no
+# delegated administration); there the scenarios are skipped, and the
+# Management and Delegated accounts prove them. Anywhere else a refusal is a
+# permissions regression, so the scenarios are skipped AND the test fails.
+probe_identity_store_writes
+LOCAL_SKIP=""
+if [ -n "$IDS_WRITE_SKIP" ]; then
+  LOCAL_SKIP="$IDS_WRITE_SKIP"
+  if [ "${TEST_ACCOUNT_TYPE:-}" = NonDelegated ]; then
+    LOCAL_SKIP="$LOCAL_SKIP (expected in the NonDelegated account; proven in Management/Delegated)"
+  else
+    echo "FAIL: Identity Store API writes are expected to work in the ${TEST_ACCOUNT_TYPE:-developer} account"
+    FAILED=1
+  fi
+fi
+scenario S5 "Delete / Retain (local, not in Google)" s5_local_unmatched "$LOCAL_SKIP"
 
 DEDICATED=""
 if [ -z "${UGO_TEST_USER:-}" ] || [ -z "${UGO_TEST_GROUP:-}" ]; then
@@ -336,7 +382,7 @@ if [ -n "$DEDICATED" ]; then
   scenario S6 "AdoptLocal (local, in Google)" : "$DEDICATED"; FAILED=1
   scenario S7 "Create (missing, in Google)" : "$DEDICATED"; FAILED=1
 else
-  scenario S6 "AdoptLocal (local, in Google)" s6_adopt_local
+  scenario S6 "AdoptLocal (local, in Google)" s6_adopt_local "$LOCAL_SKIP"
   scenario S7 "Create (missing, in Google)" s7_create
 fi
 
