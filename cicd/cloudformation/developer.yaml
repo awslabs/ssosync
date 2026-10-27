@@ -333,6 +333,26 @@ Resources:
                 - Name: SmokeCodePipeline
               InputArtifacts:
                 - Name: Tests
+        # Live proof of getUserOperations/getGroupOperations against the real
+        # tenant (issue #383): expected IssuerArn == the real ExternalId Issuer,
+        # managed records converge, multi-ExternalId records use this tenant's
+        # entry, and the ExternalId-change path (Recreate/UpdateForced) works.
+        # See cicd/tests/user_group_operations/run.sh.
+        - Name: UserGroupOperations
+          Actions:
+            - Name: IssuerAndExternalId
+              ActionTypeId:
+                Category: Test
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              RunOrder: 1
+              Configuration:
+                ProjectName: !Ref CodeBuildUserGroupOperations
+              OutputArtifacts:
+                - Name: UserGroupOperations
+              InputArtifacts:
+                - Name: Tests
         - Name: CleanUp
           Actions:
             - Name: RemoveStack
@@ -562,6 +582,34 @@ Resources:
       LogGroupName: !Ref CodePipelineLogGroup
       LogStreamName: SSOSync-Smoke-Lambda
 
+  CodeBuildUserGroupOperations:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: SSOSync-UserGroupOperations
+      Description: "Live test of getUserOperations/getGroupOperations: IssuerArn matching, multi-ExternalId selection and the ExternalId-change path (issue #383)"
+      ServiceRole: !Ref CodeBuildTestRole
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: "tests/user_group_operations/buildspec.yml"
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/amazonlinux-x86_64-standard:6.0
+        Type: LINUX_CONTAINER
+      Artifacts:
+        Name: SSOSync
+        Type: CODEPIPELINE
+      LogsConfig:
+        CloudWatchLogs:
+          GroupName: !Ref CodePipelineLogGroup
+          StreamName: !Ref CodeBuildUserGroupOperationsLogs
+          Status: ENABLED
+
+  CodeBuildUserGroupOperationsLogs:
+    Type: AWS::Logs::LogStream
+    Properties:
+      LogGroupName: !Ref CodePipelineLogGroup
+      LogStreamName: SSOSync-UserGroupOperations
+
 
   CodePipelineRole:
     Type: AWS::IAM::Role
@@ -594,6 +642,7 @@ Resources:
               - !Sub ${CodeBuildStaging.Arn}
               - !Sub ${CodeBuildSmokeCLI.Arn}
               - !Sub ${CodeBuildSmokeLambda.Arn}
+              - !Sub ${CodeBuildUserGroupOperations.Arn}
               Effect: Allow
             - Action:
               - 'inspector-scan:ScanSbom'
@@ -833,6 +882,10 @@ Resources:
                 - "identitystore:DeleteUser"
                 - "identitystore:DeleteGroup"
                 - "identitystore:CreateGroup"
+                # tests/user_group_operations (issue #383)
+                - "identitystore:CreateUser"
+                - "identitystore:UpdateUser"
+                - "identitystore:UpdateGroup"
                 - "identitystore:CreateGroupMembership"
                 - "identitystore:ListGroups"
                 - "identitystore:ListUsers"

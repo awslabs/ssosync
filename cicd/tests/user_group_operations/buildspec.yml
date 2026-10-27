@@ -1,0 +1,22 @@
+version: 0.2
+
+# Live test of getUserOperations / getGroupOperations (issue #383).
+# See run.sh for what it proves.
+env:
+  shell: bash
+  secrets-manager:
+    GoogleAdminEmail: SSOSyncGoogleAdminEmail
+    SCIMEndpointUrl: SSOSyncSCIMEndpointUrl
+    SCIMAccessToken: SSOSyncSCIMAccessToken
+  variables:
+    GROUP_MATCH: "name:AWS*"
+
+phases:
+  build:
+    commands:
+      - python3 tests/user_group_operations/test_check_log.py
+      - bash tests/user_group_operations/run.sh
+
+artifacts:
+  files:
+    - logs/**/*

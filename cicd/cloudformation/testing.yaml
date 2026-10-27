@@ -251,6 +251,27 @@ Resources:
                 - Name: SmokeCLI
               InputArtifacts:
                 - Name: Tests
+        # Live proof of getUserOperations/getGroupOperations (issue #383) in this
+        # account type (Management, Delegated or NonDelegated): the expected
+        # IssuerArn is built from the instance owner account and matches the
+        # real ExternalId Issuer wherever ssosync runs.
+        # See tests/user_group_operations/run.sh.
+        - Name: TestsUserGroupOperations
+          Actions:
+            - Name: IssuerAndExternalId
+              ActionTypeId:
+                Category: Test
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              RunOrder: 1
+              Configuration:
+                ProjectName: !Ref CodeBuildUserGroupOperations
+                PrimarySource: Tests
+              OutputArtifacts:
+                - Name: UserGroupOperations
+              InputArtifacts:
+                - Name: Tests
         - !If
             - DeployDelegated
             - Name: TestsCodePipeline
@@ -736,6 +757,37 @@ Resources:
       LogGroupName: !Ref CodePipelineLogGroup
       LogStreamName: SSOSync-Smoke-Lambda
 
+  CodeBuildUserGroupOperations:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: SSOSync-UserGroupOperations
+      Description: !Sub "Live test of getUserOperations/getGroupOperations in the ${TestAccount} account: IssuerArn matching, multi-ExternalId selection and the ExternalId-change path (issue #383)"
+      ServiceRole: !Ref CodeBuildTestRole
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: "tests/user_group_operations/buildspec.yml"
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:7.0
+        Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: TEST_ACCOUNT_TYPE
+            Value: !Ref TestAccount
+      Artifacts:
+        Name: SSOSync
+        Type: CODEPIPELINE
+      LogsConfig:
+        CloudWatchLogs:
+          GroupName: !Ref CodePipelineLogGroup
+          StreamName: !Ref CodeBuildUserGroupOperationsLogs
+          Status: ENABLED
+
+  CodeBuildUserGroupOperationsLogs:
+    Type: AWS::Logs::LogStream
+    Properties:
+      LogGroupName: !Ref CodePipelineLogGroup
+      LogStreamName: SSOSync-UserGroupOperations
+
   CodeBuildTestingAppStack:
     Type: AWS::CodeBuild::Project
     Properties:
@@ -802,6 +854,7 @@ Resources:
               Resource:
               - !Sub ${CodeBuildSmokeCLI.Arn}
               - !Sub ${CodeBuildSmokeLambda.Arn}
+              - !Sub ${CodeBuildUserGroupOperations.Arn}
               Effect: Allow
             - Action:
               - 's3:GetBucketPolicy'
@@ -924,6 +977,17 @@ Resources:
                 - "identitystore:ListGroupMemberships"
                 - "identitystore:IsMemberInGroups"
                 - "identitystore:GetGroupMembershipId"
+              Effect: Allow
+              Resource: '*'
+            # tests/user_group_operations: set up local, foreign and missing
+            # records to exercise every user/group operation (issue #383).
+            - Action:
+                - "identitystore:CreateUser"
+                - "identitystore:CreateGroup"
+                - "identitystore:UpdateUser"
+                - "identitystore:UpdateGroup"
+                - "identitystore:DeleteUser"
+                - "identitystore:DeleteGroup"
               Effect: Allow
               Resource: '*'
             - Sid: SsoAdminAccessPolicy
