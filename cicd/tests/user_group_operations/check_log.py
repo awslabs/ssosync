@@ -20,7 +20,8 @@ Subcommands (exit 0 = pass, 1 = fail, with the reason printed):
 
   issuer    LOG --expected ARN [--min-users N] [--min-groups N]
       Every "ExternalId issuer expected" line carries ARN, and every
-      "ExternalId issuer check" line matched it exactly (issuerMatch=true).
+      "ExternalId issuer check" line matched it (issuerMatch=true, ssosync's
+      case-insensitive rule; case-only differences are reported).
 
   pick      LOG --kind user|group
       Print "awsId<TAB>name<TAB>externalId" of a managed record (issuer and
@@ -39,9 +40,10 @@ Subcommands (exit 0 = pass, 1 = fail, with the reason printed):
 
   truth     LOG --expected ARN --users USERS.json --groups GROUPS.json
       Cross-check against `aws identitystore list-users/list-groups` output:
-      every record ssosync matched carries an ExternalId with exactly that Issuer
-      and Id. Records with more than one ExternalId are reported, and ssosync
-      must have selected this tenant's entry for them.
+      every record ssosync matched carries an ExternalId with that Issuer
+      (ignoring letter case, as ssosync does) and Id. Records with more than one
+      ExternalId are reported, and ssosync must have selected this tenant's
+      entry for them.
 """
 
 import argparse
@@ -176,7 +178,7 @@ def cmd_converged(a):
 
 
 def describe(r):
-    keys = ("kind", "name", "externalId", "issuer", "expectedIssuer", "externalIdCount",
+    keys = ("kind", "name", "externalId", "issuer", "expectedIssuer", "issuerExactMatch", "externalIdCount",
             "externalIdSelectedBy", "caseInsensitiveMatch", "accountMatch", "storeAndTenantMatch")
     return ", ".join(f"{k}={as_str(r.get(k))}" for k in keys if k in r)
 
@@ -200,7 +202,12 @@ def cmd_issuer(a):
         for r in bad:
             fail(f"{kind} issuer did not match: {describe(r)}")
         if lines and not bad:
-            ok(f"all {len(lines)} {kind} issuer-check line(s) matched the expected issuer exactly")
+            # issuerMatch is ssosync's case-insensitive rule; report how many
+            # matched only ignoring case (IAM Identity Center lowercases the
+            # tenant id on groups, issue #383).
+            case_only = sum(1 for r in lines if r.get("issuerExactMatch") is False)
+            ok(f"all {len(lines)} {kind} issuer-check line(s) matched the expected issuer"
+               + (f" ({case_only} only ignoring letter case)" if case_only else " exactly"))
 
 
 def managed(records, kind):
@@ -241,6 +248,7 @@ def cmd_truth(a):
         groups = {g["GroupId"]: g for g in json.load(f).get("Groups", [])}
 
     multi = 0
+    case_only = {}
     for kind, store in (("user", users), ("group", groups)):
         lines = issuer_lines(records, kind)
         checked = 0
@@ -258,14 +266,22 @@ def cmd_truth(a):
                 if r.get("externalIdSelectedBy") != "issuerMatch":
                     fail(f"{kind} {r.get('name')}: has {len(ext)} ExternalIds but ssosync selected by "
                          f"{r.get('externalIdSelectedBy')!r}, expected 'issuerMatch'")
-            hit = [e for e in ext if e.get("Issuer") == a.expected and e.get("Id") == r.get("externalId")]
+            # Same rule as ssosync (issuerMatches): case-insensitive, because
+            # IAM Identity Center stamps the tenant id with its original case on
+            # users but lowercased on groups (issue #383). The spelling actually
+            # stored is reported.
+            hit = [e for e in ext if str(e.get("Issuer", "")).lower() == a.expected.lower()
+                   and e.get("Id") == r.get("externalId")]
             if hit:
                 checked += 1
+                if hit[0].get("Issuer") != a.expected:
+                    case_only[kind] = case_only.get(kind, 0) + 1
             else:
-                fail(f"{kind} {r.get('name')}: no ExternalId with Issuer == expected and Id == "
+                fail(f"{kind} {r.get('name')}: no ExternalId with Issuer == expected (ignoring case) and Id == "
                      f"{r.get('externalId')!r} in the Identity Store: {json.dumps(ext)}")
         if checked:
-            ok(f"{checked} {kind}(s): the Identity Store Issuer equals the expected IssuerArn exactly")
+            ok(f"{checked} {kind}(s): the Identity Store Issuer matches the expected IssuerArn "
+               f"({checked - case_only.get(kind, 0)} exactly, {case_only.get(kind, 0)} differing only in letter case)")
     if multi:
         ok(f"{multi} record(s) with more than one ExternalId were matched on this tenant's entry")
     else:

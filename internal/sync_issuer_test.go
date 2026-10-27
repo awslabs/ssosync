@@ -92,27 +92,18 @@ func TestGetUserOperation_IssuerCaseOnlyDifferenceIsManaged(t *testing.T) {
 }
 
 // The live finding behind the case-insensitive comparison: IAM Identity Center
-// stamped records of ONE SCIM tenant with the tenant id either as in the SCIM
-// endpoint (capital H) or lowercased; both spellings occurred among its users,
-// and its groups were lowercased. Every record must be managed against the one
-// expected IssuerArn (built with its original case).
-func TestOperations_IssuerCasingVariesWithinTenant_AllManaged(t *testing.T) {
+// stamped users with the tenant id as in the SCIM endpoint (capital H) and
+// groups of the same tenant with it lowercased. Both must be managed against
+// the one expected IssuerArn (built with its original case).
+func TestOperations_UserAndGroupIssuerCasingDiffer_BothManaged(t *testing.T) {
 	const (
-		expected   = "arn:aws:identitystore::920862271044:identitystore/d-9a671d7705/provisioningtenant/Hw523407fb9-d9b9-4fc6-8568-cc8afd03d4d1"
-		original   = expected
-		lowercased = "arn:aws:identitystore::920862271044:identitystore/d-9a671d7705/provisioningtenant/hw523407fb9-d9b9-4fc6-8568-cc8afd03d4d1"
+		expected    = "arn:aws:identitystore::920862271044:identitystore/d-9a671d7705/provisioningtenant/Hw523407fb9-d9b9-4fc6-8568-cc8afd03d4d1"
+		userIssuer  = expected
+		groupIssuer = "arn:aws:identitystore::920862271044:identitystore/d-9a671d7705/provisioningtenant/hw523407fb9-d9b9-4fc6-8568-cc8afd03d4d1"
 	)
-	// Two users of the same tenant, one with each spelling.
-	bob := &admin.User{Id: "G2", PrimaryEmail: "bob@example.com", Name: &admin.UserName{GivenName: "Bob", FamilyName: "Roe"}}
-	bobAWS := &interfaces.User{ID: "aws-2", Username: "bob@example.com", Active: true, ExternalId: interfaces.ExternalId{Id: "G2", Issuer: lowercased}}
-	bobAWS.Name.GivenName, bobAWS.Name.FamilyName = "Bob", "Roe"
-	_, _, uUpd, uEq := getUserOperations(
-		[]*interfaces.User{issuerUser(original, "G1"), bobAWS},
-		[]*admin.User{googleJane("G1"), bob}, false, false, expected)
-	assert.Empty(t, uUpd, "no user may be re-adopted, whichever spelling it carries")
-	assert.Len(t, uEq, 2)
-
-	groupIssuer := lowercased
+	_, _, uUpd, uEq := getUserOperations([]*interfaces.User{issuerUser(userIssuer, "G1")}, []*admin.User{googleJane("G1")}, false, false, expected)
+	assert.Empty(t, uUpd, "user must not be re-adopted")
+	assert.Len(t, uEq, 1)
 	_, _, gUpd, gEq := getGroupOperations([]*interfaces.Group{issuerGroup(groupIssuer, "GG1")}, []*admin.Group{googleAdmins("GG1")}, false, false, expected)
 	assert.Empty(t, gUpd, "group must not be re-adopted (AdoptForeign) every run")
 	assert.Len(t, gEq, 1)
@@ -309,7 +300,6 @@ func TestSelectExternalId(t *testing.T) {
 		{"this tenant first", thisTenantJane, []interfaces.ExternalId{thisTenantJane, otherIdpEntry}, realIssuer, thisTenantJane, externalIdSelectedIssuerMatch},
 		{"none from this tenant", otherIdpEntry, []interfaces.ExternalId{otherIdpEntry, {Id: "Y", Issuer: "z"}}, realIssuer, otherIdpEntry, externalIdSelectedFirst},
 		{"case-only issuer difference is still this tenant", otherIdpEntry, []interfaces.ExternalId{otherIdpEntry, thisTenantJane}, lowercaseIssuer, thisTenantJane, externalIdSelectedIssuerMatch},
-		{"case-only issuer is not selected", otherIdpEntry, []interfaces.ExternalId{otherIdpEntry, thisTenantJane}, lowercaseIssuer, otherIdpEntry, externalIdSelectedFirst},
 		{"issuer check disabled", otherIdpEntry, []interfaces.ExternalId{otherIdpEntry, thisTenantJane}, "", otherIdpEntry, externalIdSelectedFirst},
 	}
 	for _, tc := range tests {

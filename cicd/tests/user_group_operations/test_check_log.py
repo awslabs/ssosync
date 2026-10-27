@@ -34,7 +34,9 @@ def summary(kind, **kw):
 def check(kind, name, aws_id, ext_id, issuer=ISSUER, expected=ISSUER, ext_match=True, count=1, by="only"):
     return {"msg": "ExternalId issuer check", "kind": kind, "name": name, "awsId": aws_id,
             "externalId": ext_id, "issuer": issuer, "expectedIssuer": expected,
-            "issuerMatch": issuer == expected, "externalIdMatch": ext_match,
+            # Mirrors ssosync's issuerMatches: case-insensitive (issue #383).
+            "issuerMatch": issuer.lower() == expected.lower(), "issuerExactMatch": issuer == expected,
+            "externalIdMatch": ext_match,
             "caseInsensitiveMatch": issuer.lower() == expected.lower(),
             "externalIdCount": count, "externalIdSelectedBy": by}
 
@@ -96,12 +98,23 @@ class CheckLogTest(_LogFiles):
     def test_issuer_pass(self):
         self.assertEqual(run("issuer", self.good_log(), "--expected", ISSUER)[0], 0)
 
-    def test_issuer_fails_on_case_only_mismatch_with_diagnostics(self):
-        p = self.write([expected_line("user", LOWER), check("user", "a", "u-1", "G1", expected=LOWER),
-                        expected_line("group", LOWER), check("group", "g", "g-1", "GG1", expected=LOWER)])
-        rc, out = run("issuer", p, "--expected", LOWER)
+    # The live finding: users carry the tenant id in its original case, groups
+    # lowercased. Both match (ssosync's case-insensitive rule); the case-only
+    # difference is reported.
+    def test_issuer_case_only_difference_passes_and_is_reported(self):
+        p = self.write([expected_line("user"), check("user", "a", "u-1", "G1"),
+                        expected_line("group"), check("group", "g", "g-1", "GG1", issuer=LOWER)])
+        rc, out = run("issuer", p, "--expected", ISSUER)
+        self.assertEqual(rc, 0, out)
+        self.assertIn("1 only ignoring letter case", out)
+
+    def test_issuer_fails_on_account_mismatch_with_diagnostics(self):
+        other = ISSUER.replace("111111111111", "222222222222")
+        p = self.write([expected_line("user"), check("user", "a", "u-1", "G1", issuer=other),
+                        expected_line("group"), check("group", "g", "g-1", "GG1")])
+        rc, out = run("issuer", p, "--expected", ISSUER)
         self.assertEqual(rc, 1)
-        self.assertIn("caseInsensitiveMatch=true", out)
+        self.assertIn("caseInsensitiveMatch=false", out)
 
     def test_issuer_fails_when_expected_differs_or_missing(self):
         self.assertEqual(run("issuer", self.good_log(), "--expected", LOWER)[0], 1)
@@ -146,9 +159,18 @@ class CheckLogTest(_LogFiles):
         groups = self.write({"Groups": []}, ".json")
         self.assertEqual(run("truth", log, "--expected", ISSUER, "--users", users, "--groups", groups)[0], 1)
 
-    def test_truth_fails_on_issuer_case_or_missing_record(self):
+    def test_truth_case_only_difference_passes_and_is_reported(self):
+        log = self.write([check("group", "AWSAdmins", "g-1", "GG1", issuer=LOWER)])
+        users = self.write({"Users": []}, ".json")
+        groups = self.write({"Groups": [{"GroupId": "g-1", "ExternalIds": [{"Issuer": LOWER, "Id": "GG1"}]}]}, ".json")
+        rc, out = run("truth", log, "--expected", ISSUER, "--users", users, "--groups", groups)
+        self.assertEqual(rc, 0, out)
+        self.assertIn("0 exactly, 1 differing only in letter case", out)
+
+    def test_truth_fails_on_other_account_or_missing_record(self):
         log = self.write([check("user", "alice", "u-1", "G1")])
-        users = self.write({"Users": [{"UserId": "u-1", "ExternalIds": [{"Issuer": LOWER, "Id": "G1"}]}]}, ".json")
+        other = ISSUER.replace("111111111111", "222222222222")
+        users = self.write({"Users": [{"UserId": "u-1", "ExternalIds": [{"Issuer": other, "Id": "G1"}]}]}, ".json")
         groups = self.write({"Groups": []}, ".json")
         self.assertEqual(run("truth", log, "--expected", ISSUER, "--users", users, "--groups", groups)[0], 1)
         empty = self.write({"Users": []}, ".json")
