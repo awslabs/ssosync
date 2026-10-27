@@ -203,8 +203,8 @@ def cmd_issuer(a):
             fail(f"{kind} issuer did not match: {describe(r)}")
         if lines and not bad:
             # issuerMatch is ssosync's case-insensitive rule; report how many
-            # matched only ignoring case (IAM Identity Center lowercases the
-            # tenant id on groups, issue #383).
+            # matched only ignoring case (IAM Identity Center's casing of the
+            # tenant id varies between records of one tenant, issue #383).
             case_only = sum(1 for r in lines if r.get("issuerExactMatch") is False)
             ok(f"all {len(lines)} {kind} issuer-check line(s) matched the expected issuer"
                + (f" ({case_only} only ignoring letter case)" if case_only else " exactly"))
@@ -268,8 +268,8 @@ def cmd_truth(a):
                          f"{r.get('externalIdSelectedBy')!r}, expected 'issuerMatch'")
             # Same rule as ssosync (issuerMatches): case-insensitive, because
             # IAM Identity Center stamps the tenant id with its original case on
-            # users but lowercased on groups (issue #383). The spelling actually
-            # stored is reported.
+            # some records and lowercased on others, even among users of one
+            # tenant (issue #383). The spelling actually stored is reported.
             hit = [e for e in ext if str(e.get("Issuer", "")).lower() == a.expected.lower()
                    and e.get("Id") == r.get("externalId")]
             if hit:

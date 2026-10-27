@@ -358,8 +358,9 @@ func issuerAccountId(ownerAccountId string, callerAccountId func() string) (acco
 // The case of every component is preserved (the tenant id as it appears in the
 // SCIM endpoint URL), so logs show the real value. Issuers are nevertheless
 // COMPARED case-insensitively (internal/sync.go issuerMatches), because IAM
-// Identity Center stamps the same tenant id with its original case on users
-// but lowercased on groups (issue #383); no exact spelling matches both.
+// Identity Center stamps the same tenant id with its original case on some
+// records and lowercased on others, even among users of one tenant (issue
+// #383); no exact spelling matches every record.
 func buildIssuerArn(accountId, identityStoreId, issuerId string) string {
 	return fmt.Sprintf(
 		"arn:aws:identitystore::%s:identitystore/%s/provisioningtenant/%s",

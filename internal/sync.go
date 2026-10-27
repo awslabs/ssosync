@@ -1166,25 +1166,30 @@ const ExternalIdsReadMsg = "ExternalIds read from Identity Store"
 // An empty expected issuer disables the check (everything matches).
 //
 // The comparison is case-insensitive ON PURPOSE (issue #383). IAM Identity
-// Center does not stamp the provisioning tenant id with a consistent case: in a
-// live tenant every USER provisioned through SCIM carried
+// Center does not stamp the provisioning tenant id with a consistent case, even
+// across records of ONE SCIM tenant. In a live tenant, records provisioned
+// through the same SCIM endpoint carried either
 //
 //	arn:aws:identitystore::<account>:identitystore/d-xxxxxxxxxx/provisioningtenant/Hw523407fb9-...
 //
-// (the tenant id as it appears in the SCIM endpoint URL, capital "H"), while
-// every GROUP provisioned through the same SCIM tenant carried
+// (the tenant id as it appears in the SCIM endpoint URL, capital "H") or
 //
 //	arn:aws:identitystore::<account>:identitystore/d-xxxxxxxxxx/provisioningtenant/hw523407fb9-...
 //
-// (lowercased). No single spelling of the expected IssuerArn matches both with
-// an exact comparison: the old lowercased ARN matched groups and missed users,
-// and the case-preserving ARN matches users and misses groups, so either way
-// one kind was classified AdoptForeign and rewritten on every run. Two issuers
+// (lowercased). Both spellings occurred among USERS of the tenant, and its
+// groups were lowercased; records newly created through SCIM had the
+// lowercased form, while some users adopted earlier kept the original case.
+// The rule AWS applies is not documented, so ssosync must not depend on it.
+//
+// No single spelling of the expected IssuerArn matches every record with an
+// exact comparison: the old lowercased ARN missed the original-case records,
+// and the case-preserving ARN misses the lowercased ones, so either way some
+// records were classified AdoptForeign and rewritten on every run. Two issuers
 // that differ only in letter case name the same tenant, so ignoring case is
 // safe; the account id (digits) and identity store id still have to match.
 // The expected IssuerArn itself is still built with its original case
 // (cmd/root.go buildIssuerArn) so logs show the real value, and the DEBUG
-// issuer-check line records whether the match was exact.
+// issuer-check line records whether the match was exact (issuerExactMatch).
 func issuerMatches(issuer, expectedIssuer string) bool {
 	return expectedIssuer == "" || strings.EqualFold(issuer, expectedIssuer)
 }
@@ -1193,8 +1198,8 @@ func issuerMatches(issuer, expectedIssuer string) bool {
 // compared with the expected issuer. issuerMatch is the result the operation
 // decision uses (issuerMatches: case-insensitive, and an empty expected issuer
 // disables the check). issuerExactMatch records whether the case also matched,
-// so the inconsistent casing IAM Identity Center uses for users and groups
-// stays visible. accountMatch/storeAndTenantMatch split the ARN so a wrong
+// so the inconsistent casing IAM Identity Center uses for the tenant id stays
+// visible. accountMatch/storeAndTenantMatch split the ARN so a wrong
 // account id (delegated administrator) is distinguishable from a wrong tenant.
 func logIssuerCheck(kind, name, awsId string, ext interfaces.ExternalId, all []interfaces.ExternalId, selectedBy, googleId, expectedIssuer string) {
 	fields := log.Fields{
@@ -2045,8 +2050,8 @@ func selectExternalId(current interfaces.ExternalId, all []interfaces.ExternalId
 	if expectedIssuer != "" {
 		for _, e := range all {
 			// Same rule as the managed/foreign decision: case-insensitive,
-			// because IAM Identity Center's casing of the tenant id differs
-			// between users and groups (see issuerMatches).
+			// because IAM Identity Center's casing of the tenant id varies
+			// between records of one tenant (see issuerMatches).
 			if issuerMatches(e.Issuer, expectedIssuer) {
 				return e, externalIdSelectedIssuerMatch
 			}
