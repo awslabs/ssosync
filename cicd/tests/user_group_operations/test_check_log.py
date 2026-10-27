@@ -98,9 +98,10 @@ class CheckLogTest(_LogFiles):
     def test_issuer_pass(self):
         self.assertEqual(run("issuer", self.good_log(), "--expected", ISSUER)[0], 0)
 
-    # The live finding: users carry the tenant id in its original case, groups
-    # lowercased. Both match (ssosync's case-insensitive rule); the case-only
-    # difference is reported.
+    # The live finding: records of one tenant carry the tenant id in its
+    # original case or lowercased (both seen among users; groups lowercased).
+    # Both match (ssosync's case-insensitive rule); the case-only difference is
+    # reported.
     def test_issuer_case_only_difference_passes_and_is_reported(self):
         p = self.write([expected_line("user"), check("user", "a", "u-1", "G1"),
                         expected_line("group"), check("group", "g", "g-1", "GG1", issuer=LOWER)])
