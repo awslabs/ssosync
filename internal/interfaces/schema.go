@@ -52,6 +52,10 @@ type Group struct {
 	DisplayName string     `json:"displayName"`
 	ExternalId  ExternalId `json:"externalId,omitempty"`
 	Members     []string   `json:"members"`
+	// ExternalIds holds every ExternalId the Identity Store returned for the
+	// group (a record can carry more than one). ExternalId is the one used for
+	// matching. Never sent on the SCIM wire.
+	ExternalIds []ExternalId `json:"-"`
 }
 
 // MarshalJSON preserves the SCIM wire format for the externalId field: when the
@@ -139,6 +143,10 @@ type User struct {
 	Active      bool          `json:"active"`
 	Emails      []UserEmail   `json:"emails"`
 	Addresses   []UserAddress `json:"addresses"`
+	// ExternalIds holds every ExternalId the Identity Store returned for the
+	// user (a record can carry more than one). ExternalId is the one used for
+	// matching. Never sent on the SCIM wire.
+	ExternalIds []ExternalId `json:"-"`
 }
 
 // MarshalJSON preserves the SCIM wire format for the externalId field: when the

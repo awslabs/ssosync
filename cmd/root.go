@@ -211,7 +211,7 @@ func initConfig() {
 	if cfg.SCIMEndpoint != "" {
 		cfg.Region = getRegion()
 		cfg.IdentityStoreID = getIdentityStoreId()
-		cfg.IssuerArn = getIssuerArn()
+		cfg.IssuerArn = getIssuerArn(cfg.IdentityStoreID)
 	}
 
 }
@@ -318,18 +318,72 @@ func getIdentityStoreId() string {
 	}
 
 	IdentityStoreId := aws.ToString(output.Instances[0].IdentityStoreId)
-	log.WithField("IdentityStoreId", IdentityStoreId).Info("getIdentityStoreId()")
+	// The instance owner is the account that owns the Identity Center instance
+	// (the management account for an organization instance). It is the account
+	// in the ExternalId Issuer ARN, and differs from the caller account whenever
+	// ssosync runs in a linked or delegated administrator account (issue #383).
+	instanceOwnerAccountId = aws.ToString(output.Instances[0].OwnerAccountId)
+	log.WithFields(log.Fields{
+		"IdentityStoreId": IdentityStoreId,
+		"InstanceArn":     aws.ToString(output.Instances[0].InstanceArn),
+		"OwnerAccountId":  instanceOwnerAccountId,
+	}).Info("getIdentityStoreId()")
 	return IdentityStoreId
 }
 
-func getIssuerArn() string {
-	IssuerArn := strings.ToLower(fmt.Sprintf(
+// instanceOwnerAccountId is the OwnerAccountId of the Identity Center instance,
+// recorded by getIdentityStoreId() and used as the IssuerArn account.
+var instanceOwnerAccountId string
+
+// Where the IssuerArn account id came from (logged as AccountSource).
+const (
+	accountSourceInstanceOwner  = "instanceOwner"  // sso:ListInstances OwnerAccountId
+	accountSourceCallerIdentity = "callerIdentity" // sts:GetCallerIdentity (fallback)
+)
+
+// issuerAccountId returns the account id for the IssuerArn. IAM Identity Center
+// puts the account that owns the instance in the ExternalId Issuer, not the
+// account ssosync runs in, so the instance owner is used whenever it is known.
+// The caller account is only a fallback for when ListInstances returned no
+// OwnerAccountId; it is fetched lazily so it is not looked up otherwise.
+func issuerAccountId(ownerAccountId string, callerAccountId func() string) (accountId, source string) {
+	if ownerAccountId != "" {
+		return ownerAccountId, accountSourceInstanceOwner
+	}
+	return callerAccountId(), accountSourceCallerIdentity
+}
+
+// buildIssuerArn assembles the ExternalId Issuer ARN that IAM Identity Center
+// stamps on users and groups provisioned through a SCIM provisioning tenant.
+// The case of every component is preserved: the provisioning tenant id is
+// mixed-case in the real Issuer, and the Issuer comparison is case-sensitive
+// (issue #383).
+func buildIssuerArn(accountId, identityStoreId, issuerId string) string {
+	return fmt.Sprintf(
 		"arn:aws:identitystore::%s:identitystore/%s/provisioningtenant/%s",
-		getAccountId(),
-		getIdentityStoreId(),
-		getIssuerId(),
-	))
-	log.WithField("IssuerArn", IssuerArn).Info("getIssuerArn()")
+		accountId,
+		identityStoreId,
+		issuerId,
+	)
+}
+
+// getIssuerArn returns the ExternalId Issuer that IAM Identity Center stamps on
+// users and groups provisioned through this SCIM tenant. identityStoreId must
+// come from getIdentityStoreId(), which also records the instance owner account.
+func getIssuerArn(identityStoreId string) string {
+	accountId, source := issuerAccountId(instanceOwnerAccountId, getAccountId)
+	issuerId := getIssuerId()
+	IssuerArn := buildIssuerArn(accountId, identityStoreId, issuerId)
+	log.WithFields(log.Fields{
+		"IssuerArn":       IssuerArn,
+		"AccountId":       accountId,
+		"AccountSource":   source,
+		"IdentityStoreId": identityStoreId,
+		"IssuerId":        issuerId,
+	}).Info("getIssuerArn()")
+	if source == accountSourceCallerIdentity {
+		log.WithField("AccountId", accountId).Warn("getIssuerArn(): sso:ListInstances returned no OwnerAccountId, so the caller account is used; if ssosync is not running in the account that owns the IAM Identity Center instance, the expected IssuerArn will not match and users/groups will be treated as foreign (issue #383)")
+	}
 	return IssuerArn
 }
 
