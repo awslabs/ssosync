@@ -1161,12 +1161,41 @@ const ExpectedIssuerMsg = "ExternalId issuer expected"
 // read with every ExternalId it carries.
 const ExternalIdsReadMsg = "ExternalIds read from Identity Store"
 
+// issuerMatches reports whether a record's ExternalId Issuer identifies this
+// ssosync SCIM provisioning tenant, i.e. whether ssosync manages the record.
+// An empty expected issuer disables the check (everything matches).
+//
+// The comparison is case-insensitive ON PURPOSE (issue #383). IAM Identity
+// Center does not stamp the provisioning tenant id with a consistent case: in a
+// live tenant every USER provisioned through SCIM carried
+//
+//	arn:aws:identitystore::<account>:identitystore/d-xxxxxxxxxx/provisioningtenant/Hw523407fb9-...
+//
+// (the tenant id as it appears in the SCIM endpoint URL, capital "H"), while
+// every GROUP provisioned through the same SCIM tenant carried
+//
+//	arn:aws:identitystore::<account>:identitystore/d-xxxxxxxxxx/provisioningtenant/hw523407fb9-...
+//
+// (lowercased). No single spelling of the expected IssuerArn matches both with
+// an exact comparison: the old lowercased ARN matched groups and missed users,
+// and the case-preserving ARN matches users and misses groups, so either way
+// one kind was classified AdoptForeign and rewritten on every run. Two issuers
+// that differ only in letter case name the same tenant, so ignoring case is
+// safe; the account id (digits) and identity store id still have to match.
+// The expected IssuerArn itself is still built with its original case
+// (cmd/root.go buildIssuerArn) so logs show the real value, and the DEBUG
+// issuer-check line records whether the match was exact.
+func issuerMatches(issuer, expectedIssuer string) bool {
+	return expectedIssuer == "" || strings.EqualFold(issuer, expectedIssuer)
+}
+
 // logIssuerCheck emits the DEBUG line describing how a record's ExternalId is
 // compared with the expected issuer. issuerMatch is the result the operation
-// decision uses (an empty expected issuer disables the check, so it matches).
-// caseInsensitiveMatch flags an issuer that only differs in letter case, and
-// accountMatch/storeAndTenantMatch split the ARN so a wrong account id
-// (delegated administrator) is distinguishable from a wrong tenant.
+// decision uses (issuerMatches: case-insensitive, and an empty expected issuer
+// disables the check). issuerExactMatch records whether the case also matched,
+// so the inconsistent casing IAM Identity Center uses for users and groups
+// stays visible. accountMatch/storeAndTenantMatch split the ARN so a wrong
+// account id (delegated administrator) is distinguishable from a wrong tenant.
 func logIssuerCheck(kind, name, awsId string, ext interfaces.ExternalId, all []interfaces.ExternalId, selectedBy, googleId, expectedIssuer string) {
 	fields := log.Fields{
 		"externalIdCount":      len(all),
@@ -1180,7 +1209,8 @@ func logIssuerCheck(kind, name, awsId string, ext interfaces.ExternalId, all []i
 		"googleId":             googleId,
 		"externalIdMatch":      googleId != "" && ext.Id == googleId,
 		"issuerCheckDisabled":  expectedIssuer == "",
-		"issuerMatch":          expectedIssuer == "" || ext.Issuer == expectedIssuer,
+		"issuerMatch":          issuerMatches(ext.Issuer, expectedIssuer),
+		"issuerExactMatch":     ext.Issuer == expectedIssuer,
 		"caseInsensitiveMatch": strings.EqualFold(ext.Issuer, expectedIssuer),
 	}
 	gotAcct, gotRest, gotOk := splitIssuerArn(ext.Issuer)
@@ -1260,8 +1290,8 @@ func getGroupOperation(awsGroup *interfaces.Group, googleGroup *admin.Group, for
 	}
 	logIssuerCheck("group", awsGroup.DisplayName, awsGroup.ID, awsGroup.ExternalId, awsGroup.ExternalIds, selectedBy, googleGroupId, issuerArn)
 
-	if issuerArn == "" || awsGroup.ExternalId.Issuer == issuerArn {
-		// ssosync managed group
+	if issuerMatches(awsGroup.ExternalId.Issuer, issuerArn) {
+		// ssosync managed group (issuer compared case-insensitively, see issuerMatches)
 		if googleGroup == nil {
 			// group not found in Google
 			return Delete, awsGroup
@@ -1449,8 +1479,8 @@ func getUserOperation(awsUser *interfaces.User, googleUser *admin.User, forceExt
 	}
 	logIssuerCheck("user", awsUser.Username, awsUser.ID, awsUser.ExternalId, awsUser.ExternalIds, selectedBy, googleUserId, issuerArn)
 
-	if issuerArn == "" || awsUser.ExternalId.Issuer == issuerArn {
-		// ssosync managed user
+	if issuerMatches(awsUser.ExternalId.Issuer, issuerArn) {
+		// ssosync managed user (issuer compared case-insensitively, see issuerMatches)
 		if googleUser == nil {
 			// user not found in Google
 			return Delete, awsUser
@@ -2014,7 +2044,10 @@ func selectExternalId(current interfaces.ExternalId, all []interfaces.ExternalId
 	}
 	if expectedIssuer != "" {
 		for _, e := range all {
-			if e.Issuer == expectedIssuer {
+			// Same rule as the managed/foreign decision: case-insensitive,
+			// because IAM Identity Center's casing of the tenant id differs
+			// between users and groups (see issuerMatches).
+			if issuerMatches(e.Issuer, expectedIssuer) {
 				return e, externalIdSelectedIssuerMatch
 			}
 		}

@@ -78,16 +78,45 @@ func TestGetUserOperation_IssuerExactMatchIsManaged(t *testing.T) {
 	assert.Equal(t, Equal, action, "a user provisioned by this tenant must be ssosync-managed")
 }
 
+// A different account (e.g. the delegated administrator's) is a different
+// issuer: foreign.
 func TestGetUserOperation_IssuerMismatchIsForeign(t *testing.T) {
-	for name, expected := range map[string]string{
-		"lowercased expected (old getIssuerArn)":     lowercaseIssuer,
-		"delegated admin account in expected issuer": delegatedIssuer,
-	} {
-		t.Run(name, func(t *testing.T) {
-			action, _ := getUserOperation(issuerUser(realIssuer, "G1"), googleJane("G1"), false, false, expected)
-			assert.Equal(t, AdoptForeign, action)
-		})
-	}
+	action, _ := getUserOperation(issuerUser(realIssuer, "G1"), googleJane("G1"), false, false, delegatedIssuer)
+	assert.Equal(t, AdoptForeign, action)
+}
+
+// A difference only in letter case is the same tenant: managed (issuerMatches).
+func TestGetUserOperation_IssuerCaseOnlyDifferenceIsManaged(t *testing.T) {
+	action, _ := getUserOperation(issuerUser(realIssuer, "G1"), googleJane("G1"), false, false, lowercaseIssuer)
+	assert.Equal(t, Equal, action)
+}
+
+// The live finding behind the case-insensitive comparison: IAM Identity Center
+// stamped users with the tenant id as in the SCIM endpoint (capital H) and
+// groups of the same tenant with it lowercased. Both must be managed against
+// the one expected IssuerArn (built with its original case).
+func TestOperations_UserAndGroupIssuerCasingDiffer_BothManaged(t *testing.T) {
+	const (
+		expected    = "arn:aws:identitystore::920862271044:identitystore/d-9a671d7705/provisioningtenant/Hw523407fb9-d9b9-4fc6-8568-cc8afd03d4d1"
+		userIssuer  = expected
+		groupIssuer = "arn:aws:identitystore::920862271044:identitystore/d-9a671d7705/provisioningtenant/hw523407fb9-d9b9-4fc6-8568-cc8afd03d4d1"
+	)
+	_, _, uUpd, uEq := getUserOperations([]*interfaces.User{issuerUser(userIssuer, "G1")}, []*admin.User{googleJane("G1")}, false, false, expected)
+	assert.Empty(t, uUpd, "user must not be re-adopted")
+	assert.Len(t, uEq, 1)
+	_, _, gUpd, gEq := getGroupOperations([]*interfaces.Group{issuerGroup(groupIssuer, "GG1")}, []*admin.Group{googleAdmins("GG1")}, false, false, expected)
+	assert.Empty(t, gUpd, "group must not be re-adopted (AdoptForeign) every run")
+	assert.Len(t, gEq, 1)
+}
+
+func TestIssuerMatches(t *testing.T) {
+	assert.True(t, issuerMatches(realIssuer, realIssuer))
+	assert.True(t, issuerMatches(lowercaseIssuer, realIssuer), "case-only difference")
+	assert.True(t, issuerMatches(realIssuer, lowercaseIssuer), "case-only difference")
+	assert.True(t, issuerMatches("anything", ""), "empty expected disables the check")
+	assert.False(t, issuerMatches(delegatedIssuer, realIssuer), "different account")
+	assert.False(t, issuerMatches("", realIssuer), "no issuer")
+	assert.False(t, issuerMatches(realIssuer+"x", realIssuer), "different tenant")
 }
 
 func TestGetGroupOperation_IssuerExactMatchIsManaged(t *testing.T) {
@@ -96,8 +125,13 @@ func TestGetGroupOperation_IssuerExactMatchIsManaged(t *testing.T) {
 }
 
 func TestGetGroupOperation_IssuerMismatchIsForeign(t *testing.T) {
-	action, _ := getGroupOperation(issuerGroup(realIssuer, "GG1"), googleAdmins("GG1"), false, false, lowercaseIssuer)
+	action, _ := getGroupOperation(issuerGroup(realIssuer, "GG1"), googleAdmins("GG1"), false, false, delegatedIssuer)
 	assert.Equal(t, AdoptForeign, action)
+}
+
+func TestGetGroupOperation_IssuerCaseOnlyDifferenceIsManaged(t *testing.T) {
+	action, _ := getGroupOperation(issuerGroup(lowercaseIssuer, "GG1"), googleAdmins("GG1"), false, false, realIssuer)
+	assert.Equal(t, Equal, action)
 }
 
 // With a matching issuer the ExternalId-change path is reachable again:
@@ -118,13 +152,13 @@ func TestOperations_ExternalIdChangeReachableAfterIssuerMatch(t *testing.T) {
 
 func TestGetUserOperation_LogsIssuerCheck(t *testing.T) {
 	tests := []struct {
-		name                                                  string
-		expected                                              string
-		issuerMatch, caseInsensitive, account, storeAndTenant bool
+		name                                                         string
+		expected                                                     string
+		issuerMatch, exact, caseInsensitive, account, storeAndTenant bool
 	}{
-		{"exact match", realIssuer, true, true, true, true},
-		{"case only mismatch", lowercaseIssuer, false, true, true, false},
-		{"account mismatch", delegatedIssuer, false, false, false, true},
+		{"exact match", realIssuer, true, true, true, true, true},
+		{"case only difference matches", lowercaseIssuer, true, false, true, true, false},
+		{"account mismatch", delegatedIssuer, false, false, false, false, true},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -144,6 +178,7 @@ func TestGetUserOperation_LogsIssuerCheck(t *testing.T) {
 			assert.Equal(t, realIssuer, d["issuer"])
 			assert.Equal(t, tc.expected, d["expectedIssuer"])
 			assert.Equal(t, tc.issuerMatch, d["issuerMatch"])
+			assert.Equal(t, tc.exact, d["issuerExactMatch"])
 			assert.Equal(t, tc.caseInsensitive, d["caseInsensitiveMatch"])
 			assert.Equal(t, tc.account, d["accountMatch"])
 			assert.Equal(t, "111111111111", d["issuerAccount"])
@@ -264,7 +299,7 @@ func TestSelectExternalId(t *testing.T) {
 		{"this tenant second", otherIdpEntry, []interfaces.ExternalId{otherIdpEntry, thisTenantJane}, realIssuer, thisTenantJane, externalIdSelectedIssuerMatch},
 		{"this tenant first", thisTenantJane, []interfaces.ExternalId{thisTenantJane, otherIdpEntry}, realIssuer, thisTenantJane, externalIdSelectedIssuerMatch},
 		{"none from this tenant", otherIdpEntry, []interfaces.ExternalId{otherIdpEntry, {Id: "Y", Issuer: "z"}}, realIssuer, otherIdpEntry, externalIdSelectedFirst},
-		{"case-only issuer is not selected", otherIdpEntry, []interfaces.ExternalId{otherIdpEntry, thisTenantJane}, lowercaseIssuer, otherIdpEntry, externalIdSelectedFirst},
+		{"case-only issuer difference is still this tenant", otherIdpEntry, []interfaces.ExternalId{otherIdpEntry, thisTenantJane}, lowercaseIssuer, thisTenantJane, externalIdSelectedIssuerMatch},
 		{"issuer check disabled", otherIdpEntry, []interfaces.ExternalId{otherIdpEntry, thisTenantJane}, "", otherIdpEntry, externalIdSelectedFirst},
 	}
 	for _, tc := range tests {

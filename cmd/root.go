@@ -355,9 +355,11 @@ func issuerAccountId(ownerAccountId string, callerAccountId func() string) (acco
 
 // buildIssuerArn assembles the ExternalId Issuer ARN that IAM Identity Center
 // stamps on users and groups provisioned through a SCIM provisioning tenant.
-// The case of every component is preserved: the provisioning tenant id is
-// mixed-case in the real Issuer, and the Issuer comparison is case-sensitive
-// (issue #383).
+// The case of every component is preserved (the tenant id as it appears in the
+// SCIM endpoint URL), so logs show the real value. Issuers are nevertheless
+// COMPARED case-insensitively (internal/sync.go issuerMatches), because IAM
+// Identity Center stamps the same tenant id with its original case on users
+// but lowercased on groups (issue #383); no exact spelling matches both.
 func buildIssuerArn(accountId, identityStoreId, issuerId string) string {
 	return fmt.Sprintf(
 		"arn:aws:identitystore::%s:identitystore/%s/provisioningtenant/%s",
