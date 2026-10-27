@@ -1149,6 +1149,119 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 	return gGroups, gUsers, gGroupsUsers, nil
 }
 
+// IssuerCheckMsg is the DEBUG message logged for every user/group whose
+// ExternalId Issuer is compared with the IssuerArn ssosync expects (issue #383).
+const IssuerCheckMsg = "ExternalId issuer check"
+
+// ExpectedIssuerMsg is the DEBUG message logged once per user/group operations
+// pass with the IssuerArn ssosync expects on records it manages.
+const ExpectedIssuerMsg = "ExternalId issuer expected"
+
+// ExternalIdsReadMsg is the DEBUG message logged for each Identity Store record
+// read with every ExternalId it carries.
+const ExternalIdsReadMsg = "ExternalIds read from Identity Store"
+
+// issuerMatches reports whether a record's ExternalId Issuer identifies this
+// ssosync SCIM provisioning tenant, i.e. whether ssosync manages the record.
+// An empty expected issuer disables the check (everything matches).
+//
+// The comparison is case-insensitive ON PURPOSE (issue #383). IAM Identity
+// Center does not stamp the provisioning tenant id with a consistent case, even
+// across records of ONE SCIM tenant. In a live tenant, records provisioned
+// through the same SCIM endpoint carried either
+//
+//	arn:aws:identitystore::<account>:identitystore/d-xxxxxxxxxx/provisioningtenant/Hw523407fb9-...
+//
+// (the tenant id as it appears in the SCIM endpoint URL, capital "H") or
+//
+//	arn:aws:identitystore::<account>:identitystore/d-xxxxxxxxxx/provisioningtenant/hw523407fb9-...
+//
+// (lowercased). Both spellings occurred among USERS of the tenant, and its
+// groups were lowercased; records newly created through SCIM had the
+// lowercased form, while some users adopted earlier kept the original case.
+// The rule AWS applies is not documented, so ssosync must not depend on it.
+//
+// No single spelling of the expected IssuerArn matches every record with an
+// exact comparison: the old lowercased ARN missed the original-case records,
+// and the case-preserving ARN misses the lowercased ones, so either way some
+// records were classified AdoptForeign and rewritten on every run. Two issuers
+// that differ only in letter case name the same tenant, so ignoring case is
+// safe; the account id (digits) and identity store id still have to match.
+// The expected IssuerArn itself is still built with its original case
+// (cmd/root.go buildIssuerArn) so logs show the real value, and the DEBUG
+// issuer-check line records whether the match was exact (issuerExactMatch).
+func issuerMatches(issuer, expectedIssuer string) bool {
+	return expectedIssuer == "" || strings.EqualFold(issuer, expectedIssuer)
+}
+
+// logIssuerCheck emits the DEBUG line describing how a record's ExternalId is
+// compared with the expected issuer. issuerMatch is the result the operation
+// decision uses (issuerMatches: case-insensitive, and an empty expected issuer
+// disables the check). issuerExactMatch records whether the case also matched,
+// so the inconsistent casing IAM Identity Center uses for the tenant id stays
+// visible. accountMatch/storeAndTenantMatch split the ARN so a wrong
+// account id (delegated administrator) is distinguishable from a wrong tenant.
+func logIssuerCheck(kind, name, awsId string, ext interfaces.ExternalId, all []interfaces.ExternalId, selectedBy, googleId, expectedIssuer string) {
+	fields := log.Fields{
+		"externalIdCount":      len(all),
+		"externalIdSelectedBy": selectedBy,
+		"kind":                 kind,
+		"name":                 name,
+		"awsId":                awsId,
+		"externalId":           ext.Id,
+		"issuer":               ext.Issuer,
+		"expectedIssuer":       expectedIssuer,
+		"googleId":             googleId,
+		"externalIdMatch":      googleId != "" && ext.Id == googleId,
+		"issuerCheckDisabled":  expectedIssuer == "",
+		"issuerMatch":          issuerMatches(ext.Issuer, expectedIssuer),
+		"issuerExactMatch":     ext.Issuer == expectedIssuer,
+		"caseInsensitiveMatch": strings.EqualFold(ext.Issuer, expectedIssuer),
+	}
+	gotAcct, gotRest, gotOk := splitIssuerArn(ext.Issuer)
+	wantAcct, wantRest, wantOk := splitIssuerArn(expectedIssuer)
+	if gotOk && wantOk {
+		fields["issuerAccount"] = gotAcct
+		fields["expectedAccount"] = wantAcct
+		fields["accountMatch"] = gotAcct == wantAcct
+		fields["storeAndTenantMatch"] = gotRest == wantRest
+	}
+	log.WithFields(fields).Debug(IssuerCheckMsg)
+}
+
+// splitIssuerArn splits an identitystore provisioning-tenant ARN
+// (arn:aws:identitystore::<account>:identitystore/<store>/provisioningtenant/<tenant>)
+// into the account id and the remainder after it.
+func splitIssuerArn(issuer string) (account, rest string, ok bool) {
+	const prefix = "arn:aws:identitystore::"
+	after, has := strings.CutPrefix(issuer, prefix)
+	if !has {
+		return "", "", false
+	}
+	account, rest, found := strings.Cut(after, ":")
+	if !found {
+		return "", "", false
+	}
+	return account, rest, true
+}
+
+// logExternalIdsRead emits the DEBUG line listing every ExternalId of a record
+// read from the Identity Store. When there are several, the user/group
+// operations match on the one issued by the expected issuer (selectExternalId).
+func logExternalIdsRead(kind, name, awsId string, externalIds []identitystore_types.ExternalId) {
+	ids := make([]map[string]string, 0, len(externalIds))
+	for _, e := range externalIds {
+		ids = append(ids, map[string]string{"id": derefString(e.Id), "issuer": derefString(e.Issuer)})
+	}
+	log.WithFields(log.Fields{
+		"kind":        kind,
+		"name":        name,
+		"awsId":       awsId,
+		"externalIds": ids,
+		"count":       len(externalIds),
+	}).Debug(ExternalIdsReadMsg)
+}
+
 // getGroupOperation returns the action to perform for this group and the desired group state
 func getGroupOperation(awsGroup *interfaces.Group, googleGroup *admin.Group, forceExternalIdUpdate bool, retainUnmatched bool, issuerArn string) (action OperationAction, group *interfaces.Group) {
 	log.Debug("getGroupOperation()")
@@ -1157,6 +1270,10 @@ func getGroupOperation(awsGroup *interfaces.Group, googleGroup *admin.Group, for
 		// Group doesn't exist
 		return Create, aws.NewGroup(googleGroup.Name, googleGroup.Id)
 	}
+
+	// Match on the ExternalId issued by this SCIM tenant when the group has
+	// several (see selectExternalId).
+	selectedBy := useManagedGroupExternalId(awsGroup, issuerArn)
 
 	if awsGroup.ExternalId.Id == "" {
 		// local (manually created) group, it has no ExternalId
@@ -1172,8 +1289,14 @@ func getGroupOperation(awsGroup *interfaces.Group, googleGroup *admin.Group, for
 		return AdoptLocal, aws.UpdateGroup(awsGroup.ID, googleGroup.Name, googleGroup.Id)
 	}
 
-	if issuerArn == "" || awsGroup.ExternalId.Issuer == issuerArn {
-		// ssosync managed group
+	googleGroupId := ""
+	if googleGroup != nil {
+		googleGroupId = googleGroup.Id
+	}
+	logIssuerCheck("group", awsGroup.DisplayName, awsGroup.ID, awsGroup.ExternalId, awsGroup.ExternalIds, selectedBy, googleGroupId, issuerArn)
+
+	if issuerMatches(awsGroup.ExternalId.Issuer, issuerArn) {
+		// ssosync managed group (issuer compared case-insensitively, see issuerMatches)
 		if googleGroup == nil {
 			// group not found in Google
 			return Delete, awsGroup
@@ -1214,6 +1337,7 @@ func getGroupOperation(awsGroup *interfaces.Group, googleGroup *admin.Group, for
 func getGroupOperations(awsGroups []*interfaces.Group, googleGroups []*admin.Group, forceExternalIdUpdate bool, retainUnmatched bool, issuerArn string) (add []*interfaces.Group, delete []*interfaces.Group, update []*interfaces.Group, equals []*interfaces.Group) {
 
 	log.Debug("getGroupOperations()")
+	log.WithFields(log.Fields{"kind": "group", "expectedIssuer": issuerArn, "issuerCheckDisabled": issuerArn == ""}).Debug(ExpectedIssuerMsg)
 
 	stats := struct {
 		Equal, Create, AdoptLocal, AdoptForeign, Update, UpdateForced, Delete, Recreate, Retain int
@@ -1225,6 +1349,8 @@ func getGroupOperations(awsGroups []*interfaces.Group, googleGroups []*admin.Gro
 	googleMapId := make(map[string]*admin.Group)
 
 	for _, awsGroup := range awsGroups {
+		// Index (and later match) on the ExternalId issued by this SCIM tenant.
+		useManagedGroupExternalId(awsGroup, issuerArn)
 		awsMap[strings.ToLower(awsGroup.DisplayName)] = awsGroup
 		if awsGroup.ExternalId.Id != "" {
 			awsMapExtId[awsGroup.ExternalId.Id] = awsGroup
@@ -1334,6 +1460,10 @@ func getUserOperation(awsUser *interfaces.User, googleUser *admin.User, forceExt
 		return Create, aws.NewUser(googleUser.Name.GivenName, googleUser.Name.FamilyName, googleUser.PrimaryEmail, !googleUser.Suspended, googleUser.Id)
 	}
 
+	// Match on the ExternalId issued by this SCIM tenant when the user has
+	// several (see selectExternalId).
+	selectedBy := useManagedUserExternalId(awsUser, issuerArn)
+
 	if awsUser.ExternalId.Id == "" {
 		// local (manually created) user, it has no ExternalId
 		if googleUser == nil {
@@ -1348,8 +1478,14 @@ func getUserOperation(awsUser *interfaces.User, googleUser *admin.User, forceExt
 		return AdoptLocal, aws.UpdateUser(awsUser.ID, googleUser.Name.GivenName, googleUser.Name.FamilyName, googleUser.PrimaryEmail, !googleUser.Suspended, googleUser.Id)
 	}
 
-	if issuerArn == "" || awsUser.ExternalId.Issuer == issuerArn {
-		// ssosync managed user
+	googleUserId := ""
+	if googleUser != nil {
+		googleUserId = googleUser.Id
+	}
+	logIssuerCheck("user", awsUser.Username, awsUser.ID, awsUser.ExternalId, awsUser.ExternalIds, selectedBy, googleUserId, issuerArn)
+
+	if issuerMatches(awsUser.ExternalId.Issuer, issuerArn) {
+		// ssosync managed user (issuer compared case-insensitively, see issuerMatches)
 		if googleUser == nil {
 			// user not found in Google
 			return Delete, awsUser
@@ -1393,6 +1529,7 @@ func getUserOperation(awsUser *interfaces.User, googleUser *admin.User, forceExt
 func getUserOperations(awsUsers []*interfaces.User, googleUsers []*admin.User, forceExternalIdUpdate bool, retainUnmatched bool, issuerArn string) (add []*interfaces.User, delete []*interfaces.User, update []*interfaces.User, equals []*interfaces.User) {
 
 	log.Debug("getUserOperations()")
+	log.WithFields(log.Fields{"kind": "user", "expectedIssuer": issuerArn, "issuerCheckDisabled": issuerArn == ""}).Debug(ExpectedIssuerMsg)
 
 	stats := struct {
 		Equal, Create, AdoptLocal, AdoptForeign, Update, UpdateForced, Delete, Recreate, Retain int
@@ -1404,6 +1541,8 @@ func getUserOperations(awsUsers []*interfaces.User, googleUsers []*admin.User, f
 	googleMapId := make(map[string]*admin.User)
 
 	for _, awsUser := range awsUsers {
+		// Index (and later match) on the ExternalId issued by this SCIM tenant.
+		useManagedUserExternalId(awsUser, issuerArn)
 		awsMapUsername[strings.ToLower(awsUser.Username)] = awsUser
 		if awsUser.ExternalId.Id != "" {
 			awsMapExtId[awsUser.ExternalId.Id] = awsUser
@@ -1732,9 +1871,11 @@ func ConvertIdentityStoreGroupToAWSGroup(group identitystore_types.Group) *inter
 		return nil
 	}
 	log.WithField("groupId", *group.GroupId).WithField("displayName", *group.DisplayName).Debug("ConvertIdentityStoreGroupToAWSGroup() Group converted")
+	logExternalIdsRead("group", *group.DisplayName, *group.GroupId, group.ExternalIds)
 	return &interfaces.Group{
 		ID:          *group.GroupId,
 		ExternalId:  getExternalId(group.ExternalIds),
+		ExternalIds: getExternalIds(group.ExternalIds),
 		Schemas:     []string{constants.SCIMSchemaGroup},
 		DisplayName: *group.DisplayName,
 		Members:     []string{},
@@ -1813,6 +1954,8 @@ func ConvertSdkUserObjToNative(user identitystore_types.User) *interfaces.User {
 		})
 	}
 
+	logExternalIdsRead("user", derefString(user.UserName), derefString(user.UserId), user.ExternalIds)
+
 	// Safely dereference optional pointer fields; the Identity Store SDK leaves
 	// these as nil when a value is not set (e.g. users created outside ssosync).
 	familyName := ""
@@ -1827,10 +1970,11 @@ func ConvertSdkUserObjToNative(user identitystore_types.User) *interfaces.User {
 	}
 
 	return &interfaces.User{
-		ID:         derefString(user.UserId),
-		ExternalId: getExternalId(user.ExternalIds),
-		Schemas:    []string{constants.SCIMSchemaUser},
-		Username:   derefString(user.UserName),
+		ID:          derefString(user.UserId),
+		ExternalId:  getExternalId(user.ExternalIds),
+		ExternalIds: getExternalIds(user.ExternalIds),
+		Schemas:     []string{constants.SCIMSchemaUser},
+		Username:    derefString(user.UserName),
 		Name: struct {
 			FamilyName string `json:"familyName"`
 			GivenName  string `json:"givenName"`
@@ -1865,6 +2009,70 @@ func getExternalId(externalIds []identitystore_types.ExternalId) interfaces.Exte
 		}
 	}
 	return interfaces.ExternalId{}
+}
+
+// getExternalIds converts every Identity Store ExternalId, nil-safely.
+func getExternalIds(externalIds []identitystore_types.ExternalId) []interfaces.ExternalId {
+	if len(externalIds) == 0 {
+		return nil
+	}
+	out := make([]interfaces.ExternalId, 0, len(externalIds))
+	for _, e := range externalIds {
+		out = append(out, interfaces.ExternalId{Id: derefString(e.Id), Issuer: derefString(e.Issuer)})
+	}
+	return out
+}
+
+// How selectExternalId chose the ExternalId used for matching (logged).
+const (
+	externalIdSelectedNone        = "none"        // the record has no ExternalId
+	externalIdSelectedOnly        = "only"        // exactly one ExternalId
+	externalIdSelectedIssuerMatch = "issuerMatch" // the entry issued by the expected issuer
+	externalIdSelectedFirst       = "first"       // several, none from the expected issuer
+)
+
+// selectExternalId picks the ExternalId a user or group is matched on. An
+// Identity Store record can carry more than one ExternalId; ssosync manages the
+// one issued by its own SCIM provisioning tenant (expectedIssuer), which need
+// not be the first. When no entry has the expected issuer (or the issuer check
+// is disabled) the current ExternalId (the first entry) is kept, which the
+// operation then classifies as foreign/local as before.
+func selectExternalId(current interfaces.ExternalId, all []interfaces.ExternalId, expectedIssuer string) (interfaces.ExternalId, string) {
+	switch {
+	case len(all) == 0:
+		if current.Id == "" && current.Issuer == "" {
+			return current, externalIdSelectedNone
+		}
+		return current, externalIdSelectedOnly
+	case len(all) == 1:
+		return all[0], externalIdSelectedOnly
+	}
+	if expectedIssuer != "" {
+		for _, e := range all {
+			// Same rule as the managed/foreign decision: case-insensitive,
+			// because IAM Identity Center's casing of the tenant id varies
+			// between records of one tenant (see issuerMatches).
+			if issuerMatches(e.Issuer, expectedIssuer) {
+				return e, externalIdSelectedIssuerMatch
+			}
+		}
+	}
+	return all[0], externalIdSelectedFirst
+}
+
+// useManagedUserExternalId sets u.ExternalId to the entry selected by
+// selectExternalId and returns how it was chosen. Idempotent.
+func useManagedUserExternalId(u *interfaces.User, expectedIssuer string) string {
+	ext, by := selectExternalId(u.ExternalId, u.ExternalIds, expectedIssuer)
+	u.ExternalId = ext
+	return by
+}
+
+// useManagedGroupExternalId is useManagedUserExternalId for groups.
+func useManagedGroupExternalId(g *interfaces.Group, expectedIssuer string) string {
+	ext, by := selectExternalId(g.ExternalId, g.ExternalIds, expectedIssuer)
+	g.ExternalId = ext
+	return by
 }
 
 // CreateUserIDtoUserObjMap

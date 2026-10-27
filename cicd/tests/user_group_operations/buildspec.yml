@@ -1,0 +1,32 @@
+version: 0.2
+
+# Live test of getUserOperations / getGroupOperations (issue #383): every user
+# and group operation is set up and proven against the real tenant.
+# See run.sh for the scenarios.
+env:
+  shell: bash
+  secrets-manager:
+    GoogleAdminEmail: SSOSyncGoogleAdminEmail
+    SCIMEndpointUrl: SSOSyncSCIMEndpointUrl
+    SCIMAccessToken: SSOSyncSCIMAccessToken
+  variables:
+    GROUP_MATCH: "name:AWS*"
+    # A dedicated Google test user (primary email) and group (name), both in
+    # scope of GROUP_MATCH and with NO permission-set assignments: the AdoptLocal
+    # and Create scenarios delete and re-create them, giving them new Identity
+    # Store ids. Required; those scenarios fail if they are not set.
+    UGO_TEST_USER: "acehole@nothing2see.info"
+    UGO_TEST_GROUP: "AWSOperationsTest"
+    # "true": fail (instead of skip) the foreign-issuer scenarios when the
+    # Identity Store API cannot write ExternalIds.
+    UGO_FOREIGN_REQUIRED: "false"
+
+phases:
+  build:
+    commands:
+      - python3 tests/user_group_operations/test_check_log.py
+      - bash tests/user_group_operations/run.sh
+
+artifacts:
+  files:
+    - logs/**/*
