@@ -43,7 +43,9 @@ def expected_line(kind, issuer=ISSUER):
     return {"msg": "ExternalId issuer expected", "kind": kind, "expectedIssuer": issuer}
 
 
-class CheckLogTest(unittest.TestCase):
+class _LogFiles(unittest.TestCase):
+    """Temp-file helpers shared by the test classes (no tests of its own)."""
+
     def setUp(self):
         self.files = []
 
@@ -71,6 +73,8 @@ class CheckLogTest(unittest.TestCase):
             "not json at all",
         ])
 
+
+class CheckLogTest(_LogFiles):
     def test_field(self):
         rc, out = run("field", self.good_log(), "--msg", "getIssuerArn()", "--key", "IssuerArn")
         self.assertEqual(rc, 0)
@@ -149,6 +153,28 @@ class CheckLogTest(unittest.TestCase):
         self.assertEqual(run("truth", log, "--expected", ISSUER, "--users", users, "--groups", groups)[0], 1)
         empty = self.write({"Users": []}, ".json")
         self.assertEqual(run("truth", log, "--expected", ISSUER, "--users", empty, "--groups", groups)[0], 1)
+
+
+class CountsAndFindTest(_LogFiles):
+    def test_counts_exact(self):
+        p = self.write([summary("Users", update=1, equal=3), summary("Groups", recreate=1)])
+        self.assertEqual(run("counts", p, "--users", "update=1", "--groups", "recreate=1")[0], 0)
+        # an unlisted non-zero action fails
+        self.assertEqual(run("counts", p, "--users", "update=1")[0], 1)
+        # "equal" is not an action counter, so asking for it is a usage error
+        self.assertNotEqual(run("counts", p, "--users", "update=1", "equal=3", "--groups", "recreate=1")[0], 0)
+
+    def test_counts_rejects_unknown_counter(self):
+        p = self.write([summary("Users"), summary("Groups")])
+        rc, _ = run("counts", p, "--users", "updated=1")
+        self.assertNotEqual(rc, 0)
+
+    def test_find_case_insensitive(self):
+        p = self.write([check("user", "Test.User@Example.com", "u-9", "G9")])
+        rc, out = run("find", p, "--kind", "user", "--name", "test.user@example.com")
+        self.assertEqual(rc, 0)
+        self.assertEqual(out.strip(), "u-9\tG9\ttrue")
+        self.assertEqual(run("find", p, "--kind", "group", "--name", "x")[0], 1)
 
 
 if __name__ == "__main__":

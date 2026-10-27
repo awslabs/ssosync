@@ -29,6 +29,14 @@ Subcommands (exit 0 = pass, 1 = fail, with the reason printed):
   record    LOG --kind KIND --name NAME [--field k=v ...]
       The issuer-check line for that record has the given field values.
 
+  counts    LOG [--users k=v ...] [--groups k=v ...]
+      Exact: every user/group action counter not listed must be 0 (the
+      "equal" counter is not an action and is not checked).
+
+  find      LOG --kind KIND --name NAME
+      Print "awsId<TAB>externalId<TAB>externalIdMatch" of the record named NAME
+      (case-insensitive) from its issuer-check line.
+
   truth     LOG --expected ARN --users USERS.json --groups GROUPS.json
       Cross-check against `aws identitystore list-users/list-groups` output:
       every record ssosync matched carries an ExternalId with exactly that Issuer
@@ -126,6 +134,31 @@ def cmd_summary(a):
         check_counters("Change Summary: Users", last(records, "Change Summary: Users"), parse_kv(a.users))
     if a.groups:
         check_counters("Change Summary: Groups", last(records, "Change Summary: Groups"), parse_kv(a.groups))
+
+
+def exact(pairs):
+    want = {k: "0" for k in ACTION_KEYS}
+    for k, v in parse_kv(pairs).items():
+        if k not in ACTION_KEYS:
+            sys.exit(f"unknown action counter {k!r} (valid: {', '.join(ACTION_KEYS)})")
+        want[k] = v
+    return want
+
+
+def cmd_counts(a):
+    records = load(a.log)
+    check_counters("Change Summary: Users", last(records, "Change Summary: Users"), exact(a.users))
+    check_counters("Change Summary: Groups", last(records, "Change Summary: Groups"), exact(a.groups))
+
+
+def cmd_find(a):
+    lines = [r for r in issuer_lines(load(a.log), a.kind)
+             if str(r.get("name", "")).lower() == a.name.lower()]
+    if not lines:
+        fail(f"no issuer-check line for {a.kind} {a.name!r}: is it in scope and provisioned by ssosync?")
+        return
+    r = lines[-1]
+    print(f"{r.get('awsId', '')}\t{r.get('externalId', '')}\t{as_str(r.get('externalIdMatch'))}")
 
 
 def cmd_converged(a):
@@ -253,10 +286,14 @@ def main():
     s.add_argument("--name", required=True); s.add_argument("--field", action="append")
     s = sub.add_parser("truth"); s.add_argument("log"); s.add_argument("--expected", required=True)
     s.add_argument("--users", required=True); s.add_argument("--groups", required=True)
+    s = sub.add_parser("counts"); s.add_argument("log"); s.add_argument("--users", nargs="*"); s.add_argument("--groups", nargs="*")
+    s = sub.add_parser("find"); s.add_argument("log"); s.add_argument("--kind", choices=["user", "group"], required=True)
+    s.add_argument("--name", required=True)
 
     a = p.parse_args()
     {"field": cmd_field, "summary": cmd_summary, "converged": cmd_converged, "issuer": cmd_issuer,
-     "pick": cmd_pick, "record": cmd_record, "truth": cmd_truth}[a.cmd](a)
+     "pick": cmd_pick, "record": cmd_record, "truth": cmd_truth, "counts": cmd_counts,
+     "find": cmd_find}[a.cmd](a)
     sys.exit(1 if failures else 0)
 
 
