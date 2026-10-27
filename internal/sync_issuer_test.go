@@ -309,6 +309,7 @@ func TestSelectExternalId(t *testing.T) {
 		{"this tenant first", thisTenantJane, []interfaces.ExternalId{thisTenantJane, otherIdpEntry}, realIssuer, thisTenantJane, externalIdSelectedIssuerMatch},
 		{"none from this tenant", otherIdpEntry, []interfaces.ExternalId{otherIdpEntry, {Id: "Y", Issuer: "z"}}, realIssuer, otherIdpEntry, externalIdSelectedFirst},
 		{"case-only issuer difference is still this tenant", otherIdpEntry, []interfaces.ExternalId{otherIdpEntry, thisTenantJane}, lowercaseIssuer, thisTenantJane, externalIdSelectedIssuerMatch},
+		{"case-only issuer is not selected", otherIdpEntry, []interfaces.ExternalId{otherIdpEntry, thisTenantJane}, lowercaseIssuer, otherIdpEntry, externalIdSelectedFirst},
 		{"issuer check disabled", otherIdpEntry, []interfaces.ExternalId{otherIdpEntry, thisTenantJane}, "", otherIdpEntry, externalIdSelectedFirst},
 	}
 	for _, tc := range tests {
