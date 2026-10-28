@@ -1,3 +1,12 @@
+## v2.9.4 - 2026-10-28
+
+### Changelog
+
+* 4d5206c32c3e3d214648218f20c0faf4d07890e1 Create git.md
+* c14b2416d8e7bfaa8c804daad18d33646eed69d8 Fix IssuerArn matching from any account and mixed-case tenants (#383) (#384)
+* e21d1fc9b090e0172490250fd7a695d2080ea00a Update .gitignore
+* 0661d145bc99324bc6704114e283055d20982893 Update CHANGELOG and Quick Start templates (#382)
+
 ## v2.9.3 - 2026-10-21
 
 ### Changelog
