@@ -6,7 +6,7 @@ Description:
   the AWS Serverless Application Repository (SAR). One holding the Secrets 
   and the other the app itself. Same as single-account.yaml, plus an optional
   AttributeMap controlling how Google user attributes map onto IAM Identity
-  Center (SCIM) fields (an AttributeMap requires release 2.10.0 or later).
+  Center (SCIM) fields (requires release 2.10.0 or later).
 
 Metadata:
   AWS::CloudFormation::Interface:
@@ -52,12 +52,11 @@ Parameters:
   Release:
     Type: String
     Description: |
-      Select the release to deploy. An AttributeMap needs release 2.10.0 or later.
+      Select the release to deploy. The AttributeMap parameter needs 2.10.0 or later, so earlier releases are not offered (use single-account.yaml for those).
     #SemanticVersion 
-    Default: 2.9.4
+    Default: 2.10.0
     AllowedValues:
-      - 2.9.4
-      - 2.9.3
+      - 2.10.0
 
   ScheduleExpression:
     Type: String
@@ -249,19 +248,6 @@ Conditions:
       - !Equals [!Select [0, !Split ["arn:aws:ssm:", !Ref AttributeMap]], ""]
 
 
-Rules:
-  # The releases before 2.10.0 offered above have no AttributeMap parameter.
-  # Fn::Contains is an exact match, which is enough here: this list of older
-  # releases is fixed, every later release supports AttributeMap.
-  AttributeMapNeedsRelease210:
-    RuleCondition: !Not
-      - !Equals [!Ref AttributeMap, ""]
-    Assertions:
-      - Assert: !Not
-          - !Contains [["2.9.4", "2.9.3"], !Ref Release]
-        AssertDescription: 'An AttributeMap needs release 2.10.0 or later; select a later Release or leave AttributeMap empty.'
-
-
 Resources:
 
   Function:
@@ -292,7 +278,7 @@ Resources:
         LogLevel: !Ref LogLevel
         LogFormat: !Ref LogFormat
         LogRetention: !Ref LogRetention
-        # Only passed when set: releases before 2.10.0 have no AttributeMap parameter.
+        # Empty: not passed, so the app uses the built-in default map.
         AttributeMap: !If
           - AttributeMapIsInline
           - !GetAtt [Secrets, Outputs.AttributeMap]
@@ -311,6 +297,5 @@ Resources:
         GoogleCustomerId: !Ref GoogleCustomerId
         GoogleAdminEmail: !Ref GoogleAdminEmail
         GoogleCredentials: !Ref GoogleCredentials
-        # Only inline JSON becomes a secret; an Arn or empty value creates nothing
-        # (and is not passed: releases before 2.10.0 have no AttributeMap parameter).
+        # Only inline JSON becomes a secret; an Arn or empty value creates nothing.
         AttributeMap: !If [AttributeMapIsInline, !Ref AttributeMap, !Ref AWS::NoValue]
