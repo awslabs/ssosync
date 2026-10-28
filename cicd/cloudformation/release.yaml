@@ -1037,6 +1037,13 @@ Resources:
               Effect: Allow
               Resource:
               - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/SSOSync/*
+            # Staging records the customer id secret's Arn (not its value) in
+            # deploy/quickstart.json for the quick-start tests.
+            - Action:
+              - 'secretsmanager:DescribeSecret'
+              Effect: Allow
+              Resource:
+              - !Sub arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:PipelineGoogleCustomerId-*
       
   CodeBuildTestRole:
     Type: AWS::IAM::Role

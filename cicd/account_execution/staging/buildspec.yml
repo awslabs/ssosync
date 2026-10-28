@@ -17,6 +17,26 @@ phases:
       - mkdir deploy
       - cp cicd/account_execution/staging/stack.yml ./deploy/
 
+      # Quick-start templates and what their smoke tests need
+      # (tests/quick_start/, run in the release pipeline's delegated admin
+      # account): the staging app and version, and the Arns of the secrets
+      # whose values the templates take. Arns only, no secret values. The
+      # customer id secret is not in SecretsConfig, so it is looked up by name;
+      # where it cannot be (the developer pipeline), its Arn is left empty.
+      - cp -r quick-start ./deploy/
+      - |
+        GoogleCustomerIdArn=$(aws secretsmanager describe-secret --secret-id PipelineGoogleCustomerId --query ARN --output text 2>/dev/null || true)
+        jq -n \
+          --arg AppArn "$AppArn" \
+          --arg AppVersion "$AppVersion" \
+          --arg GoogleCustomerIdArn "$GoogleCustomerIdArn" \
+          --arg GoogleCredentialsArn "$SecretGoogleCredentials" \
+          --arg GoogleAdminEmailArn "$SecretGoogleAdminEmail" \
+          --arg SCIMEndpointUrlArn "$SecretSCIMEndpoint" \
+          --arg SCIMAccessTokenArn "$SecretSCIMAccessToken" \
+          '$ARGS.named' > ./deploy/quickstart.json
+      - cat ./deploy/quickstart.json
+
       # Update params with the values for this run for a developer account
       - |
         jq -n \
