@@ -3,6 +3,10 @@ version: 0.2
 # Attribute-map integration test: lambda_default. See run.sh for what it checks.
 env:
   shell: bash
+  secrets-manager:
+    # Only for the Identity Store region (lib/common.sh identity_store_region),
+    # used by the baseline reset.
+    SCIMEndpointUrl: SSOSyncSCIMEndpointUrl
   variables:
     FUNCTION_NAME: SSOSyncFunction
 

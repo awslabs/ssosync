@@ -81,11 +81,28 @@ run_ssosync() {
   return $rc
 }
 
+# identity_store_region: the IAM Identity Center region, taken from the SCIM
+# endpoint URL exactly as ssosync does (cmd/root.go getRegion). It can differ
+# from the pipeline's region (AWS_REGION): the release staging Identity Center
+# is in eu-west-1 while its pipelines run in us-east-2.
+identity_store_region() {
+  require_env SCIMEndpointUrl
+  local r
+  r=$(grep -oE '(af|il|ap|ca|eu|me|sa|us|cn|us-gov|us-iso|us-isob)-(central|north|northeast|northwest|south|southeast|southwest|east|west)-[1-9]' <<<"$SCIMEndpointUrl" | head -1)
+  if [ -z "$r" ]; then
+    echo "ERROR: no AWS region in SCIMEndpointUrl" >&2
+    return 1
+  fi
+  echo "$r"
+}
+
 # Reset the Identity Store to the baseline. Every user and group is created as
 # a local (unmanaged) record with no ExternalId.
 reset_baseline() {
-  echo ">>> reset Identity Store to baseline"
-  python3 "$AM_DIR/import.py" --input-dir "$AM_DIR/baseline"
+  local region
+  region=$(identity_store_region)
+  echo ">>> reset Identity Store to baseline (region $region)"
+  python3 "$AM_DIR/import.py" --input-dir "$AM_DIR/baseline" --region "$region"
 }
 
 # Reset, then run ssosync live with the default map so it adopts the local
