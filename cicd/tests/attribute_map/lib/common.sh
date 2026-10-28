@@ -117,20 +117,23 @@ assert_dry_run() { assert_log dryrun "$1"; }
 
 # invoke_lambda <log-file>
 # Invokes FUNCTION_NAME synchronously, fails on FunctionError, then collects the
-# function's CloudWatch log lines for this invocation into <log-file>.
+# function's CloudWatch log lines for THIS invocation (by its request id) into
+# <log-file>. The 5 s start margin allows for clock skew; the request id keeps
+# the end of a previous invocation out of the log.
 invoke_lambda() {
   local log=$1
   local start=$(( ($(date +%s) - 5) * 1000 ))
   echo ">>> invoke $FUNCTION_NAME"
-  aws lambda invoke --cli-read-timeout 900 --function-name "$FUNCTION_NAME" \
-    "$ROOT_DIR/response.json" > "$ROOT_DIR/invoke.json"
-  cat "$ROOT_DIR/invoke.json"
+  python3 "$AM_DIR/lib/lambda_invoke.py" --function-name "$FUNCTION_NAME" \
+    --response "$ROOT_DIR/response.json" --out "$ROOT_DIR/invoke.json"
   if jq -e 'has("FunctionError")' "$ROOT_DIR/invoke.json" > /dev/null; then
     echo "FAIL: Lambda returned FunctionError"
     cat "$ROOT_DIR/response.json"
     return 1
   fi
+  local request_id
+  request_id=$(jq -er '.RequestId' "$ROOT_DIR/invoke.json")
   python3 "$AM_DIR/lib/lambda_logs.py" --log-group "/aws/lambda/$FUNCTION_NAME" \
-    --start "$start" --out "$log"
+    --start "$start" --request-id "$request_id" --out "$log"
   cat "$log"
 }
