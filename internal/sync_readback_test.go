@@ -72,7 +72,10 @@ func fullGoogleSideUser() *interfaces.User {
 		ID:         "is-1",
 		Schemas:    []string{constants.SCIMSchemaUser},
 		ExternalId: interfaces.ExternalId{Id: "gid-1", Issuer: "issuer-1"},
-		Username:   "jane@example.com",
+		// Every ExternalId the Identity Store returned (issue #383); used only to
+		// select ExternalId, never compared by usersEqual.
+		ExternalIds: []interfaces.ExternalId{{Id: "gid-1", Issuer: "issuer-1"}},
+		Username:    "jane@example.com",
 		Name: interfaces.UserName{
 			FamilyName:      "Doe",
 			GivenName:       "Jane",

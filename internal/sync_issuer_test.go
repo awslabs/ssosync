@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"testing"
 
+	"ssosync/internal/config"
+	"ssosync/internal/google"
 	"ssosync/internal/interfaces"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -46,23 +48,6 @@ func entriesWithMsg(hook *test.Hook, msg string) []*log.Entry {
 	return out
 }
 
-func issuerUser(issuer, extID string) *interfaces.User {
-	return &interfaces.User{
-		ID:       "aws-1",
-		Username: "jane@example.com",
-		Name: struct {
-			FamilyName string `json:"familyName"`
-			GivenName  string `json:"givenName"`
-		}{FamilyName: "Doe", GivenName: "Jane"},
-		Active:     true,
-		ExternalId: interfaces.ExternalId{Id: extID, Issuer: issuer},
-	}
-}
-
-func issuerGroup(issuer, extID string) *interfaces.Group {
-	return &interfaces.Group{ID: "grp-1", DisplayName: "AWSAdmins", ExternalId: interfaces.ExternalId{Id: extID, Issuer: issuer}}
-}
-
 func googleJane(id string) *admin.User {
 	return &admin.User{Id: id, PrimaryEmail: "jane@example.com", Name: &admin.UserName{GivenName: "Jane", FamilyName: "Doe"}}
 }
@@ -71,23 +56,68 @@ func googleAdmins(id string) *admin.Group {
 	return &admin.Group{Id: id, Name: "AWSAdmins"}
 }
 
+// mappedJane is googleJane as getUserOperations hands it to getUserOperation:
+// mapped through the default user attribute map.
+func mappedJane(id string) *interfaces.User {
+	u, err := google.MapFromGoogleUser(googleJane(id), config.DefaultUserAttributeMap)
+	if err != nil {
+		panic(err)
+	}
+	return &u
+}
+
+// mappedAdmins is googleAdmins mapped through the default group attribute map.
+func mappedAdmins(id string) *interfaces.Group {
+	g, err := google.MapFromGoogleGroup(googleAdmins(id), config.DefaultGroupAttributeMap)
+	if err != nil {
+		panic(err)
+	}
+	return &g
+}
+
+// issuerUser is the Identity Store copy of Jane: every mapped attribute equal
+// to Google's (so only the ExternalId/issuer can drive the decision), with the
+// given ExternalId. An empty extID makes it a local (non-SCIM) user.
+func issuerUser(issuer, extID string) *interfaces.User {
+	u := mappedJane("G1")
+	u.ID = "aws-1"
+	u.ExternalId = interfaces.ExternalId{Id: extID, Issuer: issuer}
+	return u
+}
+
+func issuerGroup(issuer, extID string) *interfaces.Group {
+	g := mappedAdmins("GG1")
+	g.ID = "grp-1"
+	g.ExternalId = interfaces.ExternalId{Id: extID, Issuer: issuer}
+	return g
+}
+
+// userOps/groupOps call the batch functions with the default attribute maps.
+func userOps(aws []*interfaces.User, g []*admin.User, issuer string) (add, del, upd, eq []*interfaces.User) {
+	return getUserOperations(aws, g, opsConfig(false, false, issuer), config.DefaultUserAttributeMap)
+}
+
+func groupOps(aws []*interfaces.Group, g []*admin.Group, issuer string) (add, del, upd, eq []*interfaces.Group) {
+	return getGroupOperations(aws, g, opsConfig(false, false, issuer), config.DefaultGroupAttributeMap)
+}
+
 // --- The decision depends on the exact issuer (issue #383 regression) ---
 
 func TestGetUserOperation_IssuerExactMatchIsManaged(t *testing.T) {
-	action, _ := getUserOperation(issuerUser(realIssuer, "G1"), googleJane("G1"), false, false, realIssuer)
+	action, _ := getUserOperation(issuerUser(realIssuer, "G1"), mappedJane("G1"), false, false, realIssuer)
 	assert.Equal(t, Equal, action, "a user provisioned by this tenant must be ssosync-managed")
 }
 
 // A different account (e.g. the delegated administrator's) is a different
 // issuer: foreign.
 func TestGetUserOperation_IssuerMismatchIsForeign(t *testing.T) {
-	action, _ := getUserOperation(issuerUser(realIssuer, "G1"), googleJane("G1"), false, false, delegatedIssuer)
+	action, _ := getUserOperation(issuerUser(realIssuer, "G1"), mappedJane("G1"), false, false, delegatedIssuer)
 	assert.Equal(t, AdoptForeign, action)
 }
 
 // A difference only in letter case is the same tenant: managed (issuerMatches).
 func TestGetUserOperation_IssuerCaseOnlyDifferenceIsManaged(t *testing.T) {
-	action, _ := getUserOperation(issuerUser(realIssuer, "G1"), googleJane("G1"), false, false, lowercaseIssuer)
+	action, _ := getUserOperation(issuerUser(realIssuer, "G1"), mappedJane("G1"), false, false, lowercaseIssuer)
 	assert.Equal(t, Equal, action)
 }
 
@@ -104,16 +134,19 @@ func TestOperations_IssuerCasingVariesWithinTenant_AllManaged(t *testing.T) {
 	)
 	// Two users of the same tenant, one with each spelling.
 	bob := &admin.User{Id: "G2", PrimaryEmail: "bob@example.com", Name: &admin.UserName{GivenName: "Bob", FamilyName: "Roe"}}
-	bobAWS := &interfaces.User{ID: "aws-2", Username: "bob@example.com", Active: true, ExternalId: interfaces.ExternalId{Id: "G2", Issuer: lowercased}}
-	bobAWS.Name.GivenName, bobAWS.Name.FamilyName = "Bob", "Roe"
-	_, _, uUpd, uEq := getUserOperations(
+	bobMapped, err := google.MapFromGoogleUser(bob, config.DefaultUserAttributeMap)
+	require.NoError(t, err)
+	bobAWS := &bobMapped
+	bobAWS.ID = "aws-2"
+	bobAWS.ExternalId = interfaces.ExternalId{Id: "G2", Issuer: lowercased}
+	_, _, uUpd, uEq := userOps(
 		[]*interfaces.User{issuerUser(original, "G1"), bobAWS},
-		[]*admin.User{googleJane("G1"), bob}, false, false, expected)
+		[]*admin.User{googleJane("G1"), bob}, expected)
 	assert.Empty(t, uUpd, "no user may be re-adopted, whichever spelling it carries")
 	assert.Len(t, uEq, 2)
 
 	groupIssuer := lowercased
-	_, _, gUpd, gEq := getGroupOperations([]*interfaces.Group{issuerGroup(groupIssuer, "GG1")}, []*admin.Group{googleAdmins("GG1")}, false, false, expected)
+	_, _, gUpd, gEq := groupOps([]*interfaces.Group{issuerGroup(groupIssuer, "GG1")}, []*admin.Group{googleAdmins("GG1")}, expected)
 	assert.Empty(t, gUpd, "group must not be re-adopted (AdoptForeign) every run")
 	assert.Len(t, gEq, 1)
 }
@@ -129,31 +162,31 @@ func TestIssuerMatches(t *testing.T) {
 }
 
 func TestGetGroupOperation_IssuerExactMatchIsManaged(t *testing.T) {
-	action, _ := getGroupOperation(issuerGroup(realIssuer, "GG1"), googleAdmins("GG1"), false, false, realIssuer)
+	action, _ := getGroupOperation(issuerGroup(realIssuer, "GG1"), mappedAdmins("GG1"), false, false, realIssuer)
 	assert.Equal(t, Equal, action)
 }
 
 func TestGetGroupOperation_IssuerMismatchIsForeign(t *testing.T) {
-	action, _ := getGroupOperation(issuerGroup(realIssuer, "GG1"), googleAdmins("GG1"), false, false, delegatedIssuer)
+	action, _ := getGroupOperation(issuerGroup(realIssuer, "GG1"), mappedAdmins("GG1"), false, false, delegatedIssuer)
 	assert.Equal(t, AdoptForeign, action)
 }
 
 func TestGetGroupOperation_IssuerCaseOnlyDifferenceIsManaged(t *testing.T) {
-	action, _ := getGroupOperation(issuerGroup(lowercaseIssuer, "GG1"), googleAdmins("GG1"), false, false, realIssuer)
+	action, _ := getGroupOperation(issuerGroup(lowercaseIssuer, "GG1"), mappedAdmins("GG1"), false, false, realIssuer)
 	assert.Equal(t, Equal, action)
 }
 
 // With a matching issuer the ExternalId-change path is reachable again:
 // Recreate by default, UpdateForced with --force-externalid-update.
 func TestOperations_ExternalIdChangeReachableAfterIssuerMatch(t *testing.T) {
-	action, _ := getUserOperation(issuerUser(realIssuer, "OLD"), googleJane("NEW"), false, false, realIssuer)
+	action, _ := getUserOperation(issuerUser(realIssuer, "OLD"), mappedJane("NEW"), false, false, realIssuer)
 	assert.Equal(t, Recreate, action)
-	action, _ = getUserOperation(issuerUser(realIssuer, "OLD"), googleJane("NEW"), true, false, realIssuer)
+	action, _ = getUserOperation(issuerUser(realIssuer, "OLD"), mappedJane("NEW"), true, false, realIssuer)
 	assert.Equal(t, UpdateForced, action)
 
-	gAction, _ := getGroupOperation(issuerGroup(realIssuer, "OLD"), googleAdmins("NEW"), false, false, realIssuer)
+	gAction, _ := getGroupOperation(issuerGroup(realIssuer, "OLD"), mappedAdmins("NEW"), false, false, realIssuer)
 	assert.Equal(t, Recreate, gAction)
-	gAction, _ = getGroupOperation(issuerGroup(realIssuer, "OLD"), googleAdmins("NEW"), true, false, realIssuer)
+	gAction, _ = getGroupOperation(issuerGroup(realIssuer, "OLD"), mappedAdmins("NEW"), true, false, realIssuer)
 	assert.Equal(t, UpdateForced, gAction)
 }
 
@@ -172,7 +205,7 @@ func TestGetUserOperation_LogsIssuerCheck(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			hook := captureDebug(t)
-			getUserOperation(issuerUser(realIssuer, "G1"), googleJane("G1"), false, false, tc.expected)
+			getUserOperation(issuerUser(realIssuer, "G1"), mappedJane("G1"), false, false, tc.expected)
 
 			lines := entriesWithMsg(hook, IssuerCheckMsg)
 			require.Len(t, lines, 1)
@@ -198,7 +231,7 @@ func TestGetUserOperation_LogsIssuerCheck(t *testing.T) {
 
 func TestGetGroupOperation_LogsIssuerCheck(t *testing.T) {
 	hook := captureDebug(t)
-	getGroupOperation(issuerGroup(realIssuer, "GG1"), googleAdmins("GG1"), false, false, realIssuer)
+	getGroupOperation(issuerGroup(realIssuer, "GG1"), mappedAdmins("GG1"), false, false, realIssuer)
 
 	lines := entriesWithMsg(hook, IssuerCheckMsg)
 	require.Len(t, lines, 1)
@@ -209,14 +242,14 @@ func TestGetGroupOperation_LogsIssuerCheck(t *testing.T) {
 
 func TestIssuerCheck_NotLoggedForLocalOrMissingRecords(t *testing.T) {
 	hook := captureDebug(t)
-	getUserOperation(nil, googleJane("G1"), false, false, realIssuer)                // create
-	getUserOperation(issuerUser("", ""), googleJane("G1"), false, false, realIssuer) // local, no ExternalId
+	getUserOperation(nil, mappedJane("G1"), false, false, realIssuer)                // create
+	getUserOperation(issuerUser("", ""), mappedJane("G1"), false, false, realIssuer) // local, no ExternalId
 	assert.Empty(t, entriesWithMsg(hook, IssuerCheckMsg))
 }
 
 func TestIssuerCheck_DisabledWhenNoExpectedIssuer(t *testing.T) {
 	hook := captureDebug(t)
-	action, _ := getUserOperation(issuerUser(realIssuer, "G1"), googleJane("G1"), false, false, "")
+	action, _ := getUserOperation(issuerUser(realIssuer, "G1"), mappedJane("G1"), false, false, "")
 	assert.Equal(t, Equal, action)
 	lines := entriesWithMsg(hook, IssuerCheckMsg)
 	require.Len(t, lines, 1)
@@ -226,8 +259,8 @@ func TestIssuerCheck_DisabledWhenNoExpectedIssuer(t *testing.T) {
 
 func TestOperations_LogExpectedIssuer(t *testing.T) {
 	hook := captureDebug(t)
-	getUserOperations([]*interfaces.User{issuerUser(realIssuer, "G1")}, []*admin.User{googleJane("G1")}, false, false, realIssuer)
-	getGroupOperations([]*interfaces.Group{issuerGroup(realIssuer, "GG1")}, []*admin.Group{googleAdmins("GG1")}, false, false, realIssuer)
+	userOps([]*interfaces.User{issuerUser(realIssuer, "G1")}, []*admin.User{googleJane("G1")}, realIssuer)
+	groupOps([]*interfaces.Group{issuerGroup(realIssuer, "GG1")}, []*admin.Group{googleAdmins("GG1")}, realIssuer)
 
 	lines := entriesWithMsg(hook, ExpectedIssuerMsg)
 	require.Len(t, lines, 2)
@@ -326,7 +359,7 @@ func TestGetUserOperation_MultipleExternalIds_UsesThisTenantsEntry(t *testing.T)
 	hook := captureDebug(t)
 	u := multiExtUser(otherIdpEntry, thisTenantJane)
 
-	action, _ := getUserOperation(u, googleJane("G1"), false, false, realIssuer)
+	action, _ := getUserOperation(u, mappedJane("G1"), false, false, realIssuer)
 	assert.Equal(t, Equal, action)
 	assert.Equal(t, thisTenantJane, u.ExternalId)
 
@@ -340,13 +373,13 @@ func TestGetUserOperation_MultipleExternalIds_UsesThisTenantsEntry(t *testing.T)
 
 func TestGetUserOperation_MultipleExternalIds_NoneFromThisTenantIsForeign(t *testing.T) {
 	u := multiExtUser(otherIdpEntry, interfaces.ExternalId{Id: "Y", Issuer: "another"})
-	action, _ := getUserOperation(u, googleJane("G1"), false, false, realIssuer)
+	action, _ := getUserOperation(u, mappedJane("G1"), false, false, realIssuer)
 	assert.Equal(t, AdoptForeign, action)
 }
 
 func TestGetGroupOperation_MultipleExternalIds_UsesThisTenantsEntry(t *testing.T) {
 	g := multiExtGroup(otherIdpEntry, interfaces.ExternalId{Id: "GG1", Issuer: realIssuer})
-	action, _ := getGroupOperation(g, googleAdmins("GG1"), false, false, realIssuer)
+	action, _ := getGroupOperation(g, mappedAdmins("GG1"), false, false, realIssuer)
 	assert.Equal(t, Equal, action)
 }
 
@@ -356,7 +389,7 @@ func TestGetGroupOperation_MultipleExternalIds_UsesThisTenantsEntry(t *testing.T
 func TestOperations_MultipleExternalIds_MatchedByExternalId(t *testing.T) {
 	u := multiExtUser(otherIdpEntry, thisTenantJane)
 	u.Username = "renamed@example.com" // only the ExternalId can match it
-	_, del, upd, eq := getUserOperations([]*interfaces.User{u}, []*admin.User{googleJane("G1")}, false, false, realIssuer)
+	_, del, upd, eq := userOps([]*interfaces.User{u}, []*admin.User{googleJane("G1")}, realIssuer)
 	assert.Empty(t, del)
 	assert.Empty(t, eq)
 	require.Len(t, upd, 1, "matched by this tenant's ExternalId and updated (username differs)")
@@ -364,7 +397,7 @@ func TestOperations_MultipleExternalIds_MatchedByExternalId(t *testing.T) {
 
 	g := multiExtGroup(otherIdpEntry, interfaces.ExternalId{Id: "GG1", Issuer: realIssuer})
 	g.DisplayName = "Renamed"
-	gAdd, gDel, gUpd, _ := getGroupOperations([]*interfaces.Group{g}, []*admin.Group{googleAdmins("GG1")}, false, false, realIssuer)
+	gAdd, gDel, gUpd, _ := groupOps([]*interfaces.Group{g}, []*admin.Group{googleAdmins("GG1")}, realIssuer)
 	assert.Empty(t, gAdd)
 	assert.Empty(t, gDel)
 	require.Len(t, gUpd, 1)
