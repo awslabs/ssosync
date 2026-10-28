@@ -165,6 +165,12 @@ Resources:
     Type: AWS::CodePipeline::Pipeline
     Properties:
       Name: SSOSync
+      # QUEUED (V2 only): run executions one at a time. Every stage shares the
+      # TestAccountExecution stack and the Identity Store, so with SUPERSEDED a
+      # newer run's Deploy could overlap an older run's tests or CleanUp (which
+      # deletes the stack the newer run is about to test).
+      PipelineType: V2
+      ExecutionMode: QUEUED
       RoleArn: !Sub ${CodePipelineRole.Arn}
       ArtifactStore: 
         Type: S3
