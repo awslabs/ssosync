@@ -150,6 +150,24 @@ class SuiteExpectations(unittest.TestCase):
         const = re.search(r'MultiValuedCustomFieldIgnoredMsg = "([^"]+)"', code).group(1)
         self.assertIn(f'MULTI="{const}"', read("rich_map", "run.sh"))
 
+    def test_validation_warnings_long_value(self):
+        # validation_warnings maps Username from SSOSync-Test.LongValue: exactly
+        # the holders exceed the SCIM userName maxLength (128), and every other
+        # user has none (missing-field and requiredField warnings).
+        with open(os.path.join(AM_DIR, "maps", "long_username.json")) as f:
+            self.assertEqual("customSchemas.SSOSync-Test.LongValue", json.load(f)["user"]["Username"])
+        holders = [u for u in users() if "LongValue" in schema(u)]
+        self.assertGreaterEqual(len(holders), 1)
+        for u in holders:
+            value = schema(u)["LongValue"]
+            self.assertIsInstance(value, str, f"{u['primaryEmail']}: LongValue is single-valued")
+            self.assertGreater(len(value), 128, f"{u['primaryEmail']}: LongValue must exceed 128 characters")
+        script = read("validation_warnings", "run.sh")
+        absent = len(users()) - len(holders)
+        self.assertEqual(absent, int(re.search(r"rule=requiredField --field field=userName --min (\d+)", script).group(1)))
+        self.assertEqual(absent, int(re.search(r"field=LongValue --min (\d+)", script).group(1)))
+        self.assertEqual(len(holders), int(re.search(r"rule=maxLength --field field=userName --min (\d+)", script).group(1)))
+
     def test_baseline_matches_google_users(self):
         with open(os.path.join(AM_DIR, "baseline", "users.json")) as f:
             baseline = {b["UserName"].lower(): b for b in json.load(f)}

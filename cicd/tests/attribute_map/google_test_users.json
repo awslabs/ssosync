@@ -14,7 +14,11 @@
     "'multiValued: true' in the schema). ssosync does not support multi-valued",
     "custom attributes: the rich_map suite maps it and asserts it is warned about",
     "and ignored. It is set on crpates (two values) and dave2 (one value; still",
-    "multi-valued, so still ignored) and absent on AceHole and olaf."
+    "multi-valued, so still ignored) and absent on AceHole and olaf.",
+    "SSOSync-Test.LongValue is a SINGLE-VALUED custom field set ONLY on AceHole,",
+    "to a string over 128 characters (the SCIM userName maxLength); the",
+    "validation_warnings suite maps Username from it and expects the other users",
+    "to have no LongValue."
   ],
   "users": [
     {
@@ -46,7 +50,8 @@
       "suspended": false,
       "customSchemas": {
         "SSOSync-Test": {
-          "AWSUsername": "arnold.rimmer.aws@nothing2see.info"
+          "AWSUsername": "arnold.rimmer.aws@nothing2see.info",
+          "LongValue": "arnold.judas.rimmer.bsc.ssc.second.technician.hard.light.hologram.red.dwarf.jupiter.mining.corporation.three.million.years.from.earth@nothing2see.info"
         }
       },
       "notes": "Blank given name; only a school-typed organization; no CostCodes. SSOSync-Test.LongValue is a string over 128 characters (validation_warnings suite) and is unchanged."
