@@ -3757,10 +3757,11 @@ func rotateAdminOrgs(in []admin.UserOrganization) []admin.UserOrganization {
 	return append(append([]admin.UserOrganization(nil), in[1:]...), in[0])
 }
 
-// Default map [type=work]: a Google user with a work-typed org enriches an AWS
-// record that does not yet carry Title/Enterprise (Update), carrying the work
-// org's values.
-func TestGetUserOperations_DefaultMapTypeWork_Enrichment(t *testing.T) {
+// Default map [primary]: a Google user whose primary org is untyped (as the
+// Admin console stores it) enriches an AWS record that does not yet carry
+// Title/Enterprise (Update), carrying the primary org's values; a work-typed
+// org that is not primary is ignored.
+func TestGetUserOperations_DefaultMapPrimary_Enrichment(t *testing.T) {
 	awsUsers := []*interfaces.User{
 		{
 			ID: "A1", Username: "user1@example.com",
@@ -3774,8 +3775,8 @@ func TestGetUserOperations_DefaultMapTypeWork_Enrichment(t *testing.T) {
 			Id: "G1", PrimaryEmail: "user1@example.com",
 			Name: &admin.UserName{GivenName: "John", FamilyName: "Doe"},
 			Organizations: []admin.UserOrganization{
-				{Title: "Other", Type: "other", Primary: true},
-				{Title: "Staff Engineer", Department: "Platform", Name: "ExampleCorp", CostCenter: "CC-100", Type: "work", Primary: false},
+				{Title: "Other", Type: "work", Primary: false},
+				{Title: "Staff Engineer", Department: "Platform", Name: "ExampleCorp", CostCenter: "CC-100", Type: "", Primary: true},
 			},
 		},
 	}
@@ -3792,17 +3793,18 @@ func TestGetUserOperations_DefaultMapTypeWork_Enrichment(t *testing.T) {
 	}
 }
 
-// Default map [type=work]: a user whose only org is untyped/primary-but-not-work
-// resolves to NOTHING; an AWS record that carried Title/Enterprise is cleared
-// (Update), and once AWS reflects the clear the user is Equal (steady state).
-func TestGetUserOperations_DefaultMapTypeWork_UntypedOrgClears(t *testing.T) {
+// Default map [primary]: a user with no primary org resolves to NOTHING (no
+// fallback to the first entry, even a work-typed one); an AWS record that
+// carried Title/Enterprise is cleared (Update), and once AWS reflects the
+// clear the user is Equal (steady state).
+func TestGetUserOperations_DefaultMapPrimary_NoPrimaryOrgClears(t *testing.T) {
 	googleUsers := []*admin.User{
 		{
 			Id: "G1", PrimaryEmail: "user1@example.com",
 			Name: &admin.UserName{GivenName: "John", FamilyName: "Doe"},
 			Organizations: []admin.UserOrganization{
-				// Primary but NOT typed work -> under [type=work] resolves to nothing.
-				{Title: "Staff Engineer", Department: "Platform", Type: "", Primary: true},
+				// Typed work but NOT primary -> under [primary] resolves to nothing.
+				{Title: "Staff Engineer", Department: "Platform", Type: "work", Primary: false},
 			},
 		},
 	}
@@ -3826,7 +3828,7 @@ func TestGetUserOperations_DefaultMapTypeWork_UntypedOrgClears(t *testing.T) {
 	assert.Len(t, del, 0)
 	assert.Len(t, equals, 0)
 	if assert.Len(t, update, 1) {
-		assert.Equal(t, "", update[0].Title, "untyped work org clears Title under [type=work]")
+		assert.Equal(t, "", update[0].Title, "no primary org clears Title under [primary]")
 		assert.Nil(t, update[0].Enterprise, "Enterprise cleared to nil")
 	}
 
@@ -3848,9 +3850,10 @@ func TestGetUserOperations_DefaultMapTypeWork_UntypedOrgClears(t *testing.T) {
 	assert.Len(t, equals, 1)
 }
 
-// Shuffled multi-valued order with exactly one work-typed org produces no
-// spurious Update in any ordering (churn-freedom for the type= selector).
-func TestGetUserOperations_TypeWorkShuffledNoChurn(t *testing.T) {
+// Shuffled multi-valued order with exactly one primary org produces no
+// spurious Update in any ordering (churn-freedom for the default [primary]
+// selector).
+func TestGetUserOperations_PrimaryShuffledNoChurn(t *testing.T) {
 	awsUsers := []*interfaces.User{
 		{
 			ID: "A1", Username: "user1@example.com",
@@ -3864,8 +3867,8 @@ func TestGetUserOperations_TypeWorkShuffledNoChurn(t *testing.T) {
 		},
 	}
 	orgs := []admin.UserOrganization{
-		{Title: "Other", Department: "DO", Name: "OrgO", CostCenter: "CCO", Type: "other", Primary: true},
-		{Title: "Staff Engineer", Department: "Platform", Name: "ExampleCorp", CostCenter: "CC-100", Type: "work", Primary: false},
+		{Title: "Other", Department: "DO", Name: "OrgO", CostCenter: "CCO", Type: "work", Primary: false},
+		{Title: "Staff Engineer", Department: "Platform", Name: "ExampleCorp", CostCenter: "CC-100", Type: "", Primary: true},
 		{Title: "Home", Department: "DH", Name: "OrgH", CostCenter: "CCH", Type: "home", Primary: false},
 	}
 	build := func(o []admin.UserOrganization) []*admin.User {
@@ -3888,7 +3891,7 @@ func TestGetUserOperations_TypeWorkShuffledNoChurn(t *testing.T) {
 		add, del, update, equals := getUserOperations(awsUsers, tc.g, opsConfig(false, false, ""), config.DefaultUserAttributeMap)
 		assert.Len(t, add, 0, tc.name)
 		assert.Len(t, del, 0, tc.name)
-		assert.Len(t, update, 0, tc.name+": stable work-typed selection -> no churn")
+		assert.Len(t, update, 0, tc.name+": stable primary selection -> no churn")
 		assert.Len(t, equals, 1, tc.name)
 	}
 }

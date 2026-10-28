@@ -157,25 +157,21 @@ var (
 	// It carries the four behaviour-preserving scalars (GivenName, FamilyName,
 	// Username, Active) plus the SAFE SET enrichment (Title and the
 	// Enterprise.Department/Organization/CostCenter fields) sourced from the
-	// user's WORK-typed organization. These safe-set fields are both resolvable
+	// user's PRIMARY organization. These safe-set fields are both resolvable
 	// from Google and accepted by AWS IAM Identity Center SCIM, so defaulting
 	// them enriches synced users; a user with no matching organization keeps them
 	// empty (the resolver is empty-safe and Enterprise stays nil), so steady
 	// state is churn-free (attrmap-design §5, §8).
 	//
-	// BEHAVIOUR CHANGE (design §7): the org-sourced entries changed from
-	// organizations[primary].* to organizations[type=work].*. The [type=work]
-	// selector matches the FIRST organization whose Google type == "work"
-	// (case-insensitive) and IGNORES the primary flag; with the no-first-fallback
-	// rule, a user whose work/primary org is typed something other than "work"
-	// (empty type, "other", a custom label) now resolves to NOTHING for all four
-	// fields. Under clear-to-consistent that CLEARS a previously-populated Title
-	// and Enterprise.Department/Organization/CostCenter (and Enterprise drops to
-	// nil if it holds no other data) on the first run after upgrade.
-	//
-	// MITIGATION: run with --dry-run after upgrading and inspect the planned
-	// Updates BEFORE a live sync. A tenant that wants the old behaviour sets its
-	// own attribute map with organizations[primary].* (still fully supported).
+	// WHY [primary], NOT [type=work]: the Google Admin console does not set an
+	// organization's type (it stores type "" / customType ""), but it does mark
+	// the organization primary. With the no-first-fallback rule a [type=work]
+	// default resolved to NOTHING for every console-managed user, and under
+	// clear-to-consistent that CLEARED Title and Enterprise.Department/
+	// Organization/CostCenter on every run. [primary] resolves for those
+	// tenants. A user with no primary organization still resolves to nothing
+	// (no fallback to the first entry). A tenant that types its organizations
+	// and wants the work one sets its own map with organizations[type=work].*.
 	//
 	// Note on "Active": it is the logical INVERSE of Google's "suspended" flag
 	// (Active == !Suspended). The map stores the raw source path "suspended";
@@ -185,10 +181,10 @@ var (
 		"Name.FamilyName":         "name.familyName",
 		"Username":                "primaryEmail",
 		"Active":                  "suspended",
-		"Title":                   "organizations[type=work].title",
-		"Enterprise.Department":   "organizations[type=work].department",
-		"Enterprise.Organization": "organizations[type=work].name",
-		"Enterprise.CostCenter":   "organizations[type=work].costCenter",
+		"Title":                   "organizations[primary].title",
+		"Enterprise.Department":   "organizations[primary].department",
+		"Enterprise.Organization": "organizations[primary].name",
+		"Enterprise.CostCenter":   "organizations[primary].costCenter",
 		// NOTE: Enterprise.Manager is deliberately NOT defaulted (opt-in only,
 		// see attrmap-design §5.7): Google's relation value is a free-form name,
 		// not a guaranteed AWS-resolvable manager.value reference. The resolver

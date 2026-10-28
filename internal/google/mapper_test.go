@@ -186,23 +186,24 @@ func TestMapFromGoogleUser_NonPrimaryOrganizationResolvesToNothing(t *testing.T)
 	assert.Nil(t, got.Enterprise)
 }
 
-func TestMapFromGoogleUser_WorkTypedOrganizationPreferred(t *testing.T) {
-	// Under the new default map (organizations[type=work].*), the entry typed
-	// "work" wins even when it is not first, regardless of the primary flag.
+func TestMapFromGoogleUser_PrimaryOrganizationPreferred(t *testing.T) {
+	// Under the default map (organizations[primary].*), the primary entry wins
+	// even when it is not first and is untyped (as the Admin console stores
+	// it); a work-typed entry that is not primary is ignored.
 	u := &admin.User{
 		Id:           "G4",
 		PrimaryEmail: "p@example.com",
 		Name:         &admin.UserName{GivenName: "Pri", FamilyName: "Mary"},
 		Organizations: []admin.UserOrganization{
-			{Title: "Not This", Type: "other", Primary: true},
-			{Title: "The Work Org", Department: "D", Type: "work", Primary: false},
+			{Title: "Not This", Type: "work", Primary: false},
+			{Title: "The Primary Org", Department: "D", Type: "", Primary: true},
 		},
 	}
 
 	got, err := mapFromGoogleUser(u, config.DefaultUserAttributeMap)
 	assert.NoError(t, err)
 
-	assert.Equal(t, "The Work Org", got.Title)
+	assert.Equal(t, "The Primary Org", got.Title)
 	if assert.NotNil(t, got.Enterprise) {
 		assert.Equal(t, "D", got.Enterprise.Department)
 	}

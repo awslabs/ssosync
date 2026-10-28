@@ -169,14 +169,17 @@ class SuiteExpectations(unittest.TestCase):
         const = re.search(r'MultiValuedCustomFieldIgnoredMsg = "([^"]+)"', code).group(1)
         self.assertIn(f'MULTI="{const}"', read("rich_map", "run.sh"))
 
-    def test_default_map_work_title(self):
-        # default_map: the built-in map's organizations[type=work].title resolves
-        # to "Science Officer" for one user and to nothing (noTypeMatch) for another.
+    def test_default_map_org_title(self):
+        # default_map: the built-in map's organization title source (the one in
+        # config.DefaultUserAttributeMap) resolves to the asserted title for one
+        # user and to nothing for another.
+        with open(os.path.join(AM_DIR, "..", "..", "..", "internal", "config", "config.go")) as f:
+            src = re.search(r'"Title":\s+"([^"]+)"', f.read()).group(1)
         script = read("default_map", "run.sh")
-        src = "organizations[type=work].title"
-        expected = re.search(rf'"source={re.escape(src)}" --field "resolved=([^"]+)"', script).group(1)
-        self.assertIn(expected, {resolve(u, src) for u in users()})
-        self.assertIn("", {resolve(u, src) for u in users()}, "some user must have no work organization")
+        expected = re.search(rf'"source={re.escape(src)}" --field "resolved=([^"]+)"', script)
+        self.assertIsNotNone(expected, f"default_map must assert the default source {src}")
+        self.assertIn(expected.group(1), {resolve(u, src) for u in users()})
+        self.assertIn("", {resolve(u, src) for u in users()}, f"some user must resolve {src} to nothing")
 
     def test_default_map_blank_given_name(self):
         self.assertIn("field=name.givenName", read("default_map", "run.sh"))

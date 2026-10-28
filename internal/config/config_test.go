@@ -37,17 +37,17 @@ func TestDefaultUserAttributeMap_SafeSetEntries(t *testing.T) {
 	assert := assert.New(t)
 
 	// The default user map is exactly the four behaviour-preserving scalars plus
-	// the four safe-set enrichment fields. The org-sourced entries changed from
-	// organizations[primary].* to organizations[type=work].* (design §7).
+	// the four safe-set enrichment fields, sourced from the PRIMARY organization
+	// (the Admin console marks it primary but does not type it).
 	assert.Equal(AttributeMap{
 		"Name.GivenName":          "name.givenName",
 		"Name.FamilyName":         "name.familyName",
 		"Username":                "primaryEmail",
 		"Active":                  "suspended",
-		"Title":                   "organizations[type=work].title",
-		"Enterprise.Department":   "organizations[type=work].department",
-		"Enterprise.Organization": "organizations[type=work].name",
-		"Enterprise.CostCenter":   "organizations[type=work].costCenter",
+		"Title":                   "organizations[primary].title",
+		"Enterprise.Department":   "organizations[primary].department",
+		"Enterprise.Organization": "organizations[primary].name",
+		"Enterprise.CostCenter":   "organizations[primary].costCenter",
 	}, DefaultUserAttributeMap)
 
 	// Opt-in-only targets must NOT be in the default map.

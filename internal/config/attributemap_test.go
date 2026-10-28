@@ -351,15 +351,14 @@ func TestParseAttributeMaps_UnknownBasePathRejected(t *testing.T) {
 }
 
 // Atomic-landing guard (design §7.1/§13): the empty document and a group-only
-// partial document must BOTH load under the new organizations[type=work].*
-// default. This FAILS if the default is flipped without the validator learning
-// to accept type= selectors.
+// partial document must BOTH load under the organizations[primary].* default.
+// This FAILS if the default uses a selector the validator does not accept.
 func TestParseAttributeMaps_AtomicLandingDefaultLoads(t *testing.T) {
 	assert := assert.New(t)
 
 	am, err := ParseAttributeMaps([]byte(`{}`))
 	assert.NoError(err)
-	assert.Equal("organizations[type=work].title", am.User["Title"])
+	assert.Equal("organizations[primary].title", am.User["Title"])
 
 	am, err = ParseAttributeMaps([]byte(`{"group":{"DisplayName":"name"}}`))
 	assert.NoError(err)

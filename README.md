@@ -473,10 +473,10 @@ The following JSON is exactly the built-in default. Copying it verbatim changes 
     "Name.FamilyName": "name.familyName",
     "Username": "primaryEmail",
     "Active": "suspended",
-    "Title": "organizations[type=work].title",
-    "Enterprise.Department": "organizations[type=work].department",
-    "Enterprise.Organization": "organizations[type=work].name",
-    "Enterprise.CostCenter": "organizations[type=work].costCenter"
+    "Title": "organizations[primary].title",
+    "Enterprise.Department": "organizations[primary].department",
+    "Enterprise.Organization": "organizations[primary].name",
+    "Enterprise.CostCenter": "organizations[primary].costCenter"
   },
   "group": {
     "DisplayName": "name"
@@ -491,7 +491,7 @@ Notes on the defaults:
 - Group `DisplayName` maps from the Google group name (`admin.Group.Name`).
 
 > [!IMPORTANT]
-> The organization-derived defaults (`Title` and the three `Enterprise.*` fields) now source from `organizations[type=work].*` — previously `organizations[primary].*`. The `[type=work]` selector matches the first organization whose Google type is `work` (case-insensitive) and ignores the primary flag. Because there is **no** first-entry fallback (see [Selection rule](#selection-rule-for-multi-valued-google-fields)), a user whose work organization is typed something other than `work` (empty type, `other`, a custom label), or who has no matching organization, resolves to nothing for all four fields — and those fields are then **cleared** on the AWS user under clear-to-consistent. If you want the previous behaviour, set your own map with `organizations[primary].*` (still fully supported). Run `--dry-run` after upgrading to preview the change.
+> The organization-derived defaults (`Title` and the three `Enterprise.*` fields) source from the user's **primary** organization (`organizations[primary].*`). The Google Admin console marks an organization primary but does not set its type, so `[primary]` resolves for console-managed directories where a `[type=work]` selector would match nothing. Because there is **no** first-entry fallback (see [Selection rule](#selection-rule-for-multi-valued-google-fields)), a user with no organization marked primary resolves to nothing for all four fields — and those fields are then **cleared** on the AWS user under clear-to-consistent. If your directory types its organizations and you want the work one, set your own map with `organizations[type=work].*`. Run `--dry-run` after upgrading to preview the change.
 
 ### Supported fields
 
@@ -505,10 +505,10 @@ The validator's allow-lists are the single source of truth for what is valid. Ta
 | `Name.FamilyName` | defaulted | `name.familyName` |
 | `Username` | defaulted | `primaryEmail` |
 | `Active` | defaulted | `suspended` (inverted) |
-| `Title` | defaulted | `organizations[type=work].title` |
-| `Enterprise.Department` | defaulted | `organizations[type=work].department` |
-| `Enterprise.Organization` | defaulted | `organizations[type=work].name` |
-| `Enterprise.CostCenter` | defaulted | `organizations[type=work].costCenter` |
+| `Title` | defaulted | `organizations[primary].title` |
+| `Enterprise.Department` | defaulted | `organizations[primary].department` |
+| `Enterprise.Organization` | defaulted | `organizations[primary].name` |
+| `Enterprise.CostCenter` | defaulted | `organizations[primary].costCenter` |
 | `Enterprise.Manager` | opt-in | — (you choose, e.g. `relations[type=manager].value`) |
 | `Enterprise.Division` | opt-in | — |
 | `Enterprise.EmployeeNumber` | opt-in | — |
@@ -576,7 +576,7 @@ ssosync fetches users from the Google Admin Directory API with `projection=full`
 The sync makes the AWS user **consistent** with the mapped Google user (clear-to-consistent): any supported SCIM field that the map does **not** populate is **cleared** on the AWS user.
 
 > [!CAUTION]
-> **Always test a new or changed attribute map with `--dry-run` first.** Because of clear-to-consistent, an error in the attribute map — a typo, a `[type=X]` selector that matches nothing, a missing custom field, or an ignored multi-valued custom field — resolves to nothing and **clears** the corresponding attribute on every affected AWS user. A dry run shows exactly which attributes would change before anything is written. This applies to adopting the defaults too, since the `[type=work]` org selector can clear org-sourced fields for users whose work organization is not typed `work`. See the dry-run note under [Retaining unmatched users and groups](#retaining-unmatched-users-and-groups).
+> **Always test a new or changed attribute map with `--dry-run` first.** Because of clear-to-consistent, an error in the attribute map — a typo, a `[type=X]` selector that matches nothing, a missing custom field, or an ignored multi-valued custom field — resolves to nothing and **clears** the corresponding attribute on every affected AWS user. A dry run shows exactly which attributes would change before anything is written. This applies to adopting the defaults too, since the `[primary]` org selector clears org-sourced fields for users with no organization marked primary. See the dry-run note under [Retaining unmatched users and groups](#retaining-unmatched-users-and-groups).
 
 Two logging aids help you validate a custom map alongside `--dry-run`:
 
