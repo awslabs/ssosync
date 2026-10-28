@@ -367,6 +367,24 @@ Resources:
                 - Name: SingleStack
 
         - Name: Release-Publicly
+          # Skip (the execution then succeeds) instead of failing when this
+          # commit is not a release: the stage is entered only when
+          # Git.IsRelease (from the Git-Metadata action) is "true". The
+          # tag-check action below stays as a second guard.
+          BeforeEntry:
+            Conditions:
+              - Result: SKIP
+                Rules:
+                  - Name: IsReleaseTag
+                    RuleTypeId:
+                      Category: Rule
+                      Owner: AWS
+                      Provider: VariableCheck
+                      Version: '1'
+                    Configuration:
+                      Variable: '#{Git.IsRelease}'
+                      Operator: EQ
+                      Value: 'true'
           Actions:
             - Name: Does_this_commit_have_a_release_tag
               ActionTypeId:
