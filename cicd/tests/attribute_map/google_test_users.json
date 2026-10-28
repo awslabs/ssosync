@@ -3,88 +3,141 @@
     "Google Workspace test users the attribute-map integration tests rely on.",
     "This is the reference for what must exist in the test tenant. It is checked",
     "against the suites' expectations by lib/test_google_test_data.py.",
-    "customSchemas mirrors the Directory API shape, so each user's block can be",
-    "applied as the customSchemas body of users.update/patch.",
-    "SSOSync-Test.AWSUsername is a scalar and MUST be email-shaped (ssosync also",
-    "uses the Username as the synthesized primary work email) and must differ",
-    "from the user's primary email so the remap suite updates every user.",
-    "SSOSync-Test.CostCodes is a SINGLE-VALUED custom field (a plain string): one",
-    "cost center per user. Google custom fields cannot be typed.",
-    "SSOSync-Test.ProjectCodes is a MULTI-VALUED custom field (define it with",
-    "'multiValued: true' in the schema). ssosync does not support multi-valued",
-    "custom attributes: the rich_map suite maps it and asserts it is warned about",
-    "and ignored. It is set on crpates (two values) and dave2 (one value; still",
-    "multi-valued, so still ignored) and absent on AceHole and olaf.",
-    "SSOSync-Test.LongValue is a SINGLE-VALUED custom field set ONLY on AceHole,",
-    "to a string over 128 characters (the SCIM userName maxLength); the",
-    "validation_warnings suite maps Username from it and expects the other users",
-    "to have no LongValue."
+    "Each user is a Directory API user resource: primaryEmail and id identify the",
+    "user; EVERY OTHER FIELD is the users.patch request body that sets that user",
+    "up (https://developers.google.com/admin-sdk/directory/reference/rest/v1/users/patch).",
+    "A patch replaces each list field it carries (organizations, phones,",
+    "addresses, relations) as a whole; fields not listed are left untouched.",
+    "Organization 'type' and phone/organization 'primary' cannot be set in the",
+    "Admin console; apply them through the API.",
+    "Data rules (enforced by the checks):",
+    "- customSchemas.SSOSync-Test.AWSUsername is a scalar and MUST be email-shaped",
+    "  (ssosync also uses the Username as the synthesized primary work email) and",
+    "  must differ from the user's primary email so the remap suite updates every user.",
+    "- SSOSync-Test.CostCodes is a SINGLE-VALUED custom field: one cost center per user.",
+    "- SSOSync-Test.ProjectCodes is a MULTI-VALUED custom field (define it with",
+    "  'multiValued: true'). ssosync does not support multi-valued custom",
+    "  attributes: the rich_map suite maps it and asserts it is warned about and",
+    "  ignored. Google stores each entry as {type, value}; the type is ignored.",
+    "- SSOSync-Test.LongValue is SINGLE-VALUED, set ONLY on AceHole, and longer",
+    "  than 128 characters (the SCIM userName maxLength).",
+    "- AceHole's givenName is a single space: Google requires a non-empty given",
+    "  name, and ssosync treats it as blank (requiredField warning).",
+    "- No user has websites (the tenant's user schema has no websites field)."
   ],
   "users": [
     {
       "primaryEmail": "crpates@nothing2see.info",
       "id": "114073192003346788358",
-      "givenName": "Chris",
-      "familyName": "Pates",
+      "name": { "givenName": "Chris", "familyName": "Pates" },
       "suspended": false,
+      "organizations": [
+        {
+          "name": "Jupiter Mining Corporation",
+          "title": "Science Officer",
+          "department": "Science",
+          "costCenter": "JMC-100",
+          "type": "work",
+          "primary": true
+        }
+      ],
+      "phones": [
+        { "type": "mobile", "value": "+44 7700 900001" },
+        { "type": "work", "value": "+44 20 7946 0001", "primary": true }
+      ],
+      "addresses": [
+        { "type": "work", "formatted": "Deck 16, Red Dwarf" }
+      ],
+      "relations": [
+        { "type": "manager", "value": "dave2@nothing2see.info" }
+      ],
       "customSchemas": {
         "SSOSync-Test": {
           "AWSUsername": "chris.pates.aws@nothing2see.info",
           "CostCodes": "WORK-100",
           "ProjectCodes": [
-            { "value": "PRJ-STARBUG" },
-            { "value": "PRJ-HOLOSHIP" }
+            { "type": "work", "value": "PRJ-STARBUG" },
+            { "type": "work", "value": "PRJ-HOLOSHIP" }
           ]
         }
-      },
-      "relations": [
-        { "type": "manager", "value": "dave2@nothing2see.info" }
-      ],
-      "notes": "Primary work organization 'Jupiter Mining Corporation' / 'Science Officer'; phones: mobile, then primary work '+44 20 7946 0001'; work address 'Deck 16, Red Dwarf'. No websites (the tenant's user schema has no websites field). The former second cost code (HOME-1) is removed."
+      }
     },
     {
       "primaryEmail": "AceHole@nothing2see.info",
       "id": "101090649517008403940",
-      "givenName": "",
-      "familyName": "Rimmer",
+      "name": { "givenName": " ", "familyName": "Rimmer" },
       "suspended": false,
+      "organizations": [
+        {
+          "name": "Red Dwarf Hologram Society",
+          "type": "school",
+          "primary": true
+        }
+      ],
+      "phones": [],
+      "addresses": [],
+      "relations": [],
       "customSchemas": {
         "SSOSync-Test": {
           "AWSUsername": "arnold.rimmer.aws@nothing2see.info",
           "LongValue": "arnold.judas.rimmer.bsc.ssc.second.technician.hard.light.hologram.red.dwarf.jupiter.mining.corporation.three.million.years.from.earth@nothing2see.info"
         }
-      },
-      "notes": "Blank given name; only a school-typed organization; no CostCodes. SSOSync-Test.LongValue is a string over 128 characters (validation_warnings suite) and is unchanged."
+      }
     },
     {
       "primaryEmail": "dave2@nothing2see.info",
       "id": "104127319331459468079",
-      "givenName": "Dave",
-      "familyName": "Lister",
+      "name": { "givenName": "Dave", "familyName": "Lister" },
       "suspended": false,
+      "organizations": [
+        {
+          "name": "Red Dwarf Academy",
+          "title": "Student",
+          "type": "school",
+          "primary": true
+        },
+        {
+          "name": "Jupiter Mining Corporation",
+          "title": "Technician, Third Class",
+          "department": "Maintenance",
+          "costCenter": "C123456789",
+          "type": "work"
+        }
+      ],
+      "phones": [
+        { "type": "home", "value": "123456789" },
+        { "type": "mobile", "value": "+44 7700 900003" }
+      ],
+      "addresses": [
+        { "type": "work", "formatted": "Cargo Bay, Red Dwarf" }
+      ],
+      "relations": [
+        { "type": "manager", "value": "acehole@nothing2see.info" }
+      ],
       "customSchemas": {
         "SSOSync-Test": {
           "AWSUsername": "dave.lister.aws@nothing2see.info",
           "CostCodes": "WORK-300",
           "ProjectCodes": [
-            { "value": "PRJ-CURRY" }
+            { "type": "work", "value": "PRJ-CURRY" }
           ]
         }
-      },
-      "notes": "Organizations: school 'Red Dwarf Academy' / 'Student' (primary), then work 'Jupiter Mining Corporation' / 'Technician, Third Class' / department 'Maintenance'; two phones, neither primary; work address 'Cargo Bay, Red Dwarf'."
+      }
     },
     {
       "primaryEmail": "olaf@nothing2see.info",
       "id": "117930356878090693739",
-      "givenName": "Olaf",
-      "familyName": "Petersen",
+      "name": { "givenName": "Olaf", "familyName": "Petersen" },
       "suspended": true,
+      "organizations": [],
+      "phones": [],
+      "addresses": [],
+      "relations": [],
       "customSchemas": {
         "SSOSync-Test": {
           "AWSUsername": "olaf.petersen.aws@nothing2see.info"
         }
-      },
-      "notes": "Suspended; no CostCodes."
+      }
     }
   ]
 }

@@ -32,6 +32,25 @@ def schema(user):
     return user.get("customSchemas", {}).get("SSOSync-Test", {})
 
 
+SELECTOR = re.compile(r"^(\w+)\[(primary|type=([^\]]+))\]\.(\w+)$")
+
+
+def resolve(user, source):
+    """What ssosync resolves a standard multi-valued source to for this user:
+    [primary] picks the entry marked primary, [type=X] the first entry whose
+    type matches case-insensitively; no match is "" (never a fallback)."""
+    m = SELECTOR.match(source)
+    if not m:
+        raise ValueError(f"unsupported source in test: {source}")
+    collection, _, type_value, field = m.groups()
+    for entry in user.get(collection, []):
+        if type_value is None and entry.get("primary") is True:
+            return entry.get(field, "")
+        if type_value is not None and entry.get("type", "").lower() == type_value.lower():
+            return entry.get(field, "")
+    return ""
+
+
 class DataRules(unittest.TestCase):
     def test_aws_username_is_an_email(self):
         for u in users():
@@ -119,7 +138,7 @@ class SuiteExpectations(unittest.TestCase):
             self.assertIsInstance(values, list, f"{u['primaryEmail']}: ProjectCodes is multi-valued")
             self.assertTrue(values)
             for v in values:
-                self.assertNotIn("type", v, "custom fields cannot be typed")
+                self.assertTrue(v.get("value"), f"{u['primaryEmail']}: ProjectCodes entry needs a value")
 
     def test_rich_map_maps_the_multi_valued_custom_field(self):
         with open(os.path.join(AM_DIR, "maps", "rich.json")) as f:
@@ -149,6 +168,50 @@ class SuiteExpectations(unittest.TestCase):
             code = f.read()
         const = re.search(r'MultiValuedCustomFieldIgnoredMsg = "([^"]+)"', code).group(1)
         self.assertIn(f'MULTI="{const}"', read("rich_map", "run.sh"))
+
+    def test_default_map_work_title(self):
+        # default_map: the built-in map's organizations[type=work].title resolves
+        # to "Science Officer" for one user and to nothing (noTypeMatch) for another.
+        script = read("default_map", "run.sh")
+        src = "organizations[type=work].title"
+        expected = re.search(rf'"source={re.escape(src)}" --field "resolved=([^"]+)"', script).group(1)
+        self.assertIn(expected, {resolve(u, src) for u in users()})
+        self.assertIn("", {resolve(u, src) for u in users()}, "some user must have no work organization")
+
+    def test_default_map_blank_given_name(self):
+        self.assertIn("field=name.givenName", read("default_map", "run.sh"))
+        self.assertTrue(any(not u["name"]["givenName"].strip() for u in users()),
+                        "some user must have a blank given name (requiredField warning)")
+
+    def test_rich_map_standard_selectors(self):
+        # Every value rich_map asserts for a standard selector source is what
+        # ssosync resolves for some user in the reference.
+        script = read("rich_map", "run.sh")
+        asserted = re.findall(r'^resolved "([a-z]+\[[^"]+)" "([^"]*)"', script, re.M)
+        self.assertGreaterEqual(len(asserted), 6)
+        for src, value in asserted:
+            self.assertIn(value, {resolve(u, src) for u in users()}, f"{src} -> {value!r}")
+
+    def test_rich_map_primary_differs_from_work(self):
+        # [primary] and [type=work] must pick different organizations for some
+        # user, or the suite cannot tell the selectors apart.
+        self.assertTrue(any(resolve(u, "organizations[primary].name") != resolve(u, "organizations[type=work].name")
+                            and resolve(u, "organizations[type=work].name") for u in users()))
+
+    def test_rich_map_no_primary_phone(self):
+        self.assertIn("reason=noPrimaryEntry", read("rich_map", "run.sh"))
+        self.assertTrue(any(u.get("phones") and not any(p.get("primary") for p in u["phones"]) for u in users()),
+                        "some user must have phones but none marked primary")
+
+    def test_reference_is_a_patch_body(self):
+        # Only Directory API user fields; no free-text notes.
+        allowed = {"primaryEmail", "id", "name", "suspended", "organizations", "phones",
+                   "addresses", "relations", "customSchemas"}
+        for u in users():
+            self.assertLessEqual(set(u), allowed, f"{u['primaryEmail']}: unexpected keys {set(u) - allowed}")
+            self.assertEqual({"givenName", "familyName"}, set(u["name"]))
+            for o in u.get("organizations", []):
+                self.assertIn("type", o, f"{u['primaryEmail']}: organizations must be typed")
 
     def test_validation_warnings_long_value(self):
         # validation_warnings maps Username from SSOSync-Test.LongValue: exactly

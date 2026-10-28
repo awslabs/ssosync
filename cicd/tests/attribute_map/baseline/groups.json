@@ -49,5 +49,12 @@
             "crpates@nothing2see.info",
             "acehole@nothing2see.info"
         ]
+    },
+    {
+        "DisplayName": "AWSOperationsTest",
+        "Description": "",
+        "Members": [
+            "acehole@nothing2see.info"
+        ]
     }
 ]
