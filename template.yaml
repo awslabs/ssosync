@@ -439,13 +439,15 @@ Rules:
         AssertDescription: 'Do not provide a AppAccount for this deployment type.'
       - Assert: !Equals ['', !Ref KMSKey]
         AssertDescription: 'Do not provide a KMS Key for this deployment type.'
+  # The stack creates its own KMS key and shares the key and secrets with
+  # AppAccount (key policy and secret resource policies use ${AppAccount}).
   CrossSecrets:
     RuleCondition: !Equals [!Ref DeployPattern, "Secrets for cross-account"]
     Assertions:
-      - Assert: !Equals ['', !Ref AppAccount]
-        AssertDescription: 'The AWS account id, of the account where you intend to deploy the app.'
       - Assert: !Not
-          - !Equals ['', !Ref KMSKey]
+          - !Equals ['', !Ref AppAccount]
+        AssertDescription: 'The AWS account id, of the account where you intend to deploy the app, is required for this deployment type.'
+      - Assert: !Equals ['', !Ref KMSKey]
         AssertDescription: 'Do not provide a KMS Key for this deployment type.'
 
 Resources:
