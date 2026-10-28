@@ -472,14 +472,15 @@ Resources:
                 - Name: Tests
               OutputArtifacts:
                 - Name: AttrMapLambdaInlineMap
-        # Live proof of getUserOperations/getGroupOperations against the real
-        # tenant (issue #383): expected IssuerArn == the real ExternalId Issuer,
-        # managed records converge, multi-ExternalId records use this tenant's
-        # entry, and the ExternalId-change path (Recreate/UpdateForced) works.
-        # See cicd/tests/user_group_operations/run.sh.
-        - Name: UserGroupOperations
+        # Functional tests against the live tenant.
+        - Name: FunctionalTests
           Actions:
-            - Name: IssuerAndExternalId
+            # Live proof of getUserOperations/getGroupOperations (issue #383):
+            # expected IssuerArn == the real ExternalId Issuer, managed records
+            # converge, multi-ExternalId records use this tenant's entry, and the
+            # ExternalId-change path (Recreate/UpdateForced) works.
+            # See cicd/tests/user_group_operations/run.sh.
+            - Name: UserGroupOperations
               ActionTypeId:
                 Category: Test
                 Owner: AWS
