@@ -72,7 +72,7 @@ Sensitive values can be provided inline or as the ARN of a secret in [AWS Secret
 | `PrecacheOrgUnits` | `PRECACHE_ORG_UNITS` | Comma-separated list of Google OrgUnit paths to precache (e.g. `/OU1,/OU2/OU3`). Use `/` for the whole directory, or leave empty to disable precaching. | `/` |
 | `ExternalIdChange` | `FORCE_EXTERNAL_ID_UPDATE` | When a Google user is deleted and recreated (same email, new ID), either `update` the existing Identity Store user to preserve assignments, or `delete/recreate` to prevent permission inheritance. | `delete/recreate` |
 | `RetainUnmatched` | `RETAIN_UNMATCHED` | Retain 'local' users and groups that exist in the Identity Store but cannot be matched to Google Workspace, instead of deleting them (`remove` or `retain`). | `remove` |
-| `AttributeMap` | `ATTRIBUTE_MAP` | Attribute map controlling how Google user attributes map onto IAM Identity Center (SCIM) fields (`groups` sync method only). Accepts inline attribute-map JSON, a Secrets Manager ARN, or an SSM Parameter Store ARN. Leave empty to use the built-in default mapping. See [Attribute mapping](#attribute-mapping) below. | `""` |
+| `AttributeMap` | `ATTRIBUTE_MAP` | Attribute map controlling how Google user attributes map onto IAM Identity Center (SCIM) fields (`groups` sync method only). Accepts inline attribute-map JSON, a Secrets Manager ARN, or an SSM Parameter Store ARN. Leave empty to use the built-in default mapping (no secret is created and `ATTRIBUTE_MAP` is not set). With a deployment pattern that creates secrets, inline JSON is stored in the `SSOSyncAttributeMap` secret. See [Attribute mapping](#attribute-mapping) below. | `""` |
 
 ### Lambda Configuration
 
@@ -132,7 +132,17 @@ For the complete query syntax see [Google Groups Search](https://developers.goog
 
 ## Attribute mapping
 
-The `AttributeMap` parameter (Lambda environment variable `ATTRIBUTE_MAP`) controls how Google Workspace user attributes are mapped onto the AWS IAM Identity Center (SCIM) user fields. It applies to the `groups` sync method only. Like the credentials parameters, it accepts inline attribute-map JSON, the ARN of a secret in AWS Secrets Manager, or the ARN of an SSM Parameter Store entry; ssosync resolves ARNs at runtime. Leaving it empty uses the built-in default mapping below.
+The `AttributeMap` parameter (Lambda environment variable `ATTRIBUTE_MAP`) controls how Google Workspace user attributes are mapped onto the AWS IAM Identity Center (SCIM) user fields. It applies to the `groups` sync method only. Like the credentials parameters, it accepts inline attribute-map JSON, the ARN of a secret in AWS Secrets Manager, or the ARN of an SSM Parameter Store parameter; ssosync resolves ARNs at runtime, and the template grants the function read access to the secret or parameter you give. Leaving it empty uses the built-in default mapping below; no secret is created and `ATTRIBUTE_MAP` is not set.
+
+How the value is deployed depends on the deployment pattern:
+
+| Value | `App + secrets`, `Secrets only`, `Secrets for cross-account` | `App only`, `App for cross-account` |
+|---|---|---|
+| empty | nothing created, `ATTRIBUTE_MAP` not set | `ATTRIBUTE_MAP` not set |
+| inline JSON | stored in the `SSOSyncAttributeMap` secret (shared with the app account for cross-account, and exported as `AttributeMap`); `ATTRIBUTE_MAP` is the secret ARN | `ATTRIBUTE_MAP` is the JSON (the Lambda environment is limited to 4 KB in total, so use a secret or parameter for a large map) |
+| Secrets Manager / SSM parameter ARN | `ATTRIBUTE_MAP` is the ARN | `ATTRIBUTE_MAP` is the ARN |
+
+For `App for cross-account`, pass the `AttributeMap` exported by the `Secrets for cross-account` stack.
 
 Groups map `DisplayName` from the Google group name only (AWS SCIM accepts only `externalId`, `displayName` and `members` for groups; a group description is not SCIM-settable).
 

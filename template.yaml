@@ -329,8 +329,10 @@ Parameters:
   AttributeMap:
     Type: String
     Description: |
-      [optional] Attribute map controlling how Google user attributes map onto IAM Identity Center (SCIM) fields (groups sync method only). Provide inline attribute-map JSON, the Arn of a Secrets Manager secret, or the Arn of an SSM Parameter Store entry that contains it. Leave empty to use the built-in default mapping.
+      [optional] Attribute map controlling how Google user attributes map onto IAM Identity Center (SCIM) fields (groups sync method only). Provide inline attribute-map JSON, the Arn of a Secrets Manager secret, or the Arn of an SSM Parameter Store parameter that contains it. Leave empty to use the built-in default mapping (no secret is created and ATTRIBUTE_MAP is not set). With a deployment pattern that creates secrets, inline JSON is stored in the SSOSyncAttributeMap secret.
     Default: ""
+    AllowedPattern: '(?!.*\s)|(?:arn:aws:secretsmanager:(?:(?:us(?:-gov)?|ap|ca|cn|eu|sa)-(?:central|(?:north|south)?(?:east|west)?)-\d):[0-9]{8,12}:secret:[a-zA-Z0-9\/_+=.@-]{1,512})|(?:arn:aws:ssm:(?:(?:us(?:-gov)?|ap|ca|cn|eu|sa)-(?:central|(?:north|south)?(?:east|west)?)-\d):[0-9]{8,12}:parameter\/[a-zA-Z0-9\/_.-]{1,2048})|(?s:\s*\{.*\}\s*)'
+    ConstraintDescription: 'Must be empty, inline attribute-map JSON (a JSON object), the Arn of a Secrets Manager secret, or the Arn of an SSM Parameter Store parameter.'
 
 Conditions:
   SetFunctionName: !Not 
@@ -363,8 +365,31 @@ Conditions:
   DisablePrecaching: !Equals [!Ref PrecacheOrgUnits, ""]
   SetForceExternalIdUpdate: !Equals [!Ref ExternalIdChange, "update"]
   SetRetainUnmatched: !Equals [!Ref RetainUnmatched, "retain"]
+  # AttributeMap: empty -> nothing (no secret, no ATTRIBUTE_MAP). Otherwise it
+  # is a Secrets Manager Arn, an SSM parameter Arn, or inline JSON. Splitting
+  # on an Arn prefix yields "" as the first element only when the value starts
+  # with it (an empty value also yields "", hence the SetAttributeMap guard).
   SetAttributeMap: !Not
     - !Equals [!Ref AttributeMap, ""]
+  AttributeMapIsSecretArn: !And
+    - !Condition SetAttributeMap
+    - !Equals [!Select [0, !Split ["arn:aws:secretsmanager:", !Ref AttributeMap]], ""]
+  AttributeMapIsParameterArn: !And
+    - !Condition SetAttributeMap
+    - !Equals [!Select [0, !Split ["arn:aws:ssm:", !Ref AttributeMap]], ""]
+  AttributeMapIsInline: !And
+    - !Condition SetAttributeMap
+    - !Not [!Condition AttributeMapIsSecretArn]
+    - !Not [!Condition AttributeMapIsParameterArn]
+  # Inline JSON is stored as a secret when the pattern creates secrets, like
+  # the other secret-backed parameters (and keeps it out of the 4 KB Lambda
+  # environment); otherwise it is passed to ATTRIBUTE_MAP as-is.
+  CreateAttributeMapSecret: !And
+    - !Condition CreateSecrets
+    - !Condition AttributeMapIsInline
+  ShareAttributeMapSecret: !And
+    - !Condition CreateKey
+    - !Condition CreateAttributeMapSecret
   OnSchedule: !And
     - !Condition CreateFunction
     - !Not
@@ -389,19 +414,16 @@ Rules:
       - Assert: !Not
         - !Equals [!Ref GoogleCustomerId, "my_customer"]
         AssertDescription: 'If memberKey is used in GroupMatch, the actual CustomerId must also be supplied.'
+  # The secret parameters (GoogleCustomerId, GoogleCredentials, GoogleAdminEmail,
+  # SCIMEndpointUrl, SCIMEndpointAccessToken) must be secret Arns for this
+  # pattern. Rules cannot test a prefix: Fn::Contains is an exact match against
+  # the list items, so the former Contains [['arn:aws:secretsmanager:'], ...]
+  # assertions rejected every real Arn. Each value's AllowedPattern accepts a
+  # secret Arn, and SSOSyncRoleRemote uses the values directly as IAM policy
+  # Resources, which IAM rejects unless they are Arns.
   SecretValues:
     RuleCondition: !Equals [!Ref DeployPattern, "App for cross-account"]
     Assertions:
-      - Assert: !Contains [['arn:aws:secretsmanager:'], !Ref GoogleCustomerId]
-        AssertDescription: 'The arn of the secret contenting the CustomerId is required for this deployment type.'
-      - Assert: !Contains [['arn:aws:secretsmanager:'], !Ref GoogleCredentials]
-        AssertDescription: 'The arn of the secret contenting the  contents of the Credentials.json is required for this deployment type.'
-      - Assert: !Contains [['arn:aws:secretsmanager:'], !Ref GoogleAdminEmail]
-        AssertDescription: 'The arn of the secret contenting the  email address of a directory admin is required for this deployment type.'
-      - Assert: !Contains [['arn:aws:secretsmanager:'], !Ref SCIMEndpointUrl]
-        AssertDescription: 'The arn of the secret contenting the  SCIM url from IAM Identity Center is required for this deployment type.'
-      - Assert: !Contains [['arn:aws:secretsmanager:'], !Ref SCIMEndpointAccessToken]
-        AssertDescription: 'The arn of the secret contenting the SCIM Access Token is required for this deployment type.'
       - Assert: !Not
           - !Equals ['', !Ref AppAccount]
         AssertDescription: 'The AWS account id, of the account where you intend to deploy the app is required for this deployment type.'
@@ -460,6 +482,19 @@ Resources:
                   - !If [CreateSecrets, !Ref SecretGoogleAdminEmail, !Ref GoogleAdminEmail]
                   - !If [CreateSecrets, !Ref SecretSCIMEndpoint, !Ref SCIMEndpointUrl]
                   - !If [CreateSecrets, !Ref SecretSCIMAccessToken, !Ref SCIMEndpointAccessToken]
+                  - !If
+                    - CreateAttributeMapSecret
+                    - !Ref SecretAttributeMap
+                    - !If [AttributeMapIsSecretArn, !Ref AttributeMap, !Ref AWS::NoValue]
+              - !If
+                - AttributeMapIsParameterArn
+                - Sid: AttributeMapParameterPolicy
+                  Effect: Allow
+                  Action:
+                    - "ssm:GetParameter"
+                  Resource:
+                    - !Ref AttributeMap
+                - !Ref AWS::NoValue
               - Sid: CrossRegionSecretsPolicy
                 Effect: Allow
                 Action:
@@ -522,6 +557,16 @@ Resources:
                   - !Ref GoogleAdminEmail # GoogleAdminEmail
                   - !Ref SCIMEndpointUrl # SCIMEndpointUrl
                   - !Ref SCIMEndpointAccessToken # SCIMEndpointAccessToken
+                  - !If [AttributeMapIsSecretArn, !Ref AttributeMap, !Ref AWS::NoValue] # AttributeMap
+              - !If
+                - AttributeMapIsParameterArn
+                - Sid: AttributeMapParameterPolicy
+                  Effect: Allow
+                  Action:
+                    - "ssm:GetParameter"
+                  Resource:
+                    - !Ref AttributeMap
+                - !Ref AWS::NoValue
               - Sid: CrossRegionSecretsPolicy
                 Effect: Allow
                 Action:
@@ -592,7 +637,10 @@ Resources:
           PRECACHE_ORG_UNITS: !If [DisablePrecaching, !Ref AWS::NoValue, !Ref PrecacheOrgUnits]
           FORCE_EXTERNAL_ID_UPDATE: !If [SetForceExternalIdUpdate, 'True', !Ref AWS::NoValue]
           RETAIN_UNMATCHED: !If [SetRetainUnmatched, 'True', !Ref AWS::NoValue]
-          ATTRIBUTE_MAP: !If [SetAttributeMap, !Ref AttributeMap, !Ref AWS::NoValue]
+          ATTRIBUTE_MAP: !If
+            - CreateAttributeMapSecret
+            - !Ref SecretAttributeMap
+            - !If [SetAttributeMap, !Ref AttributeMap, !Ref AWS::NoValue]
 
   PermissionForEventsToInvokeLambda:
     Type: AWS::Lambda::Permission
@@ -764,6 +812,28 @@ Resources:
           Action:
             - secretsmanager:GetSecretValue
           Resource: '*'
+
+  SecretAttributeMap:
+    Type: "AWS::SecretsManager::Secret"
+    Condition: CreateAttributeMapSecret
+    Properties:
+      Name: SSOSyncAttributeMap
+      SecretString: !Ref AttributeMap
+      KmsKeyId: !If [CreateKey, !Ref KeyAlias, alias/aws/secretsmanager]
+  SecretAttributeMapPolicy:
+    Type: AWS::SecretsManager::ResourcePolicy
+    Condition: ShareAttributeMapSecret
+    Properties:
+      SecretId: !Ref SecretAttributeMap
+      ResourcePolicy:
+        Version: 2012-10-17
+        Statement:
+        - Effect: Allow
+          Principal:
+            AWS: !Sub arn:aws:iam::${AppAccount}:root
+          Action:
+            - secretsmanager:GetSecretValue
+          Resource: '*'
         
 Outputs:
   FunctionArn:
@@ -802,6 +872,12 @@ Outputs:
     Value: !Ref SecretSCIMAccessToken
     Export:
       Name: SCIMEndpointAccessToken
+  AttributeMap:
+    Condition: CreateAttributeMapSecret
+    Description: "The Arn of the secret containing the AttributeMap"
+    Value: !Ref SecretAttributeMap
+    Export:
+      Name: AttributeMap
   KeyAlias:
     Condition: CreateKey
     Description: "The Arn of the KMS key used to encrypt the secrets"
