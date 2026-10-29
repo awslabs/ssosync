@@ -1645,6 +1645,17 @@ Resources:
                   - !Sub arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:SSOSync*
                   - !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:SSOSync
               - !Ref AWS::NoValue
+            # tests/quick_start: remove a /aws/lambda/SSOSync log group left
+            # outside a deleted quick-start stack (it blocks the next create).
+            - !If
+              - DeployDelegated
+              - Action:
+                  - "logs:DeleteLogGroup"
+                Effect: Allow
+                Resource:
+                  - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/SSOSync
+                  - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/SSOSync:*
+              - !Ref AWS::NoValue
             - Sid: SsoAdminAccessPolicy
               Effect: Allow
               Action: 

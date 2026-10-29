@@ -62,11 +62,29 @@ delete_stack() {
   fi
 }
 
+# The SSOSync template creates the function's log group as a stack resource
+# (/aws/lambda/<function>). On stack deletion CloudFormation removes the log
+# group before the function, and a log write in between makes Lambda recreate
+# it outside the stack. The next quick-start with the same function name then
+# fails with "LogGroup ... already exists". Remove such a leftover (only "not
+# found" is ignored); called only when no quick-start stack exists.
+LOG_GROUP="/aws/lambda/$FUNCTION_NAME"
+delete_leftover_log_group() {
+  local err
+  if err=$(aws logs delete-log-group --log-group-name "$LOG_GROUP" 2>&1); then
+    echo ">>> deleted leftover log group $LOG_GROUP"
+  elif ! grep -q 'ResourceNotFoundException' <<<"$err"; then
+    echo "ERROR: could not delete log group $LOG_GROUP: $err"
+    return 1
+  fi
+}
+
 cleanup() {
   local rc=$?
   rm -rf "$WORK"
   if [ $rc -ne 0 ]; then show_events; fi
   delete_stack || { echo "ERROR: could not delete $STACK_NAME"; rc=1; }
+  delete_leftover_log_group || rc=1
   if [ $rc -eq 0 ]; then echo "=== TEST PASSED ==="; else echo "=== TEST FAILED ==="; fi
   exit $rc
 }
@@ -80,8 +98,10 @@ echo ">>> $QUICKSTART_TEMPLATE against $APP_ARN version $APP_VERSION"
 python3 "$QS_DIR/rewrite.py" --in "$DEPLOY/quick-start/$QUICKSTART_TEMPLATE" \
   --out "$WORK/template.yaml" --app-arn "$APP_ARN" --app-version "$APP_VERSION"
 
-# A stack left behind by an earlier run would hold the SSOSync* secret names.
+# A stack left behind by an earlier run would hold the SSOSync* secret names,
+# and a log group left behind by an earlier stack would block this one.
 delete_stack
+delete_leftover_log_group
 
 # The quick-start's Secrets stack creates these names; fail clearly if one
 # already exists outside it.
