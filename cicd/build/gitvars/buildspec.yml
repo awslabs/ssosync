@@ -26,7 +26,10 @@ phases:
       - export Project="${APP_Name}"
       - export Tag=`git describe --tags --abbrev=0`
       - export CommitId="$(git log -1 --pretty=%H)"
-      - export CommitMessage="$(git log -1 --pretty=%B)"
+      # Subject line only, capped: a long message (e.g. a squash merge listing
+      # every commit, ~28 KB) made CodeBuild export ALL of these variables
+      # empty, so the package step published an invalid SAR version "-".
+      - export CommitMessage="$(git log -1 --pretty=%s | cut -c1-256)"
       - export CommitAuthor="$(git log -1 --pretty=%an)"
       - export CommitAuthorEmail="$(git log -1 --pretty=%ae)"
       - export CommitHash=`git rev-parse --short HEAD`
