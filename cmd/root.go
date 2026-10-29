@@ -401,12 +401,27 @@ func getIssuerArn(identityStoreId string) string {
 	return IssuerArn
 }
 
+// lambdaAWSConfig loads the AWS SDK configuration for the function's own
+// resources: the Secrets Manager secrets and SSM parameters its environment
+// variables reference, and CodePipeline. They live in the function's region
+// (AWS_REGION, set by Lambda), which is NOT necessarily the IAM Identity Center
+// region in cfg.Region (taken from the SCIM endpoint by getRegion).
+//
+// cfg is package-level and survives between invocations of a warm container:
+// on a cold start cfg.Region is still empty, but after the first run it holds
+// the Identity Center region. Building these clients with cfg.Region therefore
+// worked once and then looked for the secrets in the wrong region on every
+// warm invocation whenever the two regions differ.
+func lambdaAWSConfig(ctx context.Context) (aws.Config, error) {
+	return aws_config.LoadDefaultConfig(ctx)
+}
+
 func configLambda() {
 	ctx := context.Background()
 
 	// Load AWS SDK configuration once
 	var err error
-	awsConfig, err = aws_config.LoadDefaultConfig(ctx, aws_config.WithRegion(cfg.Region))
+	awsConfig, err = lambdaAWSConfig(ctx)
 	if err != nil {
 		log.Fatal(errors.Wrap(err, "Failed to load AWS SDK configuration").Error())
 	}

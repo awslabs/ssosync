@@ -10,6 +10,10 @@
 - **Diagnostics for authoring maps.** Debug-level logging traces, per user, the raw Google source fields, the per-entry resolution, and the produced object — so a mapped value can be compared against the attribute map. A pre-SCIM validation pass logs a **warning** (never fails) when a mapped user/group would likely be rejected by the SCIM API (a required field empty, a multi-valued field with more than one value, a non-primary email, or `userName`/group `displayName` over length or containing disallowed control characters); the object is still sent and AWS remains the authoritative decision.
 - Attribute maps are validated at load time; an unsupported target field, unsupported source attribute, or empty key/value causes a hard failure with a detailed, actionable error listing the supported values.
 
+### Fixes
+
+- **Lambda: warm invocations failed when IAM Identity Center is in another region.** The function read its own secrets and SSM parameters (and called CodePipeline) using the Identity Center region taken from the SCIM endpoint. On a cold start that region was not yet known, so the function's region was used and the run succeeded; on every warm invocation the secrets were looked up in the Identity Center region and the run failed with `cannot read secret ... ResourceNotFoundException`. These clients now always use the function's own region.
+
 ### Breaking / behavioural changes
 
 > [!IMPORTANT]

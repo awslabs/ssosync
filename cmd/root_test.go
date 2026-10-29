@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"testing"
 
 	"ssosync/internal/config"
@@ -60,5 +61,28 @@ func TestGetIssuerId_PreservesCaseFromEndpoint(t *testing.T) {
 			cfg.SCIMEndpoint = tc.endpoint
 			assert.Equal(t, tc.want, getIssuerId())
 		})
+	}
+}
+
+// The function's own resources (secrets, SSM parameters, CodePipeline) are
+// read in the Lambda's region, never in the IAM Identity Center region, even on
+// a warm invocation where cfg.Region still holds the Identity Center region
+// from the previous run.
+func TestLambdaAWSConfig_UsesFunctionRegionNotIdentityCenterRegion(t *testing.T) {
+	t.Setenv("AWS_REGION", "us-east-2")
+	t.Setenv("AWS_DEFAULT_REGION", "")
+	t.Setenv("AWS_PROFILE", "")
+	t.Setenv("AWS_CONFIG_FILE", t.TempDir()+"/none")
+	t.Setenv("AWS_SHARED_CREDENTIALS_FILE", t.TempDir()+"/none")
+
+	prev := cfg
+	t.Cleanup(func() { cfg = prev })
+	cfg = config.New()
+
+	for _, identityCenterRegion := range []string{"", "eu-west-1"} {
+		cfg.Region = identityCenterRegion // "" cold start, "eu-west-1" warm
+		awsCfg, err := lambdaAWSConfig(context.Background())
+		assert.NoError(t, err)
+		assert.Equal(t, "us-east-2", awsCfg.Region, "cfg.Region=%q", identityCenterRegion)
 	}
 }
