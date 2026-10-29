@@ -1,0 +1,130 @@
+[
+    {
+        "UserName": "crpates@nothing2see.info",
+        "DisplayName": "Chris Pates",
+        "GivenName": "Chris",
+        "FamilyName": "Pates",
+        "Active": true,
+        "ExternalIds": [
+            {
+                "Issuer": "arn:aws:identitystore::920862271044:identitystore/d-9a671d7705/provisioningtenant/hw523407fb9-d9b9-4fc6-8568-cc8afd03d4d1",
+                "Id": "114073192003346788358"
+            }
+        ],
+        "Emails": [
+            {
+                "Value": "crpates@nothing2see.info",
+                "Type": "work",
+                "Primary": true
+            }
+        ],
+        "Addresses": [
+            {
+                "StreetAddress": "",
+                "Locality": "",
+                "Region": "",
+                "PostalCode": "",
+                "Country": "",
+                "Formatted": "",
+                "Type": "work",
+                "Primary": false
+            }
+        ]
+    },
+    {
+        "UserName": "AceHole@nothing2see.info",
+        "DisplayName": "  Rimmer",
+        "GivenName": " ",
+        "FamilyName": "Rimmer",
+        "Active": true,
+        "ExternalIds": [
+            {
+                "Issuer": "arn:aws:identitystore::920862271044:identitystore/d-9a671d7705/provisioningtenant/hw523407fb9-d9b9-4fc6-8568-cc8afd03d4d1",
+                "Id": "101090649517008403940"
+            }
+        ],
+        "Emails": [
+            {
+                "Value": "AceHole@nothing2see.info",
+                "Type": "work",
+                "Primary": true
+            }
+        ],
+        "Addresses": [
+            {
+                "StreetAddress": "",
+                "Locality": "",
+                "Region": "",
+                "PostalCode": "",
+                "Country": "",
+                "Formatted": "",
+                "Type": "work",
+                "Primary": false
+            }
+        ]
+    },
+    {
+        "UserName": "dave2@nothing2see.info",
+        "DisplayName": "Dave Lister",
+        "GivenName": "Dave",
+        "FamilyName": "Lister",
+        "Active": true,
+        "ExternalIds": [
+            {
+                "Issuer": "arn:aws:identitystore::920862271044:identitystore/d-9a671d7705/provisioningtenant/hw523407fb9-d9b9-4fc6-8568-cc8afd03d4d1",
+                "Id": "104127319331459468079"
+            }
+        ],
+        "Emails": [
+            {
+                "Value": "dave2@nothing2see.info",
+                "Type": "work",
+                "Primary": true
+            }
+        ],
+        "Addresses": [
+            {
+                "StreetAddress": "",
+                "Locality": "",
+                "Region": "",
+                "PostalCode": "",
+                "Country": "",
+                "Formatted": "",
+                "Type": "work",
+                "Primary": false
+            }
+        ]
+    },
+    {
+        "UserName": "olaf@nothing2see.info",
+        "DisplayName": "Olaf Petersen",
+        "GivenName": "Olaf",
+        "FamilyName": "Petersen",
+        "Active": true,
+        "ExternalIds": [
+            {
+                "Issuer": "arn:aws:identitystore::920862271044:identitystore/d-9a671d7705/provisioningtenant/hw523407fb9-d9b9-4fc6-8568-cc8afd03d4d1",
+                "Id": "117930356878090693739"
+            }
+        ],
+        "Emails": [
+            {
+                "Value": "olaf@nothing2see.info",
+                "Type": "work",
+                "Primary": true
+            }
+        ],
+        "Addresses": [
+            {
+                "StreetAddress": "",
+                "Locality": "",
+                "Region": "",
+                "PostalCode": "",
+                "Country": "",
+                "Formatted": "",
+                "Type": "work",
+                "Primary": false
+            }
+        ]
+    }
+]

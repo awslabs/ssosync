@@ -28,10 +28,7 @@ func TestUser_Struct(t *testing.T) {
 				Type: "work",
 			},
 		},
-		Name: struct {
-			FamilyName string `json:"familyName"`
-			GivenName  string `json:"givenName"`
-		}{
+		Name: UserName{
 			GivenName:  "Test",
 			FamilyName: "User",
 		},
@@ -159,4 +156,160 @@ func TestExternalId_UnmarshalJSON_BareString(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "x", e.Id)
 	assert.Equal(t, "", e.Issuer)
+}
+
+// minimalUser builds a User exactly the way aws.NewUser constructs a minimal
+// user (name + single primary work email + single work address + active) so the
+// test asserts the real minimal-create wire format.
+func minimalUser() User {
+	return User{
+		Schemas:  []string{"urn:ietf:params:scim:schemas:core:2.0:User"},
+		Username: "a@b.com",
+		Name: UserName{
+			FamilyName: "B",
+			GivenName:  "A",
+		},
+		DisplayName: "A B",
+		Active:      true,
+		Emails: []UserEmail{
+			{Value: "a@b.com", Type: "work", Primary: true},
+		},
+		Addresses: []UserAddress{
+			{Type: "work"},
+		},
+	}
+}
+
+// minimalGroup builds a Group the way aws.NewGroup constructs a minimal group
+// (displayName + empty members slice).
+func minimalGroup() Group {
+	return Group{
+		Schemas:     []string{"urn:ietf:params:scim:schemas:core:2.0:Group"},
+		DisplayName: "X",
+		Members:     []string{},
+	}
+}
+
+// TestUser_MarshalJSON_MinimalWireUnchanged asserts that a minimally-created
+// user serializes byte-for-byte to the pre-change SCIM wire format, proving the
+// schema expansion did not alter the minimal-create output.
+func TestUser_MarshalJSON_MinimalWireUnchanged(t *testing.T) {
+	want := `{"schemas":["urn:ietf:params:scim:schemas:core:2.0:User"],"userName":"a@b.com","name":{"familyName":"B","givenName":"A"},"displayName":"A B","active":true,"emails":[{"value":"a@b.com","type":"work","primary":true}],"addresses":[{"type":"work"}]}`
+
+	b, err := json.Marshal(minimalUser())
+	assert.NoError(t, err)
+	assert.Equal(t, want, string(b))
+}
+
+// TestGroup_MarshalJSON_MinimalWireUnchanged asserts that a minimally-created
+// group serializes byte-for-byte to the pre-change SCIM wire format.
+func TestGroup_MarshalJSON_MinimalWireUnchanged(t *testing.T) {
+	want := `{"schemas":["urn:ietf:params:scim:schemas:core:2.0:Group"],"displayName":"X","members":[]}`
+
+	b, err := json.Marshal(minimalGroup())
+	assert.NoError(t, err)
+	assert.Equal(t, want, string(b))
+}
+
+// TestUser_MarshalJSON_FullyPopulated sets every new attribute and asserts that
+// the expanded attributes (including the enterprise extension object keyed by
+// its URN) appear on the SCIM wire.
+func TestUser_MarshalJSON_FullyPopulated(t *testing.T) {
+	u := User{
+		Schemas:  []string{"urn:ietf:params:scim:schemas:core:2.0:User"},
+		Username: "a@b.com",
+		Name: UserName{
+			FamilyName:      "B",
+			GivenName:       "A",
+			Formatted:       "A B",
+			MiddleName:      "M",
+			HonorificPrefix: "Dr",
+			HonorificSuffix: "PhD",
+		},
+		DisplayName: "A B",
+		Active:      true,
+		Emails: []UserEmail{
+			{Value: "a@b.com", Type: "work", Primary: true},
+		},
+		Addresses: []UserAddress{
+			{
+				Type:          "work",
+				Formatted:     "1 Main St",
+				StreetAddress: "1 Main St",
+				Locality:      "Town",
+				Region:        "Region",
+				PostalCode:    "12345",
+				Country:       "US",
+				Primary:       true,
+			},
+		},
+		NickName:          "Al",
+		ProfileURL:        "https://example.com/a",
+		Title:             "Engineer",
+		UserType:          "Employee",
+		PreferredLanguage: "en-US",
+		Locale:            "en-US",
+		Timezone:          "America/New_York",
+		PhoneNumbers: []UserPhoneNumber{
+			{Value: "+1-555-0100", Type: "work", Primary: true},
+		},
+		Roles: []UserRole{
+			{Value: "admin", Type: "role", Primary: true},
+		},
+		Enterprise: &EnterpriseUser{
+			EmployeeNumber: "E123",
+			CostCenter:     "CC1",
+			Organization:   "Org",
+			Division:       "Div",
+			Department:     "Dept",
+			Manager:        &EnterpriseManager{Value: "mgr-id"},
+		},
+	}
+
+	b, err := json.Marshal(u)
+	assert.NoError(t, err)
+	s := string(b)
+
+	assert.Contains(t, s, `"formatted":"A B"`)
+	assert.Contains(t, s, `"middleName":"M"`)
+	assert.Contains(t, s, `"honorificPrefix":"Dr"`)
+	assert.Contains(t, s, `"honorificSuffix":"PhD"`)
+	assert.Contains(t, s, `"streetAddress":"1 Main St"`)
+	assert.Contains(t, s, `"locality":"Town"`)
+	assert.Contains(t, s, `"region":"Region"`)
+	assert.Contains(t, s, `"postalCode":"12345"`)
+	assert.Contains(t, s, `"country":"US"`)
+	assert.Contains(t, s, `"nickName":"Al"`)
+	assert.Contains(t, s, `"profileUrl":"https://example.com/a"`)
+	assert.Contains(t, s, `"title":"Engineer"`)
+	assert.Contains(t, s, `"userType":"Employee"`)
+	assert.Contains(t, s, `"preferredLanguage":"en-US"`)
+	assert.Contains(t, s, `"locale":"en-US"`)
+	assert.Contains(t, s, `"timezone":"America/New_York"`)
+	assert.Contains(t, s, `"phoneNumbers":[{"value":"+1-555-0100","type":"work","primary":true}]`)
+	assert.Contains(t, s, `"roles":[{"value":"admin","type":"role","primary":true}]`)
+	assert.Contains(t, s, `"urn:ietf:params:scim:schemas:extension:enterprise:2.0:User":{`)
+	assert.Contains(t, s, `"employeeNumber":"E123"`)
+	assert.Contains(t, s, `"manager":{"value":"mgr-id"}`)
+}
+
+// TestGroup_MarshalJSON_NoExtraAttributes confirms that the Group schema emits
+// no additional attributes (for example a description) beyond the AWS SCIM
+// supported set, even when the native group is fully built.
+func TestGroup_MarshalJSON_NoExtraAttributes(t *testing.T) {
+	g := Group{
+		ID:          "group-123",
+		Schemas:     []string{"urn:ietf:params:scim:schemas:core:2.0:Group"},
+		DisplayName: "Test Group",
+		ExternalId:  ExternalId{Id: "ext-1"},
+		Members:     []string{"user-1"},
+	}
+
+	b, err := json.Marshal(g)
+	assert.NoError(t, err)
+	s := string(b)
+
+	assert.NotContains(t, s, `"description"`)
+	assert.Contains(t, s, `"displayName":"Test Group"`)
+	assert.Contains(t, s, `"externalId":"ext-1"`)
 }

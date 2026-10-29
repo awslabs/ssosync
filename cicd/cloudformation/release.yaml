@@ -283,7 +283,9 @@ Resources:
               Configuration:
                 ProjectName: !Ref CodeBuildPackage
                 PrimarySource: Source
-                EnvironmentVariables: '[{"name":"GitTag","value":"#{Git.Tag}","type":"PLAINTEXT"},{"name":"GitCommit","value":"#{Git.CommitId}","type":"PLAINTEXT"}]'
+                # GitVersionHash builds the staging SAR version (<tag>-<hash>); the
+                # package buildspec publishes with it.
+                EnvironmentVariables: '[{"name":"GitTag","value":"#{Git.Tag}","type":"PLAINTEXT"},{"name":"GitVersionHash","value":"#{Git.CommitHash}","type":"PLAINTEXT"},{"name":"GitCommit","value":"#{Git.CommitId}","type":"PLAINTEXT"}]'
               OutputArtifacts:
                 - Name: Packaged
               InputArtifacts:
@@ -367,6 +369,24 @@ Resources:
                 - Name: SingleStack
 
         - Name: Release-Publicly
+          # Skip (the execution then succeeds) instead of failing when this
+          # commit is not a release: the stage is entered only when
+          # Git.IsRelease (from the Git-Metadata action) is "true". The
+          # tag-check action below stays as a second guard.
+          BeforeEntry:
+            Conditions:
+              - Result: SKIP
+                Rules:
+                  - Name: IsReleaseTag
+                    RuleTypeId:
+                      Category: Rule
+                      Owner: AWS
+                      Provider: VariableCheck
+                      Version: '1'
+                    Configuration:
+                      Variable: '#{Git.IsRelease}'
+                      Operator: EQ
+                      Value: 'true'
           Actions:
             - Name: Does_this_commit_have_a_release_tag
               ActionTypeId:
@@ -1037,6 +1057,13 @@ Resources:
               Effect: Allow
               Resource:
               - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/SSOSync/*
+            # Staging records the customer id secret's Arn (not its value) in
+            # deploy/quickstart.json for the quick-start tests.
+            - Action:
+              - 'secretsmanager:DescribeSecret'
+              Effect: Allow
+              Resource:
+              - !Sub arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:PipelineGoogleCustomerId-*
       
   CodeBuildTestRole:
     Type: AWS::IAM::Role

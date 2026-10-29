@@ -19,6 +19,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"reflect"
 	"strings"
 	"time"
 
@@ -334,8 +335,14 @@ func (s *syncGSuite) LegacySyncUsers(query string) error {
 				awsUser.Name.GivenName != u.Name.GivenName ||
 				awsUser.Name.FamilyName != u.Name.FamilyName {
 				ll.Debug("update")
-				if _, err := s.aws.UpdateUser(aws.UpdateUser(
-					awsUser.ID, u.Name.GivenName, u.Name.FamilyName, u.PrimaryEmail, !u.Suspended, u.Id)); err != nil {
+				if _, err := s.aws.UpdateUser(aws.UpdateUser(&interfaces.User{
+					ID:          awsUser.ID,
+					Username:    u.PrimaryEmail,
+					Name:        interfaces.UserName{GivenName: u.Name.GivenName, FamilyName: u.Name.FamilyName},
+					DisplayName: strings.Join([]string{u.Name.GivenName, u.Name.FamilyName}, " "),
+					Active:      !u.Suspended,
+					ExternalId:  interfaces.ExternalId{Id: u.Id},
+				})); err != nil {
 					return err
 				}
 			} else {
@@ -346,33 +353,61 @@ func (s *syncGSuite) LegacySyncUsers(query string) error {
 			if len(awsUser.ExternalId.Id) > 0 {
 				if s.cfg.ForceExternalIdUpdate {
 					ll.WithField("awsUser", awsUser).Warn("New google user with the same primary email address but a different id, Force option set, so retaining the existing user and updating its ExternalId. Caution this may lead to inherited privileges.")
-					if _, err := s.aws.UpdateUser(aws.UpdateUser(
-						awsUser.ID, u.Name.GivenName, u.Name.FamilyName, u.PrimaryEmail, !u.Suspended, u.Id)); err != nil {
+					if _, err := s.aws.UpdateUser(aws.UpdateUser(&interfaces.User{
+						ID:          awsUser.ID,
+						Username:    u.PrimaryEmail,
+						Name:        interfaces.UserName{GivenName: u.Name.GivenName, FamilyName: u.Name.FamilyName},
+						DisplayName: strings.Join([]string{u.Name.GivenName, u.Name.FamilyName}, " "),
+						Active:      !u.Suspended,
+						ExternalId:  interfaces.ExternalId{Id: u.Id},
+					})); err != nil {
 						return err
 					}
 				} else {
 					ll.WithField("awsUser", awsUser).Warn("New google user with the same primary email address but a different id, delete AWS user and create a new AWS user.")
-					if err := s.aws.DeleteUser(aws.UpdateUser(
-						awsUser.ID, awsUser.Name.GivenName, awsUser.Name.FamilyName, awsUser.Username, awsUser.Active, awsUser.ExternalId.Id)); err != nil {
+					if err := s.aws.DeleteUser(aws.UpdateUser(&interfaces.User{
+						ID:          awsUser.ID,
+						Username:    awsUser.Username,
+						Name:        interfaces.UserName{GivenName: awsUser.Name.GivenName, FamilyName: awsUser.Name.FamilyName},
+						DisplayName: strings.Join([]string{awsUser.Name.GivenName, awsUser.Name.FamilyName}, " "),
+						Active:      awsUser.Active,
+						ExternalId:  interfaces.ExternalId{Id: awsUser.ExternalId.Id},
+					})); err != nil {
 						return err
 					}
-					if _, err := s.aws.CreateUser(aws.NewUser(
-						u.Name.GivenName, u.Name.FamilyName, u.PrimaryEmail, !u.Suspended, u.Id)); err != nil {
+					if _, err := s.aws.CreateUser(aws.NewUser(&interfaces.User{
+						Username:    u.PrimaryEmail,
+						Name:        interfaces.UserName{GivenName: u.Name.GivenName, FamilyName: u.Name.FamilyName},
+						DisplayName: strings.Join([]string{u.Name.GivenName, u.Name.FamilyName}, " "),
+						Active:      !u.Suspended,
+						ExternalId:  interfaces.ExternalId{Id: u.Id},
+					})); err != nil {
 						return err
 					}
 				}
 			} else {
 				// Existing user with no ExternalId: adopt it and sync in place.
 				ll.Debug("A local user that matches the primary email address of a google user has been found, adopting to be synced.")
-				if _, err := s.aws.UpdateUser(aws.UpdateUser(
-					awsUser.ID, u.Name.GivenName, u.Name.FamilyName, u.PrimaryEmail, !u.Suspended, u.Id)); err != nil {
+				if _, err := s.aws.UpdateUser(aws.UpdateUser(&interfaces.User{
+					ID:          awsUser.ID,
+					Username:    u.PrimaryEmail,
+					Name:        interfaces.UserName{GivenName: u.Name.GivenName, FamilyName: u.Name.FamilyName},
+					DisplayName: strings.Join([]string{u.Name.GivenName, u.Name.FamilyName}, " "),
+					Active:      !u.Suspended,
+					ExternalId:  interfaces.ExternalId{Id: u.Id},
+				})); err != nil {
 					return err
 				}
 			}
 		} else {
 			ll.Info("creating user")
-			if _, err := s.aws.CreateUser(aws.NewUser(
-				u.Name.GivenName, u.Name.FamilyName, u.PrimaryEmail, !u.Suspended, u.Id)); err != nil {
+			if _, err := s.aws.CreateUser(aws.NewUser(&interfaces.User{
+				Username:    u.PrimaryEmail,
+				Name:        interfaces.UserName{GivenName: u.Name.GivenName, FamilyName: u.Name.FamilyName},
+				DisplayName: strings.Join([]string{u.Name.GivenName, u.Name.FamilyName}, " "),
+				Active:      !u.Suspended,
+				ExternalId:  interfaces.ExternalId{Id: u.Id},
+			})); err != nil {
 				return err
 			}
 		}
@@ -403,8 +438,14 @@ func (s *syncGSuite) LegacySyncUsers(query string) error {
 			continue
 		}
 		log.WithField("awsUser", awsUser).Info("deleting user")
-		if err := s.aws.DeleteUser(aws.UpdateUser(
-			awsUser.ID, awsUser.Name.GivenName, awsUser.Name.FamilyName, awsUser.Username, awsUser.Active, awsUser.ExternalId.Id)); err != nil {
+		if err := s.aws.DeleteUser(aws.UpdateUser(&interfaces.User{
+			ID:          awsUser.ID,
+			Username:    awsUser.Username,
+			Name:        interfaces.UserName{GivenName: awsUser.Name.GivenName, FamilyName: awsUser.Name.FamilyName},
+			DisplayName: strings.Join([]string{awsUser.Name.GivenName, awsUser.Name.FamilyName}, " "),
+			Active:      awsUser.Active,
+			ExternalId:  interfaces.ExternalId{Id: awsUser.ExternalId.Id},
+		})); err != nil {
 			return err
 		}
 	}
@@ -474,7 +515,11 @@ func (s *syncGSuite) LegacySyncGroups(query string) error {
 			// Matched by ExternalId (Google id). Update if the display name differs.
 			if awsGroup.DisplayName != g.Email {
 				log.Debug("update")
-				if _, err := s.aws.UpdateGroup(aws.UpdateGroup(awsGroup.ID, g.Email, g.Id)); err != nil {
+				if _, err := s.aws.UpdateGroup(aws.UpdateGroup(&interfaces.Group{
+					ID:          awsGroup.ID,
+					DisplayName: g.Email,
+					ExternalId:  interfaces.ExternalId{Id: g.Id},
+				})); err != nil {
 					return err
 				}
 				awsGroup.DisplayName = g.Email
@@ -486,14 +531,21 @@ func (s *syncGSuite) LegacySyncGroups(query string) error {
 			// Matched by display name but not by ExternalId: update to backfill
 			// (or correct) the ExternalId.
 			log.Debug("update")
-			if _, err := s.aws.UpdateGroup(aws.UpdateGroup(awsGroup.ID, g.Email, g.Id)); err != nil {
+			if _, err := s.aws.UpdateGroup(aws.UpdateGroup(&interfaces.Group{
+				ID:          awsGroup.ID,
+				DisplayName: g.Email,
+				ExternalId:  interfaces.ExternalId{Id: g.Id},
+			})); err != nil {
 				return err
 			}
 			awsGroup.ExternalId = interfaces.ExternalId{Id: g.Id}
 			group = awsGroup
 		} else {
 			log.Info("Creating group in AWS")
-			newGroup := aws.NewGroup(g.Email, g.Id)
+			newGroup := aws.NewGroup(&interfaces.Group{
+				DisplayName: g.Email,
+				ExternalId:  interfaces.ExternalId{Id: g.Id},
+			})
 			createdGroup, err := s.aws.CreateGroup(newGroup)
 			if err != nil {
 				return err
@@ -577,7 +629,11 @@ func (s *syncGSuite) LegacySyncGroups(query string) error {
 			continue
 		}
 		log.WithField("awsGroup", awsGroup).Info("deleting group")
-		if err := s.aws.DeleteGroup(aws.UpdateGroup(awsGroup.ID, awsGroup.DisplayName, awsGroup.ExternalId.Id)); err != nil {
+		if err := s.aws.DeleteGroup(aws.UpdateGroup(&interfaces.Group{
+			ID:          awsGroup.ID,
+			DisplayName: awsGroup.DisplayName,
+			ExternalId:  interfaces.ExternalId{Id: awsGroup.ExternalId.Id},
+		})); err != nil {
 			return err
 		}
 	}
@@ -655,8 +711,12 @@ func (s *syncGSuite) Sync(queryGroups string, queryUsers string) error {
 	}
 
 	// create list of changes by operations
-	addAWSUsers, delAWSUsers, updateAWSUsers, _ := getUserOperations(awsUsers, googleUsers, s.cfg.ForceExternalIdUpdate, s.cfg.RetainUnmatched, s.cfg.IssuerArn)
-	addAWSGroups, delAWSGroups, updateAWSGroups, unchangedAWSGroups := getGroupOperations(awsGroups, googleGroups, s.cfg.ForceExternalIdUpdate, s.cfg.RetainUnmatched, s.cfg.IssuerArn)
+	// Map the Google users once; user and group-membership operations share
+	// the same mapped identities.
+	mappedGoogleUsers := mapGoogleUsers(googleUsers, s.cfg.AttributeMap.User)
+	addAWSUsers, delAWSUsers, updateAWSUsers, _ := getUserOperationsMapped(awsUsers, mappedGoogleUsers, s.cfg)
+	memberIDs := newMemberIdentities(mappedGoogleUsers, s.cfg.AttributeMap.User, awsUsers)
+	addAWSGroups, delAWSGroups, updateAWSGroups, unchangedAWSGroups := getGroupOperations(awsGroups, googleGroups, s.cfg, s.cfg.AttributeMap.Group)
 
 	// update aws users (updated in google)
 	log.Debug("updating aws users updated in google")
@@ -665,13 +725,11 @@ func (s *syncGSuite) Sync(queryGroups string, queryUsers string) error {
 		log := log.WithFields(log.Fields{"user": awsUser.Username})
 
 		log.Warn("updating user")
-		_, err = s.aws.UpdateUser(aws.UpdateUser(
-			awsUser.ID,
-			awsUser.Name.GivenName,
-			awsUser.Name.FamilyName,
-			awsUser.Username,
-			awsUser.Active,
-			awsUser.ExternalId.Id))
+		// awsUser is already the desired *interfaces.User produced by
+		// getUserOperation(s); pass it straight through so all supported
+		// attributes reach SCIM rather than re-unpacking only the scalar fields.
+		logFindings(validateUser(awsUser), "user", userValidateID(awsUser))
+		_, err = s.aws.UpdateUser(awsUser)
 		if err != nil {
 			log.WithField("user", awsUser).Error("error updating user")
 			return err
@@ -685,6 +743,7 @@ func (s *syncGSuite) Sync(queryGroups string, queryUsers string) error {
 		log := log.WithFields(log.Fields{"user": awsUser.Username})
 
 		log.Info("creating user")
+		logFindings(validateUser(awsUser), "user", userValidateID(awsUser))
 		_, err := s.aws.CreateUser(awsUser)
 		if err != nil {
 			errHTTP := new(aws.ErrHTTPNotOK)
@@ -704,6 +763,7 @@ func (s *syncGSuite) Sync(queryGroups string, queryUsers string) error {
 		log.WithFields(log.Fields{"group": awsGroup}).Debug("Creating")
 
 		log.WithFields(log.Fields{"Name": awsGroup.DisplayName}).Info("creating group")
+		logFindings(validateGroup(awsGroup), "group", groupValidateID(awsGroup))
 		awsGroup, err := s.aws.CreateGroup(awsGroup)
 		if err != nil {
 			log.Error("creating group")
@@ -713,9 +773,8 @@ func (s *syncGSuite) Sync(queryGroups string, queryUsers string) error {
 		// add members of the new group
 		for _, googleUser := range googleGroupsUsers[awsGroup.DisplayName] {
 
-			// equivalent aws user of google user on the fly
-			log.WithField("email:", googleUser.PrimaryEmail).Debug("aws.FindUserByEmail() finding user")
-			awsUserFull, err := s.aws.FindUserByEmail(googleUser.PrimaryEmail)
+			// equivalent aws user of the google user, by mapped identity
+			awsUserFull, err := s.resolveAWSMember(memberIDs, googleUser)
 			if err != nil {
 				return err
 			}
@@ -735,6 +794,7 @@ func (s *syncGSuite) Sync(queryGroups string, queryUsers string) error {
 		log.WithFields(log.Fields{"group": awsGroup}).Debug("Updating")
 
 		log.WithFields(log.Fields{"Name": awsGroup.DisplayName}).Info("updating group")
+		logFindings(validateGroup(awsGroup), "group", groupValidateID(awsGroup))
 		awsGroup, err := s.aws.UpdateGroup(awsGroup)
 		if err != nil {
 			log.Error("upating group")
@@ -744,9 +804,8 @@ func (s *syncGSuite) Sync(queryGroups string, queryUsers string) error {
 		// add members of the new group
 		for _, googleUser := range googleGroupsUsers[awsGroup.DisplayName] {
 
-			// equivalent aws user of google user on the fly
-			log.WithField("email:", googleUser.PrimaryEmail).Debug("aws.FindUserByEmail() finding user")
-			awsUserFull, err := s.aws.FindUserByEmail(googleUser.PrimaryEmail)
+			// equivalent aws user of the google user, by mapped identity
+			awsUserFull, err := s.resolveAWSMember(memberIDs, googleUser)
 			if err != nil {
 				return err
 			}
@@ -760,7 +819,7 @@ func (s *syncGSuite) Sync(queryGroups string, queryUsers string) error {
 	}
 
 	// list of users to to be removed in aws groups
-	addUsersToGroup, deleteUsersFromGroup, unchangedUsersInGroup, err := s.getGroupUsersOperations(googleGroupsUsers, awsGroupsUsers)
+	addUsersToGroup, deleteUsersFromGroup, unchangedUsersInGroup, err := s.getGroupUsersOperations(googleGroupsUsers, awsGroupsUsers, memberIDs)
 	if err != nil {
 		return err
 	}
@@ -1262,13 +1321,120 @@ func logExternalIdsRead(kind, name, awsId string, externalIds []identitystore_ty
 	}).Debug(ExternalIdsReadMsg)
 }
 
-// getGroupOperation returns the action to perform for this group and the desired group state
-func getGroupOperation(awsGroup *interfaces.Group, googleGroup *admin.Group, forceExternalIdUpdate bool, retainUnmatched bool, issuerArn string) (action OperationAction, group *interfaces.Group) {
+// usersEqual reports whether two users are equal for the purpose of the
+// Equal-vs-Update decision in getUserOperation.
+//
+// The compared set is the CANONICAL supported SCIM attribute set — the same set
+// the aws constructors serialize (see aws.buildUser); the two are kept in
+// lock-step so that a difference in any supported field triggers an Update and
+// the subsequent write makes AWS consistent with Google (clear-to-consistent).
+// The compared fields are:
+//
+//	Username, Name (FamilyName, GivenName, Formatted, MiddleName,
+//	HonorificPrefix, HonorificSuffix), DisplayName, Active, Emails, Addresses,
+//	NickName, ProfileURL, Title, UserType, PreferredLanguage, Locale, Timezone,
+//	PhoneNumbers, Roles, Enterprise.
+//
+// ID (record identity), Schemas (structural) and ExternalId (correlation
+// identity, handled by getUserOperation's branch logic) are deliberately NOT
+// compared here.
+//
+// Both operands are first normalized through aws.UpdateUser (the same builder
+// the desired state is written with) so the comparison basis is identical to
+// what is actually persisted. This matters for the Emails/Addresses derivation:
+// the builder synthesizes a primary work email (== Username) and a work address
+// when the input carries none, so a steady-state managed user — whose AWS record
+// carries those synthesized values while the default-mapped Google object does
+// not — compares Equal instead of spuriously reporting an Update every run. A
+// genuine difference in any supported field still trips Update.
+//
+// The AWS side is read back from the Identity Store by ConvertSdkUserObjToNative
+// (Active from SCIM). PhoneNumbers, Roles, Enterprise and Enterprise.Manager are
+// omitempty on the SCIM wire, so empty and absent are equivalent and are
+// normalized before comparing; this cannot hide a genuine value difference.
+// Values are compared verbatim (no case folding).
+func usersEqual(a, b *interfaces.User) bool {
+	na := aws.UpdateUser(a)
+	nb := aws.UpdateUser(b)
+	normalizeOmitEmpty(na)
+	normalizeOmitEmpty(nb)
+	return na.Username == nb.Username &&
+		na.Name == nb.Name &&
+		na.DisplayName == nb.DisplayName &&
+		na.Active == nb.Active &&
+		reflect.DeepEqual(na.Emails, nb.Emails) &&
+		reflect.DeepEqual(na.Addresses, nb.Addresses) &&
+		na.NickName == nb.NickName &&
+		na.ProfileURL == nb.ProfileURL &&
+		na.Title == nb.Title &&
+		na.UserType == nb.UserType &&
+		na.PreferredLanguage == nb.PreferredLanguage &&
+		na.Locale == nb.Locale &&
+		na.Timezone == nb.Timezone &&
+		reflect.DeepEqual(na.PhoneNumbers, nb.PhoneNumbers) &&
+		reflect.DeepEqual(na.Roles, nb.Roles) &&
+		reflect.DeepEqual(na.Enterprise, nb.Enterprise)
+}
+
+// normalizeOmitEmpty sets empty omitempty collections/objects to nil so absent
+// and empty compare equal. u must be a copy owned by the caller (as returned by
+// aws.UpdateUser); Enterprise is replaced with a copy rather than mutated,
+// because aws.UpdateUser copies that pointer shallowly from the original user.
+func normalizeOmitEmpty(u *interfaces.User) {
+	if len(u.PhoneNumbers) == 0 {
+		u.PhoneNumbers = nil
+	}
+	if len(u.Roles) == 0 {
+		u.Roles = nil
+	}
+	if u.Enterprise != nil {
+		e := *u.Enterprise
+		if e.Manager != nil && e.Manager.Value == "" {
+			e.Manager = nil
+		}
+		if e == (interfaces.EnterpriseUser{}) {
+			u.Enterprise = nil
+		} else {
+			u.Enterprise = &e
+		}
+	}
+}
+
+// groupsEqual reports whether two groups are equal for the purpose of the
+// Equal-vs-Update decision in getGroupOperation.
+//
+// DisplayName is the only mutable SCIM group attribute AWS IAM Identity Center
+// accepts (ExternalId is correlation identity and Members are handled by the
+// membership-sync path), so comparing DisplayName alone is intentional and
+// complete.
+func groupsEqual(a, b *interfaces.Group) bool {
+	return a.DisplayName == b.DisplayName
+}
+
+// getGroupOperation returns the action to perform for this group and the desired
+// group state.
+//
+// googleGroup is the ALREADY-MAPPED interface view of the Google group (produced
+// by google.MapFromGoogleGroup), or nil to signal "not found in Google". Reading
+// the mapped object here (DisplayName, ExternalId.Id) instead of the raw
+// admin.Group keeps all Google field selection in the mapper. With the default
+// map the mapped DisplayName == admin.Group.Name and ExternalId.Id ==
+// admin.Group.Id, so every decision is identical to pre-change.
+func getGroupOperation(awsGroup *interfaces.Group, googleGroup *interfaces.Group, forceExternalIdUpdate bool, retainUnmatched bool, issuerArn string) (action OperationAction, group *interfaces.Group) {
 	log.Debug("getGroupOperation()")
+
+	// desiredFromGoogle builds the desired AWS group state from the mapped Google
+	// group, stamping the matched AWS record ID so the update targets the right
+	// record. DisplayName and ExternalId come from the mapped Google group.
+	desiredFromGoogle := func() *interfaces.Group {
+		desired := *googleGroup
+		desired.ID = awsGroup.ID
+		return aws.UpdateGroup(&desired)
+	}
 
 	if awsGroup == nil {
 		// Group doesn't exist
-		return Create, aws.NewGroup(googleGroup.Name, googleGroup.Id)
+		return Create, aws.NewGroup(googleGroup)
 	}
 
 	// Match on the ExternalId issued by this SCIM tenant when the group has
@@ -1280,18 +1446,18 @@ func getGroupOperation(awsGroup *interfaces.Group, googleGroup *admin.Group, for
 		if googleGroup == nil {
 			if retainUnmatched {
 				// group not found in Google but retain flag enabled
-				return Retain, aws.UpdateGroup(awsGroup.ID, awsGroup.DisplayName, awsGroup.ExternalId.Id)
+				return Retain, aws.UpdateGroup(awsGroup)
 			}
 			// group not found in Google
 			return Delete, awsGroup
 		}
 		// matching Google group found, adopt the local group
-		return AdoptLocal, aws.UpdateGroup(awsGroup.ID, googleGroup.Name, googleGroup.Id)
+		return AdoptLocal, desiredFromGoogle()
 	}
 
 	googleGroupId := ""
 	if googleGroup != nil {
-		googleGroupId = googleGroup.Id
+		googleGroupId = googleGroup.ExternalId.Id
 	}
 	logIssuerCheck("group", awsGroup.DisplayName, awsGroup.ID, awsGroup.ExternalId, awsGroup.ExternalIds, selectedBy, googleGroupId, issuerArn)
 
@@ -1301,42 +1467,46 @@ func getGroupOperation(awsGroup *interfaces.Group, googleGroup *admin.Group, for
 			// group not found in Google
 			return Delete, awsGroup
 		}
-		if awsGroup.ExternalId.Id == googleGroup.Id {
+		if awsGroup.ExternalId.Id == googleGroup.ExternalId.Id {
 			// group matches on ExternalId
-			if awsGroup.DisplayName == googleGroup.Name {
+			if groupsEqual(awsGroup, googleGroup) {
 				// no action required
 				return Equal, awsGroup
 			}
 			// group needs updating
-			return Update, aws.UpdateGroup(awsGroup.ID, googleGroup.Name, googleGroup.Id)
+			return Update, desiredFromGoogle()
 		}
 		// both groups exist but ExternalId doesn't match
 		// have they been deleted and recreated?
 		if forceExternalIdUpdate {
 			// Force Retention of existing group and update External Id to match
 			// this may lead to privilege inheritence
-			return UpdateForced, aws.UpdateGroup(awsGroup.ID, googleGroup.Name, googleGroup.Id)
+			return UpdateForced, desiredFromGoogle()
 		}
 		// Do the safe thing and delete the existing group and create a new one to avoid privilege inheritence
-		return Recreate, aws.NewGroup(googleGroup.Name, googleGroup.Id)
+		return Recreate, aws.NewGroup(googleGroup)
 	}
 
 	// There must be an ExternalId setup, its come from a different SCIM provisioning instance/external IdP
 	if googleGroup == nil {
 		if retainUnmatched {
 			// group not found in Google but retain flag enabled
-			return Retain, aws.UpdateGroup(awsGroup.ID, awsGroup.DisplayName, awsGroup.ExternalId.Id)
+			return Retain, aws.UpdateGroup(awsGroup)
 		}
 		// group not found in Google
 		return Delete, awsGroup
 	}
-	return AdoptForeign, aws.UpdateGroup(awsGroup.ID, googleGroup.Name, googleGroup.Id)
+	return AdoptForeign, desiredFromGoogle()
 }
 
 // getGroupOperations returns the groups of AWS that must be added, deleted, updated, are equals and retained
-func getGroupOperations(awsGroups []*interfaces.Group, googleGroups []*admin.Group, forceExternalIdUpdate bool, retainUnmatched bool, issuerArn string) (add []*interfaces.Group, delete []*interfaces.Group, update []*interfaces.Group, equals []*interfaces.Group) {
+func getGroupOperations(awsGroups []*interfaces.Group, googleGroups []*admin.Group, cfg *config.Config, attrMap config.AttributeMap) (add []*interfaces.Group, delete []*interfaces.Group, update []*interfaces.Group, equals []*interfaces.Group) {
 
 	log.Debug("getGroupOperations()")
+
+	forceExternalIdUpdate := cfg.ForceExternalIdUpdate
+	retainUnmatched := cfg.RetainUnmatched
+	issuerArn := cfg.IssuerArn
 	log.WithFields(log.Fields{"kind": "group", "expectedIssuer": issuerArn, "issuerCheckDisabled": issuerArn == ""}).Debug(ExpectedIssuerMsg)
 
 	stats := struct {
@@ -1345,8 +1515,11 @@ func getGroupOperations(awsGroups []*interfaces.Group, googleGroups []*admin.Gro
 
 	awsMap := make(map[string]*interfaces.Group)
 	awsMapExtId := make(map[string]*interfaces.Group)
-	googleMap := make(map[string]*admin.Group)
-	googleMapId := make(map[string]*admin.Group)
+	// The google-side lookup maps hold the MAPPED interface view of each Google
+	// group (via google.MapFromGoogleGroup using the configured map passed in via
+	// attrMap), so all Google field selection lives in the mapper.
+	googleMap := make(map[string]*interfaces.Group)
+	googleMapId := make(map[string]*interfaces.Group)
 
 	for _, awsGroup := range awsGroups {
 		// Index (and later match) on the ExternalId issued by this SCIM tenant.
@@ -1357,25 +1530,33 @@ func getGroupOperations(awsGroups []*interfaces.Group, googleGroups []*admin.Gro
 		}
 	}
 
+	// Map each Google group to its interface view exactly once, populate the
+	// google-side lookup maps, and perform the AWS lookup + op call using that
+	// same mapped pointer.
 	for _, gGroup := range googleGroups {
-		googleMap[strings.ToLower(gGroup.Name)] = gGroup
-		googleMapId[gGroup.Id] = gGroup
-	}
+		mapped, err := google.MapFromGoogleGroup(gGroup, attrMap)
+		if err != nil {
+			// The attribute map is validated at load time, so a mapping error
+			// here is an internal invariant breach, not user input. Abort rather
+			// than proceed with a half-mapped group.
+			log.WithError(err).Fatal("getGroupOperations(): failed to map Google group")
+		}
+		mappedGroup := mapped
+		googleMap[strings.ToLower(mappedGroup.DisplayName)] = &mappedGroup
+		googleMapId[mappedGroup.ExternalId.Id] = &mappedGroup
 
-	// Look for Google groups in AWS
-	for _, gGroup := range googleGroups {
 		var awsGroup *interfaces.Group
 
-		if match, found := awsMapExtId[gGroup.Id]; found {
+		if match, found := awsMapExtId[mappedGroup.ExternalId.Id]; found {
 			// Found by ExternalId.Id
 			awsGroup = match
-		} else if match, found := awsMap[strings.ToLower(gGroup.Name)]; found {
+		} else if match, found := awsMap[strings.ToLower(mappedGroup.DisplayName)]; found {
 			// Found by DisplayName
 			awsGroup = match
 		}
 
 		// awsGroup is nil when the Google group was not found in AWS at all
-		action, group := getGroupOperation(awsGroup, gGroup, forceExternalIdUpdate, retainUnmatched, issuerArn)
+		action, group := getGroupOperation(awsGroup, &mappedGroup, forceExternalIdUpdate, retainUnmatched, issuerArn)
 
 		log.WithField("group", group).Info(action)
 
@@ -1451,13 +1632,43 @@ func getGroupOperations(awsGroups []*interfaces.Group, googleGroups []*admin.Gro
 	return add, delete, update, equals
 }
 
-// getUserOperation returns the action to perform for this user and the desired user state
-func getUserOperation(awsUser *interfaces.User, googleUser *admin.User, forceExternalIdUpdate bool, retainUnmatched bool, issuerArn string) (action OperationAction, user *interfaces.User) {
+// getUserOperation returns the action to perform for this user and the desired
+// user state.
+//
+// googleUser is the ALREADY-MAPPED interface view of the Google user (produced
+// by google.MapFromGoogleUser), or nil to signal "not found in Google". Reading
+// the mapped object here (Username, Active, Name, ExternalId.Id) instead of the
+// raw admin.User keeps all Google field selection and the suspended->Active
+// inversion in the mapper. With the default map the mapped values equal the
+// pre-change raw values (Username == primaryEmail, Active == !suspended,
+// ExternalId.Id == admin.User.Id), so every decision is identical to pre-change.
+func getUserOperation(awsUser *interfaces.User, googleUser *interfaces.User, forceExternalIdUpdate bool, retainUnmatched bool, issuerArn string) (action OperationAction, user *interfaces.User) {
 	log.Debug("getUserOperation()")
+
+	// desiredFromGoogle builds the desired AWS user state from the mapped Google
+	// user, stamping the matched AWS record ID so the update targets the right
+	// record. The desired object is fully determined by the mapped Google user
+	// (clear-to-consistent): any supported SCIM field the attribute map does not
+	// populate stays zero here and is therefore written to AWS as cleared. No
+	// supported field is copied from the pre-existing awsUser.
+	desiredFromGoogle := func() *interfaces.User {
+		desired := *googleUser
+		desired.ID = awsUser.ID
+		return aws.UpdateUser(&desired)
+	}
+
+	// desiredRetain describes the EXISTING aws user with Active=false. The Retain
+	// branches intentionally keep the current AWS state (minus activation) rather
+	// than making it consistent with Google, so they build from awsUser.
+	desiredRetain := func() *interfaces.User {
+		desired := *awsUser
+		desired.Active = false
+		return aws.UpdateUser(&desired)
+	}
 
 	if awsUser == nil {
 		// User doesn't exist
-		return Create, aws.NewUser(googleUser.Name.GivenName, googleUser.Name.FamilyName, googleUser.PrimaryEmail, !googleUser.Suspended, googleUser.Id)
+		return Create, aws.NewUser(googleUser)
 	}
 
 	// Match on the ExternalId issued by this SCIM tenant when the user has
@@ -1469,18 +1680,18 @@ func getUserOperation(awsUser *interfaces.User, googleUser *admin.User, forceExt
 		if googleUser == nil {
 			if retainUnmatched {
 				// user not found in Google but retain flag enabled
-				return Retain, aws.UpdateUser(awsUser.ID, awsUser.Name.GivenName, awsUser.Name.FamilyName, awsUser.Username, false, awsUser.ExternalId.Id)
+				return Retain, desiredRetain()
 			}
 			// user not found in Google
 			return Delete, awsUser
 		}
 		// matching Google user found, adopt the local user
-		return AdoptLocal, aws.UpdateUser(awsUser.ID, googleUser.Name.GivenName, googleUser.Name.FamilyName, googleUser.PrimaryEmail, !googleUser.Suspended, googleUser.Id)
+		return AdoptLocal, desiredFromGoogle()
 	}
 
 	googleUserId := ""
 	if googleUser != nil {
-		googleUserId = googleUser.Id
+		googleUserId = googleUser.ExternalId.Id
 	}
 	logIssuerCheck("user", awsUser.Username, awsUser.ID, awsUser.ExternalId, awsUser.ExternalIds, selectedBy, googleUserId, issuerArn)
 
@@ -1490,45 +1701,71 @@ func getUserOperation(awsUser *interfaces.User, googleUser *admin.User, forceExt
 			// user not found in Google
 			return Delete, awsUser
 		}
-		if awsUser.ExternalId.Id == googleUser.Id {
+		if awsUser.ExternalId.Id == googleUser.ExternalId.Id {
 			// user matches on ExternalId
-			if awsUser.Active == !googleUser.Suspended &&
-				awsUser.Username == googleUser.PrimaryEmail &&
-				awsUser.Name.GivenName == googleUser.Name.GivenName &&
-				awsUser.Name.FamilyName == googleUser.Name.FamilyName {
+			if usersEqual(awsUser, googleUser) {
 				// no action required
 				return Equal, awsUser
 			}
 			// user needs updating
-			return Update, aws.UpdateUser(awsUser.ID, googleUser.Name.GivenName, googleUser.Name.FamilyName, googleUser.PrimaryEmail, !googleUser.Suspended, googleUser.Id)
+			return Update, desiredFromGoogle()
 		}
 		// both users exist but ExternalId doesn't match
 		// have they been deleted and recreated?
 		if forceExternalIdUpdate {
 			// Force Retention of existing user and update External Id to match
 			// this may lead to privilege inheritence
-			return UpdateForced, aws.UpdateUser(awsUser.ID, googleUser.Name.GivenName, googleUser.Name.FamilyName, googleUser.PrimaryEmail, !googleUser.Suspended, googleUser.Id)
+			return UpdateForced, desiredFromGoogle()
 		}
 		// Do the safe thing and delete the existing user and create a new one to avoid privilege inheritence
-		return Recreate, aws.UpdateUser(awsUser.ID, googleUser.Name.GivenName, googleUser.Name.FamilyName, googleUser.PrimaryEmail, !googleUser.Suspended, googleUser.Id)
+		return Recreate, desiredFromGoogle()
 	}
 
 	// There must be an ExternalId setup, its come from a different SCIM provisioning instance/external IdP
 	if googleUser == nil {
 		if retainUnmatched {
 			// user not found in Google but retain flag enabled
-			return Retain, aws.UpdateUser(awsUser.ID, awsUser.Name.GivenName, awsUser.Name.FamilyName, awsUser.Username, false, awsUser.ExternalId.Id)
+			return Retain, desiredRetain()
 		}
 		// user not found in Google
 		return Delete, awsUser
 	}
-	return AdoptForeign, aws.UpdateUser(awsUser.ID, googleUser.Name.GivenName, googleUser.Name.FamilyName, googleUser.PrimaryEmail, !googleUser.Suspended, googleUser.Id)
+	return AdoptForeign, desiredFromGoogle()
 }
 
 // getUserOperations returns the users of AWS that must be added, deleted, updated, are equals and retained
-func getUserOperations(awsUsers []*interfaces.User, googleUsers []*admin.User, forceExternalIdUpdate bool, retainUnmatched bool, issuerArn string) (add []*interfaces.User, delete []*interfaces.User, update []*interfaces.User, equals []*interfaces.User) {
+func getUserOperations(awsUsers []*interfaces.User, googleUsers []*admin.User, cfg *config.Config, attrMap config.AttributeMap) (add []*interfaces.User, delete []*interfaces.User, update []*interfaces.User, equals []*interfaces.User) {
+	return getUserOperationsMapped(awsUsers, mapGoogleUsers(googleUsers, attrMap), cfg)
+}
+
+// mapGoogleUsers maps each Google user to its interface view exactly once
+// (via google.MapFromGoogleUser), so all Google field selection and the
+// suspended->Active inversion live in the mapper. The result is shared by the
+// user and group-membership operations so both use the same mapped identity.
+func mapGoogleUsers(googleUsers []*admin.User, attrMap config.AttributeMap) []*interfaces.User {
+	mappedUsers := make([]*interfaces.User, 0, len(googleUsers))
+	for _, gUser := range googleUsers {
+		mapped, err := google.MapFromGoogleUser(gUser, attrMap)
+		if err != nil {
+			// The attribute map is validated at load time, so a mapping error
+			// here is an internal invariant breach, not user input. Abort rather
+			// than proceed with a half-mapped user.
+			log.WithError(err).Fatal("getUserOperations(): failed to map Google user")
+		}
+		mappedUser := mapped
+		mappedUsers = append(mappedUsers, &mappedUser)
+	}
+	return mappedUsers
+}
+
+// getUserOperationsMapped is getUserOperations over already-mapped Google users.
+func getUserOperationsMapped(awsUsers []*interfaces.User, mappedUsers []*interfaces.User, cfg *config.Config) (add []*interfaces.User, delete []*interfaces.User, update []*interfaces.User, equals []*interfaces.User) {
 
 	log.Debug("getUserOperations()")
+
+	forceExternalIdUpdate := cfg.ForceExternalIdUpdate
+	retainUnmatched := cfg.RetainUnmatched
+	issuerArn := cfg.IssuerArn
 	log.WithFields(log.Fields{"kind": "user", "expectedIssuer": issuerArn, "issuerCheckDisabled": issuerArn == ""}).Debug(ExpectedIssuerMsg)
 
 	stats := struct {
@@ -1537,8 +1774,10 @@ func getUserOperations(awsUsers []*interfaces.User, googleUsers []*admin.User, f
 
 	awsMapUsername := make(map[string]*interfaces.User)
 	awsMapExtId := make(map[string]*interfaces.User)
-	googleMapEmail := make(map[string]*admin.User)
-	googleMapId := make(map[string]*admin.User)
+	// The google-side lookup maps hold the MAPPED interface view of each Google
+	// user (see mapGoogleUsers).
+	googleMapEmail := make(map[string]*interfaces.User)
+	googleMapId := make(map[string]*interfaces.User)
 
 	for _, awsUser := range awsUsers {
 		// Index (and later match) on the ExternalId issued by this SCIM tenant.
@@ -1549,25 +1788,24 @@ func getUserOperations(awsUsers []*interfaces.User, googleUsers []*admin.User, f
 		}
 	}
 
-	for _, gUser := range googleUsers {
-		googleMapId[gUser.Id] = gUser
-		googleMapEmail[strings.ToLower(gUser.PrimaryEmail)] = gUser
-	}
+	// Populate the google-side lookup maps and perform the AWS lookup + op call
+	// using the same mapped pointer.
+	for _, mappedUser := range mappedUsers {
+		googleMapId[mappedUser.ExternalId.Id] = mappedUser
+		googleMapEmail[strings.ToLower(mappedUser.Username)] = mappedUser
 
-	// Look for Google users in AWS
-	for _, gUser := range googleUsers {
 		var awsUser *interfaces.User
 
-		if match, found := awsMapExtId[gUser.Id]; found {
+		if match, found := awsMapExtId[mappedUser.ExternalId.Id]; found {
 			// Found by ExternalId.Id
 			awsUser = match
-		} else if match, found := awsMapUsername[strings.ToLower(gUser.PrimaryEmail)]; found {
-			// Found by PrimaryEmail/username
+		} else if match, found := awsMapUsername[strings.ToLower(mappedUser.Username)]; found {
+			// Found by Username (default-mapped from PrimaryEmail)
 			awsUser = match
 		}
 
 		// awsUser is nil when the Google user was not found in AWS at all
-		action, user := getUserOperation(awsUser, gUser, forceExternalIdUpdate, retainUnmatched, issuerArn)
+		action, user := getUserOperation(awsUser, mappedUser, forceExternalIdUpdate, retainUnmatched, issuerArn)
 
 		log.WithField("user", user).Info(action)
 
@@ -1643,48 +1881,144 @@ func getUserOperations(awsUsers []*interfaces.User, googleUsers []*admin.User, f
 	return add, delete, update, equals
 }
 
-// groupUsersOperations returns the groups and its users of AWS that must be delete from these groups and what are equals
-func (s *syncGSuite) getGroupUsersOperations(gGroupsUsers map[string][]*admin.User, awsGroupsUsers map[string][]*interfaces.User) (add map[string][]*interfaces.User, delete map[string][]*interfaces.User, equals map[string][]*interfaces.User, err error) {
-	log.Debug("getGroupUsersOperations()")
-	mbG := make(map[string]map[string]struct{})
-	mbA := make(map[string]map[string]struct{})
+// memberIdentities resolves Google group members to the same MAPPED identity
+// (ExternalId.Id, then mapped Username) that the user operations use, so group
+// membership is matched against AWS consistently with user matching, including
+// when the attribute map remaps Username away from primaryEmail.
+type memberIdentities struct {
+	// googleByID holds the mapped Google users keyed by non-empty ExternalId.Id
+	// (the mapper sets it from admin.User.Id).
+	googleByID map[string]*interfaces.User
+	// attrMap maps Google members that are not in googleByID on the fly.
+	attrMap config.AttributeMap
+	// awsByExtID holds the pre-fetched Identity Store users keyed by non-empty
+	// ExternalId.Id; their ID is the SCIM user id.
+	awsByExtID map[string]*interfaces.User
+}
 
-	for gGroupName, gGroupUsers := range gGroupsUsers {
-		mbG[gGroupName] = make(map[string]struct{})
-		for _, gUser := range gGroupUsers {
-			mbG[gGroupName][gUser.PrimaryEmail] = struct{}{}
+func newMemberIdentities(mapped []*interfaces.User, attrMap config.AttributeMap, awsUsers []*interfaces.User) *memberIdentities {
+	ids := &memberIdentities{
+		googleByID: make(map[string]*interfaces.User),
+		attrMap:    attrMap,
+		awsByExtID: make(map[string]*interfaces.User),
+	}
+	for _, u := range mapped {
+		if u.ExternalId.Id != "" {
+			ids.googleByID[u.ExternalId.Id] = u
 		}
 	}
+	for _, u := range awsUsers {
+		if u.ExternalId.Id != "" {
+			ids.awsByExtID[u.ExternalId.Id] = u
+		}
+	}
+	return ids
+}
 
-	for awsGroupName, awsGroupUsers := range awsGroupsUsers {
-		mbA[awsGroupName] = make(map[string]struct{})
-		for _, awsUser := range awsGroupUsers {
-			mbA[awsGroupName][awsUser.Username] = struct{}{}
+// google returns the mapped identity of a Google member.
+func (ids *memberIdentities) google(g *admin.User) (*interfaces.User, error) {
+	if g.Id != "" {
+		if u, ok := ids.googleByID[g.Id]; ok {
+			return u, nil
+		}
+	}
+	mapped, err := google.MapFromGoogleUser(g, ids.attrMap)
+	if err != nil {
+		return nil, err
+	}
+	return &mapped, nil
+}
+
+// userIndex is a set of users. A user is contained when its non-empty
+// ExternalId.Id is present, or its Username matches case-insensitively; empty
+// ExternalIds never match each other.
+type userIndex struct {
+	byExtID map[string]struct{}
+	byName  map[string]struct{}
+}
+
+func newUserIndex(users []*interfaces.User) userIndex {
+	idx := userIndex{byExtID: make(map[string]struct{}), byName: make(map[string]struct{})}
+	for _, u := range users {
+		if u.ExternalId.Id != "" {
+			idx.byExtID[u.ExternalId.Id] = struct{}{}
+		}
+		idx.byName[strings.ToLower(u.Username)] = struct{}{}
+	}
+	return idx
+}
+
+func (idx userIndex) contains(u *interfaces.User) bool {
+	if u.ExternalId.Id != "" {
+		if _, ok := idx.byExtID[u.ExternalId.Id]; ok {
+			return true
+		}
+	}
+	_, ok := idx.byName[strings.ToLower(u.Username)]
+	return ok
+}
+
+// resolveAWSMember returns the AWS user to add to a group for a Google member:
+// the pre-fetched Identity Store user with the same ExternalId.Id when there is
+// one, otherwise a SCIM lookup by the mapped Username (for users created in this
+// run). Preferring the pre-fetched user keeps a Username-remap transition run
+// working in --dry-run, where the rename is not applied and a SCIM lookup by the
+// new Username would fail.
+func (s *syncGSuite) resolveAWSMember(ids *memberIdentities, g *admin.User) (*interfaces.User, error) {
+	mapped, err := ids.google(g)
+	if err != nil {
+		return nil, err
+	}
+	if mapped.ExternalId.Id != "" {
+		if u, ok := ids.awsByExtID[mapped.ExternalId.Id]; ok {
+			return u, nil
+		}
+	}
+	log.WithField("user", mapped.Username).Debug("aws.FindUserByEmail() finding user")
+	return s.aws.FindUserByEmail(mapped.Username)
+}
+
+// getGroupUsersOperations returns, per group, the AWS users that must be added
+// to it, removed from it, and that are unchanged. Google members are compared
+// to AWS members by mapped identity (see memberIdentities).
+func (s *syncGSuite) getGroupUsersOperations(gGroupsUsers map[string][]*admin.User, awsGroupsUsers map[string][]*interfaces.User, ids *memberIdentities) (add map[string][]*interfaces.User, delete map[string][]*interfaces.User, equals map[string][]*interfaces.User, err error) {
+	log.Debug("getGroupUsersOperations()")
+
+	// Mapped identity of every Google member, per group.
+	mappedG := make(map[string][]*interfaces.User)
+	for gGroupName, gGroupUsers := range gGroupsUsers {
+		for _, gUser := range gGroupUsers {
+			gm, err := ids.google(gUser)
+			if err != nil {
+				return nil, nil, nil, err
+			}
+			mappedG[gGroupName] = append(mappedG[gGroupName], gm)
 		}
 	}
 
 	add = make(map[string][]*interfaces.User)
-	// get user in google groups that are in aws groups and
-	// users in aws groups that aren't in google groups
+	// Google members that are not members of the AWS group
 	for gGroupName, gGroupUsers := range gGroupsUsers {
-		for _, gUser := range gGroupUsers {
-			if _, found := mbA[gGroupName][gUser.PrimaryEmail]; !found {
-				log.Debug("finding user")
-				awsUserFull, err := s.aws.FindUserByEmail(gUser.PrimaryEmail)
-				if err != nil {
-					return nil, nil, nil, err
-				}
-				add[gGroupName] = append(add[gGroupName], awsUserFull)
+		inAWS := newUserIndex(awsGroupsUsers[gGroupName])
+		for i, gUser := range gGroupUsers {
+			if inAWS.contains(mappedG[gGroupName][i]) {
+				continue
 			}
+			awsUserFull, err := s.resolveAWSMember(ids, gUser)
+			if err != nil {
+				return nil, nil, nil, err
+			}
+			add[gGroupName] = append(add[gGroupName], awsUserFull)
 		}
 	}
 
 	delete = make(map[string][]*interfaces.User)
 	equals = make(map[string][]*interfaces.User)
 	for awsGroupName, awsGroupUsers := range awsGroupsUsers {
+		inGoogle := newUserIndex(mappedG[awsGroupName])
 		for _, awsUser := range awsGroupUsers {
-			// users that exist in aws groups but doesn't in google groups
-			if _, found := mbG[awsGroupName][awsUser.Username]; found {
+			// users that exist in aws groups but not in google groups
+			if inGoogle.contains(awsUser) {
 				equals[awsGroupName] = append(equals[awsGroupName], awsUser)
 			} else {
 				delete[awsGroupName] = append(delete[awsGroupName], awsUser)
@@ -1908,6 +2242,10 @@ func (s *syncGSuite) GetUsers() ([]*interfaces.User, error) {
 			s.identityStore,
 			&aws_identitystore.ListUsersInput{
 				IdentityStoreId: &s.cfg.IdentityStoreID,
+				// Extensions are only returned when explicitly requested; without
+				// this the enterprise attributes are never read back and every
+				// mapped Enterprise.* field compares unequal on every run.
+				Extensions: []string{constants.IdentityStoreEnterpriseExtension},
 			},
 		),
 		ConvertSdkUserObjToNative,
@@ -1920,8 +2258,31 @@ func (s *syncGSuite) GetUsers() ([]*interfaces.User, error) {
 	return awsUsers, nil
 }
 
-// ConvertSdkUserObjToNative
-// Convert SDK user to native user object
+// ConvertSdkUserObjToNative converts an Identity Store SDK user into the native
+// user object used for the Equal-vs-Update comparison (usersEqual).
+//
+// Every field usersEqual compares is read back from the Identity Store here,
+// except Active, which Sync fills in from the SCIM API (FindUserByEmail):
+//
+//	Username, DisplayName               UserName, DisplayName
+//	Name (all six sub-fields)           Name.*
+//	Emails                              Emails (entries with nil Value/Type skipped)
+//	Addresses (all sub-fields, Primary) Addresses
+//	NickName, ProfileURL, Title,        NickName, ProfileUrl, Title,
+//	UserType, PreferredLanguage,        UserType, PreferredLanguage,
+//	Locale, Timezone                    Locale, Timezone
+//	PhoneNumbers, Roles                 PhoneNumbers, Roles
+//	Enterprise.*                        Extensions["aws:identitystore:enterprise"]
+//	                                    (only present when ListUsers requests it)
+//
+// Empty PhoneNumbers/Roles and an absent or all-empty enterprise extension are
+// returned as nil, matching what the Google mapper produces for unset values.
+//
+// Known limitations: Enterprise.Manager is compared verbatim; AWS documents
+// manager.value as an Identity Store user id while ssosync sends the mapped
+// Google value, so the opt-in Manager mapping may not round-trip. Name.Formatted
+// is never set by the mapper; if AWS derives it on write it will read back
+// non-empty and the live convergence tests will show it.
 func ConvertSdkUserObjToNative(user identitystore_types.User) *interfaces.User {
 	log.Debug("ConvertSdkUserObjToNative()")
 	// Convert emails into native Email object
@@ -1945,12 +2306,16 @@ func ConvertSdkUserObjToNative(user identitystore_types.User) *interfaces.User {
 	userAddresses := make([]interfaces.UserAddress, 0)
 
 	for _, address := range user.Addresses {
-		addressType := ""
-		if address.Type != nil {
-			addressType = *address.Type
-		}
+		// Entries with a nil/empty Type are kept (with an empty Type).
 		userAddresses = append(userAddresses, interfaces.UserAddress{
-			Type: addressType,
+			Type:          derefString(address.Type),
+			Formatted:     derefString(address.Formatted),
+			StreetAddress: derefString(address.StreetAddress),
+			Locality:      derefString(address.Locality),
+			Region:        derefString(address.Region),
+			PostalCode:    derefString(address.PostalCode),
+			Country:       derefString(address.Country),
+			Primary:       address.Primary,
 		})
 	}
 
@@ -1958,34 +2323,102 @@ func ConvertSdkUserObjToNative(user identitystore_types.User) *interfaces.User {
 
 	// Safely dereference optional pointer fields; the Identity Store SDK leaves
 	// these as nil when a value is not set (e.g. users created outside ssosync).
-	familyName := ""
-	givenName := ""
+	var name interfaces.UserName
 	if user.Name != nil {
-		if user.Name.FamilyName != nil {
-			familyName = *user.Name.FamilyName
-		}
-		if user.Name.GivenName != nil {
-			givenName = *user.Name.GivenName
+		name = interfaces.UserName{
+			FamilyName:      derefString(user.Name.FamilyName),
+			GivenName:       derefString(user.Name.GivenName),
+			Formatted:       derefString(user.Name.Formatted),
+			MiddleName:      derefString(user.Name.MiddleName),
+			HonorificPrefix: derefString(user.Name.HonorificPrefix),
+			HonorificSuffix: derefString(user.Name.HonorificSuffix),
 		}
 	}
 
-	return &interfaces.User{
-		ID:          derefString(user.UserId),
-		ExternalId:  getExternalId(user.ExternalIds),
-		ExternalIds: getExternalIds(user.ExternalIds),
-		Schemas:     []string{constants.SCIMSchemaUser},
-		Username:    derefString(user.UserName),
-		Name: struct {
-			FamilyName string `json:"familyName"`
-			GivenName  string `json:"givenName"`
-		}{
-			FamilyName: familyName,
-			GivenName:  givenName,
-		},
-		DisplayName: derefString(user.DisplayName),
-		Emails:      userEmails,
-		Addresses:   userAddresses,
+	// Nil (not empty) when there are none, matching the Google mapper.
+	var phoneNumbers []interfaces.UserPhoneNumber
+	for _, p := range user.PhoneNumbers {
+		phoneNumbers = append(phoneNumbers, interfaces.UserPhoneNumber{
+			Value:   derefString(p.Value),
+			Type:    derefString(p.Type),
+			Primary: p.Primary,
+		})
 	}
+	var roles []interfaces.UserRole
+	for _, r := range user.Roles {
+		roles = append(roles, interfaces.UserRole{
+			Value:   derefString(r.Value),
+			Type:    derefString(r.Type),
+			Primary: r.Primary,
+		})
+	}
+
+	return &interfaces.User{
+		ID:                derefString(user.UserId),
+		ExternalId:        getExternalId(user.ExternalIds),
+		ExternalIds:       getExternalIds(user.ExternalIds),
+		Schemas:           []string{constants.SCIMSchemaUser},
+		Username:          derefString(user.UserName),
+		Name:              name,
+		DisplayName:       derefString(user.DisplayName),
+		Emails:            userEmails,
+		Addresses:         userAddresses,
+		NickName:          derefString(user.NickName),
+		ProfileURL:        derefString(user.ProfileUrl),
+		Title:             derefString(user.Title),
+		UserType:          derefString(user.UserType),
+		PreferredLanguage: derefString(user.PreferredLanguage),
+		Locale:            derefString(user.Locale),
+		Timezone:          derefString(user.Timezone),
+		PhoneNumbers:      phoneNumbers,
+		Roles:             roles,
+		Enterprise:        enterpriseFromExtensions(user),
+	}
+}
+
+// identityStoreEnterprise is the decoded shape of the Identity Store
+// "aws:identitystore:enterprise" extension document (lower-camel keys, manager
+// as an object carrying value).
+type identityStoreEnterprise struct {
+	EmployeeNumber string `document:"employeeNumber"`
+	CostCenter     string `document:"costCenter"`
+	Organization   string `document:"organization"`
+	Division       string `document:"division"`
+	Department     string `document:"department"`
+	Manager        *struct {
+		Value string `document:"value"`
+	} `document:"manager"`
+}
+
+// enterpriseFromExtensions decodes the enterprise extension of an Identity
+// Store user. It returns nil when the extension is absent, cannot be decoded
+// (logged as a warning) or carries no values; Manager is nil when its value is
+// empty.
+func enterpriseFromExtensions(user identitystore_types.User) *interfaces.EnterpriseUser {
+	doc, ok := user.Extensions[constants.IdentityStoreEnterpriseExtension]
+	if !ok || doc == nil {
+		return nil
+	}
+	var decoded identityStoreEnterprise
+	if err := doc.UnmarshalSmithyDocument(&decoded); err != nil {
+		log.WithField("user", derefString(user.UserId)).WithError(err).
+			Warn("cannot decode Identity Store enterprise extension; enterprise attributes treated as empty")
+		return nil
+	}
+	e := &interfaces.EnterpriseUser{
+		EmployeeNumber: decoded.EmployeeNumber,
+		CostCenter:     decoded.CostCenter,
+		Organization:   decoded.Organization,
+		Division:       decoded.Division,
+		Department:     decoded.Department,
+	}
+	if decoded.Manager != nil && decoded.Manager.Value != "" {
+		e.Manager = &interfaces.EnterpriseManager{Value: decoded.Manager.Value}
+	}
+	if *e == (interfaces.EnterpriseUser{}) {
+		return nil
+	}
+	return e
 }
 
 // derefString safely dereferences a string pointer, returning an empty string

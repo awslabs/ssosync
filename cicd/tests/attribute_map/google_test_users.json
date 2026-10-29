@@ -1,0 +1,143 @@
+{
+  "_comment": [
+    "Google Workspace test users the attribute-map integration tests rely on.",
+    "This is the reference for what must exist in the test tenant. It is checked",
+    "against the suites' expectations by lib/test_google_test_data.py.",
+    "Each user is a Directory API user resource: primaryEmail and id identify the",
+    "user; EVERY OTHER FIELD is the users.patch request body that sets that user",
+    "up (https://developers.google.com/admin-sdk/directory/reference/rest/v1/users/patch).",
+    "A patch replaces each list field it carries (organizations, phones,",
+    "addresses, relations) as a whole; fields not listed are left untouched.",
+    "Organization 'type' and phone/organization 'primary' cannot be set in the",
+    "Admin console; apply them through the API.",
+    "Data rules (enforced by the checks):",
+    "- customSchemas.SSOSync-Test.AWSUsername is a scalar and MUST be email-shaped",
+    "  (ssosync also uses the Username as the synthesized primary work email) and",
+    "  must differ from the user's primary email so the remap suite updates every user.",
+    "- SSOSync-Test.CostCodes is a SINGLE-VALUED custom field: one cost center per user.",
+    "- SSOSync-Test.ProjectCodes is a MULTI-VALUED custom field (define it with",
+    "  'multiValued: true'). ssosync does not support multi-valued custom",
+    "  attributes: the rich_map suite maps it and asserts it is warned about and",
+    "  ignored. Google stores each entry as {type, value}; the type is ignored.",
+    "- SSOSync-Test.LongValue is SINGLE-VALUED, set ONLY on AceHole, and longer",
+    "  than 128 characters (the SCIM userName maxLength).",
+    "- AceHole's givenName is a single space: Google requires a non-empty given",
+    "  name, and ssosync treats it as blank (requiredField warning).",
+    "- No user has websites (the tenant's user schema has no websites field)."
+  ],
+  "users": [
+    {
+      "primaryEmail": "crpates@nothing2see.info",
+      "id": "114073192003346788358",
+      "name": { "givenName": "Chris", "familyName": "Pates" },
+      "suspended": false,
+      "organizations": [
+        {
+          "name": "Jupiter Mining Corporation",
+          "title": "Science Officer",
+          "department": "Science",
+          "costCenter": "JMC-100",
+          "type": "work",
+          "primary": true
+        }
+      ],
+      "phones": [
+        { "type": "mobile", "value": "+44 7700 900001" },
+        { "type": "work", "value": "+44 20 7946 0001", "primary": true }
+      ],
+      "addresses": [
+        { "type": "work", "formatted": "Deck 16, Red Dwarf" }
+      ],
+      "relations": [
+        { "type": "manager", "value": "dave2@nothing2see.info" }
+      ],
+      "customSchemas": {
+        "SSOSync-Test": {
+          "AWSUsername": "chris.pates.aws@nothing2see.info",
+          "CostCodes": "WORK-100",
+          "ProjectCodes": [
+            { "type": "work", "value": "PRJ-STARBUG" },
+            { "type": "work", "value": "PRJ-HOLOSHIP" }
+          ]
+        }
+      }
+    },
+    {
+      "primaryEmail": "AceHole@nothing2see.info",
+      "id": "101090649517008403940",
+      "name": { "givenName": " ", "familyName": "Rimmer" },
+      "suspended": false,
+      "organizations": [
+        {
+          "name": "Red Dwarf Hologram Society",
+          "type": "school",
+          "primary": true
+        }
+      ],
+      "phones": [],
+      "addresses": [],
+      "relations": [],
+      "customSchemas": {
+        "SSOSync-Test": {
+          "AWSUsername": "arnold.rimmer.aws@nothing2see.info",
+          "LongValue": "arnold.judas.rimmer.bsc.ssc.second.technician.hard.light.hologram.red.dwarf.jupiter.mining.corporation.three.million.years.from.earth@nothing2see.info"
+        }
+      }
+    },
+    {
+      "primaryEmail": "dave2@nothing2see.info",
+      "id": "104127319331459468079",
+      "name": { "givenName": "Dave", "familyName": "Lister" },
+      "suspended": false,
+      "organizations": [
+        {
+          "name": "Red Dwarf Academy",
+          "title": "Student",
+          "type": "school",
+          "primary": true
+        },
+        {
+          "name": "Jupiter Mining Corporation",
+          "title": "Technician, Third Class",
+          "department": "Maintenance",
+          "costCenter": "C123456789",
+          "type": "work"
+        }
+      ],
+      "phones": [
+        { "type": "home", "value": "123456789" },
+        { "type": "mobile", "value": "+44 7700 900003" }
+      ],
+      "addresses": [
+        { "type": "work", "formatted": "Cargo Bay, Red Dwarf" }
+      ],
+      "relations": [
+        { "type": "manager", "value": "acehole@nothing2see.info" }
+      ],
+      "customSchemas": {
+        "SSOSync-Test": {
+          "AWSUsername": "dave.lister.aws@nothing2see.info",
+          "CostCodes": "WORK-300",
+          "ProjectCodes": [
+            { "type": "work", "value": "PRJ-CURRY" }
+          ]
+        }
+      }
+    },
+    {
+      "primaryEmail": "olaf@nothing2see.info",
+      "id": "117930356878090693739",
+      "name": { "givenName": "Olaf", "familyName": "Petersen" },
+      "suspended": true,
+      "organizations": [],
+      "phones": [],
+      "addresses": [],
+      "relations": [],
+      "customSchemas": {
+        "SSOSync-Test": {
+          "AWSUsername": "olaf.petersen.aws@nothing2see.info"
+        }
+      }
+    }
+  ]
+}

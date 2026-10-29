@@ -1,0 +1,12 @@
+{
+  "user": {
+    "Username": "customSchemas.SSOSync-Test.AWSUsername",
+    "Name.GivenName": "name.givenName",
+    "Name.FamilyName": "name.familyName",
+    "Active": "suspended",
+    "Title": "organizations[type=work].title",
+    "Enterprise.Department": "organizations[type=work].department",
+    "Enterprise.Organization": "organizations[type=work].name",
+    "Enterprise.CostCenter": "organizations[type=work].costCenter"
+  }
+}

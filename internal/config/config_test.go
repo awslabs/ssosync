@@ -19,7 +19,50 @@ func TestConfig(t *testing.T) {
 	assert.Equal(cfg.LogFormat, DefaultLogFormat)
 	assert.Equal(cfg.Debug, DefaultDebug)
 	assert.Equal(cfg.GoogleCredentials, DefaultGoogleCredentials)
+	assert.Equal(cfg.AttributeMapFile, DefaultAttributeMapFile)
+	assert.Equal(cfg.AttributeMap, DefaultAttributeMap)
 	assert.Equal(cfg.SyncMethod, DefaultSyncMethod)
+}
+
+func TestDefaultAttributeMap(t *testing.T) {
+	assert := assert.New(t)
+
+	// DefaultAttributeMap only references the existing maps; it does not
+	// redefine the mappings.
+	assert.Equal(DefaultUserAttributeMap, DefaultAttributeMap.User)
+	assert.Equal(DefaultGroupAttributeMap, DefaultAttributeMap.Group)
+}
+
+func TestDefaultUserAttributeMap_SafeSetEntries(t *testing.T) {
+	assert := assert.New(t)
+
+	// The default user map is exactly the four behaviour-preserving scalars plus
+	// the four safe-set enrichment fields, sourced from the PRIMARY organization
+	// (the Admin console marks it primary but does not type it).
+	assert.Equal(AttributeMap{
+		"Name.GivenName":          "name.givenName",
+		"Name.FamilyName":         "name.familyName",
+		"Username":                "primaryEmail",
+		"Active":                  "suspended",
+		"Title":                   "organizations[primary].title",
+		"Enterprise.Department":   "organizations[primary].department",
+		"Enterprise.Organization": "organizations[primary].name",
+		"Enterprise.CostCenter":   "organizations[primary].costCenter",
+	}, DefaultUserAttributeMap)
+
+	// Opt-in-only targets must NOT be in the default map.
+	_, hasManager := DefaultUserAttributeMap["Enterprise.Manager"]
+	assert.False(hasManager, "Enterprise.Manager must not be defaulted")
+	for _, optIn := range []string{"Enterprise.Division", "Enterprise.EmployeeNumber", "ProfileURL", "Emails", "Addresses", "PhoneNumbers"} {
+		_, has := DefaultUserAttributeMap[optIn]
+		assert.False(has, "%s must not be defaulted", optIn)
+	}
+}
+
+func TestDefaultGroupAttributeMap_Unchanged(t *testing.T) {
+	assert := assert.New(t)
+
+	assert.Equal(AttributeMap{"DisplayName": "name"}, DefaultGroupAttributeMap)
 }
 
 func TestConfigValidate_Success(t *testing.T) {
@@ -116,5 +159,6 @@ func TestConstants(t *testing.T) {
 	assert.Equal(t, "text", DefaultLogFormat)
 	assert.Equal(t, false, DefaultDebug)
 	assert.Equal(t, "credentials.json", DefaultGoogleCredentials)
+	assert.Equal(t, "", DefaultAttributeMapFile)
 	assert.Equal(t, "groups", DefaultSyncMethod)
 }

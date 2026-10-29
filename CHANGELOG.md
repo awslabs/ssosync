@@ -1,3 +1,30 @@
+## v2.10.0
+
+### Highlights
+
+- **Configurable attribute mapping (groups sync method).** You can now control how Google Workspace user attributes are mapped onto AWS IAM Identity Center (SCIM) user fields via a JSON attribute map. Supply it with the new `--attribute-map-file` CLI flag or, for Lambda, the `ATTRIBUTE_MAP` environment variable (which accepts a Secrets Manager secret ARN, an SSM Parameter Store ARN, or the inline JSON, mirroring the credentials pattern). When unset, a built-in default mapping is used. See the README "Attribute mapping" section for the syntax and the copy-pasteable default.
+- Expanded the internal user/group model to the full set of IAM Identity Center SCIM attributes (full name, nickname, profile URL, title, user type, preferred language, locale, timezone, phone numbers, addresses, and the enterprise extension: organization, department, cost center, division, manager, employee number). Groups remain `displayName`-only, as AWS SCIM accepts only `externalId`/`displayName`/`members` for groups.
+- **Source-path grammar.** Attribute-map source values support scalar paths, and multi-valued Google fields (organizations, relations, emails, phone numbers, addresses, websites) support both `[type=<value>]` (case-insensitive type match) and `[primary]` (entry marked primary) selection. In both cases there is **no positional/first-match fallback** — if nothing matches, the field resolves to nothing, so results are stable run-to-run.
+- **Google custom (user-defined) schema sources.** A map value may reference a Google custom-schema field with `customSchemas.<SchemaName>.<fieldName>` and route it to a supported core/enterprise SCIM target. Only single-valued custom fields are supported: a multi-valued custom attribute (a custom source with a `[type=<value>]` selector, or a mapped custom field that is multi-valued on a user) logs a warning and that mapping is ignored. Support may be added later. A referenced custom schema/field that is absent logs a warning and resolves to nothing. (SCIM targets stay closed to core + enterprise — AWS does not accept arbitrary custom extension schemas as targets; groups have no custom schemas.) To make custom-schema data available, users are now fetched with Google's `full` projection.
+- **Default map** populates `Title`, `Enterprise.Organization`, `Enterprise.Department`, and `Enterprise.CostCenter` from the user's **primary** organization (`organizations[primary]`); the Google Admin console marks an organization primary but does not set its type. Additional attributes (`Enterprise.Manager`, `Enterprise.Division`, `Enterprise.EmployeeNumber`, `ProfileURL`, single-element emails/addresses/phone numbers) are supported but opt-in. `Enterprise.Manager` maps the Google manager relation, which holds the manager's email address; it works where the Identity Store can resolve that email, and is opt-in because it depends on the directory populating the relation.
+- **Diagnostics for authoring maps.** Debug-level logging traces, per user, the raw Google source fields, the per-entry resolution, and the produced object — so a mapped value can be compared against the attribute map. A pre-SCIM validation pass logs a **warning** (never fails) when a mapped user/group would likely be rejected by the SCIM API (a required field empty, a multi-valued field with more than one value, a non-primary email, or `userName`/group `displayName` over length or containing disallowed control characters); the object is still sent and AWS remains the authoritative decision.
+- Attribute maps are validated at load time; an unsupported target field, unsupported source attribute, or empty key/value causes a hard failure with a detailed, actionable error listing the supported values.
+
+### Fixes
+
+- **Lambda: warm invocations failed when IAM Identity Center is in another region.** The function read its own secrets and SSM parameters (and called CodePipeline) using the Identity Center region taken from the SCIM endpoint. On a cold start that region was not yet known, so the function's region was used and the run succeeded; on every warm invocation the secrets were looked up in the Identity Center region and the run failed with `cannot read secret ... ResourceNotFoundException`. These clients now always use the function's own region.
+
+### Breaking / behavioural changes
+
+> [!IMPORTANT]
+> **Clear-to-consistent user sync.** The `groups` sync method now makes the IAM Identity Store user fully consistent with the mapped Google user. Any supported SCIM attribute that the attribute map does **not** populate is **cleared** on the Identity Store user. On the first run after upgrading, user attributes that were previously left untouched (for example Title, phone numbers, addresses, or locale set outside of ssosync) may be cleared unless they are covered by your attribute map. **Run with `--dry-run` first** to review the changes before a live sync.
+
+> [!IMPORTANT]
+> **Validate attribute maps with `--dry-run` first.** Because of clear-to-consistent behaviour, an error in a custom attribute map (a typo, a `[type=X]` selector that matches nothing, a missing custom field, or an ignored multi-valued custom field) can **clear** real attributes on a live run. Always test a new or changed attribute map with `--dry-run` — together with debug logging and the pre-SCIM validation warnings — before running it live.
+
+> [!NOTE]
+> The default attribute map reads organization-derived fields (Title, Organization, Department, Cost Center) from the user's **primary** organization (`organizations[primary]`). A user with no organization marked primary will have these fields left empty (and therefore cleared). Confirm with a `--dry-run` against your directory that these fields resolve as expected before a live run.
+
 ## v2.9.5 - 2026-10-28
 
 ### Changelog

@@ -15,7 +15,20 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	admin "google.golang.org/api/admin/directory/v1"
+	"google.golang.org/api/googleapi"
 )
+
+// opsConfig builds a minimal *config.Config carrying only the fields that
+// getUserOperations/getGroupOperations read, so existing operation tests can
+// pass the same ForceExternalIdUpdate/RetainUnmatched/IssuerArn values they
+// previously passed positionally.
+func opsConfig(forceExternalIdUpdate, retainUnmatched bool, issuerArn string) *config.Config {
+	return &config.Config{
+		ForceExternalIdUpdate: forceExternalIdUpdate,
+		RetainUnmatched:       retainUnmatched,
+		IssuerArn:             issuerArn,
+	}
+}
 
 func TestNew(t *testing.T) {
 	cfg := &config.Config{}
@@ -99,7 +112,7 @@ func TestGetGroupOperations_NoChange(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, false, false, "")
+	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, opsConfig(false, false, ""), config.DefaultGroupAttributeMap)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
@@ -120,7 +133,7 @@ func TestGetGroupOperations_Add(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, false, false, "")
+	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, opsConfig(false, false, ""), config.DefaultGroupAttributeMap)
 
 	assert.Len(t, add, 1)
 	assert.Len(t, delete, 0)
@@ -141,7 +154,7 @@ func TestGetGroupOperations_Delete(t *testing.T) {
 
 	googleGroups := []*admin.Group{}
 
-	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, false, false, "")
+	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, opsConfig(false, false, ""), config.DefaultGroupAttributeMap)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 1)
@@ -162,7 +175,7 @@ func TestGetGroupOperations_SyncedGroupMatched_Delete(t *testing.T) {
 
 	googleGroups := []*admin.Group{}
 
-	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, false, true, "")
+	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, opsConfig(false, true, ""), config.DefaultGroupAttributeMap)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 1)
@@ -182,7 +195,7 @@ func TestGetGroupOperations_RetainUnmatched(t *testing.T) {
 
 	googleGroups := []*admin.Group{}
 
-	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, false, true, "")
+	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, opsConfig(false, true, ""), config.DefaultGroupAttributeMap)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
@@ -207,7 +220,7 @@ func TestGetGroupOperations_LocalGroupMatch(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, false, false, "")
+	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, opsConfig(false, false, ""), config.DefaultGroupAttributeMap)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
@@ -234,7 +247,7 @@ func TestGetGroupOperations_SyncedGroupMatched_Update(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, false, false, "")
+	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, opsConfig(false, false, ""), config.DefaultGroupAttributeMap)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
@@ -261,7 +274,7 @@ func TestGetGroupOperations_ExternalIdUpdate_Update(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, true, false, "")
+	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, opsConfig(true, false, ""), config.DefaultGroupAttributeMap)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
@@ -288,7 +301,7 @@ func TestGetGroupOperations_ExternalIdUpdate_DeleteCreate(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, false, false, "")
+	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, opsConfig(false, false, ""), config.DefaultGroupAttributeMap)
 
 	assert.Len(t, add, 1)
 	assert.Len(t, delete, 1)
@@ -306,14 +319,15 @@ func TestGetUserOperations_NoChange(t *testing.T) {
 			ID:         "A1",
 			Username:   "user1@example.com",
 			ExternalId: interfaces.ExternalId{Id: "G1"},
-			Name: struct {
-				FamilyName string `json:"familyName"`
-				GivenName  string `json:"givenName"`
-			}{
+			Name: interfaces.UserName{
 				GivenName:  "John",
 				FamilyName: "Doe",
 			},
-			Active: true,
+			// DisplayName mirrors what the mapper derives for the Google user
+			// ("GivenName FamilyName"); a real ssosync-managed AWS user carries
+			// it, so the full-attribute comparison still reports Equal.
+			DisplayName: "John Doe",
+			Active:      true,
 		},
 	}
 
@@ -329,7 +343,7 @@ func TestGetUserOperations_NoChange(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, false, false, "")
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, false, ""), config.DefaultUserAttributeMap)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
@@ -339,6 +353,218 @@ func TestGetUserOperations_NoChange(t *testing.T) {
 	assert.Equal(t, equals[0].Username, "user1@example.com")
 	assert.Equal(t, equals[0].Name.GivenName, "John")
 	assert.Equal(t, equals[0].Name.FamilyName, "Doe")
+}
+
+// TestGetUserOperations_SynthesizedEmailsAddresses_Equal is a regression guard
+// for the Emails/Addresses asymmetry: a real ssosync-managed AWS user returned
+// by ConvertSdkUserObjToNative carries a synthesized primary work email
+// (== Username) and a {Type:"work"} address, while the default-mapped Google
+// user carries neither. usersEqual must normalize both operands through the same
+// builder so the user compares Equal (no spurious Update every run) rather than
+// being re-classified as Update on each sync.
+func TestGetUserOperations_SynthesizedEmailsAddresses_Equal(t *testing.T) {
+	awsUsers := []*interfaces.User{
+		{
+			ID:         "A1",
+			Username:   "user1@example.com",
+			ExternalId: interfaces.ExternalId{Id: "G1"},
+			Name: interfaces.UserName{
+				GivenName:  "John",
+				FamilyName: "Doe",
+			},
+			DisplayName: "John Doe",
+			Active:      true,
+			// As ConvertSdkUserObjToNative produces for an ssosync-created user:
+			// the Identity Store returns the synthesized work email and address.
+			Emails: []interfaces.UserEmail{{
+				Value:   "user1@example.com",
+				Type:    "work",
+				Primary: true,
+			}},
+			Addresses: []interfaces.UserAddress{{
+				Type: "work",
+			}},
+		},
+	}
+
+	googleUsers := []*admin.User{
+		{
+			Id:           "G1",
+			PrimaryEmail: "user1@example.com",
+			Name: &admin.UserName{
+				GivenName:  "John",
+				FamilyName: "Doe",
+			},
+			Suspended: false,
+		},
+	}
+
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, false, ""), config.DefaultUserAttributeMap)
+
+	assert.Len(t, add, 0)
+	assert.Len(t, delete, 0)
+	assert.Len(t, update, 0, "steady-state managed user must not be re-classified as Update")
+	assert.Len(t, equals, 1)
+	assert.Equal(t, equals[0].ExternalId.Id, "G1")
+}
+
+// TestGetUserOperations_EnrichmentFromOrganization verifies the Step D default
+// map enrichment: a Google user with a primary organization but an AWS record
+// that does not yet carry Title/Enterprise is classified as Update, and the
+// desired user written to AWS carries the enriched Title and Enterprise.* values.
+func TestGetUserOperations_EnrichmentFromOrganization(t *testing.T) {
+	awsUsers := []*interfaces.User{
+		{
+			ID:          "A1",
+			Username:    "user1@example.com",
+			ExternalId:  interfaces.ExternalId{Id: "G1"},
+			Name:        interfaces.UserName{GivenName: "John", FamilyName: "Doe"},
+			DisplayName: "John Doe",
+			Active:      true,
+			// No Title / Enterprise yet: the record predates the enrichment.
+		},
+	}
+
+	googleUsers := []*admin.User{
+		{
+			Id:           "G1",
+			PrimaryEmail: "user1@example.com",
+			Name:         &admin.UserName{GivenName: "John", FamilyName: "Doe"},
+			Organizations: []admin.UserOrganization{
+				{
+					Title:      "Staff Engineer",
+					Department: "Platform",
+					Name:       "ExampleCorp",
+					CostCenter: "CC-100",
+					Type:       "work",
+					Primary:    true,
+				},
+			},
+			Suspended: false,
+		},
+	}
+
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, false, ""), config.DefaultUserAttributeMap)
+
+	assert.Len(t, add, 0)
+	assert.Len(t, delete, 0)
+	assert.Len(t, equals, 0)
+	if assert.Len(t, update, 1) {
+		assert.Equal(t, "Staff Engineer", update[0].Title)
+		if assert.NotNil(t, update[0].Enterprise) {
+			assert.Equal(t, "Platform", update[0].Enterprise.Department)
+			assert.Equal(t, "ExampleCorp", update[0].Enterprise.Organization)
+			assert.Equal(t, "CC-100", update[0].Enterprise.CostCenter)
+		}
+	}
+}
+
+// TestGetUserOperations_EnrichedSteadyState_Equal verifies NFR4 / criterion 6:
+// once the AWS record already carries the enriched Title/Enterprise (plus the
+// synthesized primary work email/address), a user whose Google organization is
+// unchanged compares Equal, so there is no churn.
+func TestGetUserOperations_EnrichedSteadyState_Equal(t *testing.T) {
+	awsUsers := []*interfaces.User{
+		{
+			ID:          "A1",
+			Username:    "user1@example.com",
+			ExternalId:  interfaces.ExternalId{Id: "G1"},
+			Name:        interfaces.UserName{GivenName: "John", FamilyName: "Doe"},
+			DisplayName: "John Doe",
+			Active:      true,
+			Title:       "Staff Engineer",
+			Enterprise: &interfaces.EnterpriseUser{
+				Department:   "Platform",
+				Organization: "ExampleCorp",
+				CostCenter:   "CC-100",
+			},
+			// As ConvertSdkUserObjToNative produces for a managed user.
+			Emails: []interfaces.UserEmail{{
+				Value:   "user1@example.com",
+				Type:    "work",
+				Primary: true,
+			}},
+			Addresses: []interfaces.UserAddress{{Type: "work"}},
+		},
+	}
+
+	googleUsers := []*admin.User{
+		{
+			Id:           "G1",
+			PrimaryEmail: "user1@example.com",
+			Name:         &admin.UserName{GivenName: "John", FamilyName: "Doe"},
+			Organizations: []admin.UserOrganization{
+				{
+					Title:      "Staff Engineer",
+					Department: "Platform",
+					Name:       "ExampleCorp",
+					CostCenter: "CC-100",
+					Type:       "work",
+					Primary:    true,
+				},
+			},
+			Suspended: false,
+		},
+	}
+
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, false, ""), config.DefaultUserAttributeMap)
+
+	assert.Len(t, add, 0)
+	assert.Len(t, delete, 0)
+	assert.Len(t, update, 0, "enriched steady-state user must not churn")
+	assert.Len(t, equals, 1)
+	assert.Equal(t, equals[0].ExternalId.Id, "G1")
+}
+
+// TestGetUserOperations_EnrichedTitleChanged verifies a changed Google org title
+// trips Update and the desired user carries the new title.
+func TestGetUserOperations_EnrichedTitleChanged(t *testing.T) {
+	awsUsers := []*interfaces.User{
+		{
+			ID:          "A1",
+			Username:    "user1@example.com",
+			ExternalId:  interfaces.ExternalId{Id: "G1"},
+			Name:        interfaces.UserName{GivenName: "John", FamilyName: "Doe"},
+			DisplayName: "John Doe",
+			Active:      true,
+			Title:       "Engineer",
+			Enterprise: &interfaces.EnterpriseUser{
+				Department:   "Platform",
+				Organization: "ExampleCorp",
+				CostCenter:   "CC-100",
+			},
+			Emails:    []interfaces.UserEmail{{Value: "user1@example.com", Type: "work", Primary: true}},
+			Addresses: []interfaces.UserAddress{{Type: "work"}},
+		},
+	}
+
+	googleUsers := []*admin.User{
+		{
+			Id:           "G1",
+			PrimaryEmail: "user1@example.com",
+			Name:         &admin.UserName{GivenName: "John", FamilyName: "Doe"},
+			Organizations: []admin.UserOrganization{
+				{
+					Title:      "Senior Engineer",
+					Department: "Platform",
+					Name:       "ExampleCorp",
+					CostCenter: "CC-100",
+					Type:       "work",
+					Primary:    true,
+				},
+			},
+			Suspended: false,
+		},
+	}
+
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, false, ""), config.DefaultUserAttributeMap)
+
+	assert.Len(t, add, 0)
+	assert.Len(t, delete, 0)
+	assert.Len(t, equals, 0)
+	if assert.Len(t, update, 1) {
+		assert.Equal(t, "Senior Engineer", update[0].Title)
+	}
 }
 
 func TestGetUserOperations_Add(t *testing.T) {
@@ -356,7 +582,7 @@ func TestGetUserOperations_Add(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, false, false, "")
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, false, ""), config.DefaultUserAttributeMap)
 
 	assert.Len(t, add, 1)
 	assert.Len(t, delete, 0)
@@ -374,10 +600,7 @@ func TestGetUserOperations_UpdateAttribute(t *testing.T) {
 			ID:         "A2",
 			Username:   "user2@example.com",
 			ExternalId: interfaces.ExternalId{Id: "G2"},
-			Name: struct {
-				FamilyName string `json:"familyName"`
-				GivenName  string `json:"givenName"`
-			}{
+			Name: interfaces.UserName{
 				GivenName:  "Jane",
 				FamilyName: "Smith",
 			},
@@ -397,7 +620,7 @@ func TestGetUserOperations_UpdateAttribute(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, false, false, "")
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, false, ""), config.DefaultUserAttributeMap)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
@@ -414,10 +637,7 @@ func TestGetUserOperations_UpdateMissingExternalId(t *testing.T) {
 		{
 			ID:       "A5",
 			Username: "user5@example.com",
-			Name: struct {
-				FamilyName string `json:"familyName"`
-				GivenName  string `json:"givenName"`
-			}{
+			Name: interfaces.UserName{
 				GivenName:  "Jane",
 				FamilyName: "Doe",
 			},
@@ -437,7 +657,7 @@ func TestGetUserOperations_UpdateMissingExternalId(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, false, false, "")
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, false, ""), config.DefaultUserAttributeMap)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
@@ -455,10 +675,7 @@ func TestGetUserOperations_UpdatePrimaryEmail(t *testing.T) {
 			ID:         "A2",
 			Username:   "user2@example.com",
 			ExternalId: interfaces.ExternalId{Id: "G2"},
-			Name: struct {
-				FamilyName string `json:"familyName"`
-				GivenName  string `json:"givenName"`
-			}{
+			Name: interfaces.UserName{
 				GivenName:  "Jane",
 				FamilyName: "Smith",
 			},
@@ -478,7 +695,7 @@ func TestGetUserOperations_UpdatePrimaryEmail(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, false, false, "")
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, false, ""), config.DefaultUserAttributeMap)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
@@ -496,10 +713,7 @@ func TestGetUserOperations_UpdateExternalId_DeleteRecreate(t *testing.T) {
 			ID:         "A6",
 			ExternalId: interfaces.ExternalId{Id: "GX"},
 			Username:   "user6@example.com",
-			Name: struct {
-				FamilyName string `json:"familyName"`
-				GivenName  string `json:"givenName"`
-			}{
+			Name: interfaces.UserName{
 				GivenName:  "Alan",
 				FamilyName: "Brown",
 			},
@@ -519,7 +733,7 @@ func TestGetUserOperations_UpdateExternalId_DeleteRecreate(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, false, false, "")
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, false, ""), config.DefaultUserAttributeMap)
 
 	assert.Len(t, add, 1)
 	assert.Len(t, delete, 1)
@@ -541,10 +755,7 @@ func TestGetUserOperations_UpdateExternalId_ForceUpdate(t *testing.T) {
 			ID:         "A6",
 			ExternalId: interfaces.ExternalId{Id: "GX"},
 			Username:   "user6@example.com",
-			Name: struct {
-				FamilyName string `json:"familyName"`
-				GivenName  string `json:"givenName"`
-			}{
+			Name: interfaces.UserName{
 				GivenName:  "Alan",
 				FamilyName: "Brown",
 			},
@@ -564,7 +775,7 @@ func TestGetUserOperations_UpdateExternalId_ForceUpdate(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, true, false, "")
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(true, false, ""), config.DefaultUserAttributeMap)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
@@ -581,10 +792,7 @@ func TestGetUserOperations_DeleteNoExternalId(t *testing.T) {
 		{
 			ID:       "A3",
 			Username: "user3@example.com",
-			Name: struct {
-				FamilyName string `json:"familyName"`
-				GivenName  string `json:"givenName"`
-			}{
+			Name: interfaces.UserName{
 				GivenName:  "Bob",
 				FamilyName: "Johnson",
 			},
@@ -594,7 +802,7 @@ func TestGetUserOperations_DeleteNoExternalId(t *testing.T) {
 
 	googleUsers := []*admin.User{}
 
-	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, false, false, "")
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, false, ""), config.DefaultUserAttributeMap)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 1)
@@ -611,10 +819,7 @@ func TestGetUserOperations_DeleteExternalId(t *testing.T) {
 			ID:         "A4",
 			Username:   "user4@example.com",
 			ExternalId: interfaces.ExternalId{Id: "G4"},
-			Name: struct {
-				FamilyName string `json:"familyName"`
-				GivenName  string `json:"givenName"`
-			}{
+			Name: interfaces.UserName{
 				GivenName:  "Belinda",
 				FamilyName: "Johnson",
 			},
@@ -624,7 +829,7 @@ func TestGetUserOperations_DeleteExternalId(t *testing.T) {
 
 	googleUsers := []*admin.User{}
 
-	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, false, false, "")
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, false, ""), config.DefaultUserAttributeMap)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 1)
@@ -641,10 +846,7 @@ func TestGetUserOperations_RetainUnmatched_LocalUserUnmatched(t *testing.T) {
 		{
 			ID:       "A4",
 			Username: "user4@example.com",
-			Name: struct {
-				FamilyName string `json:"familyName"`
-				GivenName  string `json:"givenName"`
-			}{
+			Name: interfaces.UserName{
 				GivenName:  "Belinda",
 				FamilyName: "Johnson",
 			},
@@ -654,7 +856,7 @@ func TestGetUserOperations_RetainUnmatched_LocalUserUnmatched(t *testing.T) {
 
 	googleUsers := []*admin.User{}
 
-	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, false, true, "")
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, true, ""), config.DefaultUserAttributeMap)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
@@ -671,10 +873,7 @@ func TestGetUserOperations_RetainUnmatched_LocalUserMatched(t *testing.T) {
 		{
 			ID:       "A4",
 			Username: "user4@example.com",
-			Name: struct {
-				FamilyName string `json:"familyName"`
-				GivenName  string `json:"givenName"`
-			}{
+			Name: interfaces.UserName{
 				GivenName:  "Belinda",
 				FamilyName: "Johnson",
 			},
@@ -694,7 +893,7 @@ func TestGetUserOperations_RetainUnmatched_LocalUserMatched(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, false, true, "")
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, true, ""), config.DefaultUserAttributeMap)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
@@ -712,10 +911,7 @@ func TestGetUserOperations_RetainUnmatched_SyncedUserUnmatched(t *testing.T) {
 			ID:         "A4",
 			Username:   "user4@example.com",
 			ExternalId: interfaces.ExternalId{Id: "G4"},
-			Name: struct {
-				FamilyName string `json:"familyName"`
-				GivenName  string `json:"givenName"`
-			}{
+			Name: interfaces.UserName{
 				GivenName:  "Belinda",
 				FamilyName: "Johnson",
 			},
@@ -725,7 +921,7 @@ func TestGetUserOperations_RetainUnmatched_SyncedUserUnmatched(t *testing.T) {
 
 	googleUsers := []*admin.User{}
 
-	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, false, true, "")
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, true, ""), config.DefaultUserAttributeMap)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 1)
@@ -743,10 +939,7 @@ func TestGetUserOperations_RetainUnmatched_SyncedUserMismatched(t *testing.T) {
 			ID:         "A6",
 			ExternalId: interfaces.ExternalId{Id: "GX"},
 			Username:   "user6@example.com",
-			Name: struct {
-				FamilyName string `json:"familyName"`
-				GivenName  string `json:"givenName"`
-			}{
+			Name: interfaces.UserName{
 				GivenName:  "Alan",
 				FamilyName: "Brown",
 			},
@@ -766,7 +959,7 @@ func TestGetUserOperations_RetainUnmatched_SyncedUserMismatched(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, false, true, "")
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, true, ""), config.DefaultUserAttributeMap)
 
 	assert.Len(t, add, 1)
 	assert.Len(t, delete, 1)
@@ -785,13 +978,11 @@ func TestGetUserOperations_RetainUnmatched_SyncedUserMismatched(t *testing.T) {
 func TestGetUserOperations_RetainUnmatched_SyncedUserMatched(t *testing.T) {
 	awsUsers := []*interfaces.User{
 		{
-			ID:         "A6",
-			ExternalId: interfaces.ExternalId{Id: "G6"},
-			Username:   "user6@example.com",
-			Name: struct {
-				FamilyName string `json:"familyName"`
-				GivenName  string `json:"givenName"`
-			}{
+			ID:          "A6",
+			ExternalId:  interfaces.ExternalId{Id: "G6"},
+			Username:    "user6@example.com",
+			DisplayName: "Alan Brown",
+			Name: interfaces.UserName{
 				GivenName:  "Alan",
 				FamilyName: "Brown",
 			},
@@ -811,7 +1002,7 @@ func TestGetUserOperations_RetainUnmatched_SyncedUserMatched(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, false, true, "")
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, true, ""), config.DefaultUserAttributeMap)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
@@ -830,14 +1021,17 @@ func TestGetUserOperations_RetainUnmatched_SyncedUserMatched(t *testing.T) {
 
 // Path: awsUser == nil (no existing AWS user) -> Create.
 func TestGetUserOperation_Create(t *testing.T) {
-	googleUser := &admin.User{
-		Id:           "G7",
-		PrimaryEmail: "user7@example.com",
-		Name: &admin.UserName{
+	// Mapped interface view of the Google user (default map: Username <-
+	// primaryEmail, Active <- !suspended, ExternalId.Id <- id), as
+	// getUserOperations would produce via the mapper.
+	googleUser := &interfaces.User{
+		ExternalId: interfaces.ExternalId{Id: "G7"},
+		Username:   "user7@example.com",
+		Name: interfaces.UserName{
 			GivenName:  "Bob",
 			FamilyName: "Smith",
 		},
-		Suspended: false,
+		Active: true,
 	}
 
 	action, user := getUserOperation(nil, googleUser, false, false, "")
@@ -856,10 +1050,7 @@ func TestGetUserOperation_LocalUnmatched_Retain(t *testing.T) {
 	awsUser := &interfaces.User{
 		ID:       "A4",
 		Username: "user4@example.com",
-		Name: struct {
-			FamilyName string `json:"familyName"`
-			GivenName  string `json:"givenName"`
-		}{
+		Name: interfaces.UserName{
 			GivenName:  "Belinda",
 			FamilyName: "Johnson",
 		},
@@ -881,10 +1072,7 @@ func TestGetUserOperation_LocalUnmatched_Delete(t *testing.T) {
 	awsUser := &interfaces.User{
 		ID:       "A4",
 		Username: "user4@example.com",
-		Name: struct {
-			FamilyName string `json:"familyName"`
-			GivenName  string `json:"givenName"`
-		}{
+		Name: interfaces.UserName{
 			GivenName:  "Belinda",
 			FamilyName: "Johnson",
 		},
@@ -905,24 +1093,21 @@ func TestGetUserOperation_LocalMatched_AdoptLocal(t *testing.T) {
 	awsUser := &interfaces.User{
 		ID:       "A5",
 		Username: "user5@example.com",
-		Name: struct {
-			FamilyName string `json:"familyName"`
-			GivenName  string `json:"givenName"`
-		}{
+		Name: interfaces.UserName{
 			GivenName:  "Jane",
 			FamilyName: "Doe",
 		},
 		Active: true,
 	}
 
-	googleUser := &admin.User{
-		Id:           "G5",
-		PrimaryEmail: "user5@example.com",
-		Name: &admin.UserName{
+	googleUser := &interfaces.User{
+		ExternalId: interfaces.ExternalId{Id: "G5"},
+		Username:   "user5@example.com",
+		Name: interfaces.UserName{
 			GivenName:  "Jane",
 			FamilyName: "Doe",
 		},
-		Suspended: false,
+		Active: true,
 	}
 
 	action, user := getUserOperation(awsUser, googleUser, false, false, "")
@@ -941,10 +1126,7 @@ func TestGetUserOperation_ManagedUnmatched_Delete(t *testing.T) {
 		ID:         "A1",
 		Username:   "user1@example.com",
 		ExternalId: interfaces.ExternalId{Id: "G1"},
-		Name: struct {
-			FamilyName string `json:"familyName"`
-			GivenName  string `json:"givenName"`
-		}{
+		Name: interfaces.UserName{
 			GivenName:  "John",
 			FamilyName: "Doe",
 		},
@@ -965,24 +1147,21 @@ func TestGetUserOperation_ManagedMatched_Equal(t *testing.T) {
 		ID:         "A1",
 		Username:   "user1@example.com",
 		ExternalId: interfaces.ExternalId{Id: "G1"},
-		Name: struct {
-			FamilyName string `json:"familyName"`
-			GivenName  string `json:"givenName"`
-		}{
+		Name: interfaces.UserName{
 			GivenName:  "John",
 			FamilyName: "Doe",
 		},
 		Active: true,
 	}
 
-	googleUser := &admin.User{
-		Id:           "G1",
-		PrimaryEmail: "user1@example.com",
-		Name: &admin.UserName{
+	googleUser := &interfaces.User{
+		ExternalId: interfaces.ExternalId{Id: "G1"},
+		Username:   "user1@example.com",
+		Name: interfaces.UserName{
 			GivenName:  "John",
 			FamilyName: "Doe",
 		},
-		Suspended: false,
+		Active: true,
 	}
 
 	action, user := getUserOperation(awsUser, googleUser, false, false, "")
@@ -1001,24 +1180,21 @@ func TestGetUserOperation_ManagedMatched_Update(t *testing.T) {
 		ID:         "A2",
 		Username:   "user2@example.com",
 		ExternalId: interfaces.ExternalId{Id: "G2"},
-		Name: struct {
-			FamilyName string `json:"familyName"`
-			GivenName  string `json:"givenName"`
-		}{
+		Name: interfaces.UserName{
 			GivenName:  "Jane",
 			FamilyName: "Smith",
 		},
 		Active: true,
 	}
 
-	googleUser := &admin.User{
-		Id:           "G2",
-		PrimaryEmail: "user2@example.com",
-		Name: &admin.UserName{
+	googleUser := &interfaces.User{
+		ExternalId: interfaces.ExternalId{Id: "G2"},
+		Username:   "user2@example.com",
+		Name: interfaces.UserName{
 			GivenName:  "Jane",
 			FamilyName: "Updated", // Name changed
 		},
-		Suspended: false,
+		Active: true,
 	}
 
 	action, user := getUserOperation(awsUser, googleUser, false, false, "")
@@ -1037,24 +1213,21 @@ func TestGetUserOperation_ManagedMismatched_UpdateForced(t *testing.T) {
 		ID:         "A6",
 		Username:   "user6@example.com",
 		ExternalId: interfaces.ExternalId{Id: "GX"},
-		Name: struct {
-			FamilyName string `json:"familyName"`
-			GivenName  string `json:"givenName"`
-		}{
+		Name: interfaces.UserName{
 			GivenName:  "Alan",
 			FamilyName: "Brown",
 		},
 		Active: true,
 	}
 
-	googleUser := &admin.User{
-		Id:           "G6",
-		PrimaryEmail: "user6@example.com",
-		Name: &admin.UserName{
+	googleUser := &interfaces.User{
+		ExternalId: interfaces.ExternalId{Id: "G6"},
+		Username:   "user6@example.com",
+		Name: interfaces.UserName{
 			GivenName:  "Alan",
 			FamilyName: "Brown",
 		},
-		Suspended: false,
+		Active: true,
 	}
 
 	action, user := getUserOperation(awsUser, googleUser, true, false, "")
@@ -1073,24 +1246,21 @@ func TestGetUserOperation_ManagedMismatched_Recreate(t *testing.T) {
 		ID:         "A6",
 		Username:   "user6@example.com",
 		ExternalId: interfaces.ExternalId{Id: "GX"},
-		Name: struct {
-			FamilyName string `json:"familyName"`
-			GivenName  string `json:"givenName"`
-		}{
+		Name: interfaces.UserName{
 			GivenName:  "Alan",
 			FamilyName: "Brown",
 		},
 		Active: true,
 	}
 
-	googleUser := &admin.User{
-		Id:           "G6",
-		PrimaryEmail: "user6@example.com",
-		Name: &admin.UserName{
+	googleUser := &interfaces.User{
+		ExternalId: interfaces.ExternalId{Id: "G6"},
+		Username:   "user6@example.com",
+		Name: interfaces.UserName{
 			GivenName:  "Alan",
 			FamilyName: "Brown",
 		},
-		Suspended: false,
+		Active: true,
 	}
 
 	action, user := getUserOperation(awsUser, googleUser, false, false, "")
@@ -1113,10 +1283,7 @@ func TestGetUserOperation_ForeignUnmatched_Retain(t *testing.T) {
 			Id:     "G8",
 			Issuer: "arn:aws:identitystore::111111111111:identitystore/d-other/provisioningtenant/other",
 		},
-		Name: struct {
-			FamilyName string `json:"familyName"`
-			GivenName  string `json:"givenName"`
-		}{
+		Name: interfaces.UserName{
 			GivenName:  "Carol",
 			FamilyName: "White",
 		},
@@ -1145,10 +1312,7 @@ func TestGetUserOperation_ForeignUnmatched_Delete(t *testing.T) {
 			Id:     "G8",
 			Issuer: "arn:aws:identitystore::111111111111:identitystore/d-other/provisioningtenant/other",
 		},
-		Name: struct {
-			FamilyName string `json:"familyName"`
-			GivenName  string `json:"givenName"`
-		}{
+		Name: interfaces.UserName{
 			GivenName:  "Carol",
 			FamilyName: "White",
 		},
@@ -1175,24 +1339,21 @@ func TestGetUserOperation_ForeignMatched_AdoptForeign(t *testing.T) {
 			Id:     "G8",
 			Issuer: "arn:aws:identitystore::111111111111:identitystore/d-other/provisioningtenant/other",
 		},
-		Name: struct {
-			FamilyName string `json:"familyName"`
-			GivenName  string `json:"givenName"`
-		}{
+		Name: interfaces.UserName{
 			GivenName:  "Carol",
 			FamilyName: "White",
 		},
 		Active: true,
 	}
 
-	googleUser := &admin.User{
-		Id:           "G8",
-		PrimaryEmail: "user8@example.com",
-		Name: &admin.UserName{
+	googleUser := &interfaces.User{
+		ExternalId: interfaces.ExternalId{Id: "G8"},
+		Username:   "user8@example.com",
+		Name: interfaces.UserName{
 			GivenName:  "Carol",
 			FamilyName: "White",
 		},
-		Suspended: false,
+		Active: true,
 	}
 
 	issuerArn := "arn:aws:identitystore::920862271044:identitystore/d-9a671d7705/provisioningtenant/ssosync"
@@ -1205,6 +1366,92 @@ func TestGetUserOperation_ForeignMatched_AdoptForeign(t *testing.T) {
 	assert.Equal(t, user.Username, "user8@example.com")
 	assert.Equal(t, user.Name.GivenName, "Carol")
 	assert.Equal(t, user.Name.FamilyName, "White")
+}
+
+// TestUsersEqual_SupportedFieldDiffers confirms usersEqual now compares the full
+// canonical supported attribute set: a difference in any supported field (Title,
+// PhoneNumbers, Enterprise.*) makes the users unequal, while two users identical
+// across the whole supported set compare equal.
+func TestUsersEqual_SupportedFieldDiffers(t *testing.T) {
+	base := func() *interfaces.User {
+		return &interfaces.User{
+			Username:    "user@example.com",
+			Name:        interfaces.UserName{GivenName: "Jane", FamilyName: "Doe"},
+			DisplayName: "Jane Doe",
+			Active:      true,
+		}
+	}
+
+	// Identical across the whole supported set -> equal.
+	assert.True(t, usersEqual(base(), base()))
+
+	// Title differs -> not equal.
+	withTitle := base()
+	withTitle.Title = "Engineer"
+	assert.False(t, usersEqual(base(), withTitle))
+
+	// PhoneNumbers differ -> not equal.
+	withPhone := base()
+	withPhone.PhoneNumbers = []interfaces.UserPhoneNumber{{Value: "+1-555-0100", Type: "work", Primary: true}}
+	assert.False(t, usersEqual(base(), withPhone))
+
+	// Enterprise.Department differs -> not equal.
+	withEnterprise := base()
+	withEnterprise.Enterprise = &interfaces.EnterpriseUser{Department: "Eng"}
+	assert.False(t, usersEqual(base(), withEnterprise))
+
+	// Emails/Addresses asymmetry: an AWS-side user carrying the synthesized work
+	// email/address compares Equal to a Google-side user carrying neither,
+	// because both operands are normalized through the same builder (the builder
+	// synthesizes the same work email == Username and work address). Without the
+	// normalization this would spuriously report a difference.
+	awsSide := base()
+	awsSide.Emails = []interfaces.UserEmail{{Value: "user@example.com", Type: "work", Primary: true}}
+	awsSide.Addresses = []interfaces.UserAddress{{Type: "work"}}
+	assert.True(t, usersEqual(awsSide, base()))
+}
+
+// TestGetUserOperation_ClearToConsistent confirms clear-to-consistent semantics:
+// an AWS user with a Title that the attribute map does not populate is reported
+// as an Update, and the returned desired object has an empty (cleared) Title
+// while the mapped Google attributes are preserved.
+func TestGetUserOperation_ClearToConsistent(t *testing.T) {
+	awsUser := &interfaces.User{
+		ID:         "A9",
+		Username:   "user9@example.com",
+		ExternalId: interfaces.ExternalId{Id: "G9"},
+		Name: interfaces.UserName{
+			GivenName:  "Sam",
+			FamilyName: "Green",
+		},
+		Active: true,
+		Title:  "Engineer", // expanded field the default map does not populate
+	}
+
+	// Mapped Google user as the default map produces it: no Title.
+	googleUser := &interfaces.User{
+		ExternalId: interfaces.ExternalId{Id: "G9"},
+		Username:   "user9@example.com",
+		Name: interfaces.UserName{
+			GivenName:  "Sam",
+			FamilyName: "Green",
+		},
+		Active: true,
+	}
+
+	action, user := getUserOperation(awsUser, googleUser, false, false, "")
+
+	assert.Equal(t, Update, action)
+	assert.NotNil(t, user)
+	// The desired object stamps the AWS record ID so the update targets it.
+	assert.Equal(t, "A9", user.ID)
+	// Title is cleared to make AWS consistent with Google.
+	assert.Equal(t, "", user.Title)
+	// Mapped Google attributes are preserved.
+	assert.Equal(t, "user9@example.com", user.Username)
+	assert.Equal(t, "Sam", user.Name.GivenName)
+	assert.Equal(t, "Green", user.Name.FamilyName)
+	assert.Equal(t, true, user.Active)
 }
 
 func TestGetGroupOperations_RetainUnmatched_LocalGroupMatched(t *testing.T) {
@@ -1223,7 +1470,7 @@ func TestGetGroupOperations_RetainUnmatched_LocalGroupMatched(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, false, true, "")
+	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, opsConfig(false, true, ""), config.DefaultGroupAttributeMap)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
@@ -1243,7 +1490,7 @@ func TestGetGroupOperations_RetainUnmatched_LocalGroupUnmatched(t *testing.T) {
 
 	googleGroups := []*admin.Group{}
 
-	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, false, true, "")
+	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, opsConfig(false, true, ""), config.DefaultGroupAttributeMap)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
@@ -1263,7 +1510,7 @@ func TestGetGroupOperations_RetainUnmatched_SyncedGroupUnMatched(t *testing.T) {
 
 	googleGroups := []*admin.Group{}
 
-	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, false, true, "")
+	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, opsConfig(false, true, ""), config.DefaultGroupAttributeMap)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 1)
@@ -1290,7 +1537,7 @@ func TestGetGroupOperations_RetainUnmatched_SyncedGroupMismatched(t *testing.T) 
 		},
 	}
 
-	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, false, true, "")
+	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, opsConfig(false, true, ""), config.DefaultGroupAttributeMap)
 
 	assert.Len(t, add, 1)
 	assert.Len(t, delete, 1)
@@ -1319,7 +1566,7 @@ func TestGetGroupOperations_RetainUnmatched_SyncedGroupMatched(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, false, true, "")
+	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, opsConfig(false, true, ""), config.DefaultGroupAttributeMap)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
@@ -1331,10 +1578,11 @@ func TestGetGroupOperations_RetainUnmatched_SyncedGroupMatched(t *testing.T) {
 
 // Path: awsGroup == nil (no existing AWS group) -> Create.
 func TestGetGroupOperation_Create(t *testing.T) {
-	googleGroup := &admin.Group{
-		Id:    "G1",
-		Name:  "Group 1",
-		Email: "group1@example.com",
+	// Mapped interface view of the Google group (default map: DisplayName <- name,
+	// ExternalId.Id <- id), as getGroupOperations would produce via the mapper.
+	googleGroup := &interfaces.Group{
+		DisplayName: "Group 1",
+		ExternalId:  interfaces.ExternalId{Id: "G1"},
 	}
 
 	action, group := getGroupOperation(nil, googleGroup, false, false, "")
@@ -1382,10 +1630,9 @@ func TestGetGroupOperation_LocalMatched_AdoptLocal(t *testing.T) {
 		DisplayName: "Group 3",
 	}
 
-	googleGroup := &admin.Group{
-		Id:    "G3",
-		Name:  "Group 3",
-		Email: "group3@example.com",
+	googleGroup := &interfaces.Group{
+		DisplayName: "Group 3",
+		ExternalId:  interfaces.ExternalId{Id: "G3"},
 	}
 
 	action, group := getGroupOperation(awsGroup, googleGroup, false, false, "")
@@ -1420,10 +1667,9 @@ func TestGetGroupOperation_ManagedMatched_Equal(t *testing.T) {
 		ExternalId:  interfaces.ExternalId{Id: "G1"},
 	}
 
-	googleGroup := &admin.Group{
-		Id:    "G1",
-		Name:  "Group 1",
-		Email: "group1@example.com",
+	googleGroup := &interfaces.Group{
+		DisplayName: "Group 1",
+		ExternalId:  interfaces.ExternalId{Id: "G1"},
 	}
 
 	action, group := getGroupOperation(awsGroup, googleGroup, false, false, "")
@@ -1442,10 +1688,9 @@ func TestGetGroupOperation_ManagedMatched_Update(t *testing.T) {
 		ExternalId:  interfaces.ExternalId{Id: "G4"},
 	}
 
-	googleGroup := &admin.Group{
-		Id:    "G4",
-		Name:  "Different Group Name",
-		Email: "group4@example.com",
+	googleGroup := &interfaces.Group{
+		DisplayName: "Different Group Name",
+		ExternalId:  interfaces.ExternalId{Id: "G4"},
 	}
 
 	action, group := getGroupOperation(awsGroup, googleGroup, false, false, "")
@@ -1464,10 +1709,9 @@ func TestGetGroupOperation_ManagedMismatched_UpdateForced(t *testing.T) {
 		ExternalId:  interfaces.ExternalId{Id: "GX"},
 	}
 
-	googleGroup := &admin.Group{
-		Id:    "G50",
-		Name:  "Group 5",
-		Email: "group5@example.com",
+	googleGroup := &interfaces.Group{
+		DisplayName: "Group 5",
+		ExternalId:  interfaces.ExternalId{Id: "G50"},
 	}
 
 	action, group := getGroupOperation(awsGroup, googleGroup, true, false, "")
@@ -1486,10 +1730,9 @@ func TestGetGroupOperation_ManagedMismatched_Recreate(t *testing.T) {
 		ExternalId:  interfaces.ExternalId{Id: "GX"},
 	}
 
-	googleGroup := &admin.Group{
-		Id:    "G50",
-		Name:  "Group 5",
-		Email: "group5@example.com",
+	googleGroup := &interfaces.Group{
+		DisplayName: "Group 5",
+		ExternalId:  interfaces.ExternalId{Id: "G50"},
 	}
 
 	action, group := getGroupOperation(awsGroup, googleGroup, false, false, "")
@@ -1556,10 +1799,9 @@ func TestGetGroupOperation_ForeignMatched_AdoptForeign(t *testing.T) {
 		},
 	}
 
-	googleGroup := &admin.Group{
-		Id:    "G8",
-		Name:  "Group 8",
-		Email: "group8@example.com",
+	googleGroup := &interfaces.Group{
+		DisplayName: "Group 8",
+		ExternalId:  interfaces.ExternalId{Id: "G8"},
 	}
 
 	issuerArn := "arn:aws:identitystore::920862271044:identitystore/d-9a671d7705/provisioningtenant/ssosync"
@@ -1577,10 +1819,7 @@ func TestGetUserOperations_SuspendedStateChange(t *testing.T) {
 		{
 			ID:       "1",
 			Username: "user1@example.com",
-			Name: struct {
-				FamilyName string `json:"familyName"`
-				GivenName  string `json:"givenName"`
-			}{
+			Name: interfaces.UserName{
 				GivenName:  "John",
 				FamilyName: "Doe",
 			},
@@ -1599,7 +1838,7 @@ func TestGetUserOperations_SuspendedStateChange(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, false, false, "")
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, false, ""), config.DefaultUserAttributeMap)
 
 	// Should update user1 (suspended state changed)
 	assert.Len(t, update, 1)
@@ -1638,9 +1877,11 @@ func TestGetGroupUsersOperations(t *testing.T) {
 
 	s := &syncGSuite{
 		aws: mockAws,
+		cfg: &config.Config{AttributeMap: config.DefaultAttributeMap},
 	}
 
-	addUsers, deleteUsers, unchangedUsers, err := s.getGroupUsersOperations(googleGroupsUsers, awsGroupsUsers)
+	ids := newMemberIdentities(nil, config.DefaultAttributeMap.User, nil)
+	addUsers, deleteUsers, unchangedUsers, err := s.getGroupUsersOperations(googleGroupsUsers, awsGroupsUsers, ids)
 	assert.NoError(t, err)
 
 	// Should Add user2 in group1
@@ -2307,10 +2548,7 @@ func TestGetUserOperations_ForeignIssuer_UnmatchedRetain(t *testing.T) {
 				Id:     "G8",
 				Issuer: "arn:aws:identitystore::111111111111:identitystore/d-other/provisioningtenant/other",
 			},
-			Name: struct {
-				FamilyName string `json:"familyName"`
-				GivenName  string `json:"givenName"`
-			}{
+			Name: interfaces.UserName{
 				GivenName:  "Carol",
 				FamilyName: "White",
 			},
@@ -2320,7 +2558,7 @@ func TestGetUserOperations_ForeignIssuer_UnmatchedRetain(t *testing.T) {
 
 	googleUsers := []*admin.User{}
 
-	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, false, true, issuerArn)
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, true, issuerArn), config.DefaultUserAttributeMap)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
@@ -2341,10 +2579,7 @@ func TestGetUserOperations_ForeignIssuer_UnmatchedDelete(t *testing.T) {
 				Id:     "G8",
 				Issuer: "arn:aws:identitystore::111111111111:identitystore/d-other/provisioningtenant/other",
 			},
-			Name: struct {
-				FamilyName string `json:"familyName"`
-				GivenName  string `json:"givenName"`
-			}{
+			Name: interfaces.UserName{
 				GivenName:  "Carol",
 				FamilyName: "White",
 			},
@@ -2354,7 +2589,7 @@ func TestGetUserOperations_ForeignIssuer_UnmatchedDelete(t *testing.T) {
 
 	googleUsers := []*admin.User{}
 
-	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, false, false, issuerArn)
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, false, issuerArn), config.DefaultUserAttributeMap)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 1)
@@ -2375,10 +2610,7 @@ func TestGetUserOperations_ForeignIssuer_MatchedAdoptForeign(t *testing.T) {
 				Id:     "G8",
 				Issuer: "arn:aws:identitystore::111111111111:identitystore/d-other/provisioningtenant/other",
 			},
-			Name: struct {
-				FamilyName string `json:"familyName"`
-				GivenName  string `json:"givenName"`
-			}{
+			Name: interfaces.UserName{
 				GivenName:  "Carol",
 				FamilyName: "White",
 			},
@@ -2398,7 +2630,7 @@ func TestGetUserOperations_ForeignIssuer_MatchedAdoptForeign(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, false, false, issuerArn)
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, false, issuerArn), config.DefaultUserAttributeMap)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
@@ -2420,14 +2652,12 @@ func TestGetUserOperations_ManagedIssuer_Equals(t *testing.T) {
 				Id:     "G8",
 				Issuer: issuerArn,
 			},
-			Name: struct {
-				FamilyName string `json:"familyName"`
-				GivenName  string `json:"givenName"`
-			}{
+			Name: interfaces.UserName{
 				GivenName:  "Carol",
 				FamilyName: "White",
 			},
-			Active: true,
+			DisplayName: "Carol White",
+			Active:      true,
 		},
 	}
 
@@ -2443,7 +2673,7 @@ func TestGetUserOperations_ManagedIssuer_Equals(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, false, false, issuerArn)
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, false, issuerArn), config.DefaultUserAttributeMap)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
@@ -2469,7 +2699,7 @@ func TestGetGroupOperations_ForeignIssuer_UnmatchedRetain(t *testing.T) {
 
 	googleGroups := []*admin.Group{}
 
-	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, false, true, issuerArn)
+	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, opsConfig(false, true, issuerArn), config.DefaultGroupAttributeMap)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
@@ -2495,7 +2725,7 @@ func TestGetGroupOperations_ForeignIssuer_UnmatchedDelete(t *testing.T) {
 
 	googleGroups := []*admin.Group{}
 
-	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, false, false, issuerArn)
+	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, opsConfig(false, false, issuerArn), config.DefaultGroupAttributeMap)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 1)
@@ -2527,7 +2757,7 @@ func TestGetGroupOperations_ForeignIssuer_MatchedAdoptForeign(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, false, false, issuerArn)
+	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, opsConfig(false, false, issuerArn), config.DefaultGroupAttributeMap)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
@@ -2560,11 +2790,1160 @@ func TestGetGroupOperations_ManagedIssuer_Equals(t *testing.T) {
 		},
 	}
 
-	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, false, false, issuerArn)
+	add, delete, update, equals := getGroupOperations(awsGroups, googleGroups, opsConfig(false, false, issuerArn), config.DefaultGroupAttributeMap)
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
 	assert.Len(t, update, 0)
 	assert.Len(t, equals, 1)
 	assert.Equal(t, "G8", equals[0].ExternalId.Id)
+}
+
+// TestGetUserOperations_CustomAttrMap_ChangesMatching proves that the discrete
+// attrMap parameter is actually used end-to-end: remapping Username away from
+// primaryEmail to name.givenName changes which AWS user the Google user matches
+// on the Username-fallback path. The AWS user has no ExternalId, so matching can
+// only happen via Username.
+func TestGetUserOperations_CustomAttrMap_ChangesMatching(t *testing.T) {
+	// AWS user whose Username equals the Google user's GivenName (lowercased),
+	// but NOT the Google user's primaryEmail.
+	awsUsers := []*interfaces.User{
+		{
+			ID:       "A99",
+			Username: "bob",
+			Name: interfaces.UserName{
+				GivenName:  "Bob",
+				FamilyName: "Smith",
+			},
+			Active: true,
+		},
+	}
+
+	googleUsers := []*admin.User{
+		{
+			Id:           "G99",
+			PrimaryEmail: "bob.smith@example.com",
+			Name: &admin.UserName{
+				GivenName:  "Bob",
+				FamilyName: "Smith",
+			},
+			Suspended: false,
+		},
+	}
+
+	// Custom map: Username is sourced from name.givenName instead of primaryEmail.
+	customMap := config.AttributeMap{
+		"Name.GivenName":  "name.givenName",
+		"Name.FamilyName": "name.familyName",
+		"Username":        "name.givenName",
+		"Active":          "suspended",
+	}
+
+	// With the custom map the mapped Username == "Bob", which matches the AWS
+	// user "bob" on the Username-fallback path: the local user is adopted.
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, false, ""), customMap)
+
+	assert.Len(t, add, 0)
+	assert.Len(t, delete, 0)
+	assert.Len(t, update, 1)
+	assert.Len(t, equals, 0)
+	assert.Equal(t, "G99", update[0].ExternalId.Id)
+	assert.Equal(t, "Bob", update[0].Username)
+
+	// Contrast: with the DEFAULT map the mapped Username == primaryEmail
+	// ("bob.smith@example.com"), which does NOT match the AWS user "bob", so the
+	// Google user is created and the unmatched local AWS user is deleted.
+	add, delete, update, equals = getUserOperations(awsUsers, googleUsers, opsConfig(false, false, ""), config.DefaultUserAttributeMap)
+
+	assert.Len(t, add, 1)
+	assert.Len(t, delete, 1)
+	assert.Len(t, update, 0)
+	assert.Len(t, equals, 0)
+	assert.Equal(t, "G99", add[0].ExternalId.Id)
+	assert.Equal(t, "bob.smith@example.com", add[0].Username)
+	assert.Equal(t, "A99", delete[0].ID)
+
+	// Third sub-scenario (item 6a): an AWS user already synced with
+	// Username == "Bob" and the Google ExternalId set. Running the same
+	// Username <- name.givenName custom map must classify Equal with an empty
+	// update: an already-synced user whose Username equals the mapped value does
+	// not churn.
+	syncedAwsUsers := []*interfaces.User{
+		{
+			ID:          "A99",
+			Username:    "Bob",
+			ExternalId:  interfaces.ExternalId{Id: "G99"},
+			Name:        interfaces.UserName{GivenName: "Bob", FamilyName: "Smith"},
+			DisplayName: "Bob Smith",
+			Active:      true,
+		},
+	}
+
+	add, delete, update, equals = getUserOperations(syncedAwsUsers, googleUsers, opsConfig(false, false, ""), customMap)
+
+	assert.Len(t, add, 0)
+	assert.Len(t, delete, 0)
+	assert.Len(t, update, 0, "already-synced user whose Username equals the mapped givenName must not churn")
+	assert.Len(t, equals, 1)
+	assert.Equal(t, "G99", equals[0].ExternalId.Id)
+	assert.Equal(t, "Bob", equals[0].Username)
+}
+
+// optInMap builds a custom AttributeMap from the four default scalar entries
+// (Name.GivenName, Name.FamilyName, Username, Active) plus the single opt-in
+// target<-source pair under test, so matching still works via Username while the
+// one opt-in multi-valued/enterprise field is exercised at the getUserOperations
+// level.
+func optInMap(target, source string) config.AttributeMap {
+	m := config.AttributeMap{
+		"Name.GivenName":  "name.givenName",
+		"Name.FamilyName": "name.familyName",
+		"Username":        "primaryEmail",
+		"Active":          "suspended",
+	}
+	m[target] = source
+	return m
+}
+
+// --- Item 5: getUserOperations-level opt-in coverage (enrichment + steady-state) ---
+
+func TestGetUserOperations_OptInEmails_Enrichment(t *testing.T) {
+	awsUsers := []*interfaces.User{
+		{
+			ID:          "A1",
+			Username:    "user1@example.com",
+			ExternalId:  interfaces.ExternalId{Id: "G1"},
+			Name:        interfaces.UserName{GivenName: "John", FamilyName: "Doe"},
+			DisplayName: "John Doe",
+			Active:      true,
+			// Only the synthesized work email the Identity Store returns; no
+			// opt-in email yet.
+			Emails:    []interfaces.UserEmail{{Value: "user1@example.com", Type: "work", Primary: true}},
+			Addresses: []interfaces.UserAddress{{Type: "work"}},
+		},
+	}
+
+	googleUsers := []*admin.User{
+		{
+			Id:           "G1",
+			PrimaryEmail: "user1@example.com",
+			Name:         &admin.UserName{GivenName: "John", FamilyName: "Doe"},
+			Emails: []admin.UserEmail{
+				{Address: "john.personal@example.com", Type: "home", Primary: true},
+			},
+		},
+	}
+
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, false, ""), optInMap("Emails", "emails[primary].address"))
+
+	assert.Len(t, add, 0)
+	assert.Len(t, delete, 0)
+	assert.Len(t, equals, 0)
+	if assert.Len(t, update, 1) {
+		if assert.Len(t, update[0].Emails, 1) {
+			assert.Equal(t, "john.personal@example.com", update[0].Emails[0].Value)
+			assert.Equal(t, "home", update[0].Emails[0].Type)
+			assert.True(t, update[0].Emails[0].Primary)
+		}
+	}
+}
+
+func TestGetUserOperations_OptInEmails_SteadyState_Equal(t *testing.T) {
+	awsUsers := []*interfaces.User{
+		{
+			ID:          "A1",
+			Username:    "user1@example.com",
+			ExternalId:  interfaces.ExternalId{Id: "G1"},
+			Name:        interfaces.UserName{GivenName: "John", FamilyName: "Doe"},
+			DisplayName: "John Doe",
+			Active:      true,
+			// The opt-in email is already present AWS-side, as the mapper would
+			// shape it (single element, Primary:true, type passed through).
+			Emails:    []interfaces.UserEmail{{Value: "john.personal@example.com", Type: "home", Primary: true}},
+			Addresses: []interfaces.UserAddress{{Type: "work"}},
+		},
+	}
+
+	googleUsers := []*admin.User{
+		{
+			Id:           "G1",
+			PrimaryEmail: "user1@example.com",
+			Name:         &admin.UserName{GivenName: "John", FamilyName: "Doe"},
+			Emails: []admin.UserEmail{
+				{Address: "john.personal@example.com", Type: "home", Primary: true},
+			},
+		},
+	}
+
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, false, ""), optInMap("Emails", "emails[primary].address"))
+
+	assert.Len(t, add, 0)
+	assert.Len(t, delete, 0)
+	assert.Len(t, update, 0, "steady-state opt-in Emails user must not churn")
+	assert.Len(t, equals, 1)
+}
+
+func TestGetUserOperations_OptInAddresses_Enrichment(t *testing.T) {
+	awsUsers := []*interfaces.User{
+		{
+			ID:          "A1",
+			Username:    "user1@example.com",
+			ExternalId:  interfaces.ExternalId{Id: "G1"},
+			Name:        interfaces.UserName{GivenName: "John", FamilyName: "Doe"},
+			DisplayName: "John Doe",
+			Active:      true,
+			Emails:      []interfaces.UserEmail{{Value: "user1@example.com", Type: "work", Primary: true}},
+			Addresses:   []interfaces.UserAddress{{Type: "work"}},
+		},
+	}
+
+	googleUsers := []*admin.User{
+		{
+			Id:           "G1",
+			PrimaryEmail: "user1@example.com",
+			Name:         &admin.UserName{GivenName: "John", FamilyName: "Doe"},
+			Addresses: []admin.UserAddress{
+				// Empty Google type -> defaults to "work".
+				{Formatted: "1 Example Way", Type: "", Primary: true},
+			},
+		},
+	}
+
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, false, ""), optInMap("Addresses", "addresses[primary].formatted"))
+
+	assert.Len(t, add, 0)
+	assert.Len(t, delete, 0)
+	assert.Len(t, equals, 0)
+	if assert.Len(t, update, 1) {
+		if assert.Len(t, update[0].Addresses, 1) {
+			assert.Equal(t, "1 Example Way", update[0].Addresses[0].Formatted)
+			assert.Equal(t, "work", update[0].Addresses[0].Type)
+			assert.True(t, update[0].Addresses[0].Primary)
+		}
+	}
+}
+
+func TestGetUserOperations_OptInAddresses_SteadyState_Equal(t *testing.T) {
+	awsUsers := []*interfaces.User{
+		{
+			ID:          "A1",
+			Username:    "user1@example.com",
+			ExternalId:  interfaces.ExternalId{Id: "G1"},
+			Name:        interfaces.UserName{GivenName: "John", FamilyName: "Doe"},
+			DisplayName: "John Doe",
+			Active:      true,
+			Emails:      []interfaces.UserEmail{{Value: "user1@example.com", Type: "work", Primary: true}},
+			Addresses:   []interfaces.UserAddress{{Formatted: "1 Example Way", Type: "work", Primary: true}},
+		},
+	}
+
+	googleUsers := []*admin.User{
+		{
+			Id:           "G1",
+			PrimaryEmail: "user1@example.com",
+			Name:         &admin.UserName{GivenName: "John", FamilyName: "Doe"},
+			Addresses: []admin.UserAddress{
+				{Formatted: "1 Example Way", Type: "", Primary: true},
+			},
+		},
+	}
+
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, false, ""), optInMap("Addresses", "addresses[primary].formatted"))
+
+	assert.Len(t, add, 0)
+	assert.Len(t, delete, 0)
+	assert.Len(t, update, 0, "steady-state opt-in Addresses user must not churn")
+	assert.Len(t, equals, 1)
+}
+
+func TestGetUserOperations_OptInPhoneNumbers_Enrichment(t *testing.T) {
+	awsUsers := []*interfaces.User{
+		{
+			ID:          "A1",
+			Username:    "user1@example.com",
+			ExternalId:  interfaces.ExternalId{Id: "G1"},
+			Name:        interfaces.UserName{GivenName: "John", FamilyName: "Doe"},
+			DisplayName: "John Doe",
+			Active:      true,
+			Emails:      []interfaces.UserEmail{{Value: "user1@example.com", Type: "work", Primary: true}},
+			Addresses:   []interfaces.UserAddress{{Type: "work"}},
+		},
+	}
+
+	googleUsers := []*admin.User{
+		{
+			Id:           "G1",
+			PrimaryEmail: "user1@example.com",
+			Name:         &admin.UserName{GivenName: "John", FamilyName: "Doe"},
+			Phones: []admin.UserPhone{
+				{Value: "+15551234567", Type: "mobile", Primary: true},
+			},
+		},
+	}
+
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, false, ""), optInMap("PhoneNumbers", "phones[primary].value"))
+
+	assert.Len(t, add, 0)
+	assert.Len(t, delete, 0)
+	assert.Len(t, equals, 0)
+	if assert.Len(t, update, 1) {
+		if assert.Len(t, update[0].PhoneNumbers, 1) {
+			assert.Equal(t, "+15551234567", update[0].PhoneNumbers[0].Value)
+			assert.Equal(t, "mobile", update[0].PhoneNumbers[0].Type)
+			assert.True(t, update[0].PhoneNumbers[0].Primary)
+		}
+	}
+}
+
+func TestGetUserOperations_OptInPhoneNumbers_SteadyState_Equal(t *testing.T) {
+	awsUsers := []*interfaces.User{
+		{
+			ID:           "A1",
+			Username:     "user1@example.com",
+			ExternalId:   interfaces.ExternalId{Id: "G1"},
+			Name:         interfaces.UserName{GivenName: "John", FamilyName: "Doe"},
+			DisplayName:  "John Doe",
+			Active:       true,
+			Emails:       []interfaces.UserEmail{{Value: "user1@example.com", Type: "work", Primary: true}},
+			Addresses:    []interfaces.UserAddress{{Type: "work"}},
+			PhoneNumbers: []interfaces.UserPhoneNumber{{Value: "+15551234567", Type: "mobile", Primary: true}},
+		},
+	}
+
+	googleUsers := []*admin.User{
+		{
+			Id:           "G1",
+			PrimaryEmail: "user1@example.com",
+			Name:         &admin.UserName{GivenName: "John", FamilyName: "Doe"},
+			Phones: []admin.UserPhone{
+				{Value: "+15551234567", Type: "mobile", Primary: true},
+			},
+		},
+	}
+
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, false, ""), optInMap("PhoneNumbers", "phones[primary].value"))
+
+	assert.Len(t, add, 0)
+	assert.Len(t, delete, 0)
+	assert.Len(t, update, 0, "steady-state opt-in PhoneNumbers user must not churn")
+	assert.Len(t, equals, 1)
+}
+
+func TestGetUserOperations_OptInManager_Enrichment(t *testing.T) {
+	awsUsers := []*interfaces.User{
+		{
+			ID:          "A1",
+			Username:    "user1@example.com",
+			ExternalId:  interfaces.ExternalId{Id: "G1"},
+			Name:        interfaces.UserName{GivenName: "John", FamilyName: "Doe"},
+			DisplayName: "John Doe",
+			Active:      true,
+			Emails:      []interfaces.UserEmail{{Value: "user1@example.com", Type: "work", Primary: true}},
+			Addresses:   []interfaces.UserAddress{{Type: "work"}},
+		},
+	}
+
+	googleUsers := []*admin.User{
+		{
+			Id:           "G1",
+			PrimaryEmail: "user1@example.com",
+			Name:         &admin.UserName{GivenName: "John", FamilyName: "Doe"},
+			Relations: []admin.UserRelation{
+				{Type: "assistant", Value: "asst@example.com"},
+				{Type: "manager", Value: "boss@example.com"},
+			},
+		},
+	}
+
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, false, ""), optInMap("Enterprise.Manager", "relations[type=manager].value"))
+
+	assert.Len(t, add, 0)
+	assert.Len(t, delete, 0)
+	assert.Len(t, equals, 0)
+	if assert.Len(t, update, 1) {
+		if assert.NotNil(t, update[0].Enterprise) && assert.NotNil(t, update[0].Enterprise.Manager) {
+			assert.Equal(t, "boss@example.com", update[0].Enterprise.Manager.Value)
+		}
+	}
+}
+
+func TestGetUserOperations_OptInManager_SteadyState_Equal(t *testing.T) {
+	awsUsers := []*interfaces.User{
+		{
+			ID:          "A1",
+			Username:    "user1@example.com",
+			ExternalId:  interfaces.ExternalId{Id: "G1"},
+			Name:        interfaces.UserName{GivenName: "John", FamilyName: "Doe"},
+			DisplayName: "John Doe",
+			Active:      true,
+			Emails:      []interfaces.UserEmail{{Value: "user1@example.com", Type: "work", Primary: true}},
+			Addresses:   []interfaces.UserAddress{{Type: "work"}},
+			Enterprise:  &interfaces.EnterpriseUser{Manager: &interfaces.EnterpriseManager{Value: "boss@example.com"}},
+		},
+	}
+
+	googleUsers := []*admin.User{
+		{
+			Id:           "G1",
+			PrimaryEmail: "user1@example.com",
+			Name:         &admin.UserName{GivenName: "John", FamilyName: "Doe"},
+			Relations: []admin.UserRelation{
+				{Type: "manager", Value: "boss@example.com"},
+			},
+		},
+	}
+
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, false, ""), optInMap("Enterprise.Manager", "relations[type=manager].value"))
+
+	assert.Len(t, add, 0)
+	assert.Len(t, delete, 0)
+	assert.Len(t, update, 0, "steady-state opt-in Manager user must not churn")
+	assert.Len(t, equals, 1)
+}
+
+// Absent-manager variant: no type==manager relation -> Enterprise stays nil and
+// there is no spurious Update (Equal against an AWS record that also lacks it).
+func TestGetUserOperations_OptInManager_AbsentNoChurn(t *testing.T) {
+	awsUsers := []*interfaces.User{
+		{
+			ID:          "A1",
+			Username:    "user1@example.com",
+			ExternalId:  interfaces.ExternalId{Id: "G1"},
+			Name:        interfaces.UserName{GivenName: "John", FamilyName: "Doe"},
+			DisplayName: "John Doe",
+			Active:      true,
+			Emails:      []interfaces.UserEmail{{Value: "user1@example.com", Type: "work", Primary: true}},
+			Addresses:   []interfaces.UserAddress{{Type: "work"}},
+			// No Enterprise: the record never had a manager.
+		},
+	}
+
+	googleUsers := []*admin.User{
+		{
+			Id:           "G1",
+			PrimaryEmail: "user1@example.com",
+			Name:         &admin.UserName{GivenName: "John", FamilyName: "Doe"},
+			Relations: []admin.UserRelation{
+				{Type: "assistant", Value: "asst@example.com"},
+			},
+		},
+	}
+
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, false, ""), optInMap("Enterprise.Manager", "relations[type=manager].value"))
+
+	assert.Len(t, add, 0)
+	assert.Len(t, delete, 0)
+	assert.Len(t, update, 0, "absent manager must not create a spurious Update")
+	if assert.Len(t, equals, 1) {
+		assert.Nil(t, equals[0].Enterprise)
+	}
+}
+
+func TestGetUserOperations_OptInDivision_Enrichment(t *testing.T) {
+	awsUsers := []*interfaces.User{
+		{
+			ID:          "A1",
+			Username:    "user1@example.com",
+			ExternalId:  interfaces.ExternalId{Id: "G1"},
+			Name:        interfaces.UserName{GivenName: "John", FamilyName: "Doe"},
+			DisplayName: "John Doe",
+			Active:      true,
+			Emails:      []interfaces.UserEmail{{Value: "user1@example.com", Type: "work", Primary: true}},
+			Addresses:   []interfaces.UserAddress{{Type: "work"}},
+		},
+	}
+
+	googleUsers := []*admin.User{
+		{
+			Id:           "G1",
+			PrimaryEmail: "user1@example.com",
+			Name:         &admin.UserName{GivenName: "John", FamilyName: "Doe"},
+			Organizations: []admin.UserOrganization{
+				{Domain: "sales.example.com", Primary: true},
+			},
+		},
+	}
+
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, false, ""), optInMap("Enterprise.Division", "organizations[primary].domain"))
+
+	assert.Len(t, add, 0)
+	assert.Len(t, delete, 0)
+	assert.Len(t, equals, 0)
+	if assert.Len(t, update, 1) {
+		if assert.NotNil(t, update[0].Enterprise) {
+			assert.Equal(t, "sales.example.com", update[0].Enterprise.Division)
+		}
+	}
+}
+
+func TestGetUserOperations_OptInDivision_SteadyState_Equal(t *testing.T) {
+	awsUsers := []*interfaces.User{
+		{
+			ID:          "A1",
+			Username:    "user1@example.com",
+			ExternalId:  interfaces.ExternalId{Id: "G1"},
+			Name:        interfaces.UserName{GivenName: "John", FamilyName: "Doe"},
+			DisplayName: "John Doe",
+			Active:      true,
+			Emails:      []interfaces.UserEmail{{Value: "user1@example.com", Type: "work", Primary: true}},
+			Addresses:   []interfaces.UserAddress{{Type: "work"}},
+			Enterprise:  &interfaces.EnterpriseUser{Division: "sales.example.com"},
+		},
+	}
+
+	googleUsers := []*admin.User{
+		{
+			Id:           "G1",
+			PrimaryEmail: "user1@example.com",
+			Name:         &admin.UserName{GivenName: "John", FamilyName: "Doe"},
+			Organizations: []admin.UserOrganization{
+				{Domain: "sales.example.com", Primary: true},
+			},
+		},
+	}
+
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, false, ""), optInMap("Enterprise.Division", "organizations[primary].domain"))
+
+	assert.Len(t, add, 0)
+	assert.Len(t, delete, 0)
+	assert.Len(t, update, 0, "steady-state opt-in Division user must not churn")
+	assert.Len(t, equals, 1)
+}
+
+// EmployeeNumber assignment coverage only: Google admin.User has no first-class
+// scalar employee-number source (design §5.3), so the source here is ARBITRARY
+// (organizations[primary].name) purely to prove the Enterprise.EmployeeNumber
+// TARGET case resolves and is churn-free — NOT to assert semantic correctness of
+// that mapping.
+func TestGetUserOperations_OptInEmployeeNumber_Enrichment(t *testing.T) {
+	awsUsers := []*interfaces.User{
+		{
+			ID:          "A1",
+			Username:    "user1@example.com",
+			ExternalId:  interfaces.ExternalId{Id: "G1"},
+			Name:        interfaces.UserName{GivenName: "John", FamilyName: "Doe"},
+			DisplayName: "John Doe",
+			Active:      true,
+			Emails:      []interfaces.UserEmail{{Value: "user1@example.com", Type: "work", Primary: true}},
+			Addresses:   []interfaces.UserAddress{{Type: "work"}},
+		},
+	}
+
+	googleUsers := []*admin.User{
+		{
+			Id:           "G1",
+			PrimaryEmail: "user1@example.com",
+			Name:         &admin.UserName{GivenName: "John", FamilyName: "Doe"},
+			Organizations: []admin.UserOrganization{
+				{Name: "ExampleCorp", Primary: true},
+			},
+		},
+	}
+
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, false, ""), optInMap("Enterprise.EmployeeNumber", "organizations[primary].name"))
+
+	assert.Len(t, add, 0)
+	assert.Len(t, delete, 0)
+	assert.Len(t, equals, 0)
+	if assert.Len(t, update, 1) {
+		if assert.NotNil(t, update[0].Enterprise) {
+			assert.Equal(t, "ExampleCorp", update[0].Enterprise.EmployeeNumber)
+		}
+	}
+}
+
+func TestGetUserOperations_OptInEmployeeNumber_SteadyState_Equal(t *testing.T) {
+	awsUsers := []*interfaces.User{
+		{
+			ID:          "A1",
+			Username:    "user1@example.com",
+			ExternalId:  interfaces.ExternalId{Id: "G1"},
+			Name:        interfaces.UserName{GivenName: "John", FamilyName: "Doe"},
+			DisplayName: "John Doe",
+			Active:      true,
+			Emails:      []interfaces.UserEmail{{Value: "user1@example.com", Type: "work", Primary: true}},
+			Addresses:   []interfaces.UserAddress{{Type: "work"}},
+			Enterprise:  &interfaces.EnterpriseUser{EmployeeNumber: "ExampleCorp"},
+		},
+	}
+
+	googleUsers := []*admin.User{
+		{
+			Id:           "G1",
+			PrimaryEmail: "user1@example.com",
+			Name:         &admin.UserName{GivenName: "John", FamilyName: "Doe"},
+			Organizations: []admin.UserOrganization{
+				{Name: "ExampleCorp", Primary: true},
+			},
+		},
+	}
+
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, false, ""), optInMap("Enterprise.EmployeeNumber", "organizations[primary].name"))
+
+	assert.Len(t, add, 0)
+	assert.Len(t, delete, 0)
+	assert.Len(t, update, 0, "steady-state opt-in EmployeeNumber user must not churn")
+	assert.Len(t, equals, 1)
+}
+
+func TestGetUserOperations_OptInProfileURL_Enrichment(t *testing.T) {
+	awsUsers := []*interfaces.User{
+		{
+			ID:          "A1",
+			Username:    "user1@example.com",
+			ExternalId:  interfaces.ExternalId{Id: "G1"},
+			Name:        interfaces.UserName{GivenName: "John", FamilyName: "Doe"},
+			DisplayName: "John Doe",
+			Active:      true,
+			Emails:      []interfaces.UserEmail{{Value: "user1@example.com", Type: "work", Primary: true}},
+			Addresses:   []interfaces.UserAddress{{Type: "work"}},
+		},
+	}
+
+	googleUsers := []*admin.User{
+		{
+			Id:           "G1",
+			PrimaryEmail: "user1@example.com",
+			Name:         &admin.UserName{GivenName: "John", FamilyName: "Doe"},
+			Websites: []admin.UserWebsite{
+				{Value: "https://profile.example.com/john", Type: "profile", Primary: true},
+			},
+		},
+	}
+
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, false, ""), optInMap("ProfileURL", "websites[primary].value"))
+
+	assert.Len(t, add, 0)
+	assert.Len(t, delete, 0)
+	assert.Len(t, equals, 0)
+	if assert.Len(t, update, 1) {
+		assert.Equal(t, "https://profile.example.com/john", update[0].ProfileURL)
+	}
+}
+
+func TestGetUserOperations_OptInProfileURL_SteadyState_Equal(t *testing.T) {
+	awsUsers := []*interfaces.User{
+		{
+			ID:          "A1",
+			Username:    "user1@example.com",
+			ExternalId:  interfaces.ExternalId{Id: "G1"},
+			Name:        interfaces.UserName{GivenName: "John", FamilyName: "Doe"},
+			DisplayName: "John Doe",
+			Active:      true,
+			ProfileURL:  "https://profile.example.com/john",
+			Emails:      []interfaces.UserEmail{{Value: "user1@example.com", Type: "work", Primary: true}},
+			Addresses:   []interfaces.UserAddress{{Type: "work"}},
+		},
+	}
+
+	googleUsers := []*admin.User{
+		{
+			Id:           "G1",
+			PrimaryEmail: "user1@example.com",
+			Name:         &admin.UserName{GivenName: "John", FamilyName: "Doe"},
+			Websites: []admin.UserWebsite{
+				{Value: "https://profile.example.com/john", Type: "profile", Primary: true},
+			},
+		},
+	}
+
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, false, ""), optInMap("ProfileURL", "websites[primary].value"))
+
+	assert.Len(t, add, 0)
+	assert.Len(t, delete, 0)
+	assert.Len(t, update, 0, "steady-state opt-in ProfileURL user must not churn")
+	assert.Len(t, equals, 1)
+}
+
+// --- Item 6a: Username mapped to a non-email source, at getUserOperations level ---
+
+// TestGetUserOperations_UsernameMappedToGivenName_DesiredPayload: a custom map
+// sources Username from name.givenName. The AWS user's Username equals the
+// Google GivenName (so matching happens on the Username-fallback path; the AWS
+// user has no ExternalId yet), so the local user is adopted (Update), the
+// ExternalId is stamped from the Google id, and the desired Username is the
+// MAPPED givenName value, NOT primaryEmail.
+func TestGetUserOperations_UsernameMappedToGivenName_DesiredPayload(t *testing.T) {
+	awsUsers := []*interfaces.User{
+		{
+			ID:       "A1",
+			Username: "John",
+			Name:     interfaces.UserName{GivenName: "John", FamilyName: "Doe"},
+			Active:   true,
+		},
+	}
+
+	googleUsers := []*admin.User{
+		{
+			Id:           "G1",
+			PrimaryEmail: "jdoe@example.com",
+			Name:         &admin.UserName{GivenName: "John", FamilyName: "Doe"},
+		},
+	}
+
+	customMap := config.AttributeMap{
+		"Name.GivenName":  "name.givenName",
+		"Name.FamilyName": "name.familyName",
+		"Username":        "name.givenName",
+		"Active":          "suspended",
+	}
+
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, false, ""), customMap)
+
+	assert.Len(t, add, 0)
+	assert.Len(t, delete, 0)
+	assert.Len(t, equals, 0)
+	if assert.Len(t, update, 1) {
+		assert.Equal(t, "G1", update[0].ExternalId.Id)
+		assert.Equal(t, "John", update[0].Username)
+		assert.NotEqual(t, "jdoe@example.com", update[0].Username)
+	}
+}
+
+func TestGetUserOperations_UsernameMappedToGivenName_SteadyState_Equal(t *testing.T) {
+	awsUsers := []*interfaces.User{
+		{
+			ID:          "A1",
+			Username:    "John",
+			ExternalId:  interfaces.ExternalId{Id: "G1"},
+			Name:        interfaces.UserName{GivenName: "John", FamilyName: "Doe"},
+			DisplayName: "John Doe",
+			Active:      true,
+		},
+	}
+
+	googleUsers := []*admin.User{
+		{
+			Id:           "G1",
+			PrimaryEmail: "jdoe@example.com",
+			Name:         &admin.UserName{GivenName: "John", FamilyName: "Doe"},
+		},
+	}
+
+	customMap := config.AttributeMap{
+		"Name.GivenName":  "name.givenName",
+		"Name.FamilyName": "name.familyName",
+		"Username":        "name.givenName",
+		"Active":          "suspended",
+	}
+
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, false, ""), customMap)
+
+	assert.Len(t, add, 0)
+	assert.Len(t, delete, 0)
+	assert.Len(t, update, 0, "already-synced user whose Username is sourced from givenName must not churn")
+	if assert.Len(t, equals, 1) {
+		assert.Equal(t, "John", equals[0].Username)
+	}
+}
+
+// --- Item 6b: multiple address values at getUserOperations level ---
+
+func TestGetUserOperations_OptInAddresses_MultiplePrimarySelected(t *testing.T) {
+	awsUsers := []*interfaces.User{
+		{
+			ID:          "A1",
+			Username:    "user1@example.com",
+			ExternalId:  interfaces.ExternalId{Id: "G1"},
+			Name:        interfaces.UserName{GivenName: "John", FamilyName: "Doe"},
+			DisplayName: "John Doe",
+			Active:      true,
+			Emails:      []interfaces.UserEmail{{Value: "user1@example.com", Type: "work", Primary: true}},
+			Addresses:   []interfaces.UserAddress{{Type: "work"}},
+		},
+	}
+
+	googleUsers := []*admin.User{
+		{
+			Id:           "G1",
+			PrimaryEmail: "user1@example.com",
+			Name:         &admin.UserName{GivenName: "John", FamilyName: "Doe"},
+			Addresses: []admin.UserAddress{
+				{Formatted: "1 First St", Type: "home", Primary: false},
+				{Formatted: "2 Primary Ave", Type: "work", Primary: true},
+				{Formatted: "3 Third Rd", Type: "other", Primary: false},
+			},
+		},
+	}
+
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, false, ""), optInMap("Addresses", "addresses[primary].formatted"))
+
+	assert.Len(t, add, 0)
+	assert.Len(t, delete, 0)
+	assert.Len(t, equals, 0)
+	if assert.Len(t, update, 1) {
+		if assert.Len(t, update[0].Addresses, 1) {
+			assert.Equal(t, "2 Primary Ave", update[0].Addresses[0].Formatted)
+			assert.Equal(t, "work", update[0].Addresses[0].Type)
+			assert.True(t, update[0].Addresses[0].Primary)
+		}
+	}
+}
+
+// Multiple addresses, NONE primary -> nothing emitted and Equal against an AWS
+// record that also lacks the opt-in address (only the synthesized work address).
+// FAILS against pre-fix first-fallback code; PASSES after the behaviour fix.
+func TestGetUserOperations_OptInAddresses_MultipleNoPrimaryNoChurn(t *testing.T) {
+	awsUsers := []*interfaces.User{
+		{
+			ID:          "A1",
+			Username:    "user1@example.com",
+			ExternalId:  interfaces.ExternalId{Id: "G1"},
+			Name:        interfaces.UserName{GivenName: "John", FamilyName: "Doe"},
+			DisplayName: "John Doe",
+			Active:      true,
+			Emails:      []interfaces.UserEmail{{Value: "user1@example.com", Type: "work", Primary: true}},
+			Addresses:   []interfaces.UserAddress{{Type: "work"}},
+		},
+	}
+
+	googleUsers := []*admin.User{
+		{
+			Id:           "G1",
+			PrimaryEmail: "user1@example.com",
+			Name:         &admin.UserName{GivenName: "John", FamilyName: "Doe"},
+			Addresses: []admin.UserAddress{
+				{Formatted: "1 First St", Type: "home", Primary: false},
+				{Formatted: "2 Second Ave", Type: "work", Primary: false},
+				{Formatted: "3 Third Rd", Type: "other", Primary: false},
+			},
+		},
+	}
+
+	add, delete, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, false, ""), optInMap("Addresses", "addresses[primary].formatted"))
+
+	assert.Len(t, add, 0)
+	assert.Len(t, delete, 0)
+	assert.Len(t, update, 0, "no primary address -> nothing selected -> no churn")
+	assert.Len(t, equals, 1)
+}
+
+// --- Item 6c: randomized-order churn regression at getUserOperations level ---
+
+// reverseAdminAddresses / rotateAdminAddresses give explicit deterministic
+// orderings (reversed and a single-position rotation) for the shuffle regression
+// tests — NO random seed.
+func reverseAdminAddresses(in []admin.UserAddress) []admin.UserAddress {
+	out := make([]admin.UserAddress, len(in))
+	for i := range in {
+		out[len(in)-1-i] = in[i]
+	}
+	return out
+}
+
+func rotateAdminAddresses(in []admin.UserAddress) []admin.UserAddress {
+	if len(in) < 2 {
+		return append([]admin.UserAddress(nil), in...)
+	}
+	return append(append([]admin.UserAddress(nil), in[1:]...), in[0])
+}
+
+// With one primary address, the classification is Equal against a record already
+// carrying the primary value, IDENTICALLY across every entry ordering (identity,
+// reversed, rotated).
+func TestGetUserOperations_ShuffledMultiValuedNoChurn(t *testing.T) {
+	addrs := []admin.UserAddress{
+		{Formatted: "1 First St", Type: "home", Primary: false},
+		{Formatted: "2 Primary Ave", Type: "work", Primary: true},
+		{Formatted: "3 Third Rd", Type: "other", Primary: false},
+	}
+
+	awsUsers := []*interfaces.User{
+		{
+			ID:          "A1",
+			Username:    "user1@example.com",
+			ExternalId:  interfaces.ExternalId{Id: "G1"},
+			Name:        interfaces.UserName{GivenName: "John", FamilyName: "Doe"},
+			DisplayName: "John Doe",
+			Active:      true,
+			Emails:      []interfaces.UserEmail{{Value: "user1@example.com", Type: "work", Primary: true}},
+			Addresses:   []interfaces.UserAddress{{Formatted: "2 Primary Ave", Type: "work", Primary: true}},
+		},
+	}
+
+	build := func(a []admin.UserAddress) []*admin.User {
+		return []*admin.User{
+			{
+				Id:           "G1",
+				PrimaryEmail: "user1@example.com",
+				Name:         &admin.UserName{GivenName: "John", FamilyName: "Doe"},
+				Addresses:    a,
+			},
+		}
+	}
+
+	for _, tc := range []struct {
+		name string
+		g    []*admin.User
+	}{
+		{"identity", build(addrs)},
+		{"reversed", build(reverseAdminAddresses(addrs))},
+		{"rotated", build(rotateAdminAddresses(addrs))},
+	} {
+		add, delete, update, equals := getUserOperations(awsUsers, tc.g, opsConfig(false, false, ""), optInMap("Addresses", "addresses[primary].formatted"))
+		assert.Len(t, add, 0, tc.name)
+		assert.Len(t, delete, 0, tc.name)
+		assert.Len(t, update, 0, tc.name+": primary-selected value is stable so no churn")
+		assert.Len(t, equals, 1, tc.name)
+	}
+}
+
+// With NO primary address in any ordering, the opt-in field resolves to nothing
+// and the user is Equal against a record that also lacks it, IDENTICALLY across
+// orderings. FAILS against pre-fix first-fallback code (different orderings
+// select different entry [0], producing a spurious Update in some orderings);
+// PASSES after the behaviour fix.
+func TestGetUserOperations_ShuffledNoPrimaryNoChurn(t *testing.T) {
+	addrs := []admin.UserAddress{
+		{Formatted: "1 A St", Type: "home", Primary: false},
+		{Formatted: "2 B St", Type: "work", Primary: false},
+		{Formatted: "3 C St", Type: "other", Primary: false},
+	}
+
+	awsUsers := []*interfaces.User{
+		{
+			ID:          "A1",
+			Username:    "user1@example.com",
+			ExternalId:  interfaces.ExternalId{Id: "G1"},
+			Name:        interfaces.UserName{GivenName: "John", FamilyName: "Doe"},
+			DisplayName: "John Doe",
+			Active:      true,
+			Emails:      []interfaces.UserEmail{{Value: "user1@example.com", Type: "work", Primary: true}},
+			Addresses:   []interfaces.UserAddress{{Type: "work"}},
+		},
+	}
+
+	build := func(a []admin.UserAddress) []*admin.User {
+		return []*admin.User{
+			{
+				Id:           "G1",
+				PrimaryEmail: "user1@example.com",
+				Name:         &admin.UserName{GivenName: "John", FamilyName: "Doe"},
+				Addresses:    a,
+			},
+		}
+	}
+
+	for _, tc := range []struct {
+		name string
+		g    []*admin.User
+	}{
+		{"identity", build(addrs)},
+		{"reversed", build(reverseAdminAddresses(addrs))},
+		{"rotated", build(rotateAdminAddresses(addrs))},
+	} {
+		add, delete, update, equals := getUserOperations(awsUsers, tc.g, opsConfig(false, false, ""), optInMap("Addresses", "addresses[primary].formatted"))
+		assert.Len(t, add, 0, tc.name)
+		assert.Len(t, delete, 0, tc.name)
+		assert.Len(t, update, 0, tc.name+": no primary -> nothing selected -> no churn in any ordering")
+		assert.Len(t, equals, 1, tc.name)
+	}
+}
+
+// --- run-178: type-qualified + custom-schema getUserOperations coverage ---
+
+func reverseAdminOrgs(in []admin.UserOrganization) []admin.UserOrganization {
+	out := make([]admin.UserOrganization, len(in))
+	for i := range in {
+		out[len(in)-1-i] = in[i]
+	}
+	return out
+}
+
+func rotateAdminOrgs(in []admin.UserOrganization) []admin.UserOrganization {
+	if len(in) < 2 {
+		return append([]admin.UserOrganization(nil), in...)
+	}
+	return append(append([]admin.UserOrganization(nil), in[1:]...), in[0])
+}
+
+// Default map [primary]: a Google user whose primary org is untyped (as the
+// Admin console stores it) enriches an AWS record that does not yet carry
+// Title/Enterprise (Update), carrying the primary org's values; a work-typed
+// org that is not primary is ignored.
+func TestGetUserOperations_DefaultMapPrimary_Enrichment(t *testing.T) {
+	awsUsers := []*interfaces.User{
+		{
+			ID: "A1", Username: "user1@example.com",
+			ExternalId:  interfaces.ExternalId{Id: "G1"},
+			Name:        interfaces.UserName{GivenName: "John", FamilyName: "Doe"},
+			DisplayName: "John Doe", Active: true,
+		},
+	}
+	googleUsers := []*admin.User{
+		{
+			Id: "G1", PrimaryEmail: "user1@example.com",
+			Name: &admin.UserName{GivenName: "John", FamilyName: "Doe"},
+			Organizations: []admin.UserOrganization{
+				{Title: "Other", Type: "work", Primary: false},
+				{Title: "Staff Engineer", Department: "Platform", Name: "ExampleCorp", CostCenter: "CC-100", Type: "", Primary: true},
+			},
+		},
+	}
+
+	add, del, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, false, ""), config.DefaultUserAttributeMap)
+	assert.Len(t, add, 0)
+	assert.Len(t, del, 0)
+	assert.Len(t, equals, 0)
+	if assert.Len(t, update, 1) {
+		assert.Equal(t, "Staff Engineer", update[0].Title)
+		if assert.NotNil(t, update[0].Enterprise) {
+			assert.Equal(t, "Platform", update[0].Enterprise.Department)
+		}
+	}
+}
+
+// Default map [primary]: a user with no primary org resolves to NOTHING (no
+// fallback to the first entry, even a work-typed one); an AWS record that
+// carried Title/Enterprise is cleared (Update), and once AWS reflects the
+// clear the user is Equal (steady state).
+func TestGetUserOperations_DefaultMapPrimary_NoPrimaryOrgClears(t *testing.T) {
+	googleUsers := []*admin.User{
+		{
+			Id: "G1", PrimaryEmail: "user1@example.com",
+			Name: &admin.UserName{GivenName: "John", FamilyName: "Doe"},
+			Organizations: []admin.UserOrganization{
+				// Typed work but NOT primary -> under [primary] resolves to nothing.
+				{Title: "Staff Engineer", Department: "Platform", Type: "work", Primary: false},
+			},
+		},
+	}
+
+	// AWS record still carries the previously-enriched values.
+	awsPopulated := []*interfaces.User{
+		{
+			ID: "A1", Username: "user1@example.com",
+			ExternalId:  interfaces.ExternalId{Id: "G1"},
+			Name:        interfaces.UserName{GivenName: "John", FamilyName: "Doe"},
+			DisplayName: "John Doe", Active: true,
+			Title:      "Staff Engineer",
+			Enterprise: &interfaces.EnterpriseUser{Department: "Platform"},
+			Emails:     []interfaces.UserEmail{{Value: "user1@example.com", Type: "work", Primary: true}},
+			Addresses:  []interfaces.UserAddress{{Type: "work"}},
+		},
+	}
+
+	add, del, update, equals := getUserOperations(awsPopulated, googleUsers, opsConfig(false, false, ""), config.DefaultUserAttributeMap)
+	assert.Len(t, add, 0)
+	assert.Len(t, del, 0)
+	assert.Len(t, equals, 0)
+	if assert.Len(t, update, 1) {
+		assert.Equal(t, "", update[0].Title, "no primary org clears Title under [primary]")
+		assert.Nil(t, update[0].Enterprise, "Enterprise cleared to nil")
+	}
+
+	// Steady state: AWS now reflects the cleared record -> Equal, no churn.
+	awsCleared := []*interfaces.User{
+		{
+			ID: "A1", Username: "user1@example.com",
+			ExternalId:  interfaces.ExternalId{Id: "G1"},
+			Name:        interfaces.UserName{GivenName: "John", FamilyName: "Doe"},
+			DisplayName: "John Doe", Active: true,
+			Emails:    []interfaces.UserEmail{{Value: "user1@example.com", Type: "work", Primary: true}},
+			Addresses: []interfaces.UserAddress{{Type: "work"}},
+		},
+	}
+	add, del, update, equals = getUserOperations(awsCleared, googleUsers, opsConfig(false, false, ""), config.DefaultUserAttributeMap)
+	assert.Len(t, add, 0)
+	assert.Len(t, del, 0)
+	assert.Len(t, update, 0, "cleared steady-state user must not churn")
+	assert.Len(t, equals, 1)
+}
+
+// Shuffled multi-valued order with exactly one primary org produces no
+// spurious Update in any ordering (churn-freedom for the default [primary]
+// selector).
+func TestGetUserOperations_PrimaryShuffledNoChurn(t *testing.T) {
+	awsUsers := []*interfaces.User{
+		{
+			ID: "A1", Username: "user1@example.com",
+			ExternalId:  interfaces.ExternalId{Id: "G1"},
+			Name:        interfaces.UserName{GivenName: "John", FamilyName: "Doe"},
+			DisplayName: "John Doe", Active: true,
+			Title:      "Staff Engineer",
+			Enterprise: &interfaces.EnterpriseUser{Department: "Platform", Organization: "ExampleCorp", CostCenter: "CC-100"},
+			Emails:     []interfaces.UserEmail{{Value: "user1@example.com", Type: "work", Primary: true}},
+			Addresses:  []interfaces.UserAddress{{Type: "work"}},
+		},
+	}
+	orgs := []admin.UserOrganization{
+		{Title: "Other", Department: "DO", Name: "OrgO", CostCenter: "CCO", Type: "work", Primary: false},
+		{Title: "Staff Engineer", Department: "Platform", Name: "ExampleCorp", CostCenter: "CC-100", Type: "", Primary: true},
+		{Title: "Home", Department: "DH", Name: "OrgH", CostCenter: "CCH", Type: "home", Primary: false},
+	}
+	build := func(o []admin.UserOrganization) []*admin.User {
+		return []*admin.User{
+			{
+				Id: "G1", PrimaryEmail: "user1@example.com",
+				Name:          &admin.UserName{GivenName: "John", FamilyName: "Doe"},
+				Organizations: o,
+			},
+		}
+	}
+	for _, tc := range []struct {
+		name string
+		g    []*admin.User
+	}{
+		{"identity", build(orgs)},
+		{"reversed", build(reverseAdminOrgs(orgs))},
+		{"rotated", build(rotateAdminOrgs(orgs))},
+	} {
+		add, del, update, equals := getUserOperations(awsUsers, tc.g, opsConfig(false, false, ""), config.DefaultUserAttributeMap)
+		assert.Len(t, add, 0, tc.name)
+		assert.Len(t, del, 0, tc.name)
+		assert.Len(t, update, 0, tc.name+": stable primary selection -> no churn")
+		assert.Len(t, equals, 1, tc.name)
+	}
+}
+
+// Custom-schema source at the getUserOperations level: a user with a custom
+// schema field enriches, then is Equal once AWS reflects it.
+func TestGetUserOperations_CustomSchemaSource_EnrichThenSteady(t *testing.T) {
+	custMap := config.AttributeMap{
+		"Name.GivenName":        "name.givenName",
+		"Name.FamilyName":       "name.familyName",
+		"Username":              "primaryEmail",
+		"Active":                "suspended",
+		"Enterprise.CostCenter": "customSchemas.EmploymentData.costCenter",
+	}
+	googleUsers := []*admin.User{
+		{
+			Id: "G1", PrimaryEmail: "user1@example.com",
+			Name:          &admin.UserName{GivenName: "John", FamilyName: "Doe"},
+			CustomSchemas: map[string]googleapi.RawMessage{"EmploymentData": googleapi.RawMessage(`{"costCenter":"CC-777"}`)},
+		},
+	}
+
+	awsUsers := []*interfaces.User{
+		{
+			ID: "A1", Username: "user1@example.com",
+			ExternalId:  interfaces.ExternalId{Id: "G1"},
+			Name:        interfaces.UserName{GivenName: "John", FamilyName: "Doe"},
+			DisplayName: "John Doe", Active: true,
+		},
+	}
+	add, del, update, equals := getUserOperations(awsUsers, googleUsers, opsConfig(false, false, ""), custMap)
+	assert.Len(t, add, 0)
+	assert.Len(t, del, 0)
+	assert.Len(t, equals, 0)
+	if assert.Len(t, update, 1) {
+		if assert.NotNil(t, update[0].Enterprise) {
+			assert.Equal(t, "CC-777", update[0].Enterprise.CostCenter)
+		}
+	}
+
+	awsEnriched := []*interfaces.User{
+		{
+			ID: "A1", Username: "user1@example.com",
+			ExternalId:  interfaces.ExternalId{Id: "G1"},
+			Name:        interfaces.UserName{GivenName: "John", FamilyName: "Doe"},
+			DisplayName: "John Doe", Active: true,
+			Enterprise: &interfaces.EnterpriseUser{CostCenter: "CC-777"},
+		},
+	}
+	add, del, update, equals = getUserOperations(awsEnriched, googleUsers, opsConfig(false, false, ""), custMap)
+	assert.Len(t, add, 0)
+	assert.Len(t, del, 0)
+	assert.Len(t, update, 0, "custom-schema steady state must not churn")
+	assert.Len(t, equals, 1)
 }

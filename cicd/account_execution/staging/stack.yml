@@ -31,6 +31,12 @@ Parameters:
     Description: The search string to match Groups in Google Workspace
     Default: 'name:AWS*'
     Type: String
+  AttributeMap:
+    Description: >-
+      Inline attribute-map JSON passed to the function's ATTRIBUTE_MAP environment
+      variable. Leave empty to use the built-in default mapping.
+    Default: ''
+    Type: String
 
 Resources:
   SARApp:
@@ -73,6 +79,7 @@ Resources:
             - '}}'
         SyncMethod: groups
         GoogleGroupMatch: !Ref GroupMatch
+        AttributeMap: !Ref AttributeMap
         SyncSuspended: sync
         ScheduleExpression: ""
         PrecacheOrgUnits: '/Catering/,/Maintenance/Vending Machines'

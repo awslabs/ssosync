@@ -72,6 +72,7 @@ Sensitive values can be provided inline or as the ARN of a secret in [AWS Secret
 | `PrecacheOrgUnits` | `PRECACHE_ORG_UNITS` | Comma-separated list of Google OrgUnit paths to precache (e.g. `/OU1,/OU2/OU3`). Use `/` for the whole directory, or leave empty to disable precaching. | `/` |
 | `ExternalIdChange` | `FORCE_EXTERNAL_ID_UPDATE` | When a Google user is deleted and recreated (same email, new ID), either `update` the existing Identity Store user to preserve assignments, or `delete/recreate` to prevent permission inheritance. | `delete/recreate` |
 | `RetainUnmatched` | `RETAIN_UNMATCHED` | Retain 'local' users and groups that exist in the Identity Store but cannot be matched to Google Workspace, instead of deleting them (`remove` or `retain`). | `remove` |
+| `AttributeMap` | `ATTRIBUTE_MAP` | Attribute map controlling how Google user attributes map onto IAM Identity Center (SCIM) fields (`groups` sync method only). Accepts inline attribute-map JSON, a Secrets Manager ARN, or an SSM Parameter Store ARN. Leave empty to use the built-in default mapping (no secret is created and `ATTRIBUTE_MAP` is not set). With a deployment pattern that creates secrets, inline JSON is stored in the `SSOSyncAttributeMap` secret. See [Attribute mapping](#attribute-mapping) below. | `""` |
 
 ### Lambda Configuration
 
@@ -128,6 +129,58 @@ ssosync then selects every group that has the marker group as a member, no matte
 Remember that `memberKey` requires `GoogleCustomerId` to be set to your real customer ID (not `my_customer`); the template fails deployment otherwise.
 
 For the complete query syntax see [Google Groups Search](https://developers.google.com/admin-sdk/directory/v1/guides/search-groups).
+
+## Attribute mapping
+
+The `AttributeMap` parameter (Lambda environment variable `ATTRIBUTE_MAP`) controls how Google Workspace user attributes are mapped onto the AWS IAM Identity Center (SCIM) user fields. It applies to the `groups` sync method only. Like the credentials parameters, it accepts inline attribute-map JSON, the ARN of a secret in AWS Secrets Manager, or the ARN of an SSM Parameter Store parameter; ssosync resolves ARNs at runtime, and the template grants the function read access to the secret or parameter you give. Leaving it empty uses the built-in default mapping below; no secret is created and `ATTRIBUTE_MAP` is not set.
+
+How the value is deployed depends on the deployment pattern:
+
+| Value | `App + secrets`, `Secrets only`, `Secrets for cross-account` | `App only`, `App for cross-account` |
+|---|---|---|
+| empty | nothing created, `ATTRIBUTE_MAP` not set | `ATTRIBUTE_MAP` not set |
+| inline JSON | stored in the `SSOSyncAttributeMap` secret (shared with the app account for cross-account, and exported as `AttributeMap`); `ATTRIBUTE_MAP` is the secret ARN | `ATTRIBUTE_MAP` is the JSON (the Lambda environment is limited to 4 KB in total, so use a secret or parameter for a large map) |
+| Secrets Manager / SSM parameter ARN | `ATTRIBUTE_MAP` is the ARN | `ATTRIBUTE_MAP` is the ARN |
+
+For `App for cross-account`, pass the `AttributeMap` exported by the `Secrets for cross-account` stack.
+
+Groups map `DisplayName` from the Google group name only (AWS SCIM accepts only `externalId`, `displayName` and `members` for groups; a group description is not SCIM-settable).
+
+The following JSON is exactly the built-in default. Copying it verbatim changes nothing, so it is a safe starting point to copy and then customise:
+
+```json
+{
+  "user": {
+    "Name.GivenName": "name.givenName",
+    "Name.FamilyName": "name.familyName",
+    "Username": "primaryEmail",
+    "Active": "suspended",
+    "Title": "organizations[primary].title",
+    "Enterprise.Department": "organizations[primary].department",
+    "Enterprise.Organization": "organizations[primary].name",
+    "Enterprise.CostCenter": "organizations[primary].costCenter"
+  },
+  "group": {
+    "DisplayName": "name"
+  }
+}
+```
+
+Each block is optional: an omitted block keeps its default, and a present block replaces that block's mapping. Within a block the key is the SCIM target field and the value is the Google source attribute.
+
+- **Defaulted** user target fields: `Name.GivenName`, `Name.FamilyName`, `Username`, `Active`, `Title`, `Enterprise.Department`, `Enterprise.Organization`, `Enterprise.CostCenter`.
+- **Opt-in** user target fields (supported, not in the default): `Enterprise.Manager`, `Enterprise.Division`, `Enterprise.EmployeeNumber`, `ProfileURL`, `Emails`, `Addresses`, `PhoneNumbers`. `Enterprise.Manager` maps from a relation value such as `relations[type=manager].value`, which Google stores as the manager's email address; it works where your deployment's manager relation holds an email the Identity Store can resolve, and is opt-in because it depends on your directory populating that relation.
+
+The organization-derived defaults source from `organizations[primary].*`, the organization marked primary (the Google Admin console marks it primary but does not set its type). A directory that types its organizations can map `organizations[type=work].*` instead. Google user-defined (custom) schema attributes can also be mapped as sources with `customSchemas.<SchemaName>.<fieldName>`.
+
+For the full JSON syntax, the supported source attributes, the custom-schema sources, and the type-qualified selection rule for multi-valued Google fields, see [Attribute mapping in the project README](https://github.com/awslabs/ssosync/blob/master/README.md#attribute-mapping).
+
+> [!CAUTION]
+> The sync makes the AWS user consistent with the mapped Google user (clear-to-consistent): any supported SCIM field the map does not populate is cleared on the AWS user. Set `DryRun` to `dry-run` and run it **first** to preview exactly what would change before applying a new or changed map — an error in the map (a typo, a `[type=X]` that matches nothing, a missing custom field), or the `[primary]` default itself for users with no organization marked primary, resolves to nothing and clears that attribute.
+
+When a field maps unexpectedly, enable debug logging (it dumps the raw Google source fields and the per-entry resolution) and watch for the pre-SCIM `WARN` lines ssosync emits when a mapped user/group would likely be rejected by the SCIM API — together they help you troubleshoot a custom map.
+
+As with the rest of the deployment, the quick-start templates are the recommended way to set this up.
 
 ## Deployment patterns
 

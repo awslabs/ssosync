@@ -29,6 +29,7 @@ import (
 	"ssosync/internal/mocks"
 
 	"github.com/aws/aws-sdk-go-v2/service/identitystore"
+	logrusTest "github.com/sirupsen/logrus/hooks/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -373,7 +374,7 @@ func TestClient_DeleteUser(t *testing.T) {
 }
 
 func TestClient_CreateUser(t *testing.T) {
-	nu := NewUser("Lee", "Packham", "test@example.com", true, "google_id")
+	nu := NewUser(&interfaces.User{Username: "test@example.com", Name: interfaces.UserName{GivenName: "Lee", FamilyName: "Packham"}, DisplayName: "Lee Packham", Active: true, ExternalId: interfaces.ExternalId{Id: "google_id"}})
 	nuResult := *nu
 	nuResult.ID = "userId"
 	// trick to ensure after marshalling we have the correct string
@@ -412,7 +413,7 @@ func TestClient_CreateUser(t *testing.T) {
 }
 
 func TestClient_UpdateUser(t *testing.T) {
-	nu := UpdateUser("userId", "Lee", "Packham", "test@example.com", true, "google_id")
+	nu := UpdateUser(&interfaces.User{ID: "userId", Username: "test@example.com", Name: interfaces.UserName{GivenName: "Lee", FamilyName: "Packham"}, DisplayName: "Lee Packham", Active: true, ExternalId: interfaces.ExternalId{Id: "google_id"}})
 	nuResult := *nu
 	nuResult.ID = "userId"
 	requestJSON, err := json.Marshal(nu)
@@ -451,7 +452,7 @@ func TestClient_UpdateUser(t *testing.T) {
 }
 
 func TestClient_CreateGroup(t *testing.T) {
-	ng := NewGroup("test_group@example.com", "google_id")
+	ng := NewGroup(&interfaces.Group{DisplayName: "test_group@example.com", ExternalId: interfaces.ExternalId{Id: "google_id"}})
 	ngResult := *ng
 	ngResult.ID = "groupId"
 
@@ -844,7 +845,7 @@ func TestClient_CreateUser_NilUser(t *testing.T) {
 }
 
 func TestClient_CreateUser_UnmarshalError(t *testing.T) {
-	nu := NewUser("Lee", "Packham", "test@example.com", true, "google_id")
+	nu := NewUser(&interfaces.User{Username: "test@example.com", Name: interfaces.UserName{GivenName: "Lee", FamilyName: "Packham"}, DisplayName: "Lee Packham", Active: true, ExternalId: interfaces.ExternalId{Id: "google_id"}})
 	requestJSON, _ := json.Marshal(nu)
 	invalidJSON := "invalid json"
 
@@ -867,7 +868,7 @@ func TestClient_CreateUser_UnmarshalError(t *testing.T) {
 }
 
 func TestClient_CreateUser_NoIDReturned(t *testing.T) {
-	nu := NewUser("Lee", "Packham", "test@example.com", true, "google_id")
+	nu := NewUser(&interfaces.User{Username: "test@example.com", Name: interfaces.UserName{GivenName: "Lee", FamilyName: "Packham"}, DisplayName: "Lee Packham", Active: true, ExternalId: interfaces.ExternalId{Id: "google_id"}})
 
 	// Response without ID
 	responseUser := interfaces.User{
@@ -933,7 +934,7 @@ func TestClient_UpdateUser_NilUser(t *testing.T) {
 }
 
 func TestClient_UpdateUser_UnmarshalError(t *testing.T) {
-	nu := UpdateUser("userId", "Lee", "Packham", "test@example.com", true, "google_id")
+	nu := UpdateUser(&interfaces.User{ID: "userId", Username: "test@example.com", Name: interfaces.UserName{GivenName: "Lee", FamilyName: "Packham"}, DisplayName: "Lee Packham", Active: true, ExternalId: interfaces.ExternalId{Id: "google_id"}})
 	requestJSON, _ := json.Marshal(nu)
 	invalidJSON := "invalid json"
 
@@ -956,7 +957,7 @@ func TestClient_UpdateUser_UnmarshalError(t *testing.T) {
 }
 
 func TestClient_UpdateUser_NoIDReturned(t *testing.T) {
-	nu := UpdateUser("userId", "Lee", "Packham", "test@example.com", true, "google_id")
+	nu := UpdateUser(&interfaces.User{ID: "userId", Username: "test@example.com", Name: interfaces.UserName{GivenName: "Lee", FamilyName: "Packham"}, DisplayName: "Lee Packham", Active: true, ExternalId: interfaces.ExternalId{Id: "google_id"}})
 
 	// Response without ID
 	responseUser := interfaces.User{
@@ -1022,7 +1023,7 @@ func TestClient_CreateGroup_NilGroup(t *testing.T) {
 }
 
 func TestClient_CreateGroup_UnmarshalError(t *testing.T) {
-	ng := NewGroup("test_group@example.com", "google_id")
+	ng := NewGroup(&interfaces.Group{DisplayName: "test_group@example.com", ExternalId: interfaces.ExternalId{Id: "google_id"}})
 	requestJSON, _ := json.Marshal(ng)
 	invalidJSON := "invalid json"
 
@@ -1045,7 +1046,7 @@ func TestClient_CreateGroup_UnmarshalError(t *testing.T) {
 }
 
 func TestClient_CreateGroup_NoIDReturned(t *testing.T) {
-	ng := NewGroup("test_group@example.com", "google_id")
+	ng := NewGroup(&interfaces.Group{DisplayName: "test_group@example.com", ExternalId: interfaces.ExternalId{Id: "google_id"}})
 
 	// Response without ID
 	responseGroup := interfaces.Group{
@@ -1269,7 +1270,7 @@ func TestClient_FindGroupByDisplayName_NetworkError(t *testing.T) {
 }
 
 func TestClient_CreateUser_NetworkError(t *testing.T) {
-	nu := NewUser("Lee", "Packham", "test@example.com", true, "google_id")
+	nu := NewUser(&interfaces.User{Username: "test@example.com", Name: interfaces.UserName{GivenName: "Lee", FamilyName: "Packham"}, DisplayName: "Lee Packham", Active: true, ExternalId: interfaces.ExternalId{Id: "google_id"}})
 	x := mocks.NewMockHttpClient(t)
 	x.EXPECT().Do(mock.Anything).Return(nil, errors.New("network error")).Once()
 
@@ -1286,7 +1287,7 @@ func TestClient_CreateUser_NetworkError(t *testing.T) {
 }
 
 func TestClient_UpdateUser_NetworkError(t *testing.T) {
-	nu := UpdateUser("userId", "Lee", "Packham", "test@example.com", true, "google_id")
+	nu := UpdateUser(&interfaces.User{ID: "userId", Username: "test@example.com", Name: interfaces.UserName{GivenName: "Lee", FamilyName: "Packham"}, DisplayName: "Lee Packham", Active: true, ExternalId: interfaces.ExternalId{Id: "google_id"}})
 	x := mocks.NewMockHttpClient(t)
 	x.EXPECT().Do(mock.Anything).Return(nil, errors.New("network error")).Once()
 
@@ -1303,7 +1304,7 @@ func TestClient_UpdateUser_NetworkError(t *testing.T) {
 }
 
 func TestClient_CreateGroup_NetworkError(t *testing.T) {
-	ng := NewGroup("test_group@example.com", "google_id")
+	ng := NewGroup(&interfaces.Group{DisplayName: "test_group@example.com", ExternalId: interfaces.ExternalId{Id: "google_id"}})
 	x := mocks.NewMockHttpClient(t)
 	x.EXPECT().Do(mock.Anything).Return(nil, errors.New("network error")).Once()
 
@@ -1506,7 +1507,7 @@ func TestDryClient_CreateUser(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	user := NewUser("John", "Doe", "john@example.com", true, "google_id")
+	user := NewUser(&interfaces.User{Username: "john@example.com", Name: interfaces.UserName{GivenName: "John", FamilyName: "Doe"}, DisplayName: "John Doe", Active: true, ExternalId: interfaces.ExternalId{Id: "google_id"}})
 
 	result, err := client.CreateUser(user)
 	assert.NoError(t, err)
@@ -1586,7 +1587,7 @@ func TestDryClient_FindUserByEmail_VirtualUser(t *testing.T) {
 	require.NoError(t, err)
 
 	// First create a virtual user
-	user := NewUser("John", "Doe", "john@example.com", true, "google_id")
+	user := NewUser(&interfaces.User{Username: "john@example.com", Name: interfaces.UserName{GivenName: "John", FamilyName: "Doe"}, DisplayName: "John Doe", Active: true, ExternalId: interfaces.ExternalId{Id: "google_id"}})
 	_, err = client.CreateUser(user)
 	require.NoError(t, err)
 
@@ -1605,11 +1606,43 @@ func TestDryClient_UpdateUser(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	user := UpdateUser("userId", "John", "Doe", "john@example.com", true, "google_id")
+	user := UpdateUser(&interfaces.User{ID: "userId", Username: "john@example.com", Name: interfaces.UserName{GivenName: "John", FamilyName: "Doe"}, DisplayName: "John Doe", Active: true, ExternalId: interfaces.ExternalId{Id: "google_id"}})
 
 	result, err := client.UpdateUser(user)
 	assert.NoError(t, err)
 	assert.Equal(t, user, result)
+}
+
+// TestDryClient_UpdateUser_ClearedFieldSurfaced proves a dry run surfaces the
+// Update (blast radius) for a user whose only difference is a now-cleared
+// expanded field (Title). The dry client logs "DRY RUN: Would update user" with
+// the user's Username, which an operator can read before a live run.
+func TestDryClient_UpdateUser_ClearedFieldSurfaced(t *testing.T) {
+	x := mocks.NewMockHttpClient(t)
+	client, err := NewDryClient(x, &Config{
+		Endpoint: baseUrl,
+		Token:    "bearerToken",
+	})
+	require.NoError(t, err)
+
+	hook := logrusTest.NewGlobal()
+	defer hook.Reset()
+
+	// desired is the clear-to-consistent object: Title is empty (cleared)
+	// because the attribute map does not populate it.
+	desired := UpdateUser(&interfaces.User{ID: "userId", Username: "john@example.com", Name: interfaces.UserName{GivenName: "John", FamilyName: "Doe"}, DisplayName: "John Doe", Active: true, ExternalId: interfaces.ExternalId{Id: "google_id"}})
+	assert.Equal(t, "", desired.Title)
+
+	_, err = client.UpdateUser(desired)
+	require.NoError(t, err)
+
+	var found bool
+	for _, e := range hook.AllEntries() {
+		if e.Message == "DRY RUN: Would update user" && e.Data["user"] == "john@example.com" {
+			found = true
+		}
+	}
+	assert.True(t, found, "expected dry run to surface the user update")
 }
 
 func TestDryClient_AddUserToGroup(t *testing.T) {
@@ -1650,7 +1683,7 @@ func TestDryClient_CreateGroup(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	group := NewGroup("testGroup", "google_id")
+	group := NewGroup(&interfaces.Group{DisplayName: "testGroup", ExternalId: interfaces.ExternalId{Id: "google_id"}})
 
 	result, err := client.CreateGroup(group)
 	assert.NoError(t, err)

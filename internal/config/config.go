@@ -13,6 +13,15 @@ type Config struct {
 	LogFormat string `mapstructure:"log_format"`
 	// GoogleCredentials ...
 	GoogleCredentials string `mapstructure:"google_credentials"`
+	// AttributeMapFile holds the path to a JSON file containing the attribute
+	// map (groups sync method only), mirroring how GoogleCredentials holds the
+	// credentials file path. Empty means use the built-in DefaultAttributeMap.
+	AttributeMapFile string `mapstructure:"attribute_map_file"`
+	// AttributeMap holds the loaded user/group attribute maps. It is populated
+	// by the attribute-map loader (from AttributeMapFile for the CLI, or the
+	// ATTRIBUTE_MAP env var for Lambda), not by viper, so it carries no
+	// mapstructure tag.
+	AttributeMap AttributeMaps
 	// GoogleAdmin ...
 	GoogleAdmin string `mapstructure:"google_admin"`
 	// CustomerID is the Google Workspace customer ID to operate against.
@@ -53,12 +62,12 @@ type Config struct {
 	DryRun bool
 	// sync suspended user, if true suspended user and their group memberships are sync'd into IAM Identity Center
 	SyncSuspended bool
-	// Force preservation of Identity Store UserId, when Google Workspace Directory UserId change but email addresses 
+	// Force preservation of Identity Store UserId, when Google Workspace Directory UserId change but email addresses
 	// still match. Default behaviour orginial user is deleted and a new user created to ensure excessive privileges
-	// are not preserved. This option is required when switching from a different external IdP (Microsoft Entra for example) 
+	// are not preserved. This option is required when switching from a different external IdP (Microsoft Entra for example)
 	// to Google Workspace Directory (with ssosync) and assignments need to be preserved.
 	ForceExternalIdUpdate bool
-	// Blocks the deletion of 'local' user and groups that exist in the IAM Identity Store but not in the Google Workspace Directory, 
+	// Blocks the deletion of 'local' user and groups that exist in the IAM Identity Store but not in the Google Workspace Directory,
 	// a local user/group is defined as one where ExternalId is not set. If an ExternalId is set then, the will be deleted as normal.
 	RetainUnmatched bool
 	// User filter string
@@ -74,27 +83,63 @@ const (
 	DefaultDebug = false
 	// DefaultGoogleCredentials is the default credentials path
 	DefaultGoogleCredentials = "credentials.json"
+	// DefaultAttributeMapFile is the default attribute map file path.
+	// Empty means no file is provided, so DefaultAttributeMap is used.
+	DefaultAttributeMapFile = ""
 	// DefaultGoogleAdmin is the default service account email address
 	DefaultGoogleAdmin = ""
 	// DefaultCustomerID is the default Google Workspace customer ID.
 	DefaultCustomerID = "my_customer"
 	// DefaultSyncMethod is the default sync method to use.
-	DefaultUserMatch = ""
-	DefaultGroupMatch = "*"
-	DefaultSCIMEndpoint = ""
+	DefaultUserMatch       = ""
+	DefaultGroupMatch      = "*"
+	DefaultSCIMEndpoint    = ""
 	DefaultSCIMAccessToken = ""
-	DefaultSyncMethod = "groups"
-	DefaultCacheMetrics = false
-	DefaultDryRun = false
-	DefaultSyncSuspended = false
+	DefaultSyncMethod      = "groups"
+	DefaultCacheMetrics    = false
+	DefaultDryRun          = false
+	DefaultSyncSuspended   = false
 	// Default behaviour orginial user is deleted and a new user created to ensure excessive privileges
 	// are not preserved.
 	DefaultForceExternalIdUpdate = false
-	DefaultRetainUnmatched = false
+	DefaultRetainUnmatched       = false
 )
 
-// Slice-typed defaults cannot be declared as constants in Go, so they are
-// defined as package-level variables.
+// AttributeMap describes how a Google Workspace Directory source attribute is
+// mapped onto an interfaces.User / interfaces.Group target field.
+//
+// Direction: the KEY is the interface TARGET field path (the field mapped TO on
+// interfaces.User / interfaces.Group, e.g. "Name.GivenName" or "Username"); the
+// VALUE is the Google SOURCE attribute path (the field mapped FROM on
+// admin.User / admin.Group, e.g. "name.givenName" or "primaryEmail").
+//
+// Standard Google attributes are supported, including multi-valued fields
+// resolved by a type-qualified selector (e.g. "organizations[type=work].title")
+// or a primary selector (e.g. "emails[primary].address",
+// "relations[type=manager].value"); in both cases there is no first-entry
+// fallback, so a selector that matches nothing resolves to nothing.
+// Custom-schema attributes are also supported via admin.User.CustomSchemas, as
+// "customSchemas.<SchemaName>.<fieldName>" paths (populated by the Users.List
+// projection=full fetch). See the mapper functions in internal/google for the
+// full source-path grammar.
+type AttributeMap map[string]string
+
+// AttributeMaps pairs the user and group attribute maps that together make up a
+// loaded attribute map (groups sync method only).
+//
+// A single flat map is deliberately NOT used: the user target keys
+// (e.g. "Name.GivenName") and group target keys (e.g. "DisplayName") are carried
+// in two separate maps today, and the mapper functions (mapFromGoogleUser /
+// mapFromGoogleGroup) depend on that user/group distinction. Flattening would
+// discard it and be ambiguous to split back out in the loader, so the pair keeps
+// the two maps distinct end to end.
+type AttributeMaps struct {
+	User  AttributeMap `mapstructure:"user" json:"user"`
+	Group AttributeMap `mapstructure:"group" json:"group"`
+}
+
+// Slice-typed and map-typed defaults cannot be declared as constants in Go, so
+// they are defined as package-level variables.
 var (
 	// DefaultIgnoreUsers is the default set of users to ignore.
 	DefaultIgnoreUsers []string = nil
@@ -104,6 +149,71 @@ var (
 	DefaultPrecacheOrgUnits []string = nil
 	// DefaultIncludeGroups is the default set of groups to sync.
 	DefaultIncludeGroups []string = nil
+
+	// DefaultUserAttributeMap is the default Google -> interfaces.User field
+	// mapping for the groups sync method. KEY = interfaces.User target field
+	// path; VALUE = admin.User source attribute path.
+	//
+	// It carries the four behaviour-preserving scalars (GivenName, FamilyName,
+	// Username, Active) plus the SAFE SET enrichment (Title and the
+	// Enterprise.Department/Organization/CostCenter fields) sourced from the
+	// user's PRIMARY organization. These safe-set fields are both resolvable
+	// from Google and accepted by AWS IAM Identity Center SCIM, so defaulting
+	// them enriches synced users; a user with no matching organization keeps them
+	// empty (the resolver is empty-safe and Enterprise stays nil), so steady
+	// state is churn-free (attrmap-design §5, §8).
+	//
+	// WHY [primary], NOT [type=work]: the Google Admin console does not set an
+	// organization's type (it stores type "" / customType ""), but it does mark
+	// the organization primary. With the no-first-fallback rule a [type=work]
+	// default resolved to NOTHING for every console-managed user, and under
+	// clear-to-consistent that CLEARED Title and Enterprise.Department/
+	// Organization/CostCenter on every run. [primary] resolves for those
+	// tenants. A user with no primary organization still resolves to nothing
+	// (no fallback to the first entry). A tenant that types its organizations
+	// and wants the work one sets its own map with organizations[type=work].*.
+	//
+	// Note on "Active": it is the logical INVERSE of Google's "suspended" flag
+	// (Active == !Suspended). The map stores the raw source path "suspended";
+	// the MAPPER applies the inversion, not the map.
+	DefaultUserAttributeMap AttributeMap = AttributeMap{
+		"Name.GivenName":          "name.givenName",
+		"Name.FamilyName":         "name.familyName",
+		"Username":                "primaryEmail",
+		"Active":                  "suspended",
+		"Title":                   "organizations[primary].title",
+		"Enterprise.Department":   "organizations[primary].department",
+		"Enterprise.Organization": "organizations[primary].name",
+		"Enterprise.CostCenter":   "organizations[primary].costCenter",
+		// NOTE: Enterprise.Manager is deliberately NOT defaulted (opt-in only,
+		// see attrmap-design §5.7): Google's relation value is a free-form name,
+		// not a guaranteed AWS-resolvable manager.value reference. The resolver
+		// and validator support "relations[type=manager].value" for tenants that
+		// opt in, but it is left out of the default to avoid stamping a
+		// possibly-garbage manager reference onto every tenant.
+	}
+
+	// DefaultGroupAttributeMap reproduces the Google -> interfaces.Group field
+	// mapping for the groups sync method. KEY = interfaces.Group target field
+	// path; VALUE = admin.Group source attribute path.
+	//
+	// Note: DisplayName maps from the group name (DisplayName <- name, i.e.
+	// admin.Group.Name), which matches the live groups-sync path
+	// (aws.NewGroup/aws.UpdateGroup use the group name). There is no divergence.
+	DefaultGroupAttributeMap AttributeMap = AttributeMap{
+		"DisplayName": "name",
+	}
+
+	// DefaultAttributeMap is the canonical combined default that the attribute
+	// map loader falls back to when no file/env value is provided (groups sync
+	// method only). It does NOT redefine any mapping; it only references the two
+	// existing maps above, so DefaultUserAttributeMap / DefaultGroupAttributeMap
+	// remain the single source of truth for the actual mappings and no existing
+	// reference or test is affected.
+	DefaultAttributeMap AttributeMaps = AttributeMaps{
+		User:  DefaultUserAttributeMap,
+		Group: DefaultGroupAttributeMap,
+	}
 )
 
 // New returns a new Config
@@ -114,6 +224,8 @@ func New() *Config {
 		LogFormat:         DefaultLogFormat,
 		SyncMethod:        DefaultSyncMethod,
 		GoogleCredentials: DefaultGoogleCredentials,
+		AttributeMapFile:  DefaultAttributeMapFile,
+		AttributeMap:      DefaultAttributeMap,
 		CustomerID:        DefaultCustomerID,
 	}
 }

@@ -1,0 +1,20 @@
+version: 0.2
+
+# Attribute-map integration test: validation_warnings. See run.sh for what it checks.
+env:
+  shell: bash
+  secrets-manager:
+    GoogleAdminEmail: SSOSyncGoogleAdminEmail
+    SCIMEndpointUrl: SSOSyncSCIMEndpointUrl
+    SCIMAccessToken: SSOSyncSCIMAccessToken
+  variables:
+    GROUP_MATCH: "name:AWS*"
+
+phases:
+  build:
+    commands:
+      - bash tests/attribute_map/validation_warnings/run.sh
+
+artifacts:
+  files:
+    - logs/**/*
