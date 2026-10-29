@@ -25,6 +25,13 @@
 > [!NOTE]
 > The default attribute map reads organization-derived fields (Title, Organization, Department, Cost Center) from the user's **primary** organization (`organizations[primary]`). A user with no organization marked primary will have these fields left empty (and therefore cleared). Confirm with a `--dry-run` against your directory that these fields resolve as expected before a live run.
 
+## v2.9.5 - 2026-10-28
+
+### Changelog
+
+* 8dc14316b82b736e05fc2397b6f63bd2235538ac Update CHANGELOG and Quick Start templates (#386)
+* 6a883116c24eaed35e446fef3aa2f39d8f65251b build: bump Go to 1.27.3 and update vulnerable dependencies (#387) (#389)
+
 ## v2.9.4 - 2026-10-28
 
 ### Changelog
