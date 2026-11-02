@@ -169,6 +169,8 @@ func initConfig() {
 		"google_admin",
 		"customer_id",
 		"google_credentials",
+		"google_impersonate_service_account",
+		"google_wif_config",
 		"attribute_map_file",
 		"scim_access_token",
 		"scim_endpoint",
@@ -208,6 +210,14 @@ func initConfig() {
 			log.Fatal(errors.Wrap(err, "cannot load attribute map file").Error())
 		}
 		cfg.AttributeMap = am
+
+		// Keyless Google authentication replaces the key file: unless the key
+		// file was given explicitly (flag or SSOSYNC_GOOGLE_CREDENTIALS), the
+		// default "credentials.json" is not read. Giving both explicitly is
+		// rejected by google.Auth.Validate.
+		if cfg.GoogleImpersonateServiceAccount != "" && !googleCredentialsExplicit() {
+			cfg.GoogleCredentials = ""
+		}
 	}
 
 	// config logger
@@ -401,6 +411,16 @@ func getIssuerArn(identityStoreId string) string {
 	return IssuerArn
 }
 
+// googleCredentialsExplicit reports whether the CLI was given a key file
+// explicitly, by flag or environment, rather than the "credentials.json" default.
+func googleCredentialsExplicit() bool {
+	if f := rootCmd.Flags().Lookup("google-credentials"); f != nil && f.Changed {
+		return true
+	}
+	_, set := os.LookupEnv("SSOSYNC_GOOGLE_CREDENTIALS")
+	return set
+}
+
 // lambdaAWSConfig loads the AWS SDK configuration for the function's own
 // resources: the Secrets Manager secrets and SSM parameters its environment
 // variables reference, and CodePipeline. They live in the function's region
@@ -438,7 +458,18 @@ func configLambda() {
 	// Get retreive sensitive values from envVars/Secrets Manager with caching
 	cfg.CustomerID = getEnvSensitive("CUSTOMER_ID", config.DefaultCustomerID)
 	cfg.GoogleAdmin = getEnvSensitive("GOOGLE_ADMIN", config.DefaultGoogleAdmin)
-	cfg.GoogleCredentials = getEnvSensitive("GOOGLE_CREDENTIALS", config.DefaultGoogleCredentials)
+	// Keyless Google authentication (issue #345): GOOGLE_IMPERSONATE_SERVICE_ACCOUNT
+	// selects it; GOOGLE_WIF_CONFIG is the optional Workload Identity Federation
+	// credential configuration (inline JSON or a Secrets Manager / SSM Arn).
+	// In keyless mode GOOGLE_CREDENTIALS has no default, so an unset value is
+	// not mistaken for a key; setting both is rejected by google.Auth.Validate.
+	cfg.GoogleImpersonateServiceAccount = getEnvSensitive("GOOGLE_IMPERSONATE_SERVICE_ACCOUNT", "")
+	cfg.GoogleWIFConfig = getEnvSensitive("GOOGLE_WIF_CONFIG", "")
+	googleCredentialsDefault := config.DefaultGoogleCredentials
+	if cfg.GoogleImpersonateServiceAccount != "" {
+		googleCredentialsDefault = ""
+	}
+	cfg.GoogleCredentials = getEnvSensitive("GOOGLE_CREDENTIALS", googleCredentialsDefault)
 	// ATTRIBUTE_MAP accepts a Secrets Manager ARN, an SSM Parameter Store ARN
 	// (both resolved to their stored JSON string by getEnvSensitive) or inline
 	// JSON. The resolved string is parsed by the same shared loader used by the
@@ -501,7 +532,9 @@ func addFlags(_ *cobra.Command, cfg *config.Config) {
 	rootCmd.PersistentFlags().BoolVarP(&cfg.SyncSuspended, "suspended", "", config.DefaultSyncSuspended, "included suspended users and their group memberships when syncing")
 	rootCmd.Flags().StringVarP(&cfg.SCIMAccessToken, "access-token", "t", config.DefaultSCIMAccessToken, "AWS SSO SCIM API Access Token")
 	rootCmd.Flags().StringVarP(&cfg.SCIMEndpoint, "endpoint", "e", config.DefaultSCIMEndpoint, "AWS SSO SCIM API Endpoint")
-	rootCmd.Flags().StringVarP(&cfg.GoogleCredentials, "google-credentials", "c", config.DefaultGoogleCredentials, "path to Google Workspace credentials file")
+	rootCmd.Flags().StringVarP(&cfg.GoogleCredentials, "google-credentials", "c", config.DefaultGoogleCredentials, "path to Google Workspace credentials file (service-account key)")
+	rootCmd.Flags().StringVar(&cfg.GoogleImpersonateServiceAccount, "google-impersonate-service-account", "", "keyless authentication: email of the Google service account to impersonate (it holds the domain-wide delegation grant); replaces --google-credentials")
+	rootCmd.Flags().StringVar(&cfg.GoogleWIFConfig, "google-wif-config", "", "keyless authentication: path to a Workload Identity Federation credential configuration (external_account JSON) for the base credentials; default: Application Default Credentials")
 	rootCmd.Flags().StringVar(&cfg.AttributeMapFile, "attribute-map-file", config.DefaultAttributeMapFile, "path to a JSON file containing the attribute map (groups sync method only); when unset the built-in default mapping is used")
 	rootCmd.Flags().StringVarP(&cfg.GoogleAdmin, "google-admin", "u", config.DefaultGoogleAdmin, "Google Workspace admin user email")
 	rootCmd.Flags().StringVar(&cfg.CustomerID, "customer-id", config.DefaultCustomerID, "Google Workspace customer ID to operate against (defaults to 'my_customer')")

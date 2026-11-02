@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"strconv"
 	"strings"
 
@@ -56,48 +55,125 @@ const (
 	MaxRetries = 5
 )
 
-// NewClient creates a new client for Google's Admin API. customerID is the
-// Google Workspace customer to operate against; pass "my_customer" (or the
-// DefaultCustomerID constant) to target the customer associated with the
-// service account's domain.
-func NewClient(ctx context.Context, adminEmail, customerID string, serviceAccountKey []byte) (Client, error) {
-	scopes := []string{
-		admin.AdminDirectoryGroupReadonlyScope,
-		admin.AdminDirectoryGroupMemberReadonlyScope,
-		admin.AdminDirectoryUserReadonlyScope,
+// Scopes are the read-only Admin SDK Directory scopes ssosync requests. With
+// either authentication method they must be authorized for the service
+// account's client ID under domain-wide delegation.
+var Scopes = []string{
+	admin.AdminDirectoryGroupReadonlyScope,
+	admin.AdminDirectoryGroupMemberReadonlyScope,
+	admin.AdminDirectoryUserReadonlyScope,
+}
+
+// Auth selects how ssosync authenticates to the Google Admin SDK. Exactly one
+// method is used, chosen explicitly (see Keyless):
+//
+//   - Service-account key (the 2.x default): ServiceAccountKey holds the JSON
+//     key of the service account; domain-wide delegation is performed with
+//     the key, on behalf of the Workspace admin.
+//   - Keyless (issue #345): ImpersonateServiceAccount names the service
+//     account to impersonate. The base credentials come from WIFConfig, a
+//     Workload Identity Federation credential configuration (for example an
+//     AWS Lambda role federated to Google Cloud), or from Application Default
+//     Credentials when WIFConfig is empty. The impersonation carries the
+//     Workspace admin as Subject, so domain-wide delegation still applies and
+//     no long-lived key exists.
+type Auth struct {
+	// ServiceAccountKey is the service-account key JSON (key authentication).
+	ServiceAccountKey []byte
+	// ImpersonateServiceAccount is the email of the service account to
+	// impersonate; setting it selects keyless authentication.
+	ImpersonateServiceAccount string
+	// WIFConfig is an optional Workload Identity Federation credential
+	// configuration (type "external_account") used as the base credentials
+	// for keyless authentication. Only that credential type is accepted.
+	WIFConfig []byte
+}
+
+// Keyless reports whether keyless (impersonation) authentication is selected.
+func (a Auth) Keyless() bool {
+	return a.ImpersonateServiceAccount != ""
+}
+
+// Validate checks that exactly one authentication method is configured.
+func (a Auth) Validate() error {
+	switch {
+	case a.Keyless() && len(a.ServiceAccountKey) > 0:
+		return errors.New("google authentication: both a service-account key and a service account to impersonate are set; use one: the key, or keyless impersonation")
+	case !a.Keyless() && len(a.WIFConfig) > 0:
+		return errors.New("google authentication: a Workload Identity Federation configuration is set without a service account to impersonate")
+	case !a.Keyless() && len(a.ServiceAccountKey) == 0:
+		return errors.New("google authentication: no service-account key and no service account to impersonate; provide one")
 	}
+	if len(a.WIFConfig) > 0 {
+		return validateWIFConfig(a.WIFConfig)
+	}
+	return nil
+}
 
-	var ts oauth2.TokenSource
+// validateWIFConfig accepts only a Workload Identity Federation credential
+// configuration (type "external_account"). The credential-type option of the
+// Google client library is not enforced on the impersonation path, so any
+// other credential (e.g. a service-account key supplied by mistake) would
+// otherwise be used as the base credentials.
+func validateWIFConfig(b []byte) error {
+	var c struct {
+		Type string `json:"type"`
+	}
+	if err := json.Unmarshal(b, &c); err != nil {
+		return fmt.Errorf("google authentication: the Workload Identity Federation configuration is not valid JSON: %w", err)
+	}
+	if c.Type != "external_account" {
+		return fmt.Errorf("google authentication: the Workload Identity Federation configuration must be of type \"external_account\", got %q", c.Type)
+	}
+	return nil
+}
 
-	if len(serviceAccountKey) > 0 {
-		// Legacy path: a downloaded service-account key (JSON) performs
-		// domain-wide delegation directly via the JWT config's Subject.
-		config, err := google.JWTConfigFromJSON(serviceAccountKey, scopes...)
+// tokenSource returns the token source for the configured authentication
+// method, acting on behalf of adminEmail through domain-wide delegation.
+func tokenSource(ctx context.Context, adminEmail string, auth Auth) (oauth2.TokenSource, error) {
+	if err := auth.Validate(); err != nil {
+		return nil, err
+	}
+	if !auth.Keyless() {
+		// Service-account key: domain-wide delegation performed directly by
+		// the JWT config's Subject.
+		config, err := google.JWTConfigFromJSON(auth.ServiceAccountKey, Scopes...)
 		if err != nil {
 			return nil, err
 		}
 		config.Subject = adminEmail
-		ts = config.TokenSource(ctx)
-	} else {
-		// Keyless path: no key file. Use Application Default Credentials
-		// (e.g. an AWS Lambda role federated to GCP via Workload Identity
-		// Federation) to impersonate the target service account, carrying
-		// the Workspace admin in Subject so domain-wide delegation still
-		// applies. GOOGLE_IMPERSONATE_SERVICE_ACCOUNT names the service
-		// account that holds the DWD grant.
-		targetSA := os.Getenv("GOOGLE_IMPERSONATE_SERVICE_ACCOUNT")
-		if targetSA == "" {
-			return nil, errors.New("no service-account key provided and GOOGLE_IMPERSONATE_SERVICE_ACCOUNT is not set; cannot authenticate to Google")
-		}
-		var err error
-		ts, err = impersonate.CredentialsTokenSource(ctx, impersonate.CredentialsConfig{
-			TargetPrincipal: targetSA,
-			Scopes:          scopes,
-			Subject:         adminEmail,
-		})
-		if err != nil {
-			return nil, err
-		}
+		return config.TokenSource(ctx), nil
+	}
+
+	// Keyless: impersonate the service account that holds the domain-wide
+	// delegation grant, with the Workspace admin as Subject. Signing the
+	// delegation JWT uses the IAM Credentials API (signJwt), so no key is
+	// needed; the base credentials need iam.serviceAccounts.signJwt on the
+	// target (e.g. roles/iam.serviceAccountTokenCreator).
+	var opts []option.ClientOption
+	if len(auth.WIFConfig) > 0 {
+		opts = append(opts, option.WithAuthCredentialsJSON(option.ExternalAccount, auth.WIFConfig))
+	}
+	ts, err := impersonate.CredentialsTokenSource(ctx, impersonate.CredentialsConfig{
+		TargetPrincipal: auth.ImpersonateServiceAccount,
+		Scopes:          Scopes,
+		Subject:         adminEmail,
+	}, opts...)
+	if err != nil {
+		return nil, fmt.Errorf("google authentication: cannot impersonate %s: %w", auth.ImpersonateServiceAccount, err)
+	}
+	return ts, nil
+}
+
+// NewClient creates a new client for Google's Admin API, authenticated as
+// described by auth and acting on behalf of the Workspace admin adminEmail.
+// customerID is the Google Workspace customer to operate against; pass
+// "my_customer" (or the DefaultCustomerID constant) to target the customer
+// associated with the service account's domain.
+func NewClient(ctx context.Context, adminEmail, customerID string, auth Auth) (Client, error) {
+	ts, err := tokenSource(ctx, adminEmail, auth)
+	if err != nil {
+		return nil, err
 	}
 
 	srv, err := admin.NewService(ctx, option.WithTokenSource(ts))

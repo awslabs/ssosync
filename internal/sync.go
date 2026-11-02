@@ -18,6 +18,7 @@ package internal
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"reflect"
 	"strings"
@@ -2029,19 +2030,64 @@ func (s *syncGSuite) getGroupUsersOperations(gGroupsUsers map[string][]*admin.Us
 	return add, delete, equals, nil
 }
 
+// googleAuthFromConfig builds the Google authentication from the config.
+// Keyless authentication is selected explicitly, by setting
+// GoogleImpersonateServiceAccount; the service-account key in
+// GoogleCredentials is then not read at all. For the CLI, GoogleCredentials and
+// GoogleWIFConfig are file paths; for Lambda they already hold the contents
+// (resolved from the environment, Secrets Manager or SSM by cmd/root.go).
+func googleAuthFromConfig(cfg *config.Config) (google.Auth, error) {
+	read := func(value, what string) ([]byte, error) {
+		if value == "" {
+			return nil, nil
+		}
+		if cfg.IsLambda {
+			return []byte(value), nil
+		}
+		b, err := os.ReadFile(value)
+		if err != nil {
+			return nil, fmt.Errorf("cannot read the %s file: %w", what, err)
+		}
+		return b, nil
+	}
+
+	auth := google.Auth{ImpersonateServiceAccount: cfg.GoogleImpersonateServiceAccount}
+	var err error
+	if auth.Keyless() {
+		if cfg.GoogleCredentials != "" {
+			// A key was given as well (cmd/root.go clears the CLI default and
+			// Lambda has none in keyless mode): not read, only marked present
+			// so Validate rejects the ambiguous configuration.
+			auth.ServiceAccountKey = []byte(cfg.GoogleCredentials)
+			return auth, auth.Validate()
+		}
+		if auth.WIFConfig, err = read(cfg.GoogleWIFConfig, "Workload Identity Federation configuration"); err != nil {
+			return auth, err
+		}
+		log.WithFields(log.Fields{
+			"impersonate": auth.ImpersonateServiceAccount,
+			"wifConfig":   len(auth.WIFConfig) > 0,
+		}).Info("Google authentication: keyless (service account impersonation)")
+	} else {
+		if auth.ServiceAccountKey, err = read(cfg.GoogleCredentials, "Google credentials"); err != nil {
+			return auth, err
+		}
+		if len(cfg.GoogleWIFConfig) > 0 {
+			auth.WIFConfig = []byte(cfg.GoogleWIFConfig) // rejected by Validate: WIF needs impersonation
+		}
+		log.Info("Google authentication: service-account key")
+	}
+	return auth, auth.Validate()
+}
+
 // DoSync will create a logger and run the sync with the paths
 // given to do the sync.
 func DoSync(ctx context.Context, cfg *config.Config) error {
 	log.Info("Syncing AWS users and groups from Google Workspace SAML Application")
 
-	creds := []byte(cfg.GoogleCredentials)
-
-	if !cfg.IsLambda {
-		b, err := os.ReadFile(cfg.GoogleCredentials)
-		if err != nil {
-			return err
-		}
-		creds = b
+	googleAuth, err := googleAuthFromConfig(cfg)
+	if err != nil {
+		return err
 	}
 
 	// create a http client with retry and backoff capabilities
@@ -2056,7 +2102,7 @@ func DoSync(ctx context.Context, cfg *config.Config) error {
 
 	httpClient := retryClient.StandardClient()
 
-	googleClient, err := google.NewClient(ctx, cfg.GoogleAdmin, cfg.CustomerID, creds)
+	googleClient, err := google.NewClient(ctx, cfg.GoogleAdmin, cfg.CustomerID, googleAuth)
 	if err != nil {
 		log.WithField("error", err).Warn("Problem establising a connection to Google directory")
 		return err

@@ -22,6 +22,17 @@ type Config struct {
 	// ATTRIBUTE_MAP env var for Lambda), not by viper, so it carries no
 	// mapstructure tag.
 	AttributeMap AttributeMaps
+	// GoogleImpersonateServiceAccount is the email of the Google service
+	// account to impersonate for keyless authentication (issue #345). Setting
+	// it selects keyless authentication instead of the service-account key in
+	// GoogleCredentials (the 2.x default).
+	GoogleImpersonateServiceAccount string `mapstructure:"google_impersonate_service_account"`
+	// GoogleWIFConfig is the optional Workload Identity Federation credential
+	// configuration ("external_account" JSON) used as the base credentials for
+	// keyless authentication: a file path for the CLI, the resolved contents
+	// for Lambda (inline JSON, or a Secrets Manager / SSM Parameter Store Arn).
+	// Empty means Application Default Credentials.
+	GoogleWIFConfig string `mapstructure:"google_wif_config"`
 	// GoogleAdmin ...
 	GoogleAdmin string `mapstructure:"google_admin"`
 	// CustomerID is the Google Workspace customer ID to operate against.
