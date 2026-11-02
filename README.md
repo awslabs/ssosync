@@ -148,7 +148,9 @@ These steps follow Google's guide [Configure Workload Identity Federation with A
 
 > **You need:** a Google Cloud project where you hold *Workload Identity Pool Admin* (`roles/iam.workloadIdentityPoolAdmin`) and *Service Account Admin* (`roles/iam.serviceAccountAdmin`) (or *Owner*); a Google Workspace **super admin** for step 4; the `gcloud` CLI ([install](https://cloud.google.com/sdk/docs/install)), or Cloud Shell; and the **AWS account ID** and **IAM role name** ssosync runs as (see step 5).
 
-The commands below use these shell variables; set them first:
+> **Tip: use Google Cloud Shell for the following steps.** Click **Activate Cloud Shell** (the `>_` icon) in the [Google Cloud Console](https://console.cloud.google.com/): it opens a terminal in your browser with the `gcloud` CLI already installed and signed in as you, so there is nothing to install. Select your project first (step 1); every command below can be pasted into Cloud Shell as-is. Step 8 writes `wif-config.json` there; download it with **More** (⋮) > **Download** in the Cloud Shell toolbar. See [Cloud Shell](https://cloud.google.com/shell/docs/using-cloud-shell).
+
+The commands below use these shell variables; set them first (in Cloud Shell, run `gcloud config set project <your project id>` before setting them, so `PROJECT_NUMBER` resolves):
 
 ```bash
 PROJECT_ID="my-ssosync-project"          # Google Cloud project that owns the service account and pool
@@ -169,7 +171,7 @@ SA_EMAIL="${SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
 
      ```bash
      gcloud services enable admin.googleapis.com iam.googleapis.com \
-       sts.googleapis.com iamcredentials.googleapis.com --project "$PROJECT_ID"
+       sts.googleapis.com iamcredentials.googleapis.com
      ```
 
 3. **Create the service account — without a key**
