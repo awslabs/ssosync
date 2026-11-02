@@ -212,8 +212,7 @@ AWS_ROLE_NAME="SSOSync_ExecutionRole"     # the IAM role ssosync runs as (see st
 
 6. **Create the workload identity pool and AWS provider**
    - ```bash
-     gcloud iam workload-identity-pools create "$POOL_ID" --project "$PROJECT_ID" \
-       --location=global --display-name="ssosync"
+     gcloud iam workload-identity-pools create "ssosync" --location=global --display-name="ssosync"
 
      gcloud iam workload-identity-pools providers create-aws "$PROVIDER_ID" --project "$PROJECT_ID" \
        --location=global --workload-identity-pool="$POOL_ID" \
