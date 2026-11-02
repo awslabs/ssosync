@@ -155,13 +155,9 @@ The commands below use these shell variables; set them first (in Cloud Shell, ru
 ```bash
 PROJECT_ID="my-ssosync-project"          # Google Cloud project that owns the service account and pool
 PROJECT_NUMBER="$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')"
-POOL_ID="ssosync"                         # workload identity pool ID (cannot be changed later)
-PROVIDER_ID="aws"                         # pool provider ID (cannot be changed later)
-AWS_ACCOUNT_ID="123456789012"             # the AWS account ssosync runs in
-AWS_ROLE_NAME="SSOSync_ExecutionRole"     # the IAM role ssosync runs as (see step 5); this is the WIF quick-start default
 ```
 
-`SA_EMAIL`, the service account's email address, is set in step 3 from the account that command creates.
+`SA_EMAIL`, the service account's email address, is set in step 3 from the account that command creates; the pool, provider and AWS variables are set in step 6.
 
 1. **Create (or select) a Google Cloud project**
    - Create a project in the [Google Cloud Console](https://console.cloud.google.com/), or reuse one: `gcloud config set project "$PROJECT_ID"`.
@@ -211,10 +207,23 @@ AWS_ROLE_NAME="SSOSync_ExecutionRole"     # the IAM role ssosync runs as (see st
    - **CLI:** the role your AWS credentials belong to; `aws sts get-caller-identity` shows it in the `assumed-role/<role name>/...` ARN.
 
 6. **Create the workload identity pool and AWS provider**
-   - ```bash
-     gcloud iam workload-identity-pools create "ssosync" --location=global --display-name="ssosync"
+   - **a.** Set the pool, provider and AWS variables. Use your AWS account ID, and the role name from step 5 (`SSOSync_ExecutionRole` for the quick-start templates). Pool and provider IDs cannot be changed later.
 
-     gcloud iam workload-identity-pools providers create-aws "$PROVIDER_ID" --project "$PROJECT_ID" \
+     ```bash
+     POOL_ID="ssosync" \
+     PROVIDER_ID="ssosync" \
+     AWS_ACCOUNT_ID="<account_id>" \
+     AWS_ROLE_NAME="SSOSync_ExecutionRole"
+     ```
+   - **b.** Create the pool:
+
+     ```bash
+     gcloud iam workload-identity-pools create "$POOL_ID" --location=global --display-name="ssosync"
+     ```
+   - **c.** Create the AWS provider in it:
+
+     ```bash
+     gcloud iam workload-identity-pools providers create-aws "$PROVIDER_ID" \
        --location=global --workload-identity-pool="$POOL_ID" \
        --account-id="$AWS_ACCOUNT_ID" \
        --attribute-mapping="google.subject=assertion.arn,attribute.account=assertion.account,attribute.aws_role=assertion.arn.extract('assumed-role/{role}/')" \
