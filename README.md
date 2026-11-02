@@ -176,8 +176,7 @@ SA_EMAIL="${SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
 
 3. **Create the service account — without a key**
    - ```bash
-     gcloud iam service-accounts create "$SA_NAME" --project "$PROJECT_ID" \
-       --display-name "ssosync (keyless)"
+     gcloud iam service-accounts create "ssosync" --display-name "ssosync (keyless)"
      ```
    - No project roles are required: its access to the directory is granted in Google Workspace (step 4), not in Google Cloud. **Do not create a key** for it.
    - Note its numeric **Client ID** (OAuth2 client ID / unique ID) for step 4:
