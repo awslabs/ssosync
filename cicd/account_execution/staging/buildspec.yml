@@ -54,30 +54,52 @@ phases:
           ./deploy/developer.json > ./deploy/attributemap.json
       - cat ./deploy/attributemap.json
 
-      # Params for the WIFAuth stage: keyless Google authentication (Workload
-      # Identity Federation, issue #345) with no admin (the service account acts
-      # as itself, issue #192), so no key and no admin email; the customer id is
-      # required. RoleName is the role the Google provider trusts. Arns only.
+      # WIFAuth stage: keyless Google authentication (Workload Identity
+      # Federation, issue #345) with no admin (the service account acts as
+      # itself, issue #192): no key, no admin email, the customer id required.
+      # PipelineGoogleWIFConfig holds one credential configuration (no secret
+      # values). The test environment has a Google provider per role per
+      # account, and only the provider at the end of its "audience" differs:
+      #   <AccountId>-lambda  trusts SSOSync_ExecutionRole    (the function)
+      #   <AccountId>-cli     trusts SSOSync_CLIExecutionRole (the CLI test)
+      # For each account (ShareWith in the release pipeline, this account in the
+      # developer pipeline), named by account id so each pipeline picks up its own:
+      #   deploy/wif-<AccountId>.json: the stack params, with the -lambda
+      #     configuration inline (the app stores it as SSOSyncGoogleWIFConfig).
+      #   tests/wif_account_execution/cli/wif-config-<AccountId>.json: the -cli
+      #     configuration.
       - |
         # Unset SecretsConfig entries are the literal "".
         if [ "$SecretWIFClientLibraryConfig" = '""' ]; then SecretWIFClientLibraryConfig=""; fi
         if [ "$SecretWIFServiceAccountEmail" = '""' ]; then SecretWIFServiceAccountEmail=""; fi
         if [ -z "$SecretWIFClientLibraryConfig" ] || [ -z "$SecretWIFServiceAccountEmail" ] || [ -z "$GoogleCustomerIdArn" ]; then
-          echo "WARNING: SecretsConfig has no WIF configuration or service account, or PipelineGoogleCustomerId was not found; the WIFAuth deploy will fail"
+          echo "WARNING: SecretsConfig has no WIF configuration or service account, or PipelineGoogleCustomerId was not found; no WIFAuth params written, the WIFAuth stage will fail"
+        else
+          aws secretsmanager get-secret-value --secret-id "$SecretWIFClientLibraryConfig" --query SecretString --output text > wif-config.json
+          if [ -z "$ShareWith" ] || [ "$ShareWith" = "NOT-SHARED" ]; then
+            Accounts=$(aws sts get-caller-identity --query Account --output text)
+          else
+            Accounts=$(echo "$ShareWith" | tr ',' ' ')
+          fi
+          for AccountId in $Accounts; do
+            sed -E "s#(/providers/)[^\"]*\"#\1${AccountId}-lambda\"#" wif-config.json > wif-config-lambda.json
+            jq -n \
+              --arg AppArn "$AppArn" \
+              --arg AppVersion "$AppVersion" \
+              --arg GoogleImpersonateServiceAccountArn "$SecretWIFServiceAccountEmail" \
+              --arg GoogleWIFConfig "$(jq -c . wif-config-lambda.json)" \
+              --arg GoogleCustomerIdArn "$GoogleCustomerIdArn" \
+              --arg SCIMEndpointUrlArn "$SecretSCIMEndpoint" \
+              --arg SCIMAccessTokenArn "$SecretSCIMAccessToken" \
+              --arg RegionArn "$SecretRegion" \
+              '{Parameters: ($ARGS.named + {RoleName: "SSOSync_ExecutionRole", GroupMatch: "name:AWS*,name=NestedGroups"}),
+                StackPolicy: {Statement: [{Effect: "Allow", NotAction: "Update:Delete", Principal: "*", Resource: "*"}]}}' \
+              > "./deploy/wif-${AccountId}.json"
+            sed -E "s#(/providers/)[^\"]*\"#\1${AccountId}-cli\"#" wif-config.json > "./tests/wif_account_execution/cli/wif-config-${AccountId}.json"
+            jq .audience wif-config-lambda.json "./tests/wif_account_execution/cli/wif-config-${AccountId}.json"
+          done
+          rm -f wif-config.json wif-config-lambda.json
         fi
-        jq -n \
-          --arg AppArn "$AppArn" \
-          --arg AppVersion "$AppVersion" \
-          --arg GoogleImpersonateServiceAccountArn "$SecretWIFServiceAccountEmail" \
-          --arg GoogleWIFConfigArn "$SecretWIFClientLibraryConfig" \
-          --arg GoogleCustomerIdArn "$GoogleCustomerIdArn" \
-          --arg SCIMEndpointUrlArn "$SecretSCIMEndpoint" \
-          --arg SCIMAccessTokenArn "$SecretSCIMAccessToken" \
-          --arg RegionArn "$SecretRegion" \
-          '{Parameters: ($ARGS.named + {RoleName: "SSOSync_ExecutionRole", GroupMatch: "name:AWS*,name=NestedGroups"}),
-            StackPolicy: {Statement: [{Effect: "Allow", NotAction: "Update:Delete", Principal: "*", Resource: "*"}]}}' \
-          > ./deploy/wif.json
-      - cat ./deploy/wif.json
 
       # Update params with the values for this run for the management account
       - |

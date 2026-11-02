@@ -2,7 +2,7 @@ version: 0.2
 
 # WIFAuth: invoke the function deployed with keyless Google authentication
 # (Workload Identity Federation, issue #345) and no admin (issue #192), from
-# deploy/wif.json. The function must be configured without a key or admin, run
+# deploy/wif-<AccountId>.json. The function must be configured without a key or admin, run
 # as the role the Google provider trusts, and complete without a FunctionError.
 
 env:

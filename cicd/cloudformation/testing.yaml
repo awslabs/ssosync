@@ -187,9 +187,11 @@ Resources:
                 S3Bucket: !Ref StagingBucket
                 S3ObjectKey: tests.zip
                 PollForSourceChanges: false
-        - Name: TestsLambda
+        # Legacy auth (stored credentials): the service-account key and an admin
+        # to act on behalf of (deploy/lambda.json, then deploy/cli.json).
+        - Name: LegacyAuth
           Actions:
-            - Name: Deploy
+            - Name: DeployLambda
               ActionTypeId:
                 Category: Deploy
                 Owner: AWS
@@ -219,9 +221,7 @@ Resources:
                 - Name: AccountExecutionLambda
               InputArtifacts:
                 - Name: Tests
-        - Name: TestsCLI
-          Actions:
-            - Name: Deploy
+            - Name: DeployCLI
               ActionTypeId:
                 Category: Deploy
                 Owner: AWS
@@ -236,14 +236,14 @@ Resources:
                 TemplatePath: !Sub 'Tests::deploy/stack.yml'
               InputArtifacts:
                 - Name: Tests
-              RunOrder: 1
+              RunOrder: 3
             - Name: CLI
               ActionTypeId:
                 Category: Test
                 Owner: AWS
                 Version: 1
                 Provider: CodeBuild
-              RunOrder: 2
+              RunOrder: 4
               Configuration:
                 ProjectName: !Ref CodeBuildSmokeCLI
                 PrimarySource: Tests
@@ -357,7 +357,7 @@ Resources:
                     - Name: Tests
                   OutputArtifacts:
                     - Name: AttrMapManagerOptIn
-                # TestsCLI left the stack on cli.json (GroupMatch name:Man*);
+                # LegacyAuth left the stack on cli.json (GroupMatch name:Man*);
                 # redeploy with the developer params (name:AWS*, the baseline
                 # groups) and the built-in default map (AttributeMap unset).
                 - Name: DeployDefaultAttributeMap
@@ -478,6 +478,77 @@ Resources:
                   InputArtifacts:
                     - Name: Tests
             - !Ref AWS::NoValue
+        # Workload Identity Federation (keyless, issue #345) with no admin (the
+        # service account acts as itself, issue #192), in every account: the
+        # LegacyAuth tests against a redeployment from this account's
+        # deploy/wif-<AccountId>.json (no key, no admin, the customer id,
+        # RoleName SSOSync_ExecutionRole, trusted by the <AccountId>-lambda
+        # provider). The CLI test runs as SSOSync_CLIExecutionRole, trusted by
+        # <AccountId>-cli. See tests/wif_account_execution/.
+        - Name: WIFAuth
+          Actions:
+            - Name: Deploy
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Version: '1'
+                Provider: CloudFormation
+              Configuration:
+                ActionMode: CREATE_UPDATE
+                Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND,CAPABILITY_NAMED_IAM
+                StackName: TestAccountExecution
+                RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
+                TemplateConfiguration: !Sub 'Tests::deploy/wif-${AWS::AccountId}.json'
+                TemplatePath: 'Tests::deploy/stack.yml'
+              InputArtifacts:
+                - Name: Tests
+              RunOrder: 1
+            - Name: Lambda
+              ActionTypeId:
+                Category: Test
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              RunOrder: 2
+              Configuration:
+                ProjectName: !Ref CodeBuildWIFLambda
+                PrimarySource: Tests
+              OutputArtifacts:
+                - Name: WIFLambda
+              InputArtifacts:
+                - Name: Tests
+            - Name: CLI
+              ActionTypeId:
+                Category: Test
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              RunOrder: 3
+              Configuration:
+                ProjectName: !Ref CodeBuildWIFCLI
+                PrimarySource: Tests
+              OutputArtifacts:
+                - Name: WIFCLI
+              InputArtifacts:
+                - Name: Tests
+            # The CodePipeline invocation, like TestsCodePipeline, in the
+            # delegated account only.
+            - !If
+              - DeployDelegated
+              - Name: CodePipeline
+                ActionTypeId:
+                  Category: Invoke
+                  Owner: AWS
+                  Version: 1
+                  Provider: Lambda
+                RunOrder: 4
+                Configuration:
+                  FunctionName: SSOSyncFunction
+                OutputArtifacts:
+                  - Name: WIFCodePipeline
+                InputArtifacts:
+                  - Name: Tests
+              - !Ref AWS::NoValue
         - Name: CleanUp
           Actions:
             - Name: RemoveStack
@@ -964,6 +1035,67 @@ Resources:
       LogGroupName: !Ref CodePipelineLogGroup
       LogStreamName: SSOSync-Smoke-Lambda
 
+  # --- WIFAuth: keyless Google authentication (tests/wif_account_execution/) ---
+
+  CodeBuildWIFLambda:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: SSOSync-WIF-Lambda
+      Description: "Invoke the keyless (Workload Identity Federation) deployment of the function"
+      ServiceRole: !Ref CodeBuildTestRole
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: "tests/wif_account_execution/lambda/buildspec.yml"
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/amazonlinux-x86_64-standard:6.0
+        Type: LINUX_CONTAINER
+      Artifacts:
+        Name: SSOSync
+        Type: CODEPIPELINE
+      LogsConfig:
+        CloudWatchLogs:
+          GroupName: !Ref CodePipelineLogGroup
+          StreamName: !Ref CodeBuildWIFLambdaLogs
+          Status: ENABLED
+
+  CodeBuildWIFLambdaLogs:
+    Type: AWS::Logs::LogStream
+    Properties:
+      LogGroupName: !Ref CodePipelineLogGroup
+      LogStreamName: SSOSync-WIF-Lambda
+
+  # Runs as CodeBuildWIFCLIRole (SSOSync_CLIExecutionRole), trusted by this
+  # account's <AccountId>-cli Google provider; the staging buildspec writes
+  # its configuration as tests/wif_account_execution/cli/wif-config-<AccountId>.json.
+  CodeBuildWIFCLI:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: SSOSync-WIF-CLI
+      Description: "Run the cli with keyless (Workload Identity Federation) authentication"
+      ServiceRole: !Ref CodeBuildWIFCLIRole
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: "tests/wif_account_execution/cli/buildspec.yml"
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/amazonlinux-x86_64-standard:6.0
+        Type: LINUX_CONTAINER
+      Artifacts:
+        Name: SSOSync
+        Type: CODEPIPELINE
+      LogsConfig:
+        CloudWatchLogs:
+          GroupName: !Ref CodePipelineLogGroup
+          StreamName: !Ref CodeBuildWIFCLILogs
+          Status: ENABLED
+
+  CodeBuildWIFCLILogs:
+    Type: AWS::Logs::LogStream
+    Properties:
+      LogGroupName: !Ref CodePipelineLogGroup
+      LogStreamName: SSOSync-WIF-CLI
+
   CodeBuildUserGroupOperations:
     Type: AWS::CodeBuild::Project
     Properties:
@@ -1416,6 +1548,8 @@ Resources:
               - !Sub ${CodeBuildSmokeCLI.Arn}
               - !Sub ${CodeBuildSmokeLambda.Arn}
               - !Sub ${CodeBuildUserGroupOperations.Arn}
+              - !Sub ${CodeBuildWIFLambda.Arn}
+              - !Sub ${CodeBuildWIFCLI.Arn}
               # Attribute-map test projects exist in the delegated account only.
               - !If [DeployDelegated, !GetAtt CodeBuildAttrMapInvalidMap.Arn, !Ref AWS::NoValue]
               - !If [DeployDelegated, !GetAtt CodeBuildAttrMapDefaultMap.Arn, !Ref AWS::NoValue]
@@ -1544,6 +1678,12 @@ Resources:
               -  'lambda:invokeFunction'
               Effect: Allow
               Resource: '*'
+            # tests/wif_account_execution/lambda checks the function is keyless.
+            - Action:
+              - 'lambda:GetFunctionConfiguration'
+              Effect: Allow
+              Resource:
+              - !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:SSOSyncFunction
             - Action:
                 - "identitystore:ListGroups"
                 - "identitystore:ListUsers"
@@ -1667,6 +1807,65 @@ Resources:
               Resource:
                 - "*"
               Effect: Allow
+
+  # The service role of the WIFAuth CLI test (tests/wif_account_execution/cli).
+  # ssosync federates to Google as this role, so its name is fixed: this
+  # account's <AccountId>-cli Google provider trusts it. Only what the CLI
+  # needs to sync.
+  CodeBuildWIFCLIRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: SSOSync_CLIExecutionRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Action: ['sts:AssumeRole']
+          Effect: Allow
+          Principal:
+            Service: [codebuild.amazonaws.com]
+      Path: /
+      Policies:
+        - PolicyName: !Sub SSOSync-CodeBuild-WIF-CLI-${AWS::Region}
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+            - Action:
+              - 'logs:CreateLogGroup'
+              - 'logs:CreateLogStream'
+              - 'logs:PutLogEvents'
+              Effect: Allow
+              Resource: '*'
+            - Action:
+              - 'kms:DescribeKey'
+              - 'kms:GenerateDataKey*'
+              - 'kms:Encrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:Decrypt'
+              Effect: Allow
+              Resource:
+              - !GetAtt ArtifactBucketKey.Arn
+            - Action: 's3:*'
+              Effect: Allow
+              Resource:
+              - !Sub ${ArtifactBucket.Arn}/*
+            - Action:
+              - 'secretsmanager:GetSecretValue'
+              - 'secretsmanager:DescribeSecret'
+              Effect: Allow
+              Resource:
+              - !Sub arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:SSOSync*
+            - Action:
+              - 'sso:ListInstances'
+              Effect: Allow
+              Resource: '*'
+            - Action:
+              - 'identitystore:ListGroups'
+              - 'identitystore:ListUsers'
+              - 'identitystore:ListGroupMemberships'
+              - 'identitystore:IsMemberInGroups'
+              - 'identitystore:GetGroupMembershipId'
+              Effect: Allow
+              Resource: '*'
 
   CloudFormationDeployerRole:
     Type: AWS::IAM::Role

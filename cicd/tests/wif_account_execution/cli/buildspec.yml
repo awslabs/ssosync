@@ -2,11 +2,11 @@ version: 0.2
 
 # WIFAuth: run the CLI with keyless Google authentication (Workload Identity
 # Federation, issue #345) and no admin (issue #192), using the secrets the
-# deploy/wif.json deployment created. There is no key file and no --google-admin.
+# deploy/wif-<AccountId>.json deployment created. There is no key file and no --google-admin.
 #
-# The project runs as its own service role (SSOSync_CLIExecutionRole); the
-# Google provider's attribute condition and the service account's Workload
-# Identity User grant must include it, alongside SSOSync_ExecutionRole.
+# The project runs as its own service role (SSOSync_CLIExecutionRole), which
+# has its own Google provider in each account (one provider per role per
+# account); see wif-config-<AccountId>.json below.
 
 env:
   secrets-manager:
@@ -27,9 +27,11 @@ phases:
     commands:
       - ./ssosync --version
 
-      # The credential configuration holds no secret (pool, provider and where
-      # to get AWS credentials).
-      - aws secretsmanager get-secret-value --secret-id SSOSyncGoogleWIFConfig --query SecretString --output text > wif-config.json
+      # This account's credential configuration for this project's role's
+      # provider, written by the staging buildspec as wif-config-<AccountId>.json.
+      # It holds no secret: pool, provider and where to get AWS credentials.
+      - AccountId=$(aws sts get-caller-identity --query Account --output text)
+      - cp "tests/wif_account_execution/cli/wif-config-${AccountId}.json" wif-config.json
       - jq -e '.type == "external_account"' wif-config.json >/dev/null
       - jq '{type, audience}' wif-config.json
 

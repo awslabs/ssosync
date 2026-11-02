@@ -503,8 +503,8 @@ Resources:
                 - Name: Tests
         # Workload Identity Federation (keyless, issue #345) with no admin (the
         # service account acts as itself, issue #192): the LegacyAuth tests
-        # against a redeployment from deploy/wif.json (no key, no admin, the
-        # customer id, RoleName SSOSync_ExecutionRole). It runs last, before
+        # against a redeployment from deploy/wif-<AccountId>.json (no key, no
+        # admin, the customer id, RoleName SSOSync_ExecutionRole). It runs last, before
         # CleanUp, because the earlier stages use the legacy deployment.
         # See tests/wif_account_execution/.
         - Name: WIFAuth
@@ -520,7 +520,7 @@ Resources:
                 Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND,CAPABILITY_NAMED_IAM
                 StackName: TestAccountExecution
                 RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
-                TemplateConfiguration: 'Tests::deploy/wif.json'
+                TemplateConfiguration: !Sub 'Tests::deploy/wif-${AWS::AccountId}.json'
                 TemplatePath: 'Tests::deploy/stack.yml'
               InputArtifacts:
                 - Name: Tests
@@ -821,8 +821,9 @@ Resources:
       LogGroupName: !Ref CodePipelineLogGroup
       LogStreamName: SSOSync-WIF-Lambda
 
-  # Runs as CodeBuildWIFCLIRole (SSOSync_CLIExecutionRole), which the Google
-  # provider must trust alongside SSOSync_ExecutionRole.
+  # Runs as CodeBuildWIFCLIRole (SSOSync_CLIExecutionRole), which has its own
+  # Google provider; the staging buildspec writes that provider's credential
+  # configuration as tests/wif_account_execution/cli/wif-config-<AccountId>.json.
   CodeBuildWIFCLI:
     Type: AWS::CodeBuild::Project
     Properties:
@@ -1367,12 +1368,24 @@ Resources:
               Resource:
               - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/SSOSync/*
             # The staging buildspec looks the customer id secret up by name
-            # (it is not in SecretsConfig); its Arn goes into deploy/wif.json.
+            # (it is not in SecretsConfig); its Arn goes into deploy/wif-*.json.
             - Action:
               - 'secretsmanager:DescribeSecret'
               Effect: Allow
               Resource:
               - !Sub arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:PipelineGoogleCustomerId-*
+            # Staging writes the WIF CLI credential configuration (no secret
+            # values) from PipelineGoogleWIFConfig into the tests.
+            - Action:
+              - 'secretsmanager:GetSecretValue'
+              Effect: Allow
+              Resource:
+              - !Sub arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:PipelineGoogleWIFConfig-*
+            - Action:
+              - 'kms:Decrypt'
+              Effect: Allow
+              Resource:
+              - !Select [8, !Split [',', !Ref SecretsConfig]]
 
   # The service role of the WIFAuth CLI test (tests/wif_account_execution/cli).
   # ssosync federates to Google as this role, so its name is fixed: the Google

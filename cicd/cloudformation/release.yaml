@@ -1060,6 +1060,18 @@ Resources:
               Effect: Allow
               Resource:
               - !Sub arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:PipelineGoogleCustomerId-*
+            # Staging writes each account's WIF CLI credential configuration
+            # (no secret values) from PipelineGoogleWIFConfig into the tests.
+            - Action:
+              - 'secretsmanager:GetSecretValue'
+              Effect: Allow
+              Resource:
+              - !Sub arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:PipelineGoogleWIFConfig-*
+            - Action:
+              - 'kms:Decrypt'
+              Effect: Allow
+              Resource:
+              - !Select [8, !Split [',', !Ref SecretsConfig]]
       
   CodeBuildTestRole:
     Type: AWS::IAM::Role
