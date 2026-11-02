@@ -34,6 +34,7 @@ Metadata:
           default: "Lambda Configuration"
         Parameters:
           - FunctionName
+          - RoleName
           - ScheduleExpression
           - DryRun
           - MemorySize
@@ -114,6 +115,14 @@ Parameters:
       [optional] Specify the name you want to us for this deployment, if you want to trigger SSOSync as part of a pipeline or other automation this will ensure a consistent arn to call. leave empty for default behaviour.
     Default: ""
     AllowedPattern: '(?!.*\s)|[a-zA-Z0-9-_]{1,140}'
+
+  RoleName:
+    Type: String
+    Description: |
+      [optional] Name of the IAM role the function runs as. Leave empty to have CloudFormation generate one (the default). Set it to get a predictable name that survives redeployments, for example to set up keyless Google authentication (Workload Identity Federation), which trusts the role by name. IAM role names are global in the account: use a different name for each ssosync deployment.
+    Default: ""
+    AllowedPattern: '(?!.*\s)|[a-zA-Z0-9+=,.@_-]{1,64}'
+    ConstraintDescription: 'Must be empty or a valid IAM role name: up to 64 letters, digits and +=,.@_-'
 
   ScheduleExpression:
     Type: String
@@ -356,6 +365,8 @@ Parameters:
 Conditions:
   SetFunctionName: !Not 
     - !Equals [!Ref FunctionName, "" ]
+  SetRoleName: !Not
+    - !Equals [!Ref RoleName, ""]
   LegacySync: !Equals [ !Ref SyncMethod, "users_groups" ]
   SetGoogleUserMatch: !And
     - !Not 
@@ -533,6 +544,7 @@ Resources:
     Type: AWS::IAM::Role
     Condition: LocalSecrets
     Properties:
+      RoleName: !If [SetRoleName, !Ref RoleName, !Ref AWS::NoValue]
       AssumeRolePolicyDocument:
         Version: 2012-10-17
         Statement:
@@ -628,6 +640,7 @@ Resources:
     Type: AWS::IAM::Role
     Condition: RemoteSecrets
     Properties:
+      RoleName: !If [SetRoleName, !Ref RoleName, !Ref AWS::NoValue]
       AssumeRolePolicyDocument:
         Version: 2012-10-17
         Statement:
@@ -1008,6 +1021,12 @@ Outputs:
     Value: !GetAtt SSOSyncFunction.Arn
     Export:
       Name: FunctionARN
+  RoleName:
+    Condition: CreateFunction
+    Description: "The name of the IAM role the function runs as (the RoleName parameter, or the name CloudFormation generated); use it to set up keyless Google authentication (Workload Identity Federation)"
+    Value: !If [RemoteSecrets, !Ref SSOSyncRoleRemote, !Ref SSOSyncRoleLocal]
+    Export:
+      Name: RoleName
   GoogleCustomerId:
     Condition: CreateSecrets
     Description: "The Arn of the secret containing the GoogleCustomerId"

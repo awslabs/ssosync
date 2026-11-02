@@ -158,7 +158,7 @@ PROJECT_NUMBER="$(gcloud projects describe "$PROJECT_ID" --format='value(project
 POOL_ID="ssosync"                         # workload identity pool ID (cannot be changed later)
 PROVIDER_ID="aws"                         # pool provider ID (cannot be changed later)
 AWS_ACCOUNT_ID="123456789012"             # the AWS account ssosync runs in
-AWS_ROLE_NAME="my-ssosync-lambda-role"    # the IAM role ssosync runs as (see step 5)
+AWS_ROLE_NAME="SSOSync_ExecutionRole"     # the IAM role ssosync runs as (see step 5); this is the WIF quick-start default
 ```
 
 `SA_EMAIL`, the service account's email address, is set in step 3 from the account that command creates.
@@ -206,7 +206,8 @@ AWS_ROLE_NAME="my-ssosync-lambda-role"    # the IAM role ssosync runs as (see st
 
 5. **Identify the AWS role ssosync runs as**
    - Google matches the role in the ARN of ssosync's AWS session, `arn:aws:sts::<account>:assumed-role/<role name>/<session>`.
-   - **Lambda (SAR / quick-start deployment):** open the function in the Lambda console, *Configuration* > *Permissions*, and note the **role name** (for example `serverlessrepo-SSOSync-SSOSyncRoleLocal-ABC123`). If you deploy the role before the federation exists, deploy ssosync first and complete these steps afterwards; it runs only once they are in place.
+   - **If you are using the Workload Identity Federation quick-start templates, use `SSOSync_ExecutionRole`.** It is their default `RoleName`, so you can complete these steps before deploying.
+   - **Lambda (SAR deployment):** set the template's **`RoleName`** parameter (for example `SSOSync_ExecutionRole`) so the role has a predictable name that does not change when the stack is redeployed, and use that name here. IAM role names are global in the account, so give each ssosync deployment its own. If you leave `RoleName` empty, CloudFormation generates a name (for example `serverlessrepo-SSOSync-SSOSyncRoleLocal-ABC123`); deploy first, then read it from the stack's **`RoleName` output**, and redo steps 6–7 if the stack is ever recreated with a new one.
    - **CLI:** the role your AWS credentials belong to; `aws sts get-caller-identity` shows it in the `assumed-role/<role name>/...` ARN.
 
 6. **Create the workload identity pool and AWS provider**
