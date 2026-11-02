@@ -243,8 +243,11 @@ func New() *Config {
 
 // Validate checks if the configuration is valid
 func (c *Config) Validate() error {
-	if c.GoogleAdmin == "" {
-		return errors.New("google admin email is required")
+	// GoogleAdmin is optional (issue #192). The customer ID must be explicit
+	// (not my_customer) for keyless authentication, and without an admin.
+	if (c.GoogleImpersonateServiceAccount != "" || c.GoogleAdmin == "") &&
+		(c.CustomerID == "" || c.CustomerID == DefaultCustomerID) {
+		return errors.New("the Google Workspace customer ID must be set (not my_customer) for keyless authentication or when no google admin email is given")
 	}
 
 	if c.SCIMEndpoint == "" {

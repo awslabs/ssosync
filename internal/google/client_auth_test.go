@@ -53,7 +53,10 @@ func serviceAccountKeyJSON(t *testing.T) string {
 	return string(b)
 }
 
-const targetSA = "ssosync@project.iam.gserviceaccount.com"
+const (
+	targetSA     = "ssosync@project.iam.gserviceaccount.com"
+	testCustomer = "C01234abc"
+)
 
 func TestAuth_Validate(t *testing.T) {
 	key := []byte(serviceAccountKeyJSON(t))
@@ -85,7 +88,7 @@ func TestAuth_Validate(t *testing.T) {
 }
 
 func TestNewClient_KeylessWithWIFConfig(t *testing.T) {
-	client, err := NewClient(context.Background(), "admin@example.com", "my_customer",
+	client, err := NewClient(context.Background(), "", testCustomer,
 		Auth{ImpersonateServiceAccount: targetSA, WIFConfig: []byte(awsWIFConfig)})
 	require.NoError(t, err)
 	assert.NotNil(t, client)
@@ -95,12 +98,12 @@ func TestNewClient_KeylessWithWIFConfig(t *testing.T) {
 // accepted as the WIF configuration; a service-account key passed there by
 // mistake is rejected instead of silently used.
 func TestNewClient_KeylessRejectsNonWIFCredentials(t *testing.T) {
-	client, err := NewClient(context.Background(), "admin@example.com", "my_customer",
+	client, err := NewClient(context.Background(), "", testCustomer,
 		Auth{ImpersonateServiceAccount: targetSA, WIFConfig: []byte(serviceAccountKeyJSON(t))})
 	assert.ErrorContains(t, err, `must be of type "external_account", got "service_account"`)
 	assert.Nil(t, client)
 
-	_, err = NewClient(context.Background(), "admin@example.com", "my_customer",
+	_, err = NewClient(context.Background(), "", testCustomer,
 		Auth{ImpersonateServiceAccount: targetSA, WIFConfig: []byte("not json")})
 	assert.ErrorContains(t, err, "not valid JSON")
 }
@@ -117,4 +120,37 @@ func TestNewClient_ServiceAccountKey(t *testing.T) {
 		Auth{ServiceAccountKey: []byte(serviceAccountKeyJSON(t))})
 	require.NoError(t, err)
 	assert.NotNil(t, client)
+}
+
+// Keyless authentication always needs the customer ID (not my_customer), with
+// or without an admin; the key needs it only without an admin (issue #192).
+func TestNewClient_CustomerIDRules(t *testing.T) {
+	keyless := Auth{ImpersonateServiceAccount: targetSA, WIFConfig: []byte(awsWIFConfig)}
+	key := Auth{ServiceAccountKey: []byte(serviceAccountKeyJSON(t))}
+	tests := []struct {
+		name            string
+		admin, customer string
+		auth            Auth
+		wantErr         string
+	}{
+		{"keyless, my_customer", "", "my_customer", keyless, "keyless authentication (Workload Identity Federation) requires the Google Workspace customer ID"},
+		{"keyless, admin, my_customer", "admin@example.com", "my_customer", keyless, "keyless authentication (Workload Identity Federation) requires the Google Workspace customer ID"},
+		{"keyless, empty customer", "", "", keyless, "requires the Google Workspace customer ID"},
+		{"keyless, customer ID", "", testCustomer, keyless, ""},
+		{"key, admin, my_customer (2.x default)", "admin@example.com", "my_customer", key, ""},
+		{"key, no admin, my_customer", "", "my_customer", key, "without a Google admin to act on behalf of"},
+		{"key, no admin, customer ID", "", testCustomer, key, ""},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			c, err := NewClient(context.Background(), tc.admin, tc.customer, tc.auth)
+			if tc.wantErr == "" {
+				require.NoError(t, err)
+				assert.NotNil(t, c)
+			} else {
+				assert.ErrorContains(t, err, tc.wantErr)
+				assert.Nil(t, c)
+			}
+		})
+	}
 }

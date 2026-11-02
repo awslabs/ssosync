@@ -128,15 +128,42 @@ func validateWIFConfig(b []byte) error {
 	return nil
 }
 
+// DefaultCustomerID is the Admin SDK alias for "the customer of the
+// authenticated user". It only resolves when acting on behalf of a Workspace
+// user (domain-wide delegation); a service account calling as itself must name
+// the customer explicitly (issue #192).
+const DefaultCustomerID = "my_customer"
+
+// validateCustomer requires an explicit Google Workspace customer ID (not the
+// my_customer alias) whenever the service account may call the Admin SDK as
+// itself rather than on behalf of an admin: always for keyless authentication
+// (Workload Identity Federation), and for the key whenever no admin is given
+// (issue #192). The alias only resolves against the acting admin's customer.
+func validateCustomer(adminEmail, customerID string, auth Auth) error {
+	if customerID != "" && customerID != DefaultCustomerID {
+		return nil
+	}
+	switch {
+	case auth.Keyless():
+		return errors.New("google authentication: keyless authentication (Workload Identity Federation) requires the Google Workspace customer ID (--customer-id / CUSTOMER_ID, for example C01234abc, from Admin console > Account > Account settings); my_customer is not accepted")
+	case adminEmail == "":
+		return errors.New("google authentication: without a Google admin to act on behalf of (--google-admin / GOOGLE_ADMIN), the service account calls the Admin SDK as itself, so the Google Workspace customer ID must be set (--customer-id / CUSTOMER_ID, for example C01234abc); my_customer is not accepted")
+	}
+	return nil
+}
+
 // tokenSource returns the token source for the configured authentication
-// method, acting on behalf of adminEmail through domain-wide delegation.
+// method. With adminEmail set, ssosync acts on behalf of that Workspace admin
+// through domain-wide delegation (the admin is the JWT Subject). With
+// adminEmail empty (issue #192), the service account calls the Admin SDK as
+// itself and needs a Google Workspace admin role assigned to it; no user is
+// impersonated and no domain-wide delegation is used.
 func tokenSource(ctx context.Context, adminEmail string, auth Auth) (oauth2.TokenSource, error) {
 	if err := auth.Validate(); err != nil {
 		return nil, err
 	}
 	if !auth.Keyless() {
-		// Service-account key: domain-wide delegation performed directly by
-		// the JWT config's Subject.
+		// Service-account key; an empty Subject means the service account itself.
 		config, err := google.JWTConfigFromJSON(auth.ServiceAccountKey, Scopes...)
 		if err != nil {
 			return nil, err
@@ -145,11 +172,11 @@ func tokenSource(ctx context.Context, adminEmail string, auth Auth) (oauth2.Toke
 		return config.TokenSource(ctx), nil
 	}
 
-	// Keyless: impersonate the service account that holds the domain-wide
-	// delegation grant, with the Workspace admin as Subject. Signing the
-	// delegation JWT uses the IAM Credentials API (signJwt), so no key is
-	// needed; the base credentials need iam.serviceAccounts.signJwt on the
-	// target (e.g. roles/iam.serviceAccountTokenCreator).
+	// Keyless: impersonate the service account. Without a Subject this is a
+	// plain access token for the service account (iam.serviceAccounts.
+	// getAccessToken, e.g. roles/iam.workloadIdentityUser). With a Subject the
+	// delegation JWT is signed through the IAM Credentials API, which needs
+	// iam.serviceAccounts.signJwt (roles/iam.serviceAccountTokenCreator).
 	var opts []option.ClientOption
 	if len(auth.WIFConfig) > 0 {
 		opts = append(opts, option.WithAuthCredentialsJSON(option.ExternalAccount, auth.WIFConfig))
@@ -166,11 +193,16 @@ func tokenSource(ctx context.Context, adminEmail string, auth Auth) (oauth2.Toke
 }
 
 // NewClient creates a new client for Google's Admin API, authenticated as
-// described by auth and acting on behalf of the Workspace admin adminEmail.
-// customerID is the Google Workspace customer to operate against; pass
-// "my_customer" (or the DefaultCustomerID constant) to target the customer
-// associated with the service account's domain.
+// described by auth. With adminEmail set it acts on behalf of that Workspace
+// admin (domain-wide delegation); with adminEmail empty the service account
+// calls as itself and needs a Google Workspace admin role (issue #192).
+// customerID is the Google Workspace customer to operate against. "my_customer"
+// (DefaultCustomerID) targets the acting admin's customer, so it is only valid
+// with adminEmail; otherwise pass the customer ID.
 func NewClient(ctx context.Context, adminEmail, customerID string, auth Auth) (Client, error) {
+	if err := validateCustomer(adminEmail, customerID, auth); err != nil {
+		return nil, err
+	}
 	ts, err := tokenSource(ctx, adminEmail, auth)
 	if err != nil {
 		return nil, err
