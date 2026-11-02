@@ -23,6 +23,8 @@ Metadata:
           - GoogleUserMatch
           - IgnoreUsers
           - IgnoreGroups
+          - ExcludeAWSUserIDs
+          - ExcludeAWSGroupIDs
           - SyncSuspended
           - PrecacheOrgUnits
           - ExternalIdChange
@@ -311,6 +313,16 @@ Parameters:
     Default: ""
     AllowedPattern: '(?!.*\s)|((([a-zA-Z0-9.\-_]{1,64})@([a-zA-Z0-9.\-]{5,260}))(,(([a-zA-Z0-9.\-_]{1,64})@([a-zA-Z0-9.\-]{5,260})))*)'
 
+  ExcludeAWSUserIDs:
+    Type: String
+    Description: Comma-separated AWS Identity Store user IDs to leave unchanged, including direct membership changes. Applies to both sync methods; leave empty to protect no users.
+    Default: ""
+
+  ExcludeAWSGroupIDs:
+    Type: String
+    Description: Comma-separated AWS Identity Store group IDs to leave unchanged, including direct membership changes. Applies to both sync methods; leave empty to protect no groups.
+    Default: ""
+
   IncludeGroups:
     Type: String
     Description: |
@@ -352,6 +364,10 @@ Conditions:
     - !Equals [ !Ref IgnoreGroups, "" ]
   SetIgnoreUsers: !Not
     - !Equals [ !Ref IgnoreUsers, "" ]
+  SetExcludeAWSUserIDs: !Not
+    - !Equals [ !Ref ExcludeAWSUserIDs, "" ]
+  SetExcludeAWSGroupIDs: !Not
+    - !Equals [ !Ref ExcludeAWSGroupIDs, "" ]
   SetIncludeGroups: !And
     - !Condition LegacySync
     - !Not
@@ -633,6 +649,8 @@ Resources:
           SYNC_METHOD: !If [LegacySync, !Ref SyncMethod, !Ref AWS::NoValue]
           IGNORE_GROUPS: !If [SetIgnoreGroups, !Ref IgnoreGroups, !Ref AWS::NoValue]
           IGNORE_USERS: !If [SetIgnoreUsers, !Ref IgnoreUsers, !Ref AWS::NoValue]
+          EXCLUDE_AWS_USER_IDS: !If [SetExcludeAWSUserIDs, !Ref ExcludeAWSUserIDs, !Ref AWS::NoValue]
+          EXCLUDE_AWS_GROUP_IDS: !If [SetExcludeAWSGroupIDs, !Ref ExcludeAWSGroupIDs, !Ref AWS::NoValue]
           INCLUDE_GROUPS: !If [SetIncludeGroups, !Ref IncludeGroups, !Ref AWS::NoValue]
           DRY_RUN: !If [SetDryRun, 'True', !Ref AWS::NoValue]
           SYNC_SUSPENDED: !If [SetSyncSuspended, 'True', !Ref AWS::NoValue]

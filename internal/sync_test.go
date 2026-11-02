@@ -30,6 +30,142 @@ func opsConfig(forceExternalIdUpdate, retainUnmatched bool, issuerArn string) *c
 	}
 }
 
+func TestGetOperations_ExcludedAWSIdentities(t *testing.T) {
+	tests := []struct {
+		name          string
+		googleID      string
+		includeGoogle bool
+		forceUpdate   bool
+	}{
+		{name: "unmatched"},
+		{name: "update", googleID: "google-id", includeGoogle: true},
+		{name: "recreate", googleID: "replacement-id", includeGoogle: true},
+		{name: "forced update", googleID: "replacement-id", includeGoogle: true, forceUpdate: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			cfg := &config.Config{
+				ExcludeAWSUserIDs:     []string{"protected-user"},
+				ExcludeAWSGroupIDs:    []string{"protected-group"},
+				ForceExternalIdUpdate: test.forceUpdate,
+			}
+			awsUsers := []*interfaces.User{
+				{ID: "protected-user", Username: "user@example.com", ExternalId: interfaces.ExternalId{Id: "google-id"}},
+				{ID: "stale-user", Username: "stale@example.com", ExternalId: interfaces.ExternalId{Id: "stale-id"}},
+			}
+			awsGroups := []*interfaces.Group{
+				{ID: "protected-group", DisplayName: "Protected", ExternalId: interfaces.ExternalId{Id: "google-id"}},
+				{ID: "stale-group", DisplayName: "Stale", ExternalId: interfaces.ExternalId{Id: "stale-id"}},
+			}
+			var googleUsers []*admin.User
+			var googleGroups []*admin.Group
+			if test.includeGoogle {
+				googleUsers = []*admin.User{{Id: test.googleID, PrimaryEmail: "user@example.com", Name: &admin.UserName{GivenName: "Changed", FamilyName: "User"}}}
+				googleGroups = []*admin.Group{{Id: test.googleID, Name: "Protected", Email: "group@example.com"}}
+			}
+			addUsers, deleteUsers, updateUsers, equalUsers := getUserOperations(awsUsers, googleUsers, cfg, config.DefaultUserAttributeMap)
+			assert.Empty(t, addUsers)
+			assert.Equal(t, []*interfaces.User{awsUsers[1]}, deleteUsers)
+			assert.Empty(t, updateUsers)
+			assert.Empty(t, equalUsers)
+			addGroups, deleteGroups, updateGroups, equalGroups := getGroupOperations(awsGroups, googleGroups, cfg, config.DefaultGroupAttributeMap)
+			assert.Empty(t, addGroups)
+			assert.Equal(t, []*interfaces.Group{awsGroups[1]}, deleteGroups)
+			assert.Empty(t, updateGroups)
+			assert.Empty(t, equalGroups)
+		})
+	}
+}
+
+func TestLegacySyncUsers_ExcludedAWSUsers(t *testing.T) {
+	tests := []struct {
+		name        string
+		googleID    string
+		forceUpdate bool
+	}{
+		{name: "unmatched"},
+		{name: "update", googleID: "google-id"},
+		{name: "recreate", googleID: "replacement-id"},
+		{name: "forced update", googleID: "replacement-id", forceUpdate: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			cfg := &config.Config{ExcludeAWSUserIDs: []string{"protected-user"}, ForceExternalIdUpdate: test.forceUpdate}
+			var googleUsers []*admin.User
+			if test.googleID != "" {
+				googleUsers = []*admin.User{gUser(test.googleID, "protected@example.com", "Changed", "User", true)}
+			}
+			awsUsers := []types.User{
+				sdkUser("protected-user", "protected@example.com", "Original", "User", "google-id"),
+				sdkUser("stale-user", "stale@example.com", "Stale", "User", "stale-id"),
+			}
+			sync, awsClient, _ := newLegacySyncUsersSuite(t, cfg, googleUsers, awsUsers)
+			awsClient.EXPECT().FindUserByEmail("stale@example.com").Return(&interfaces.User{ID: "stale-user", Username: "stale@example.com", Active: true}, nil)
+			awsClient.EXPECT().DeleteUser(mock.MatchedBy(func(user *interfaces.User) bool { return user.ID == "stale-user" })).Return(nil).Once()
+			assert.NoError(t, sync.LegacySyncUsers(""))
+			assert.Empty(t, sync.users)
+		})
+	}
+}
+
+func TestLegacySyncUsers_ExcludedAWSDeletedUser(t *testing.T) {
+	cfg := &config.Config{ExcludeAWSUserIDs: []string{"protected-user"}}
+	deleted := []*admin.User{
+		gUser("google-protected", "protected@example.com", "Protected", "User", false),
+		gUser("google-stale", "stale@example.com", "Stale", "User", false),
+	}
+	sync, awsClient := newLegacySyncUsersDeleteSuite(t, cfg, deleted, nil, nil)
+	awsClient.EXPECT().FindUserByEmail("protected@example.com").Return(&interfaces.User{ID: "protected-user"}, nil)
+	awsClient.EXPECT().FindUserByEmail("stale@example.com").Return(&interfaces.User{ID: "stale-user"}, nil)
+	awsClient.EXPECT().DeleteUser(mock.MatchedBy(func(user *interfaces.User) bool { return user.ID == "stale-user" })).Return(nil).Once()
+	assert.NoError(t, sync.LegacySyncUsers(""))
+}
+
+func TestLegacySyncGroups_ExcludedAWSGroups(t *testing.T) {
+	tests := []struct {
+		name        string
+		googleID    string
+		displayName string
+	}{
+		{name: "unmatched", displayName: "Manual"},
+		{name: "rename", googleID: "google-id", displayName: "Old name"},
+		{name: "adopt", googleID: "replacement-id", displayName: "group@example.com"},
+		{name: "membership", googleID: "google-id", displayName: "group@example.com"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			cfg := &config.Config{ExcludeAWSGroupIDs: []string{"protected-group"}, IncludeGroups: []string{"group@example.com"}}
+			var googleGroups []*admin.Group
+			if test.googleID != "" {
+				googleGroups = []*admin.Group{{Id: test.googleID, Email: "group@example.com"}}
+			}
+			awsGroups := []types.Group{
+				sdkGroup("protected-group", test.displayName, "google-id"),
+				sdkGroup("stale-group", "stale@example.com", "stale-id"),
+			}
+			sync, awsClient, _ := newLegacySyncGroupsSuite(t, cfg, googleGroups, awsGroups)
+			sync.users["user@example.com"] = &interfaces.User{ID: "user-id", Username: "user@example.com"}
+			awsClient.EXPECT().DeleteGroup(mock.MatchedBy(func(group *interfaces.Group) bool { return group.ID == "stale-group" })).Return(nil).Once()
+			assert.NoError(t, sync.LegacySyncGroups(""))
+		})
+	}
+}
+
+func TestLegacySyncGroups_ExcludedAWSUserMemberships(t *testing.T) {
+	for _, isGoogleMember := range []bool{false, true} {
+		cfg := &config.Config{ExcludeAWSUserIDs: []string{"protected-user"}, IncludeGroups: []string{"group@example.com"}}
+		googleGroups := []*admin.Group{{Id: "google-id", Email: "group@example.com"}}
+		sync, _, googleClient := newLegacySyncGroupsSuite(t, cfg, googleGroups, []types.Group{sdkGroup("group-id", "group@example.com", "google-id")})
+		sync.users["user@example.com"] = &interfaces.User{ID: "protected-user", Username: "user@example.com"}
+		var members []*admin.Member
+		if isGoogleMember {
+			members = []*admin.Member{{Email: "user@example.com"}}
+		}
+		googleClient.EXPECT().GetGroupMembers(googleGroups[0]).Return(members, nil)
+		assert.NoError(t, sync.LegacySyncGroups(""))
+	}
+}
+
 func TestNew(t *testing.T) {
 	cfg := &config.Config{}
 	awsClient := mocks.NewMockAwsClient(t)

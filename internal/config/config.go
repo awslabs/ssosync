@@ -43,7 +43,9 @@ type Config struct {
 	// Ignore users ...
 	IgnoreUsers []string `mapstructure:"ignore_users"`
 	// Ignore groups ...
-	IgnoreGroups []string `mapstructure:"ignore_groups"`
+	IgnoreGroups       []string `mapstructure:"ignore_groups"`
+	ExcludeAWSUserIDs  []string `mapstructure:"exclude_aws_user_ids"`
+	ExcludeAWSGroupIDs []string `mapstructure:"exclude_aws_group_ids"`
 	// Include groups ...
 	IncludeGroups []string `mapstructure:"include_groups"`
 	// SyncMethod allow to defined the sync method used to get the user and groups from Google Workspace
@@ -144,7 +146,9 @@ var (
 	// DefaultIgnoreUsers is the default set of users to ignore.
 	DefaultIgnoreUsers []string = nil
 	// DefaultIgnoreGroups is the default set of groups to ignore.
-	DefaultIgnoreGroups []string = nil
+	DefaultIgnoreGroups       []string = nil
+	DefaultExcludeAWSUserIDs  []string = nil
+	DefaultExcludeAWSGroupIDs []string = nil
 	// DefaultPrecacheOrgUnits is the default set of org units to precache.
 	DefaultPrecacheOrgUnits []string = nil
 	// DefaultIncludeGroups is the default set of groups to sync.

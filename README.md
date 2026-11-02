@@ -251,6 +251,8 @@ export SSOSYNC_DRY_RUN="true"
 | `--user-match` / `-m` | `SSOSYNC_USER_MATCH` | Google Users filter query | `""` |
 | `--ignore-users` | `SSOSYNC_IGNORE_USERS` | Comma-separated list of users to ignore | `[]` |
 | `--ignore-groups` | `SSOSYNC_IGNORE_GROUPS` | Comma-separated list of groups to ignore | `[]` |
+| `--exclude-aws-user-ids` | `SSOSYNC_EXCLUDE_AWS_USER_IDS` | Comma-separated AWS Identity Store user IDs excluded from updates, deletion, and direct membership changes; both sync methods | `[]` |
+| `--exclude-aws-group-ids` | `SSOSYNC_EXCLUDE_AWS_GROUP_IDS` | Comma-separated AWS Identity Store group IDs excluded from updates, deletion, and direct membership changes; both sync methods | `[]` |
 | `--include-groups` | `SSOSYNC_INCLUDE_GROUPS` | Include only these groups (users_groups method only) | `[]` |
 | `--precache-ous` | `SSOSYNC_PRECACHE_ORG_UNITS` | Comma-separated list of Google OrgUnit paths to precache | `[]` |
 | `--cache-metrics` | `SSOSYNC_CACHE_METRICS` | Gather cache hit/miss metrics and output them at the end of the run to help refine `--precache-ous` | `false` |
@@ -263,6 +265,25 @@ export SSOSYNC_DRY_RUN="true"
 | `--log-format` | `SSOSYNC_LOG_FORMAT` | Log format (text, json) | `text` |
 
 > **Note:** `--region` and `--identity-store-id` are no longer required. Region is extracted from the SCIM endpoint URL, and Identity Store ID is resolved automatically via the IAM Identity Center API.
+
+#### Protecting AWS-managed identities
+
+Use `--exclude-aws-user-ids` and `--exclude-aws-group-ids` for existing identities managed outside ssosync, such as temporary-access groups managed by an AWS access elevator. Both options accept comma-separated **AWS Identity Store IDs**, not Google IDs, email addresses, or display names. Parsing and CLI/environment precedence follow the existing list settings. IDs are matched exactly; supply comma-separated IDs without surrounding whitespace.
+
+```bash
+./ssosync \
+  --exclude-aws-group-ids "11111111-2222-3333-4444-555555555555,aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee" \
+  --exclude-aws-user-ids "1234567890-11111111-2222-3333-4444-555555555555"
+```
+
+Add the usual credentials, endpoint, and directory filters to this command. CLI environment variables use the `SSOSYNC_` prefix; Lambda uses `EXCLUDE_AWS_USER_IDS` and `EXCLUDE_AWS_GROUP_IDS`. SAM deployments expose the `ExcludeAWSUserIDs` and `ExcludeAWSGroupIDs` string parameters.
+
+An excluded record is not updated, adopted, recreated, or deleted, even if a matching Google identity exists or the user appears in Google's deleted-users list. ssosync does not directly add or remove members of an excluded group, or directly change an excluded user's group memberships. The options work with both `groups` and `users_groups`, including dry runs, and take precedence over forced external-ID updates and unmatched retention.
+
+Leave `RETAIN_UNMATCHED=false` to continue deleting ordinary stale users and groups. Exclusions protect only the listed identities; the existing `--ignore-users`, `--ignore-groups`, and inclusion filters keep their Google-side meaning. Empty exclusion lists preserve the existing behavior. If an identity is replaced outside ssosync, update its excluded AWS ID before the next run.
+
+> [!IMPORTANT]
+> This protects against ssosync's direct writes, not AWS cascading changes. Deleting an **unprotected** user can still remove that user's membership from a protected group; deleting an unprotected group can similarly remove a protected user's membership. Protection does not prevent other administrators or applications from changing the listed identities.
 
 #### Preserving assignments when migrating IdPs
 
@@ -712,6 +733,8 @@ GROUP_MATCH=*
 USER_MATCH=
 IGNORE_USERS=
 IGNORE_GROUPS=
+EXCLUDE_AWS_USER_IDS=
+EXCLUDE_AWS_GROUP_IDS=
 INCLUDE_GROUPS=
 PRECACHE_ORG_UNITS=
 CACHE_METRICS=false

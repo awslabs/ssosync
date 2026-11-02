@@ -176,6 +176,8 @@ func initConfig() {
 		"log_format",
 		"ignore_users",
 		"ignore_groups",
+		"exclude_aws_user_ids",
+		"exclude_aws_group_ids",
 		"include_groups",
 		"user_match",
 		"group_match",
@@ -461,6 +463,8 @@ func configLambda() {
 	cfg.GroupMatch = getEnvStr("GROUP_MATCH", config.DefaultGroupMatch)
 	cfg.IgnoreGroups = getEnvStrs("IGNORE_GROUPS", config.DefaultIgnoreGroups)
 	cfg.IgnoreUsers = getEnvStrs("IGNORE_USERS", config.DefaultIgnoreUsers)
+	cfg.ExcludeAWSUserIDs = getEnvStrs("EXCLUDE_AWS_USER_IDS", config.DefaultExcludeAWSUserIDs)
+	cfg.ExcludeAWSGroupIDs = getEnvStrs("EXCLUDE_AWS_GROUP_IDS", config.DefaultExcludeAWSGroupIDs)
 	cfg.IncludeGroups = getEnvStrs("INCLUDE_GROUPS", config.DefaultIncludeGroups)
 	cfg.PrecacheOrgUnits = getEnvStrs("PRECACHE_ORG_UNITS", config.DefaultPrecacheOrgUnits)
 	cfg.CacheMetrics = getEnvBool("CACHE_METRICS", config.DefaultCacheMetrics)
@@ -507,6 +511,8 @@ func addFlags(_ *cobra.Command, cfg *config.Config) {
 	rootCmd.Flags().StringVar(&cfg.CustomerID, "customer-id", config.DefaultCustomerID, "Google Workspace customer ID to operate against (defaults to 'my_customer')")
 	rootCmd.Flags().StringSliceVar(&cfg.IgnoreUsers, "ignore-users", config.DefaultIgnoreUsers, "ignores these Google Workspace users")
 	rootCmd.Flags().StringSliceVar(&cfg.IgnoreGroups, "ignore-groups", config.DefaultIgnoreGroups, "ignores these Google Workspace groups")
+	rootCmd.Flags().StringSliceVar(&cfg.ExcludeAWSUserIDs, "exclude-aws-user-ids", config.DefaultExcludeAWSUserIDs, "AWS Identity Store user IDs excluded from updates, deletion, and direct membership changes (both sync methods)")
+	rootCmd.Flags().StringSliceVar(&cfg.ExcludeAWSGroupIDs, "exclude-aws-group-ids", config.DefaultExcludeAWSGroupIDs, "AWS Identity Store group IDs excluded from updates, deletion, and direct membership changes (both sync methods)")
 	rootCmd.Flags().StringSliceVar(&cfg.IncludeGroups, "include-groups", config.DefaultIncludeGroups, "include only these Google Workspace groups, NOTE: only works when --sync-method 'users_groups'")
 	rootCmd.Flags().StringVarP(&cfg.UserMatch, "user-match", "m", config.DefaultUserMatch, "Google Workspace Users filter query parameter, example: 'name:John*' 'name=John Doe,email:admin*', to sync all users in the directory specify '*'. For query syntax and more examples see: https://developers.google.com/admin-sdk/directory/v1/guides/search-users")
 	rootCmd.Flags().StringVarP(&cfg.GroupMatch, "group-match", "g", config.DefaultGroupMatch, "Google Workspace Groups filter query parameter, example: 'name:Admin*' 'name=AWS-Admins,email:aws*', to sync all groups (and their member users) specify '*'. For query syntax and more examples see: https://developers.google.com/admin-sdk/directory/v1/guides/search-groups")
