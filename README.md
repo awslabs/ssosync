@@ -152,7 +152,10 @@ These steps follow Google's guide [Configure Workload Identity Federation with A
 
 The commands use these values; work them out first:
 
-- **`PROJECT_ID`**: the Google Cloud project that will own the service account and the workload identity pool. Create one in the [Google Cloud Console](https://console.cloud.google.com/) if you need a new project, or reuse an existing one; its ID is shown in the console's project picker. **`PROJECT_NUMBER`** is looked up from it.
+- **`PROJECT_ID`**: the Google Cloud project that will own the service account and the workload identity pool. Create one in the [Google Cloud Console](https://console.cloud.google.com/) if you need a new project, or reuse an existing one; its ID is shown in the console's project picker.
+- **`PROJECT_NUMBER`**: the project's numeric identifier (for example `123456789012`), which Google uses in workload identity pool names. It is different from the project ID. The block below looks it up from `PROJECT_ID`, so you don't need to enter it. To check it yourself:
+  - **Console:** the **Project number** on the project's [Dashboard](https://console.cloud.google.com/home/dashboard) (*Project info* card), or in **IAM & Admin** > **Settings**.
+  - **gcloud:** `gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)'`. If it prints nothing, `PROJECT_ID` is wrong or you lack access to the project; fix that before continuing, because steps 5 and 6 need the number.
 - **`POOL_ID`** and **`PROVIDER_ID`**: IDs you choose for the workload identity pool and its AWS provider (lowercase letters, digits and hyphens). They cannot be changed later. `ssosync` for both is fine for a single AWS account; with several accounts, give each its own provider ID (see step 4).
 - **`AWS_ACCOUNT_ID`**: the 12-digit ID of the AWS account ssosync runs in (`aws sts get-caller-identity --query Account --output text`).
 - **`AWS_ROLE_NAME`**: the IAM role ssosync runs as. Google matches it in the ARN of ssosync's AWS session, `arn:aws:sts::<account>:assumed-role/<role name>/<session>`.
