@@ -20,6 +20,7 @@ import (
 	"errors"
 	"os"
 	"reflect"
+	"slices"
 	"strings"
 	"time"
 
@@ -258,6 +259,9 @@ func (s *syncGSuite) LegacySyncUsers(query string) error {
 			}).Debug("User already deleted")
 			continue
 		}
+		if slices.Contains(s.cfg.ExcludeAWSUserIDs, uu.ID) {
+			continue
+		}
 		err = s.aws.DeleteUser(uu)
 		if err != nil {
 			log.WithFields(log.Fields{
@@ -294,6 +298,9 @@ func (s *syncGSuite) LegacySyncUsers(query string) error {
 
 	// ConvertSdkUserObjToNative does not populate Active; fetch it via SCIM.
 	for _, awsUser := range awsUsers {
+		if slices.Contains(s.cfg.ExcludeAWSUserIDs, awsUser.ID) {
+			continue
+		}
 		scimUser, err := s.aws.FindUserByEmail(awsUser.Username)
 		if err != nil {
 			log.WithField("user", awsUser.Username).Error("error getting active status for user")
@@ -329,6 +336,9 @@ func (s *syncGSuite) LegacySyncUsers(query string) error {
 		})
 
 		if awsUser, found := awsUsersByExtId[u.Id]; found {
+			if slices.Contains(s.cfg.ExcludeAWSUserIDs, awsUser.ID) {
+				continue
+			}
 			// Matched by ExternalId (Google id). Update if any attribute differs.
 			if awsUser.Active == u.Suspended ||
 				awsUser.Username != u.PrimaryEmail ||
@@ -349,6 +359,9 @@ func (s *syncGSuite) LegacySyncUsers(query string) error {
 				ll.Debug("equals")
 			}
 		} else if awsUser, found := awsUsersByUsername[u.PrimaryEmail]; found {
+			if slices.Contains(s.cfg.ExcludeAWSUserIDs, awsUser.ID) {
+				continue
+			}
 			// Matched by email but not by ExternalId.
 			if len(awsUser.ExternalId.Id) > 0 {
 				if s.cfg.ForceExternalIdUpdate {
@@ -427,6 +440,9 @@ func (s *syncGSuite) LegacySyncUsers(query string) error {
 	}
 
 	for _, awsUser := range awsUsers {
+		if slices.Contains(s.cfg.ExcludeAWSUserIDs, awsUser.ID) {
+			continue
+		}
 		if _, found := googleUsersById[awsUser.ExternalId.Id]; found {
 			continue
 		}
@@ -512,6 +528,9 @@ func (s *syncGSuite) LegacySyncGroups(query string) error {
 		var group *interfaces.Group
 
 		if awsGroup, found := awsGroupsByExtId[g.Id]; found {
+			if slices.Contains(s.cfg.ExcludeAWSGroupIDs, awsGroup.ID) {
+				continue
+			}
 			// Matched by ExternalId (Google id). Update if the display name differs.
 			if awsGroup.DisplayName != g.Email {
 				log.Debug("update")
@@ -528,6 +547,9 @@ func (s *syncGSuite) LegacySyncGroups(query string) error {
 			}
 			group = awsGroup
 		} else if awsGroup, found := awsGroupsByDisplayName[g.Email]; found {
+			if slices.Contains(s.cfg.ExcludeAWSGroupIDs, awsGroup.ID) {
+				continue
+			}
 			// Matched by display name but not by ExternalId: update to backfill
 			// (or correct) the ExternalId.
 			log.Debug("update")
@@ -571,6 +593,9 @@ func (s *syncGSuite) LegacySyncGroups(query string) error {
 		}
 
 		for _, u := range s.users {
+			if slices.Contains(s.cfg.ExcludeAWSUserIDs, u.ID) {
+				continue
+			}
 			log.WithField("user", u.Username).Debug("Checking user is in group already")
 
 			// Dry-run users have no ID; the Identity Store rejects an empty
@@ -618,6 +643,9 @@ func (s *syncGSuite) LegacySyncGroups(query string) error {
 	}
 
 	for _, awsGroup := range awsGroups {
+		if slices.Contains(s.cfg.ExcludeAWSGroupIDs, awsGroup.ID) {
+			continue
+		}
 		if _, found := googleGroupsById[awsGroup.ExternalId.Id]; found {
 			continue
 		}
@@ -691,6 +719,9 @@ func (s *syncGSuite) Sync(queryGroups string, queryUsers string) error {
 
 	log.Info("get active status for aws users")
 	for _, awsUser := range awsUsers {
+		if slices.Contains(s.cfg.ExcludeAWSUserIDs, awsUser.ID) {
+			continue
+		}
 		scimUser, err := s.aws.FindUserByEmail(awsUser.Username)
 
 		if err != nil {
@@ -778,6 +809,9 @@ func (s *syncGSuite) Sync(queryGroups string, queryUsers string) error {
 			if err != nil {
 				return err
 			}
+			if slices.Contains(s.cfg.ExcludeAWSUserIDs, awsUserFull.ID) {
+				continue
+			}
 
 			log.WithField("user", awsUserFull.Username).Info("adding user to group")
 			err = s.aws.AddUserToGroup(awsUserFull, awsGroup)
@@ -808,6 +842,9 @@ func (s *syncGSuite) Sync(queryGroups string, queryUsers string) error {
 			awsUserFull, err := s.resolveAWSMember(memberIDs, googleUser)
 			if err != nil {
 				return err
+			}
+			if slices.Contains(s.cfg.ExcludeAWSUserIDs, awsUserFull.ID) {
+				continue
 			}
 
 			log.WithField("user", awsUserFull.Username).Info("adding user to group")
@@ -863,6 +900,9 @@ func (s *syncGSuite) Sync(queryGroups string, queryUsers string) error {
 		if err != nil {
 			return err
 		}
+		if slices.Contains(s.cfg.ExcludeAWSGroupIDs, awsGroupFull.ID) {
+			continue
+		}
 
 		log.Warn("deleting group")
 		err = s.aws.DeleteGroup(awsGroupFull)
@@ -882,6 +922,9 @@ func (s *syncGSuite) Sync(queryGroups string, queryUsers string) error {
 		awsUserFull, err := s.aws.FindUserByEmail(awsUser.Username)
 		if err != nil {
 			return err
+		}
+		if slices.Contains(s.cfg.ExcludeAWSUserIDs, awsUserFull.ID) {
+			continue
 		}
 
 		log.Warn("deleting user")
@@ -1556,6 +1599,9 @@ func getGroupOperations(awsGroups []*interfaces.Group, googleGroups []*admin.Gro
 		}
 
 		// awsGroup is nil when the Google group was not found in AWS at all
+		if awsGroup != nil && slices.Contains(cfg.ExcludeAWSGroupIDs, awsGroup.ID) {
+			continue
+		}
 		action, group := getGroupOperation(awsGroup, &mappedGroup, forceExternalIdUpdate, retainUnmatched, issuerArn)
 
 		log.WithField("group", group).Info(action)
@@ -1596,6 +1642,9 @@ func getGroupOperations(awsGroups []*interfaces.Group, googleGroups []*admin.Gro
 
 	// Look for AWS groups not found in Google
 	for _, awsGroup := range awsGroups {
+		if slices.Contains(cfg.ExcludeAWSGroupIDs, awsGroup.ID) {
+			continue
+		}
 		if _, found := googleMapId[awsGroup.ExternalId.Id]; found {
 			continue
 		}
@@ -1805,6 +1854,9 @@ func getUserOperationsMapped(awsUsers []*interfaces.User, mappedUsers []*interfa
 		}
 
 		// awsUser is nil when the Google user was not found in AWS at all
+		if awsUser != nil && slices.Contains(cfg.ExcludeAWSUserIDs, awsUser.ID) {
+			continue
+		}
 		action, user := getUserOperation(awsUser, mappedUser, forceExternalIdUpdate, retainUnmatched, issuerArn)
 
 		log.WithField("user", user).Info(action)
@@ -1845,6 +1897,9 @@ func getUserOperationsMapped(awsUsers []*interfaces.User, mappedUsers []*interfa
 
 	// Look for AWS users not found in Google
 	for _, awsUser := range awsUsers {
+		if slices.Contains(cfg.ExcludeAWSUserIDs, awsUser.ID) {
+			continue
+		}
 		if _, found := googleMapId[awsUser.ExternalId.Id]; found {
 			continue
 		}
@@ -2008,6 +2063,9 @@ func (s *syncGSuite) getGroupUsersOperations(gGroupsUsers map[string][]*admin.Us
 			if err != nil {
 				return nil, nil, nil, err
 			}
+			if slices.Contains(s.cfg.ExcludeAWSUserIDs, awsUserFull.ID) {
+				continue
+			}
 			add[gGroupName] = append(add[gGroupName], awsUserFull)
 		}
 	}
@@ -2017,6 +2075,9 @@ func (s *syncGSuite) getGroupUsersOperations(gGroupsUsers map[string][]*admin.Us
 	for awsGroupName, awsGroupUsers := range awsGroupsUsers {
 		inGoogle := newUserIndex(mappedG[awsGroupName])
 		for _, awsUser := range awsGroupUsers {
+			if slices.Contains(s.cfg.ExcludeAWSUserIDs, awsUser.ID) {
+				continue
+			}
 			// users that exist in aws groups but not in google groups
 			if inGoogle.contains(awsUser) {
 				equals[awsGroupName] = append(equals[awsGroupName], awsUser)
