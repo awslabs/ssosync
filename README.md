@@ -129,24 +129,23 @@ SSO Sync requires configuration from both Google Workspace and AWS sides.
 
 ### Google Workspace Setup
 
-ssosync reads your directory as a **service account** that acts on behalf of a Google Workspace admin through **domain-wide delegation**. There are two ways for ssosync to authenticate as that service account. Use exactly one:
+ssosync reads your directory as a Google **service account**. There are two ways for ssosync to authenticate as that service account. Use exactly one:
 
 | | [Workload Identity Federation](#workload-identity-federation-keyless) (keyless) | [Legacy auth (stored credentials)](#legacy-auth-stored-credentials) |
 |---|---|---|
 | Credential ssosync holds | None long-lived: its AWS role is exchanged for short-lived Google credentials on every run | A downloaded service-account key (`credentials.json`) |
 | Works with the `iam.disableServiceAccountKeyCreation` org policy | Yes | No |
-| Configure with | `--google-impersonate-service-account` + `--google-wif-config` | `--google-credentials` |
+| Directory access | The service account is assigned a read-only Workspace admin role and acts as itself | The service account acts on behalf of a Workspace admin (domain-wide delegation) |
+| Configure with | `--google-impersonate-service-account` + `--google-wif-config` + `--customer-id` | `--google-credentials` + `--google-admin` |
 | Status | Opt-in in 2.x; planned to become the only method from v3 | Default in 2.x |
-
-Both methods need the same domain-wide delegation grant and an admin to act on behalf of; they differ only in how ssosync proves it is the service account.
 
 #### Workload Identity Federation (keyless)
 
-With Workload Identity Federation (WIF), Google Cloud trusts your AWS account: ssosync presents its AWS role credentials (verified by Google through the AWS `GetCallerIdentity` API), receives a short-lived federated token, and uses it to impersonate the service account with the Workspace admin as the delegated subject. No service-account key is ever created or stored, and nothing needs configuring on the AWS side beyond the role ssosync already runs as.
+With Workload Identity Federation (WIF), Google Cloud trusts your AWS account: ssosync presents its AWS role credentials (verified by Google through the AWS `GetCallerIdentity` API), receives a short-lived federated token, and uses it to impersonate the service account. The service account reads the directory with a read-only admin role assigned to it in Google Workspace, so there is no super admin to act on behalf of and no domain-wide delegation. No service-account key is ever created or stored, and nothing needs configuring on the AWS side beyond the role ssosync already runs as.
 
-These steps follow Google's guide [Configure Workload Identity Federation with AWS or Azure VMs](https://docs.cloud.google.com/iam/docs/workload-identity-federation-with-other-clouds) (the *AWS IAM credentials* mechanism, with *service account impersonation*); refer to it for background and console screenshots. Two points differ from that guide, because ssosync performs domain-wide delegation, and they are called out in steps 5 and 6.
+These steps follow Google's guide [Configure Workload Identity Federation with AWS or Azure VMs](https://docs.cloud.google.com/iam/docs/workload-identity-federation-with-other-clouds) (the *AWS IAM credentials* mechanism, with *service account impersonation*); refer to it for background and console screenshots. One point differs from that guide and is called out in step 6.
 
-> **You need:** a Google Cloud project where you hold *Workload Identity Pool Admin* (`roles/iam.workloadIdentityPoolAdmin`) and *Service Account Admin* (`roles/iam.serviceAccountAdmin`) (or *Owner*); a Google Workspace **super admin** for step 3; the `gcloud` CLI ([install](https://cloud.google.com/sdk/docs/install)), or Cloud Shell; and the **AWS account ID** and **IAM role name** ssosync runs as (described below).
+> **You need:** a Google Cloud project where you hold *Workload Identity Pool Admin* (`roles/iam.workloadIdentityPoolAdmin`) and *Service Account Admin* (`roles/iam.serviceAccountAdmin`) (or *Owner*); a Google Workspace **super admin** for steps 3 and 7; the `gcloud` CLI ([install](https://cloud.google.com/sdk/docs/install)), or Cloud Shell; and the **AWS account ID** and **IAM role name** ssosync runs as (described below).
 
 > **Tip: use Google Cloud Shell for the following steps.** Click **Activate Cloud Shell** (the `>_` icon) in the [Google Cloud Console](https://console.cloud.google.com/): it opens a terminal in your browser with the `gcloud` CLI already installed and signed in as you, so there is nothing to install, and every command below can be pasted into it as-is. Step 6 writes `wif-config.json` there and shows how to download it. See [Cloud Shell](https://cloud.google.com/shell/docs/using-cloud-shell).
 
@@ -201,22 +200,13 @@ AWS_ROLE_NAME="SSOSync_ExecutionRole"
      echo "$SA_EMAIL"
      ```
    - No project roles are required: its access to the directory is granted in Google Workspace (step 3), not in Google Cloud. **Do not create a key** for it.
-   - Print its numeric **Client ID** (OAuth2 client ID / unique ID):
 
-     ```bash
-     gcloud iam service-accounts describe "$SA_EMAIL" --format='value(oauth2ClientId)'
-     ```
-   - **Copy the Client ID this prints (a long number, for example `112233445566778899001`) to your clipboard**: you paste it into the Admin console in step 3.
-
-3. **Grant domain-wide delegation in the Admin console** (unchanged from legacy auth)
+3. **Assign a read-only admin role to the service account in the Admin console**
    - Sign in to the [Google Admin console](https://admin.google.com/) as a **super admin**.
-   - Go to **Security** > **Access and data control** > **API controls** > **Manage Domain Wide Delegation**, click **Add new**, and enter:
-     - **Client ID**: the Client ID from step 2.
-     - **OAuth scopes** (comma-separated, read-only):
-       - `https://www.googleapis.com/auth/admin.directory.group.readonly`
-       - `https://www.googleapis.com/auth/admin.directory.group.member.readonly`
-       - `https://www.googleapis.com/auth/admin.directory.user.readonly`
-   - Click **Authorize**.
+   - Go to **Account** > **Admin roles**, click **Create new role**, name it (for example `ssosync read-only`) and click **Continue**.
+   - Under **Admin API privileges**, select only **Users** > **Read** and **Groups** > **Read**, then click **Continue** and **Create role**.
+   - Back in **Admin roles**, point to the new role and click **Assign admin** > **Assign service accounts**. Enter the service account email (`$SA_EMAIL`, from step 2), then click **Add** > **Assign role**.
+   - No domain-wide delegation entry is needed: the service account calls the Admin SDK as itself, with this role. The assignment can take a while to apply (Google allows up to 24 hours). See [Assign a role to a service account](https://knowledge.workspace.google.com/admin/users/assign-specific-admin-roles).
 
 4. **Create the workload identity pool and AWS provider**
    - Create the pool:
@@ -236,14 +226,14 @@ AWS_ROLE_NAME="SSOSync_ExecutionRole"
 
      The mapping makes the role name available as `attribute.aws_role`. The **attribute condition** is the important control: the provider accepts only sessions of that one role in that one account, so no other AWS principal can federate.
 
-   > **Several AWS accounts with the same directory** (for example a dev account and a prod account): an AWS provider trusts exactly one account, so **create one provider per account** in the same pool. Repeat the provider command for each account with its own `PROVIDER_ID` (for example `ssosync-dev`, `ssosync-prod`), `AWS_ACCOUNT_ID` and, if it differs, `AWS_ROLE_NAME`. The pool and the service account (steps 2–3) are shared. Step 5's grant matches the role name in any provider of the pool, so it is needed once per distinct role name. Step 6 is per account: repeat it for each provider.
+   > **Several AWS accounts with the same directory** (for example a dev account and a prod account): an AWS provider trusts exactly one account, so **create one provider per account** in the same pool. Repeat the provider command for each account with its own `PROVIDER_ID` (for example `ssosync-dev`, `ssosync-prod`), `AWS_ACCOUNT_ID` and, if it differs, `AWS_ROLE_NAME`. The pool, the service account and its admin role (steps 2–3) are shared. Step 5's grant matches the role name in any provider of the pool, so it is needed once per distinct role name. Step 6 is per account: repeat it for each provider.
 
-5. **Allow the AWS role to impersonate the service account** ⚠️ *differs from Google's guide*
-   - Google's guide grants *Workload Identity User* (`roles/iam.workloadIdentityUser`). That is **not enough for ssosync**: to act on behalf of the Workspace admin (domain-wide delegation) it must have the service account sign a JWT, which needs `iam.serviceAccounts.signJwt`. Grant *Service Account Token Creator* instead, to that role only:
+5. **Allow the AWS role to impersonate the service account**
+   - Grant *Workload Identity User* (`roles/iam.workloadIdentityUser`) on the service account, to that role only:
 
      ```bash
      gcloud iam service-accounts add-iam-policy-binding "$SA_EMAIL" \
-       --role=roles/iam.serviceAccountTokenCreator \
+       --role=roles/iam.workloadIdentityUser \
        --member="principalSet://iam.googleapis.com/projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/${POOL_ID}/attribute.aws_role/${AWS_ROLE_NAME}"
      ```
 
@@ -263,19 +253,20 @@ AWS_ROLE_NAME="SSOSync_ExecutionRole"
 
      or click **More** (⋮) > **Download** in the Cloud Shell toolbar and enter the file's path. Cloud Shell can only download from your home directory; it opens there, so the file is in it unless you changed directory (otherwise copy it there first, `cp wif-config.json ~/`). From a local terminal, `gcloud cloud-shell scp cloudshell:~/wif-config.json localhost:./wif-config.json` also works. See [Manage files with Cloud Shell](https://docs.cloud.google.com/shell/docs/uploading-and-downloading-files).
    - **This step is per AWS account**: the configuration names the provider (`PROVIDER_ID`), and each provider trusts one account. With several accounts (see the note in step 4), run it once per provider, setting `PROVIDER_ID` to that account's provider and writing a separate file each time, for example `--output-file=wif-config-dev.json` and `--output-file=wif-config-prod.json`. Give each account's deployment the file for its own provider; a configuration for another account's provider is rejected.
-   - **Omit `--service-account`**: ssosync impersonates the service account itself (it needs to add the admin as the delegated subject), so the configuration must describe only the federation. A configuration created with `--service-account` contains `service_account_impersonation_url` and makes the impersonation happen twice.
+   - **Omit `--service-account`**: ssosync impersonates the service account itself (named by `--google-impersonate-service-account`), so the configuration must describe only the federation. A configuration created with `--service-account` contains `service_account_impersonation_url` and makes the impersonation happen twice.
    - The file contains **no secret**: it says where to get AWS credentials and which pool/provider to use. On AWS Lambda the AWS credentials come from the function's environment (the metadata server it refers to is not used), so the same file works for Lambda and the CLI.
 
-7. **Choose the admin to act on behalf of** (unchanged from legacy auth)
-   - Note the email address of an existing Google Workspace admin that can read the directory (a super admin always works). This is `--google-admin` / `GOOGLE_ADMIN` / `GoogleAdminEmail`.
+7. **Find your Google Workspace customer ID**
+   - In the [Admin console](https://admin.google.com/), go to **Account** > **Account settings** > **Profile** ([direct link](https://admin.google.com/ac/accountsettings/profile)) and copy the **Customer ID** (for example `C01abcd23`).
+   - It is **required** for keyless authentication: the service account is not a Workspace user, so the `my_customer` alias does not identify your directory. ssosync, and the template, reject `my_customer` here. This is `--customer-id` / `CUSTOMER_ID` / `GoogleCustomerId`.
 
 8. **Configure ssosync**
-   - **Lambda / SAR / quick-start:** set `GoogleImpersonateServiceAccount` to the service account email (`$SA_EMAIL`), `GoogleWIFConfig` to the contents of `wif-config.json` (or the Arn of a secret or SSM parameter holding it), and leave `GoogleCredentials` **empty**.
+   - **Lambda / SAR / quick-start:** set `GoogleImpersonateServiceAccount` to the service account email (`$SA_EMAIL`), `GoogleWIFConfig` to the contents of `wif-config.json` (or the Arn of a secret or SSM parameter holding it), `GoogleCustomerId` to the customer ID from step 7, and leave `GoogleCredentials` and `GoogleAdminEmail` **empty**.
    - **CLI:**
 
      ```bash
      ./ssosync \
-       --google-admin admin@company.com \
+       --customer-id C01abcd23 \
        --google-impersonate-service-account "$SA_EMAIL" \
        --google-wif-config ./wif-config.json \
        --endpoint https://scim.us-east-1.amazonaws.com/... \
@@ -285,7 +276,9 @@ AWS_ROLE_NAME="SSOSync_ExecutionRole"
 
      The federation reads AWS credentials from `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_SESSION_TOKEN` and the region from `AWS_REGION` (or `AWS_DEFAULT_REGION`) when they are set, and otherwise from the EC2 instance metadata server; it does not read `~/.aws` profiles. For credentials from a named profile (including IAM Identity Center sign-in), export them first: `eval "$(aws configure export-credentials --profile my-profile --format env)"`, and use that profile's role as `AWS_ROLE_NAME` (steps 4–5).
 
-> **Troubleshooting:** `Permission 'iam.serviceAccounts.signJwt' denied` means step 5 is missing or names a different role (compare it with the role in `aws sts get-caller-identity`). `The given credential is rejected by the attribute condition` means the role, or account, does not match the provider created in step 4. `Not Authorized to access this resource/api` from the Admin SDK means the domain-wide delegation (step 3) is missing a scope or uses the wrong Client ID. Run with `--dry-run --log-level debug` until the sync connects.
+> **Troubleshooting:** `Permission 'iam.serviceAccounts.getAccessToken' denied` means step 5 is missing or names a different role (compare it with the role in `aws sts get-caller-identity`). `The given credential is rejected by the attribute condition` means the role, or account, does not match the provider created in step 4. `Not Authorized to access this resource/api` from the Admin SDK means the admin role (step 3) is not assigned to the service account or lacks a privilege, or the customer ID (step 7) is wrong. Run with `--dry-run --log-level debug` until the sync connects.
+
+> **Acting on behalf of an admin instead (domain-wide delegation):** keyless authentication also works with `--google-admin` / `GoogleAdminEmail`, as in legacy auth. Instead of step 3, authorize the service account's Client ID (`gcloud iam service-accounts describe "$SA_EMAIL" --format='value(oauth2ClientId)'`) for the scopes in [legacy step 5](#legacy-auth-stored-credentials); in step 5 grant *Service Account Token Creator* (`roles/iam.serviceAccountTokenCreator`) instead of *Workload Identity User*, because acting on behalf of the admin needs `iam.serviceAccounts.signJwt`. The customer ID is then optional.
 
 #### Legacy auth (stored credentials)
 
@@ -400,12 +393,12 @@ export SSOSYNC_DRY_RUN="true"
 
 | Flag | Environment Variable | Description | Default |
 |------|---------------------|-------------|---------|
-| `--google-admin` / `-u` | `SSOSYNC_GOOGLE_ADMIN` | Google Workspace admin email | Required |
+| `--google-admin` / `-u` | `SSOSYNC_GOOGLE_ADMIN` | Google Workspace admin to act on behalf of (domain-wide delegation; required for legacy auth as documented). Leave empty to have the service account act as itself with its own admin role, which requires `--customer-id`. | `""` |
 | `--google-credentials` / `-c` | `SSOSYNC_GOOGLE_CREDENTIALS` | Legacy auth: path to the Google service-account key JSON. Not read when `--google-impersonate-service-account` is set (giving both explicitly is an error). | `credentials.json` |
 | `--google-impersonate-service-account` | `SSOSYNC_GOOGLE_IMPERSONATE_SERVICE_ACCOUNT` | Keyless auth: email of the service account to impersonate; selects [Workload Identity Federation](#workload-identity-federation-keyless) instead of the key. | `""` |
 | `--google-wif-config` | `SSOSYNC_GOOGLE_WIF_CONFIG` | Keyless auth: path to the Workload Identity Federation credential configuration (`external_account` JSON). When unset, Application Default Credentials are used. | `""` |
 | `--attribute-map-file` | `SSOSYNC_ATTRIBUTE_MAP_FILE` | Path to a JSON file containing the attribute map (`groups` sync method only); when unset the built-in default mapping is used. See [Attribute mapping](#attribute-mapping). | `""` |
-| `--customer-id` | `SSOSYNC_CUSTOMER_ID` | Google Workspace customer ID | `my_customer` |
+| `--customer-id` | `SSOSYNC_CUSTOMER_ID` | Google Workspace customer ID. The actual ID (`Cxxxxxxxx`, not `my_customer`) is required with `--google-impersonate-service-account` and when `--google-admin` is empty. | `my_customer` |
 | `--endpoint` / `-e` | `SSOSYNC_SCIM_ENDPOINT` | AWS SCIM endpoint URL | Required |
 | `--access-token` / `-t` | `SSOSYNC_SCIM_ACCESS_TOKEN` | AWS SCIM access token | Required |
 | `--sync-method` / `-s` | `SSOSYNC_SYNC_METHOD` | Sync method (`groups` or `users_groups`) | `groups` |
@@ -855,11 +848,17 @@ When deployed as Lambda, configuration is managed through environment variables.
 
 ```bash
 # Required secrets (stored in Secrets Manager or SSM Parameter Store)
-GOOGLE_ADMIN=<secret-arn or ssm-parameter-arn>
-GOOGLE_CREDENTIALS=<secret-arn or ssm-parameter-arn>
 SCIM_ENDPOINT=<secret-arn or ssm-parameter-arn>
 SCIM_ACCESS_TOKEN=<secret-arn or ssm-parameter-arn>
-CUSTOMER_ID=<secret-arn, ssm-parameter-arn, or plain value>
+CUSTOMER_ID=<secret-arn, ssm-parameter-arn, or plain value>  # actual ID required for keyless or without GOOGLE_ADMIN
+
+# Google authentication, one of:
+#   Legacy auth (stored credentials)
+GOOGLE_CREDENTIALS=<secret-arn or ssm-parameter-arn>
+GOOGLE_ADMIN=<secret-arn or ssm-parameter-arn>
+#   Workload Identity Federation (keyless)
+GOOGLE_IMPERSONATE_SERVICE_ACCOUNT=<secret-arn or service account email>
+GOOGLE_WIF_CONFIG=<secret-arn, ssm-parameter-arn, or inline JSON>
 
 # Optional attribute map (groups sync method only). Accepts a Secrets Manager ARN,
 # an SSM Parameter Store ARN, or inline attribute-map JSON. Unset => built-in defaults.

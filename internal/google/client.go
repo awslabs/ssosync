@@ -55,9 +55,10 @@ const (
 	MaxRetries = 5
 )
 
-// Scopes are the read-only Admin SDK Directory scopes ssosync requests. With
-// either authentication method they must be authorized for the service
-// account's client ID under domain-wide delegation.
+// Scopes are the read-only Admin SDK Directory scopes ssosync requests. When
+// acting on behalf of an admin (domain-wide delegation) they must be
+// authorized for the service account's client ID; when the service account
+// acts as itself, its assigned Workspace admin role governs access.
 var Scopes = []string{
 	admin.AdminDirectoryGroupReadonlyScope,
 	admin.AdminDirectoryGroupMemberReadonlyScope,
