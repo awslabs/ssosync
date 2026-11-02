@@ -236,7 +236,7 @@ AWS_ROLE_NAME="SSOSync_ExecutionRole"
 
      The mapping makes the role name available as `attribute.aws_role`. The **attribute condition** is the important control: the provider accepts only sessions of that one role in that one account, so no other AWS principal can federate.
 
-   > **Several AWS accounts with the same directory** (for example a dev account and a prod account): an AWS provider trusts exactly one account, so **create one provider per account** in the same pool. Repeat the provider command for each account with its own `PROVIDER_ID` (for example `ssosync-dev`, `ssosync-prod`), `AWS_ACCOUNT_ID` and, if it differs, `AWS_ROLE_NAME`. The pool and the service account (steps 2–3) are shared. Step 5's grant matches the role name in any provider of the pool, so it is needed once per distinct role name. Step 6 creates a separate `wif-config.json` for each provider: give each account's deployment the one for its own provider.
+   > **Several AWS accounts with the same directory** (for example a dev account and a prod account): an AWS provider trusts exactly one account, so **create one provider per account** in the same pool. Repeat the provider command for each account with its own `PROVIDER_ID` (for example `ssosync-dev`, `ssosync-prod`), `AWS_ACCOUNT_ID` and, if it differs, `AWS_ROLE_NAME`. The pool and the service account (steps 2–3) are shared. Step 5's grant matches the role name in any provider of the pool, so it is needed once per distinct role name. Step 6 is per account: repeat it for each provider.
 
 5. **Allow the AWS role to impersonate the service account** ⚠️ *differs from Google's guide*
    - Google's guide grants *Workload Identity User* (`roles/iam.workloadIdentityUser`). That is **not enough for ssosync**: to act on behalf of the Workspace admin (domain-wide delegation) it must have the service account sign a JWT, which needs `iam.serviceAccounts.signJwt`. Grant *Service Account Token Creator* instead, to that role only:
@@ -255,6 +255,7 @@ AWS_ROLE_NAME="SSOSync_ExecutionRole"
        "projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/${POOL_ID}/providers/${PROVIDER_ID}" \
        --aws --output-file=wif-config.json
      ```
+   - **This step is per AWS account**: the configuration names the provider (`PROVIDER_ID`), and each provider trusts one account. With several accounts (see the note in step 4), run it once per provider, setting `PROVIDER_ID` to that account's provider and writing a separate file each time, for example `--output-file=wif-config-dev.json` and `--output-file=wif-config-prod.json`. Give each account's deployment the file for its own provider; a configuration for another account's provider is rejected.
    - **Omit `--service-account`**: ssosync impersonates the service account itself (it needs to add the admin as the delegated subject), so the configuration must describe only the federation. A configuration created with `--service-account` contains `service_account_impersonation_url` and makes the impersonation happen twice.
    - The file contains **no secret**: it says where to get AWS credentials and which pool/provider to use. On AWS Lambda the AWS credentials come from the function's environment (the metadata server it refers to is not used), so the same file works for Lambda and the CLI.
 
