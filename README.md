@@ -159,9 +159,9 @@ POOL_ID="ssosync"                         # workload identity pool ID (cannot be
 PROVIDER_ID="aws"                         # pool provider ID (cannot be changed later)
 AWS_ACCOUNT_ID="123456789012"             # the AWS account ssosync runs in
 AWS_ROLE_NAME="my-ssosync-lambda-role"    # the IAM role ssosync runs as (see step 5)
-SA_NAME="ssosync"
-SA_EMAIL="${SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
 ```
+
+`SA_EMAIL`, the service account's email address, is set in step 3 from the account that command creates.
 
 1. **Create (or select) a Google Cloud project**
    - Create a project in the [Google Cloud Console](https://console.cloud.google.com/), or reuse one: `gcloud config set project "$PROJECT_ID"`.
@@ -176,7 +176,15 @@ SA_EMAIL="${SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
 
 3. **Create the service account — without a key**
    - ```bash
-     gcloud iam service-accounts create "ssosync" --display-name "ssosync (keyless)"
+     SA_EMAIL="$(gcloud iam service-accounts create "ssosync" --display-name "ssosync (keyless)" --format='value(email)')"
+     echo "$SA_EMAIL"
+     ```
+   - `--format='value(email)'` makes the command print only the new account's **email address**, which is kept in `SA_EMAIL` for the later steps; the `echo` shows it (for example `ssosync@my-ssosync-project.iam.gserviceaccount.com`). Keep a copy: it is also the value for `GoogleImpersonateServiceAccount` in step 10.
+   - If the account already exists, or `echo` prints nothing, set it from the existing account instead:
+
+     ```bash
+     SA_EMAIL="$(gcloud iam service-accounts list --filter='email ~ ^ssosync@' --format='value(email)')"
+     echo "$SA_EMAIL"
      ```
    - No project roles are required: its access to the directory is granted in Google Workspace (step 4), not in Google Cloud. **Do not create a key** for it.
    - Note its numeric **Client ID** (OAuth2 client ID / unique ID) for step 4:
