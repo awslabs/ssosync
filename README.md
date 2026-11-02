@@ -148,7 +148,7 @@ These steps follow Google's guide [Configure Workload Identity Federation with A
 
 > **You need:** a Google Cloud project where you hold *Workload Identity Pool Admin* (`roles/iam.workloadIdentityPoolAdmin`) and *Service Account Admin* (`roles/iam.serviceAccountAdmin`) (or *Owner*); a Google Workspace **super admin** for step 3; the `gcloud` CLI ([install](https://cloud.google.com/sdk/docs/install)), or Cloud Shell; and the **AWS account ID** and **IAM role name** ssosync runs as (described below).
 
-> **Tip: use Google Cloud Shell for the following steps.** Click **Activate Cloud Shell** (the `>_` icon) in the [Google Cloud Console](https://console.cloud.google.com/): it opens a terminal in your browser with the `gcloud` CLI already installed and signed in as you, so there is nothing to install, and every command below can be pasted into it as-is. Step 6 writes `wif-config.json` there; download it with **More** (⋮) > **Download** in the Cloud Shell toolbar. See [Cloud Shell](https://cloud.google.com/shell/docs/using-cloud-shell).
+> **Tip: use Google Cloud Shell for the following steps.** Click **Activate Cloud Shell** (the `>_` icon) in the [Google Cloud Console](https://console.cloud.google.com/): it opens a terminal in your browser with the `gcloud` CLI already installed and signed in as you, so there is nothing to install, and every command below can be pasted into it as-is. Step 6 writes `wif-config.json` there and shows how to download it. See [Cloud Shell](https://cloud.google.com/shell/docs/using-cloud-shell).
 
 The commands use these values; work them out first:
 
@@ -255,6 +255,13 @@ AWS_ROLE_NAME="SSOSync_ExecutionRole"
        "projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/${POOL_ID}/providers/${PROVIDER_ID}" \
        --aws --output-file=wif-config.json
      ```
+   - **Download the file** to your computer, to deploy ssosync with it (step 8). In Cloud Shell, either run:
+
+     ```bash
+     cloudshell download wif-config.json
+     ```
+
+     or click **More** (⋮) > **Download** in the Cloud Shell toolbar and enter the file's path. Cloud Shell can only download from your home directory; it opens there, so the file is in it unless you changed directory (otherwise copy it there first, `cp wif-config.json ~/`). From a local terminal, `gcloud cloud-shell scp cloudshell:~/wif-config.json localhost:./wif-config.json` also works. See [Manage files with Cloud Shell](https://docs.cloud.google.com/shell/docs/uploading-and-downloading-files).
    - **This step is per AWS account**: the configuration names the provider (`PROVIDER_ID`), and each provider trusts one account. With several accounts (see the note in step 4), run it once per provider, setting `PROVIDER_ID` to that account's provider and writing a separate file each time, for example `--output-file=wif-config-dev.json` and `--output-file=wif-config-prod.json`. Give each account's deployment the file for its own provider; a configuration for another account's provider is rejected.
    - **Omit `--service-account`**: ssosync impersonates the service account itself (it needs to add the admin as the delegated subject), so the configuration must describe only the federation. A configuration created with `--service-account` contains `service_account_impersonation_url` and makes the impersonation happen twice.
    - The file contains **no secret**: it says where to get AWS credentials and which pool/provider to use. On AWS Lambda the AWS credentials come from the function's environment (the metadata server it refers to is not used), so the same file works for Lambda and the CLI.
