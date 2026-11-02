@@ -54,6 +54,31 @@ phases:
           ./deploy/developer.json > ./deploy/attributemap.json
       - cat ./deploy/attributemap.json
 
+      # Params for the WIFAuth stage: keyless Google authentication (Workload
+      # Identity Federation, issue #345) with no admin (the service account acts
+      # as itself, issue #192), so no key and no admin email; the customer id is
+      # required. RoleName is the role the Google provider trusts. Arns only.
+      - |
+        # Unset SecretsConfig entries are the literal "".
+        if [ "$SecretWIFClientLibraryConfig" = '""' ]; then SecretWIFClientLibraryConfig=""; fi
+        if [ "$SecretWIFServiceAccountEmail" = '""' ]; then SecretWIFServiceAccountEmail=""; fi
+        if [ -z "$SecretWIFClientLibraryConfig" ] || [ -z "$SecretWIFServiceAccountEmail" ] || [ -z "$GoogleCustomerIdArn" ]; then
+          echo "WARNING: SecretsConfig has no WIF configuration or service account, or PipelineGoogleCustomerId was not found; the WIFAuth deploy will fail"
+        fi
+        jq -n \
+          --arg AppArn "$AppArn" \
+          --arg AppVersion "$AppVersion" \
+          --arg GoogleImpersonateServiceAccountArn "$SecretWIFServiceAccountEmail" \
+          --arg GoogleWIFConfigArn "$SecretWIFClientLibraryConfig" \
+          --arg GoogleCustomerIdArn "$GoogleCustomerIdArn" \
+          --arg SCIMEndpointUrlArn "$SecretSCIMEndpoint" \
+          --arg SCIMAccessTokenArn "$SecretSCIMAccessToken" \
+          --arg RegionArn "$SecretRegion" \
+          '{Parameters: ($ARGS.named + {RoleName: "SSOSync_ExecutionRole", GroupMatch: "name:AWS*,name=NestedGroups"}),
+            StackPolicy: {Statement: [{Effect: "Allow", NotAction: "Update:Delete", Principal: "*", Resource: "*"}]}}' \
+          > ./deploy/wif.json
+      - cat ./deploy/wif.json
+
       # Update params with the values for this run for the management account
       - |
         jq -n \
