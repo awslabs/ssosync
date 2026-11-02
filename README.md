@@ -192,6 +192,7 @@ AWS_ROLE_NAME="my-ssosync-lambda-role"    # the IAM role ssosync runs as (see st
      ```bash
      gcloud iam service-accounts describe "$SA_EMAIL" --format='value(oauth2ClientId)'
      ```
+   - **Copy the Client ID this prints (a long number, for example `112233445566778899001`) to your clipboard**: you paste it into the Admin console in step 4.
 
 4. **Grant domain-wide delegation in the Admin console** (unchanged from legacy auth)
    - Sign in to the [Google Admin console](https://admin.google.com/) as a **super admin**.
