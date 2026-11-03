@@ -21,7 +21,7 @@ phases:
       # The deployment is keyless: impersonation and WIF configuration set, no
       # key and no admin (only the names are printed, not the values).
       - aws lambda get-function-configuration --function-name "SSOSyncFunction" > function.json
-      - jq '{Role, Variables: (.Environment.Variables | keys)}' function.json
+      - "jq '{Role, Variables: (.Environment.Variables | keys)}' function.json"
       - |
         if ! jq -e '.Environment.Variables
               | has("GOOGLE_IMPERSONATE_SERVICE_ACCOUNT") and has("GOOGLE_WIF_CONFIG") and has("CUSTOMER_ID")
