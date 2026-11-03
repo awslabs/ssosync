@@ -283,6 +283,73 @@ Resources:
                 - Name: Source
                 - Name: Packaged
                 - Name: Built
+        # Workload Identity Federation (keyless, issue #345) with no admin (the
+        # service account acts as itself, issue #192), first so a keyless
+        # failure fails fast: deploy from deploy/wif-<AccountId>.json (no key,
+        # no admin, the customer id, RoleName SSOSync_ExecutionRole), then the
+        # Lambda, CLI and CodePipeline tests. LegacyAuth then redeploys the
+        # legacy stack for itself and the later stages. See tests/wif_account_execution/.
+        - Name: WIFAuth
+          Actions:
+            - Name: Deploy
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Version: '1'
+                Provider: CloudFormation
+              Configuration:
+                ActionMode: CREATE_UPDATE
+                Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND,CAPABILITY_NAMED_IAM
+                StackName: TestAccountExecution
+                RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
+                TemplateConfiguration: !Sub 'Tests::deploy/wif-${AWS::AccountId}.json'
+                TemplatePath: 'Tests::deploy/stack.yml'
+              InputArtifacts:
+                - Name: Tests
+              RunOrder: 1
+            - Name: Lambda
+              ActionTypeId:
+                Category: Test
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              RunOrder: 2
+              Configuration:
+                ProjectName: !Ref CodeBuildWIFLambda
+              OutputArtifacts:
+                - Name: WIFLambda
+              InputArtifacts:
+                - Name: Tests
+            - Name: CLI
+              ActionTypeId:
+                Category: Test
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              RunOrder: 3
+              Configuration:
+                ProjectName: !Ref CodeBuildWIFCLI
+              OutputArtifacts:
+                - Name: WIFCLI
+              InputArtifacts:
+                - Name: Tests
+            - Name: CodePipeline
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Version: 1
+                Provider: Lambda
+              RunOrder: 4
+              Configuration:
+                FunctionName: SSOSyncFunction
+              OutputArtifacts:
+                - Name: WIFCodePipeline
+              InputArtifacts:
+                - Name: Tests
+        # Legacy auth (stored credentials): the service-account key and an admin
+        # to act on behalf of (deploy/developer.json).
+        - Name: LegacyAuth
+          Actions:
             - Name: Deploy
               ActionTypeId:
                 Category: Deploy
@@ -298,18 +365,14 @@ Resources:
                 TemplatePath: !Sub 'Tests::deploy/stack.yml'
               InputArtifacts:
                 - Name: Tests
-              RunOrder: 2
-        # Legacy auth (stored credentials): the service-account key and an admin
-        # to act on behalf of (deploy/developer.json).
-        - Name: LegacyAuth
-          Actions:
+              RunOrder: 1
             - Name: Lambda
               ActionTypeId:
                 Category: Test
                 Owner: AWS
                 Version: 1
                 Provider: CodeBuild
-              RunOrder: 1
+              RunOrder: 2
               Configuration:
                 ProjectName: !Ref CodeBuildSmokeLambda
                 PrimarySource: Source
@@ -323,7 +386,7 @@ Resources:
                 Owner: AWS
                 Version: 1
                 Provider: CodeBuild
-              RunOrder: 2
+              RunOrder: 3
               Configuration:
                 ProjectName: !Ref CodeBuildSmokeCLI
               OutputArtifacts:
@@ -336,7 +399,7 @@ Resources:
                 Owner: AWS
                 Version: 1
                 Provider: Lambda
-              RunOrder: 3
+              RunOrder: 4
               Configuration:
                 FunctionName: SSOSyncFunction
               OutputArtifacts:
@@ -501,69 +564,6 @@ Resources:
                 ProjectName: !Ref CodeBuildUserGroupOperations
               OutputArtifacts:
                 - Name: UserGroupOperations
-              InputArtifacts:
-                - Name: Tests
-        # Workload Identity Federation (keyless, issue #345) with no admin (the
-        # service account acts as itself, issue #192): the LegacyAuth tests
-        # against a redeployment from deploy/wif-<AccountId>.json (no key, no
-        # admin, the customer id, RoleName SSOSync_ExecutionRole). It runs last, before
-        # CleanUp, because the earlier stages use the legacy deployment.
-        # See tests/wif_account_execution/.
-        - Name: WIFAuth
-          Actions:
-            - Name: Deploy
-              ActionTypeId:
-                Category: Deploy
-                Owner: AWS
-                Version: '1'
-                Provider: CloudFormation
-              Configuration:
-                ActionMode: CREATE_UPDATE
-                Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND,CAPABILITY_NAMED_IAM
-                StackName: TestAccountExecution
-                RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
-                TemplateConfiguration: !Sub 'Tests::deploy/wif-${AWS::AccountId}.json'
-                TemplatePath: 'Tests::deploy/stack.yml'
-              InputArtifacts:
-                - Name: Tests
-              RunOrder: 1
-            - Name: Lambda
-              ActionTypeId:
-                Category: Test
-                Owner: AWS
-                Version: 1
-                Provider: CodeBuild
-              RunOrder: 2
-              Configuration:
-                ProjectName: !Ref CodeBuildWIFLambda
-              OutputArtifacts:
-                - Name: WIFLambda
-              InputArtifacts:
-                - Name: Tests
-            - Name: CLI
-              ActionTypeId:
-                Category: Test
-                Owner: AWS
-                Version: 1
-                Provider: CodeBuild
-              RunOrder: 3
-              Configuration:
-                ProjectName: !Ref CodeBuildWIFCLI
-              OutputArtifacts:
-                - Name: WIFCLI
-              InputArtifacts:
-                - Name: Tests
-            - Name: CodePipeline
-              ActionTypeId:
-                Category: Invoke
-                Owner: AWS
-                Version: 1
-                Provider: Lambda
-              RunOrder: 4
-              Configuration:
-                FunctionName: SSOSyncFunction
-              OutputArtifacts:
-                - Name: WIFCodePipeline
               InputArtifacts:
                 - Name: Tests
         - Name: CleanUp
