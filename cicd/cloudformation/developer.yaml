@@ -165,10 +165,12 @@ Resources:
     Type: AWS::CodePipeline::Pipeline
     Properties:
       Name: SSOSync
-      # QUEUED (V2 only): run executions one at a time. Every stage shares the
-      # TestAccountExecution stack and the Identity Store, so with SUPERSEDED a
-      # newer run's Deploy could overlap an older run's tests or CleanUp (which
-      # deletes the stack the newer run is about to test).
+      # QUEUED (V2 only): no execution is superseded, but QUEUED serialises
+      # executions per stage, not per pipeline: while one run is in
+      # AttributeMapTests the next can be in Deploy or LegacyAuth. Every stage
+      # shares the TestAccountExecution stack and the Identity Store, so
+      # overlapping runs interfere (seen as intermittent UserGroupOperations
+      # S6 failures). Start one run at a time and let it finish.
       PipelineType: V2
       ExecutionMode: QUEUED
       RoleArn: !Sub ${CodePipelineRole.Arn}
