@@ -197,7 +197,7 @@ Resources:
                 Repo: !Ref RepoName
                 Branch: !Ref BranchName
                 OAuthToken: !Ref GitHubOAuthToken
-        - Name: App
+        - Name: Build
           Actions:
             - Name: InspectorScan
               ActionTypeId:
@@ -263,16 +263,14 @@ Resources:
               InputArtifacts:
                 - Name: Built
                 - Name: Source
-        - Name: Deploy
-          Actions:
-            - Name: Staging
+            - Name: configurations
               Namespace: RC
               ActionTypeId:
                 Category: Build
                 Owner: AWS
                 Version: 1
                 Provider: CodeBuild
-              RunOrder: 1
+              RunOrder: 5
               Configuration:
                 ProjectName: !Ref CodeBuildStaging
                 PrimarySource: Source
