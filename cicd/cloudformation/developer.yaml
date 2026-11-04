@@ -642,13 +642,18 @@ Resources:
               InputArtifacts:
                 - Name: Tests
             # Quick-start templates (quick-start/*.yaml, wif-auth/, legacy-auth/)
-            # against the build under test, as in the release pipeline: each action
-            # deploys its template (rewritten to the staging SAR app and version),
-            # invokes the function and deletes the stack again; see
-            # tests/quick_start/run.sh. Every quick-start creates the SSOSync*
-            # secrets, which TestAccountExecution (App + secrets) also creates, so
-            # that stack is removed first (it is not redeployed afterwards) and
-            # the tests run one at a time.
+            # against the build under test. Configurations (tests/quick_start/
+            # build.py) wrote a wrapper per test that deploys the quick-start as a
+            # nested stack, passing every secret as a Secrets Manager dynamic
+            # reference, and per-account parameter files of secret Arns.
+            # QuickStart-Package uploads the nested templates (only) to this
+            # account's artifact bucket. Each quick-start then updates the same
+            # QuickStartTests stack and the function is invoked, so unchanged
+            # resources (the IAM role, ...) carry over; the order moves from the
+            # legacy templates to the keyless ones, a legacy -> keyless upgrade.
+            # Every quick-start creates the SSOSync* secrets, which
+            # TestAccountExecution (App + secrets) also creates, so that stack is
+            # removed first.
             - Name: CleanUp-Functional
               ActionTypeId:
                 Category: Deploy
@@ -662,72 +667,200 @@ Resources:
               InputArtifacts:
                 - Name: Tests
               RunOrder: 25
-            - Name: QuickStart-SingleAccount
+            - Name: QuickStart-Package
               ActionTypeId:
-                Category: Test
+                Category: Build
                 Owner: AWS
                 Version: 1
                 Provider: CodeBuild
               RunOrder: 26
               Configuration:
-                ProjectName: !Ref CodeBuildQuickStartSingleAccount
+                ProjectName: !Ref CodeBuildQuickStartPackage
               InputArtifacts:
                 - Name: Tests
-            - Name: QuickStart-SingleAccountAttributeMap
+              OutputArtifacts:
+                - Name: QuickStarts
+            - Name: Deploy-QuickStart-LegacySingleAccount
               ActionTypeId:
-                Category: Test
+                Category: Deploy
                 Owner: AWS
-                Version: 1
-                Provider: CodeBuild
+                Version: '1'
+                Provider: CloudFormation
+              Configuration:
+                ActionMode: CREATE_UPDATE
+                Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND,CAPABILITY_NAMED_IAM
+                StackName: QuickStartTests
+                RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
+                TemplateConfiguration: !Sub 'Tests::deploy/quick-start-tests/LegacySingleAccount-${AWS::AccountId}.json'
+                TemplatePath: 'QuickStarts::packaged/LegacySingleAccount.yml'
+              InputArtifacts:
+                - Name: Tests
+                - Name: QuickStarts
               RunOrder: 27
-              Configuration:
-                ProjectName: !Ref CodeBuildQuickStartSingleAccountAttributeMap
-              InputArtifacts:
-                - Name: Tests
-            - Name: QuickStart-SingleAccountWIF
-              ActionTypeId:
-                Category: Test
-                Owner: AWS
-                Version: 1
-                Provider: CodeBuild
-              RunOrder: 28
-              Configuration:
-                ProjectName: !Ref CodeBuildQuickStartSingleAccountWIF
-              InputArtifacts:
-                - Name: Tests
-            - Name: QuickStart-SingleAccountAttributeMapWIF
-              ActionTypeId:
-                Category: Test
-                Owner: AWS
-                Version: 1
-                Provider: CodeBuild
-              RunOrder: 29
-              Configuration:
-                ProjectName: !Ref CodeBuildQuickStartSingleAccountAttributeMapWIF
-              InputArtifacts:
-                - Name: Tests
             - Name: QuickStart-LegacySingleAccount
               ActionTypeId:
-                Category: Test
+                Category: Invoke
                 Owner: AWS
                 Version: 1
-                Provider: CodeBuild
-              RunOrder: 30
+                Provider: Lambda
+              RunOrder: 28
               Configuration:
-                ProjectName: !Ref CodeBuildQuickStartLegacySingleAccount
+                FunctionName: SSOSync
               InputArtifacts:
                 - Name: Tests
+            - Name: Deploy-QuickStart-LegacySingleAccountAttributeMap
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Version: '1'
+                Provider: CloudFormation
+              Configuration:
+                ActionMode: CREATE_UPDATE
+                Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND,CAPABILITY_NAMED_IAM
+                StackName: QuickStartTests
+                RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
+                TemplateConfiguration: !Sub 'Tests::deploy/quick-start-tests/LegacySingleAccountAttributeMap-${AWS::AccountId}.json'
+                TemplatePath: 'QuickStarts::packaged/LegacySingleAccountAttributeMap.yml'
+              InputArtifacts:
+                - Name: Tests
+                - Name: QuickStarts
+              RunOrder: 29
             - Name: QuickStart-LegacySingleAccountAttributeMap
               ActionTypeId:
-                Category: Test
+                Category: Invoke
                 Owner: AWS
                 Version: 1
-                Provider: CodeBuild
-              RunOrder: 31
+                Provider: Lambda
+              RunOrder: 30
               Configuration:
-                ProjectName: !Ref CodeBuildQuickStartLegacySingleAccountAttributeMap
+                FunctionName: SSOSync
               InputArtifacts:
                 - Name: Tests
+            - Name: Deploy-QuickStart-SingleAccount
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Version: '1'
+                Provider: CloudFormation
+              Configuration:
+                ActionMode: CREATE_UPDATE
+                Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND,CAPABILITY_NAMED_IAM
+                StackName: QuickStartTests
+                RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
+                TemplateConfiguration: !Sub 'Tests::deploy/quick-start-tests/SingleAccount-${AWS::AccountId}.json'
+                TemplatePath: 'QuickStarts::packaged/SingleAccount.yml'
+              InputArtifacts:
+                - Name: Tests
+                - Name: QuickStarts
+              RunOrder: 31
+            - Name: QuickStart-SingleAccount
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Version: 1
+                Provider: Lambda
+              RunOrder: 32
+              Configuration:
+                FunctionName: SSOSync
+              InputArtifacts:
+                - Name: Tests
+            - Name: Deploy-QuickStart-SingleAccountAttributeMap
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Version: '1'
+                Provider: CloudFormation
+              Configuration:
+                ActionMode: CREATE_UPDATE
+                Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND,CAPABILITY_NAMED_IAM
+                StackName: QuickStartTests
+                RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
+                TemplateConfiguration: !Sub 'Tests::deploy/quick-start-tests/SingleAccountAttributeMap-${AWS::AccountId}.json'
+                TemplatePath: 'QuickStarts::packaged/SingleAccountAttributeMap.yml'
+              InputArtifacts:
+                - Name: Tests
+                - Name: QuickStarts
+              RunOrder: 33
+            - Name: QuickStart-SingleAccountAttributeMap
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Version: 1
+                Provider: Lambda
+              RunOrder: 34
+              Configuration:
+                FunctionName: SSOSync
+              InputArtifacts:
+                - Name: Tests
+            - Name: Deploy-QuickStart-SingleAccountWIF
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Version: '1'
+                Provider: CloudFormation
+              Configuration:
+                ActionMode: CREATE_UPDATE
+                Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND,CAPABILITY_NAMED_IAM
+                StackName: QuickStartTests
+                RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
+                TemplateConfiguration: !Sub 'Tests::deploy/quick-start-tests/SingleAccountWIF-${AWS::AccountId}.json'
+                TemplatePath: 'QuickStarts::packaged/SingleAccountWIF.yml'
+              InputArtifacts:
+                - Name: Tests
+                - Name: QuickStarts
+              RunOrder: 35
+            - Name: QuickStart-SingleAccountWIF
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Version: 1
+                Provider: Lambda
+              RunOrder: 36
+              Configuration:
+                FunctionName: SSOSync
+              InputArtifacts:
+                - Name: Tests
+            - Name: Deploy-QuickStart-SingleAccountAttributeMapWIF
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Version: '1'
+                Provider: CloudFormation
+              Configuration:
+                ActionMode: CREATE_UPDATE
+                Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND,CAPABILITY_NAMED_IAM
+                StackName: QuickStartTests
+                RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
+                TemplateConfiguration: !Sub 'Tests::deploy/quick-start-tests/SingleAccountAttributeMapWIF-${AWS::AccountId}.json'
+                TemplatePath: 'QuickStarts::packaged/SingleAccountAttributeMapWIF.yml'
+              InputArtifacts:
+                - Name: Tests
+                - Name: QuickStarts
+              RunOrder: 37
+            - Name: QuickStart-SingleAccountAttributeMapWIF
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Version: 1
+                Provider: Lambda
+              RunOrder: 38
+              Configuration:
+                FunctionName: SSOSync
+              InputArtifacts:
+                - Name: Tests
+            - Name: CleanUp-QuickStart
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Version: 1
+                Provider: CloudFormation
+              Configuration:
+                ActionMode: DELETE_ONLY
+                StackName: QuickStartTests
+                RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
+              InputArtifacts:
+                - Name: Tests
+              RunOrder: 39
   GitMetadata:
     Type: AWS::CodeBuild::Project
     Properties:
@@ -1253,6 +1386,40 @@ Resources:
       LogGroupName: !Ref CodePipelineLogGroup
       LogStreamName: SSOSync-AttrMap-LambdaInlineMap
 
+  # QuickStart-Package (tests/quick_start/package/buildspec.yml)
+  CodeBuildQuickStartPackage:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: SSOSync-QuickStart-Package
+      Description: "Quick start: upload the nested quick-start templates of the test wrappers (aws cloudformation package)"
+      ServiceRole: !Ref CodeBuildTestRole
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: "tests/quick_start/package/buildspec.yml"
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/amazonlinux-x86_64-standard:6.0
+        Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: ARTIFACT_S3_BUCKET
+            Value: !Ref ArtifactBucket
+          - Name: ARTIFACT_KMS_KEY
+            Value: !GetAtt ArtifactBucketKey.Arn
+      Artifacts:
+        Name: SSOSync
+        Type: CODEPIPELINE
+      LogsConfig:
+        CloudWatchLogs:
+          GroupName: !Ref CodePipelineLogGroup
+          StreamName: !Ref CodeBuildQuickStartPackageLogs
+          Status: ENABLED
+
+  CodeBuildQuickStartPackageLogs:
+    Type: AWS::Logs::LogStream
+    Properties:
+      LogGroupName: !Ref CodePipelineLogGroup
+      LogStreamName: SSOSync-QuickStart-Package
+
   CodeBuildUserGroupOperations:
     Type: AWS::CodeBuild::Project
     Properties:
@@ -1274,242 +1441,6 @@ Resources:
           GroupName: !Ref CodePipelineLogGroup
           StreamName: !Ref CodeBuildUserGroupOperationsLogs
           Status: ENABLED
-
-  # --- Quick-start template tests (cicd/tests/quick_start/), see the QuickStartTests stage ---
-
-  CodeBuildQuickStartSingleAccount:
-    Type: AWS::CodeBuild::Project
-    Properties:
-      Name: SSOSync-QuickStart-SingleAccount
-      Description: "Quick start: deploy quick-start/single-account.yaml with AuthMethod legacy (the default) against the build under test, invoke it, remove it"
-      ServiceRole: !Ref CodeBuildTestRole
-      Source:
-        Type: CODEPIPELINE
-        BuildSpec: "tests/quick_start/buildspec.yml"
-      Environment:
-        ComputeType: BUILD_GENERAL1_SMALL
-        Image: aws/codebuild/amazonlinux-x86_64-standard:6.0
-        Type: LINUX_CONTAINER
-        EnvironmentVariables:
-          - Name: QUICKSTART_TEMPLATE
-            Value: single-account.yaml
-          - Name: STACK_NAME
-            Value: QuickStart-SingleAccount
-          - Name: CFN_ROLE_ARN
-            Value: !GetAtt CloudFormationDeployerRole.Arn
-          - Name: EXPECT_ATTRIBUTE_MAP
-            Value: none
-      Artifacts:
-        Name: SSOSync
-        Type: CODEPIPELINE
-      LogsConfig:
-        CloudWatchLogs:
-          GroupName: !Ref CodePipelineLogGroup
-          StreamName: !Ref CodeBuildQuickStartSingleAccountLogs
-          Status: ENABLED
-
-  CodeBuildQuickStartSingleAccountLogs:
-    Type: AWS::Logs::LogStream
-    Properties:
-      LogGroupName: !Ref CodePipelineLogGroup
-      LogStreamName: SSOSync-QuickStart-SingleAccount
-
-  CodeBuildQuickStartSingleAccountAttributeMap:
-    Type: AWS::CodeBuild::Project
-    Properties:
-      Name: SSOSync-QuickStart-SingleAccountAttributeMap
-      Description: "Quick start: deploy quick-start/single-account-attribute-map.yaml with AuthMethod keyless and an inline map (stored as the SSOSyncAttributeMap secret), invoke it, remove it"
-      ServiceRole: !Ref CodeBuildTestRole
-      Source:
-        Type: CODEPIPELINE
-        BuildSpec: "tests/quick_start/buildspec.yml"
-      Environment:
-        ComputeType: BUILD_GENERAL1_SMALL
-        Image: aws/codebuild/amazonlinux-x86_64-standard:6.0
-        Type: LINUX_CONTAINER
-        EnvironmentVariables:
-          - Name: QUICKSTART_TEMPLATE
-            Value: single-account-attribute-map.yaml
-          - Name: STACK_NAME
-            Value: QuickStart-SingleAccountAttributeMap
-          - Name: CFN_ROLE_ARN
-            Value: !GetAtt CloudFormationDeployerRole.Arn
-          - Name: AUTH_METHOD
-            Value: wif
-          - Name: ATTRIBUTE_MAP_FILE
-            Value: tests/attribute_map/maps/rich.json
-          - Name: EXPECT_ATTRIBUTE_MAP
-            Value: secret
-      Artifacts:
-        Name: SSOSync
-        Type: CODEPIPELINE
-      LogsConfig:
-        CloudWatchLogs:
-          GroupName: !Ref CodePipelineLogGroup
-          StreamName: !Ref CodeBuildQuickStartSingleAccountAttributeMapLogs
-          Status: ENABLED
-
-  CodeBuildQuickStartSingleAccountAttributeMapLogs:
-    Type: AWS::Logs::LogStream
-    Properties:
-      LogGroupName: !Ref CodePipelineLogGroup
-      LogStreamName: SSOSync-QuickStart-SingleAccountAttributeMap
-
-  CodeBuildQuickStartSingleAccountWIF:
-    Type: AWS::CodeBuild::Project
-    Properties:
-      Name: SSOSync-QuickStart-SingleAccountWIF
-      Description: "Quick start: deploy quick-start/wif-auth/single-account.yaml (keyless, no admin) against the build under test, invoke it, remove it"
-      ServiceRole: !Ref CodeBuildTestRole
-      Source:
-        Type: CODEPIPELINE
-        BuildSpec: "tests/quick_start/buildspec.yml"
-      Environment:
-        ComputeType: BUILD_GENERAL1_SMALL
-        Image: aws/codebuild/amazonlinux-x86_64-standard:6.0
-        Type: LINUX_CONTAINER
-        EnvironmentVariables:
-          - Name: QUICKSTART_TEMPLATE
-            Value: wif-auth/single-account.yaml
-          - Name: STACK_NAME
-            Value: QuickStart-SingleAccountWIF
-          - Name: CFN_ROLE_ARN
-            Value: !GetAtt CloudFormationDeployerRole.Arn
-          - Name: AUTH_METHOD
-            Value: wif
-          - Name: EXPECT_ATTRIBUTE_MAP
-            Value: none
-      Artifacts:
-        Name: SSOSync
-        Type: CODEPIPELINE
-      LogsConfig:
-        CloudWatchLogs:
-          GroupName: !Ref CodePipelineLogGroup
-          StreamName: !Ref CodeBuildQuickStartSingleAccountWIFLogs
-          Status: ENABLED
-
-  CodeBuildQuickStartSingleAccountWIFLogs:
-    Type: AWS::Logs::LogStream
-    Properties:
-      LogGroupName: !Ref CodePipelineLogGroup
-      LogStreamName: SSOSync-QuickStart-SingleAccountWIF
-
-  CodeBuildQuickStartSingleAccountAttributeMapWIF:
-    Type: AWS::CodeBuild::Project
-    Properties:
-      Name: SSOSync-QuickStart-SingleAccountAttributeMapWIF
-      Description: "Quick start: deploy quick-start/wif-auth/single-account-attribute-map.yaml (keyless, no admin) with an inline map, invoke it, remove it"
-      ServiceRole: !Ref CodeBuildTestRole
-      Source:
-        Type: CODEPIPELINE
-        BuildSpec: "tests/quick_start/buildspec.yml"
-      Environment:
-        ComputeType: BUILD_GENERAL1_SMALL
-        Image: aws/codebuild/amazonlinux-x86_64-standard:6.0
-        Type: LINUX_CONTAINER
-        EnvironmentVariables:
-          - Name: QUICKSTART_TEMPLATE
-            Value: wif-auth/single-account-attribute-map.yaml
-          - Name: STACK_NAME
-            Value: QuickStart-SingleAccountAttributeMapWIF
-          - Name: CFN_ROLE_ARN
-            Value: !GetAtt CloudFormationDeployerRole.Arn
-          - Name: AUTH_METHOD
-            Value: wif
-          - Name: ATTRIBUTE_MAP_FILE
-            Value: tests/attribute_map/maps/rich.json
-          - Name: EXPECT_ATTRIBUTE_MAP
-            Value: secret
-      Artifacts:
-        Name: SSOSync
-        Type: CODEPIPELINE
-      LogsConfig:
-        CloudWatchLogs:
-          GroupName: !Ref CodePipelineLogGroup
-          StreamName: !Ref CodeBuildQuickStartSingleAccountAttributeMapWIFLogs
-          Status: ENABLED
-
-  CodeBuildQuickStartSingleAccountAttributeMapWIFLogs:
-    Type: AWS::Logs::LogStream
-    Properties:
-      LogGroupName: !Ref CodePipelineLogGroup
-      LogStreamName: SSOSync-QuickStart-SingleAccountAttributeMapWIF
-
-  CodeBuildQuickStartLegacySingleAccount:
-    Type: AWS::CodeBuild::Project
-    Properties:
-      Name: SSOSync-QuickStart-LegacySingleAccount
-      Description: "Quick start: deploy quick-start/legacy-auth/single-account.yaml against the build under test, invoke it, remove it"
-      ServiceRole: !Ref CodeBuildTestRole
-      Source:
-        Type: CODEPIPELINE
-        BuildSpec: "tests/quick_start/buildspec.yml"
-      Environment:
-        ComputeType: BUILD_GENERAL1_SMALL
-        Image: aws/codebuild/amazonlinux-x86_64-standard:6.0
-        Type: LINUX_CONTAINER
-        EnvironmentVariables:
-          - Name: QUICKSTART_TEMPLATE
-            Value: legacy-auth/single-account.yaml
-          - Name: STACK_NAME
-            Value: QuickStart-LegacySingleAccount
-          - Name: CFN_ROLE_ARN
-            Value: !GetAtt CloudFormationDeployerRole.Arn
-          - Name: EXPECT_ATTRIBUTE_MAP
-            Value: none
-      Artifacts:
-        Name: SSOSync
-        Type: CODEPIPELINE
-      LogsConfig:
-        CloudWatchLogs:
-          GroupName: !Ref CodePipelineLogGroup
-          StreamName: !Ref CodeBuildQuickStartLegacySingleAccountLogs
-          Status: ENABLED
-
-  CodeBuildQuickStartLegacySingleAccountLogs:
-    Type: AWS::Logs::LogStream
-    Properties:
-      LogGroupName: !Ref CodePipelineLogGroup
-      LogStreamName: SSOSync-QuickStart-LegacySingleAccount
-
-  CodeBuildQuickStartLegacySingleAccountAttributeMap:
-    Type: AWS::CodeBuild::Project
-    Properties:
-      Name: SSOSync-QuickStart-LegacySingleAccountAttributeMap
-      Description: "Quick start: deploy quick-start/legacy-auth/single-account-attribute-map.yaml with an inline map (stored as the SSOSyncAttributeMap secret), invoke it, remove it"
-      ServiceRole: !Ref CodeBuildTestRole
-      Source:
-        Type: CODEPIPELINE
-        BuildSpec: "tests/quick_start/buildspec.yml"
-      Environment:
-        ComputeType: BUILD_GENERAL1_SMALL
-        Image: aws/codebuild/amazonlinux-x86_64-standard:6.0
-        Type: LINUX_CONTAINER
-        EnvironmentVariables:
-          - Name: QUICKSTART_TEMPLATE
-            Value: legacy-auth/single-account-attribute-map.yaml
-          - Name: STACK_NAME
-            Value: QuickStart-LegacySingleAccountAttributeMap
-          - Name: CFN_ROLE_ARN
-            Value: !GetAtt CloudFormationDeployerRole.Arn
-          - Name: ATTRIBUTE_MAP_FILE
-            Value: tests/attribute_map/maps/rich.json
-          - Name: EXPECT_ATTRIBUTE_MAP
-            Value: secret
-      Artifacts:
-        Name: SSOSync
-        Type: CODEPIPELINE
-      LogsConfig:
-        CloudWatchLogs:
-          GroupName: !Ref CodePipelineLogGroup
-          StreamName: !Ref CodeBuildQuickStartLegacySingleAccountAttributeMapLogs
-          Status: ENABLED
-
-  CodeBuildQuickStartLegacySingleAccountAttributeMapLogs:
-    Type: AWS::Logs::LogStream
-    Properties:
-      LogGroupName: !Ref CodePipelineLogGroup
-      LogStreamName: SSOSync-QuickStart-LegacySingleAccountAttributeMap
 
   CodeBuildUserGroupOperationsLogs:
     Type: AWS::Logs::LogStream
@@ -1561,12 +1492,7 @@ Resources:
               - !Sub ${CodeBuildUserGroupOperations.Arn}
               - !Sub ${CodeBuildWIFLambda.Arn}
               - !Sub ${CodeBuildWIFCLI.Arn}
-              - !Sub ${CodeBuildQuickStartSingleAccount.Arn}
-              - !Sub ${CodeBuildQuickStartSingleAccountAttributeMap.Arn}
-              - !Sub ${CodeBuildQuickStartSingleAccountWIF.Arn}
-              - !Sub ${CodeBuildQuickStartSingleAccountAttributeMapWIF.Arn}
-              - !Sub ${CodeBuildQuickStartLegacySingleAccount.Arn}
-              - !Sub ${CodeBuildQuickStartLegacySingleAccountAttributeMap.Arn}
+              - !Sub ${CodeBuildQuickStartPackage.Arn}
               Effect: Allow
             - Action:
               - 'inspector-scan:ScanSbom'
@@ -1602,6 +1528,8 @@ Resources:
               - 'lambda:InvokeFunction'
               Resource:
               - !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:SSOSyncFunction
+              # QuickStart-* (the quick-starts name their function SSOSync)
+              - !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:SSOSync
               Effect: Allow
             - Action:
               - 'cloudformation:CreateStack'
@@ -1887,56 +1815,6 @@ Resources:
               Effect: Allow
               Resource:
               - !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:SSOSyncFunction
-              - !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:SSOSync
-            # tests/quick_start: create and delete the QuickStart-* stacks through
-            # CloudFormationDeployerRole, read the staging SAR app the rewritten
-            # templates point at, check that no SSOSync* secret already exists,
-            # and remove a /aws/lambda/SSOSync log group left outside a deleted
-            # quick-start stack (it blocks the next create).
-            - Action:
-                - "cloudformation:CreateStack"
-                - "cloudformation:DeleteStack"
-                - "cloudformation:DescribeStacks"
-                - "cloudformation:DescribeStackEvents"
-                - "cloudformation:DescribeStackResources"
-                - "cloudformation:CreateChangeSet"
-              Effect: Allow
-              Resource:
-                - !Sub arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/QuickStart-*/*
-                - !Sub arn:aws:cloudformation:${AWS::Region}:aws:transform/Serverless-2016-10-31
-            - Action:
-                - "iam:PassRole"
-              Effect: Allow
-              Resource:
-                - !GetAtt CloudFormationDeployerRole.Arn
-            - Action:
-                - "serverlessrepo:CreateCloudFormationTemplate"
-                - "serverlessrepo:GetCloudFormationTemplate"
-                - "serverlessrepo:GetApplication"
-              Effect: Allow
-              Resource:
-                - !Sub arn:aws:serverlessrepo:${AWS::Region}:${AWS::AccountId}:applications/SSOSync-Staging
-            - Action:
-                - "secretsmanager:DescribeSecret"
-              Effect: Allow
-              Resource:
-                - !Sub arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:SSOSync*
-            # tests/quick_start reads the Pipeline* secret values, encrypted with
-            # the secrets stack's key (SecretsConfig entry 8).
-            - Action:
-                - "kms:Decrypt"
-              Effect: Allow
-              Resource:
-                - !Select [8, !Split [',', !Ref SecretsConfig]]
-              Condition:
-                StringEquals:
-                  kms:ViaService: !Sub secretsmanager.${AWS::Region}.amazonaws.com
-            - Action:
-                - "logs:DeleteLogGroup"
-              Effect: Allow
-              Resource:
-                - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/SSOSync
-                - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/SSOSync:*
             - Action:
               - "sso:ListInstances"
               Effect: Allow

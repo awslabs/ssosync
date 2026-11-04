@@ -1,0 +1,33 @@
+version: 0.2
+
+# QuickStart-Package: upload the nested quick-start templates of the generated
+# test wrappers (deploy/quick-start-tests/, see tests/quick_start/build.py) to
+# this account's artifact bucket, and output the packaged wrappers for the
+# Deploy-QuickStart-* CloudFormation actions. Templates only: the wrappers pass
+# every secret as a Secrets Manager dynamic reference.
+#
+# Environment (set by the CodeBuild project): ARTIFACT_S3_BUCKET, ARTIFACT_KMS_KEY
+# (the bucket only accepts objects encrypted with that key).
+
+env:
+  shell: bash
+
+phases:
+  build:
+    commands:
+      - mkdir -p packaged
+      - |
+        set -euo pipefail
+        for w in deploy/quick-start-tests/*.yml; do
+          name="$(basename "$w")"
+          aws cloudformation package \
+            --template-file "$w" \
+            --s3-bucket "$ARTIFACT_S3_BUCKET" --s3-prefix "quick-start-tests/${CODEBUILD_BUILD_NUMBER}" \
+            --kms-key-id "$ARTIFACT_KMS_KEY" \
+            --output-template-file "packaged/$name"
+          grep -E '^\s+TemplateURL: https://' "packaged/$name"
+        done
+
+artifacts:
+  files:
+    - packaged/**/*

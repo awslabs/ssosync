@@ -2,6 +2,11 @@ version: 0.2
 
 phases:
 
+  install:
+    commands:
+      # tests/quick_start/test_rewrite.py
+      - pip3 install --quiet pyyaml
+
   build:
     commands:
       # Create parameters
@@ -17,30 +22,15 @@ phases:
       - mkdir deploy
       - cp cicd/account_execution/staging/stack.yml ./deploy/
 
-      # Quick-start templates and what their smoke tests need
-      # (tests/quick_start/, run in the developer pipeline and in the release
-      # pipeline's delegated admin account): the staging app and version, and the Arns of the secrets
-      # whose values the templates take. Arns only, no secret values. The
-      # customer id secret is not in SecretsConfig, so it is looked up by name.
-      # Every param set below passes it (stack.yml has no my_customer fallback),
-      # so stop here if it cannot be found.
-      - cp -r quick-start ./deploy/
+      # The customer id secret is not in SecretsConfig, so it is looked up by
+      # name. Every param set below passes its Arn (stack.yml has no
+      # my_customer fallback), so stop here if it cannot be found.
       - |
         GoogleCustomerIdArn=$(aws secretsmanager describe-secret --secret-id PipelineGoogleCustomerId --query ARN --output text)
         if [ -z "$GoogleCustomerIdArn" ] || [ "$GoogleCustomerIdArn" = "None" ]; then
           echo "PipelineGoogleCustomerId not found (or no secretsmanager:DescribeSecret on it)"
           exit 1
         fi
-        jq -n \
-          --arg AppArn "$AppArn" \
-          --arg AppVersion "$AppVersion" \
-          --arg GoogleCustomerIdArn "$GoogleCustomerIdArn" \
-          --arg GoogleCredentialsArn "$SecretGoogleCredentials" \
-          --arg GoogleAdminEmailArn "$SecretGoogleAdminEmail" \
-          --arg SCIMEndpointUrlArn "$SecretSCIMEndpoint" \
-          --arg SCIMAccessTokenArn "$SecretSCIMAccessToken" \
-          '$ARGS.named' > ./deploy/quickstart.json
-      - cat ./deploy/quickstart.json
 
       # Update params with the values for this run for a developer account:
       # legacy auth (the key and an admin), deployed by the LegacyAuth tests only.
@@ -68,6 +58,10 @@ phases:
       #     inline as AttributeMap (the attribute-map Lambda inline-map test).
       #   tests/wif_account_execution/cli/wif-config-<AccountId>.json: the -cli
       #     configuration.
+      #   deploy/quick-start-tests/: the quick-start tests (tests/quick_start/
+      #     build.py): the quick-starts rewritten to this build, a wrapper per
+      #     test that passes the secrets as dynamic references, and
+      #     <Test>-<AccountId>.json parameter files (secret Arns only).
       - |
         # Unset SecretsConfig entries are the literal "".
         if [ "$SecretWIFClientLibraryConfig" = '""' ]; then SecretWIFClientLibraryConfig=""; fi
@@ -101,6 +95,10 @@ phases:
             sed -E "s#(/providers/)[^\"]*\"#\1${AccountId}-cli\"#" wif-config.json > "./tests/wif_account_execution/cli/wif-config-${AccountId}.json"
             jq .audience wif-config-lambda.json "./tests/wif_account_execution/cli/wif-config-${AccountId}.json"
           done
+          python3 cicd/tests/quick_start/test_rewrite.py
+          GoogleCustomerIdArn="$GoogleCustomerIdArn" SecretWIFServiceAccountEmail="$SecretWIFServiceAccountEmail" \
+            python3 cicd/tests/quick_start/build.py --quick-start-dir quick-start \
+              --out ./deploy/quick-start-tests --wif-config wif-config.json --accounts "$Accounts"
           rm -f wif-config.json wif-config-lambda.json
         fi
 

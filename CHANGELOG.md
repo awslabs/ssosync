@@ -20,7 +20,7 @@
 
 ### Pipelines and tests
 
-- The developer and release test pipelines run keyless authentication first ("fail fast"), then legacy authentication, the attribute-map, functional and quick-start tests, all in one sequential `Tests` stage, so overlapping runs no longer interfere. Every test except the legacy-auth block now uses keyless authentication. The release staging accounts each use two Google providers, `<AccountId>-lambda` (trusting `SSOSync_ExecutionRole`) and `<AccountId>-cli` (trusting `SSOSync_CLIExecutionRole`).
+- The developer and release test pipelines run keyless authentication first ("fail fast"), then legacy authentication, the attribute-map, functional and quick-start tests, all in one sequential `Tests` stage, so overlapping runs no longer interfere. Every test except the legacy-auth block now uses keyless authentication. The quick-start templates are tested through CloudFormation pipeline actions on one stack, updated from the legacy templates to the keyless ones (a legacy to keyless upgrade); a generated wrapper passes their secrets as Secrets Manager dynamic references, so no secret value is written to the pipeline artifacts. The release staging accounts each use two Google providers, `<AccountId>-lambda` (trusting `SSOSync_ExecutionRole`) and `<AccountId>-cli` (trusting `SSOSync_CLIExecutionRole`).
 - `cicd/cloudformation/secrets.yaml` holds the keyless test configuration (`GoogleImpersonateServiceAccount`, `GoogleWIFConfig`) and no longer the unused `IdentityStoreId`.
 
 ## v2.10.0

@@ -1053,8 +1053,8 @@ Resources:
               Effect: Allow
               Resource:
               - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/SSOSync/*
-            # Staging records the customer id secret's Arn (not its value) in
-            # deploy/quickstart.json for the quick-start tests.
+            # Configurations looks the customer id secret up by name (it is not in
+            # SecretsConfig) and puts its Arn, not its value, in the test parameters.
             - Action:
               - 'secretsmanager:DescribeSecret'
               Effect: Allow
