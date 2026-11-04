@@ -144,7 +144,7 @@ ssosync reads your directory as a Google **service account**. There are two ways
 | Works with the `iam.disableServiceAccountKeyCreation` org policy | Yes | No |
 | Directory access | The service account is assigned a read-only Workspace admin role and acts as itself | The service account acts on behalf of a Workspace admin (domain-wide delegation) |
 | Configure with | `--google-impersonate-service-account` + `--google-wif-config` + `--customer-id` | `--google-credentials` + `--google-admin` |
-| Status | Opt-in in 2.x; planned to become the only method from v3 | Default in 2.x |
+| Status | **Recommended** (2.11.0 or later); planned to become the only method from v3 | Supported in 2.x (and still the CLI default when `--google-impersonate-service-account` is not set); planned for removal in v3 |
 
 #### Workload Identity Federation (keyless)
 
@@ -290,7 +290,7 @@ AWS_ROLE_NAME="SSOSync_ExecutionRole"
 
 #### Legacy auth (stored credentials)
 
-The service account authenticates with a downloaded JSON **key** (`credentials.json`). This is the default in 2.x. The steps below produce the two things ssosync needs: the `credentials.json` key file and the email address of an admin for the service account to act on behalf of.
+The service account authenticates with a downloaded JSON **key** (`credentials.json`). It remains supported in 2.x; [Workload Identity Federation](#workload-identity-federation-keyless) is recommended instead. The steps below produce the two things ssosync needs: the `credentials.json` key file and the email address of an admin for the service account to act on behalf of.
 
 These steps mirror the [AWS Control Tower workshop](https://catalog.workshops.aws/control-tower/en-US/authentication-authorization/google-workspace/3-provisioning-scim), which you can follow for a fully guided walkthrough.
 

@@ -1,3 +1,28 @@
+## v2.11.0
+
+### Highlights
+
+- **Keyless Google authentication with Workload Identity Federation (#345).** ssosync can now authenticate to Google Workspace without a downloaded service-account key: Google Cloud trusts the AWS IAM role ssosync runs as, and every run exchanges that role's credentials for short-lived Google credentials to impersonate the service account. Nothing long-lived is stored, and it works where the `iam.disableServiceAccountKeyCreation` organization policy forbids keys. Select it with `--google-impersonate-service-account` (`GOOGLE_IMPERSONATE_SERVICE_ACCOUNT`, template `GoogleImpersonateServiceAccount`) and pass the Workload Identity Federation credential configuration with `--google-wif-config` (`GOOGLE_WIF_CONFIG`, template `GoogleWIFConfig`; Lambda accepts inline JSON, a Secrets Manager ARN or an SSM Parameter Store ARN). Keyless authentication is explicit and is now the recommended method; see the README section "Workload Identity Federation (keyless)" for step-by-step Cloud Shell instructions. Builds on the work in #347 by Sami Jawhar.
+- **No super admin needed (#192).** The Google admin is now optional. Without `--google-admin` (`GOOGLE_ADMIN`, template `GoogleAdminEmail`) the service account calls the Admin SDK as itself, using a read-only Workspace admin role assigned to it, so there is no domain-wide delegation and no admin to act on behalf of. With an admin, domain-wide delegation works as before (also with keyless authentication).
+- **`RoleName` template parameter and output.** The function's IAM role can be given a fixed name (for example `SSOSync_ExecutionRole`) so a Google workload identity provider can trust it across redeployments; the `RoleName` output shows the role's name, generated or not.
+- **Quick-start templates for keyless authentication.** `quick-start/wif-auth/single-account.yaml` and `quick-start/wif-auth/single-account-attribute-map.yaml` (release 2.11.0 or later) deploy with keyless authentication and no admin; their `RoleName` defaults to `SSOSync_ExecutionRole`. The previous templates are also available as `quick-start/legacy-auth/`. The existing `quick-start/single-account.yaml` and `single-account-attribute-map.yaml` keep their paths and gain an `AuthMethod` parameter to choose either method; it defaults to legacy, so existing **Sync from Git** deployments keep working unchanged.
+
+### Breaking / behavioural changes
+
+> [!IMPORTANT]
+> **A customer ID is required for keyless authentication, and whenever no Google admin is given.** The `my_customer` alias only resolves against the admin being acted on behalf of, so with `--google-impersonate-service-account`, or with `--google-admin` empty, ssosync and the template now require the actual customer ID (`--customer-id` / `CUSTOMER_ID` / `GoogleCustomerId`, for example `C01abcd23`) and reject `my_customer`. Legacy deployments with an admin are unaffected.
+
+> [!NOTE]
+> **`GoogleAdminEmail` and `GoogleCredentials` are now optional template parameters** (both default to empty). Template rules require exactly one authentication method: `GoogleCredentials` for the key, or `GoogleImpersonateServiceAccount` for keyless; a `GoogleWIFConfig` without `GoogleImpersonateServiceAccount` is rejected. The `SSOSyncGoogleAdminEmail` and `SSOSyncGoogleCredentials` secrets, environment variables and IAM permissions are only created when their parameters are set.
+
+> [!NOTE]
+> Deleting and recreating the Google service account removes both its Workload Identity User grant and its Workspace admin role assignment, even when the email is unchanged; redo both. Admin role assignments can take a while to take effect.
+
+### Pipelines and tests
+
+- The developer and release test pipelines run keyless authentication first ("fail fast"), then legacy authentication, the attribute-map, functional and quick-start tests, all in one sequential `Tests` stage, so overlapping runs no longer interfere. Every test except the legacy-auth block now uses keyless authentication. The release staging accounts each use two Google providers, `<AccountId>-lambda` (trusting `SSOSync_ExecutionRole`) and `<AccountId>-cli` (trusting `SSOSync_CLIExecutionRole`).
+- `cicd/cloudformation/secrets.yaml` holds the keyless test configuration (`GoogleImpersonateServiceAccount`, `GoogleWIFConfig`) and no longer the unused `IdentityStoreId`.
+
 ## v2.10.0
 
 ### Highlights
