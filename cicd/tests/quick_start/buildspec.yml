@@ -1,5 +1,6 @@
 version: 0.2
-# Quick-start template smoke test (release pipeline, delegated admin account).
+# Quick-start template smoke test (developer pipeline, and the release
+# pipeline's delegated admin account).
 # The CodeBuild project sets QUICKSTART_TEMPLATE, STACK_NAME and CFN_ROLE_ARN
 # (and, for the attribute-map template, ATTRIBUTE_MAP_FILE and
 # EXPECT_ATTRIBUTE_MAP). See run.sh.

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Quick-start template smoke test (release pipeline, delegated admin account).
+# Quick-start template smoke test (developer pipeline, and the release
+# pipeline's delegated admin account).
 #
 # Deploys one quick-start template against the build under test, invokes the
 # function it creates, checks the result like the Lambda smoke test, and

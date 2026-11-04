@@ -18,8 +18,8 @@ phases:
       - cp cicd/account_execution/staging/stack.yml ./deploy/
 
       # Quick-start templates and what their smoke tests need
-      # (tests/quick_start/, run in the release pipeline's delegated admin
-      # account): the staging app and version, and the Arns of the secrets
+      # (tests/quick_start/, run in the developer pipeline and in the release
+      # pipeline's delegated admin account): the staging app and version, and the Arns of the secrets
       # whose values the templates take. Arns only, no secret values. The
       # customer id secret is not in SecretsConfig, so it is looked up by name.
       # Every param set below passes it (stack.yml has no my_customer fallback),
