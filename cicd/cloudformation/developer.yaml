@@ -1918,6 +1918,16 @@ Resources:
               Effect: Allow
               Resource:
                 - !Sub arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:SSOSync*
+            # tests/quick_start reads the Pipeline* secret values, encrypted with
+            # the secrets stack's key (SecretsConfig entry 8).
+            - Action:
+                - "kms:Decrypt"
+              Effect: Allow
+              Resource:
+                - !Select [8, !Split [',', !Ref SecretsConfig]]
+              Condition:
+                StringEquals:
+                  kms:ViaService: !Sub secretsmanager.${AWS::Region}.amazonaws.com
             - Action:
                 - "logs:DeleteLogGroup"
               Effect: Allow
