@@ -357,9 +357,9 @@ Resources:
                     - Name: Tests
                   OutputArtifacts:
                     - Name: AttrMapManagerOptIn
-                # LegacyAuth left the stack on cli.json (GroupMatch name:Man*);
-                # redeploy with the developer params (name:AWS*, the baseline
-                # groups) and the built-in default map (AttributeMap unset).
+                # LegacyAuth left the stack on cli.json (legacy, GroupMatch
+                # name:Man*); redeploy keyless (wif-<AccountId>.json: name:AWS*,
+                # the baseline groups) with the built-in default map.
                 - Name: DeployDefaultAttributeMap
                   ActionTypeId:
                     Category: Deploy
@@ -371,7 +371,7 @@ Resources:
                     Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND,CAPABILITY_NAMED_IAM
                     StackName: TestAccountExecution
                     RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
-                    TemplateConfiguration: 'Tests::deploy/developer.json'
+                    TemplateConfiguration: !Sub 'Tests::deploy/wif-${AWS::AccountId}.json'
                     TemplatePath: 'Tests::deploy/stack.yml'
                   InputArtifacts:
                     - Name: Tests
@@ -390,7 +390,7 @@ Resources:
                     - Name: Tests
                   OutputArtifacts:
                     - Name: AttrMapLambdaDefault
-                # Redeploy the function with maps/rich.json inline in ATTRIBUTE_MAP.
+                # Redeploy the (keyless) function with maps/rich.json inline in ATTRIBUTE_MAP.
                 - Name: DeployInlineAttributeMap
                   ActionTypeId:
                     Category: Deploy
@@ -402,7 +402,7 @@ Resources:
                     Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND,CAPABILITY_NAMED_IAM
                     StackName: TestAccountExecution
                     RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
-                    TemplateConfiguration: 'Tests::deploy/attributemap.json'
+                    TemplateConfiguration: !Sub 'Tests::deploy/attributemap-${AWS::AccountId}.json'
                     TemplatePath: 'Tests::deploy/stack.yml'
                   InputArtifacts:
                     - Name: Tests
@@ -429,14 +429,31 @@ Resources:
             # this account type (Management, Delegated or NonDelegated): the
             # expected IssuerArn is built from the instance owner account and
             # matches the real ExternalId Issuer wherever ssosync runs.
-            # See tests/user_group_operations/run.sh.
+            # See tests/user_group_operations/run.sh. ssosync runs keyless, with
+            # the SSOSync* secrets of the keyless deployment made first.
+            - Name: Deploy
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Version: '1'
+                Provider: CloudFormation
+              Configuration:
+                ActionMode: CREATE_UPDATE
+                Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND,CAPABILITY_NAMED_IAM
+                StackName: TestAccountExecution
+                RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
+                TemplateConfiguration: !Sub 'Tests::deploy/wif-${AWS::AccountId}.json'
+                TemplatePath: 'Tests::deploy/stack.yml'
+              InputArtifacts:
+                - Name: Tests
+              RunOrder: 1
             - Name: UserGroupOperations
               ActionTypeId:
                 Category: Test
                 Owner: AWS
                 Version: 1
                 Provider: CodeBuild
-              RunOrder: 1
+              RunOrder: 2
               Configuration:
                 ProjectName: !Ref CodeBuildUserGroupOperations
                 PrimarySource: Tests
@@ -2028,6 +2045,13 @@ Resources:
               Resource:
                 - "*"
               Effect: Allow
+            # Keyless ssosync runs (tests/wif_account_execution/lib/keyless.sh):
+            # the CLI's Google provider trusts only SSOSync_CLIExecutionRole.
+            - Action:
+                - "sts:AssumeRole"
+              Effect: Allow
+              Resource:
+                - !Sub arn:aws:iam::${AWS::AccountId}:role/SSOSync_CLIExecutionRole
 
   # The service role of the WIFAuth CLI test (tests/wif_account_execution/cli).
   # ssosync federates to Google as this role, so its name is fixed: this
@@ -2044,6 +2068,12 @@ Resources:
           Effect: Allow
           Principal:
             Service: [codebuild.amazonaws.com]
+        # The attribute-map and user/group-operations tests run ssosync keyless
+        # in a session of this role (tests/wif_account_execution/lib/keyless.sh).
+        - Action: ['sts:AssumeRole']
+          Effect: Allow
+          Principal:
+            AWS: !GetAtt CodeBuildTestRole.Arn
       Path: /
       Policies:
         - PolicyName: !Sub SSOSync-CodeBuild-WIF-CLI-${AWS::Region}

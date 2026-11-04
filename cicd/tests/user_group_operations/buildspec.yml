@@ -6,7 +6,9 @@ version: 0.2
 env:
   shell: bash
   secrets-manager:
-    GoogleAdminEmail: SSOSyncGoogleAdminEmail
+    # Keyless Google authentication (tests/wif_account_execution/lib/keyless.sh).
+    GoogleCustomerId: SSOSyncGoogleCustomerId
+    GoogleImpersonateServiceAccount: SSOSyncGoogleImpersonateServiceAccount
     SCIMEndpointUrl: SSOSyncSCIMEndpointUrl
     SCIMAccessToken: SSOSyncSCIMAccessToken
   variables:

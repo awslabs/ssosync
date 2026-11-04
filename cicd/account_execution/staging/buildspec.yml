@@ -42,22 +42,14 @@ phases:
           '$ARGS.named' > ./deploy/quickstart.json
       - cat ./deploy/quickstart.json
 
-      # Update params with the values for this run for a developer account
+      # Update params with the values for this run for a developer account:
+      # legacy auth (the key and an admin), deployed by the LegacyAuth tests only.
       - |
         jq -n \
         --argjson Parameters "{\"AppArn\": \"$AppArn\", \"AppVersion\": \"$AppVersion\", \"GoogleAdminEmailArn\": \"$SecretGoogleAdminEmail\", \"GoogleCredentialsArn\": \"$SecretGoogleCredentials\", \"SCIMEndpointUrlArn\": \"$SecretSCIMEndpoint\", \"SCIMAccessTokenArn\": \"$SecretSCIMAccessToken\", \"RegionArn\": \"$SecretRegion\", \"GoogleCustomerIdArn\": \"$GoogleCustomerIdArn\", \"GroupMatch\": \"name:AWS*,name=NestedGroups\"}" \
         --argjson StackPolicy "{\"Statement\":[{\"Effect\": \"Allow\", \"NotAction\": \"Update:Delete\", \"Principal\": \"*\", \"Resource\": \"*\"}]}" \
         '$ARGS.named' > ./deploy/developer.json
       - cat ./deploy/developer.json
-
-      # Params for the AttributeMapTests Lambda inline-map test: the developer
-      # params plus maps/rich.json passed inline as the AttributeMap parameter
-      # (the function's ATTRIBUTE_MAP environment variable).
-      - |
-        jq --arg AttributeMap "$(jq -c . cicd/tests/attribute_map/maps/rich.json)" \
-          '.Parameters.AttributeMap = $AttributeMap' \
-          ./deploy/developer.json > ./deploy/attributemap.json
-      - cat ./deploy/attributemap.json
 
       # WIFAuth stage: keyless Google authentication (Workload Identity
       # Federation, issue #345) with no admin (the service account acts as
@@ -71,6 +63,9 @@ phases:
       # developer pipeline), named by account id so each pipeline picks up its own:
       #   deploy/wif-<AccountId>.json: the stack params, with the -lambda
       #     configuration inline (the app stores it as SSOSyncGoogleWIFConfig).
+      #     Every test except LegacyAuth deploys it.
+      #   deploy/attributemap-<AccountId>.json: the same plus maps/rich.json
+      #     inline as AttributeMap (the attribute-map Lambda inline-map test).
       #   tests/wif_account_execution/cli/wif-config-<AccountId>.json: the -cli
       #     configuration.
       - |
@@ -100,6 +95,9 @@ phases:
               '{Parameters: ($ARGS.named + {RoleName: "SSOSync_ExecutionRole", GroupMatch: "name:AWS*,name=NestedGroups"}),
                 StackPolicy: {Statement: [{Effect: "Allow", NotAction: "Update:Delete", Principal: "*", Resource: "*"}]}}' \
               > "./deploy/wif-${AccountId}.json"
+            jq --arg AttributeMap "$(jq -c . cicd/tests/attribute_map/maps/rich.json)" \
+              '.Parameters.AttributeMap = $AttributeMap' \
+              "./deploy/wif-${AccountId}.json" > "./deploy/attributemap-${AccountId}.json"
             sed -E "s#(/providers/)[^\"]*\"#\1${AccountId}-cli\"#" wif-config.json > "./tests/wif_account_execution/cli/wif-config-${AccountId}.json"
             jq .audience wif-config-lambda.json "./tests/wif_account_execution/cli/wif-config-${AccountId}.json"
           done

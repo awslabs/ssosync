@@ -263,7 +263,7 @@ Resources:
               InputArtifacts:
                 - Name: Built
                 - Name: Source
-            - Name: configurations
+            - Name: Configurations
               Namespace: RC
               ActionTypeId:
                 Category: Build
@@ -292,7 +292,7 @@ Resources:
             # failure fails fast: deploy from deploy/wif-<AccountId>.json (no key,
             # no admin, the customer id, RoleName SSOSync_ExecutionRole), then the
             # Lambda, CLI and CodePipeline tests. See tests/wif_account_execution/.
-            - Name: WIFAuth-Deploy
+            - Name: Deploy-WIFAuth
               ActionTypeId:
                 Category: Deploy
                 Owner: AWS
@@ -348,7 +348,7 @@ Resources:
               InputArtifacts:
                 - Name: Tests
             # Remove TestAccountExecution, so the next block starts from a fresh deployment.
-            - Name: CleanUp1-RemoveStack
+            - Name: CleanUp-WIFAuth
               ActionTypeId:
                 Category: Deploy
                 Owner: AWS
@@ -363,7 +363,7 @@ Resources:
               RunOrder: 5
             # Legacy auth (stored credentials): the service-account key and an admin
             # to act on behalf of (deploy/developer.json).
-            - Name: LegacyAuth-Deploy
+            - Name: Deploy-LegacyAuth
               ActionTypeId:
                 Category: Deploy
                 Owner: AWS
@@ -420,7 +420,7 @@ Resources:
               InputArtifacts:
                 - Name: Tests
             # Remove TestAccountExecution, so the next block starts from a fresh deployment.
-            - Name: CleanUp2-RemoveStack
+            - Name: CleanUp-LegacyAuth
               ActionTypeId:
                 Category: Deploy
                 Owner: AWS
@@ -436,8 +436,9 @@ Resources:
             # Attribute-map integration tests (cicd/tests/attribute_map/). They share
             # one Identity Store, so every action runs in sequence (distinct RunOrder).
             # Each live test resets the Identity Store to tests/attribute_map/baseline/.
-            # Legacy deployment (deploy/developer.json): these tests read its SSOSync* secrets and invoke SSOSyncFunction.
-            - Name: AttributeMap-Deploy
+            # Keyless deployment (deploy/wif-<AccountId>.json): the CLI tests run ssosync
+            # keyless with its SSOSync* secrets, the Lambda tests invoke SSOSyncFunction.
+            - Name: Deploy-AttributeMap
               ActionTypeId:
                 Category: Deploy
                 Owner: AWS
@@ -448,7 +449,7 @@ Resources:
                 Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND,CAPABILITY_NAMED_IAM
                 StackName: TestAccountExecution
                 RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
-                TemplateConfiguration: 'Tests::deploy/developer.json'
+                TemplateConfiguration: !Sub 'Tests::deploy/wif-${AWS::AccountId}.json'
                 TemplatePath: !Sub 'Tests::deploy/stack.yml'
               InputArtifacts:
                 - Name: Tests
@@ -557,7 +558,7 @@ Resources:
                 - Name: Tests
               OutputArtifacts:
                 - Name: AttrMapLambdaDefault
-            # Redeploy the function with maps/rich.json inline in ATTRIBUTE_MAP.
+            # Redeploy the (keyless) function with maps/rich.json inline in ATTRIBUTE_MAP.
             - Name: AttributeMap-DeployInlineAttributeMap
               ActionTypeId:
                 Category: Deploy
@@ -569,7 +570,7 @@ Resources:
                 Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND,CAPABILITY_NAMED_IAM
                 StackName: TestAccountExecution
                 RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
-                TemplateConfiguration: 'Tests::deploy/attributemap.json'
+                TemplateConfiguration: !Sub 'Tests::deploy/attributemap-${AWS::AccountId}.json'
                 TemplatePath: 'Tests::deploy/stack.yml'
               InputArtifacts:
                 - Name: Tests
@@ -588,7 +589,7 @@ Resources:
               OutputArtifacts:
                 - Name: AttrMapLambdaInlineMap
             # Remove TestAccountExecution, so the next block starts from a fresh deployment.
-            - Name: CleanUp3-RemoveStack
+            - Name: CleanUp-AttributeMap
               ActionTypeId:
                 Category: Deploy
                 Owner: AWS
@@ -602,8 +603,8 @@ Resources:
                 - Name: Tests
               RunOrder: 22
             # Functional tests against the live tenant.
-            # Legacy deployment (deploy/developer.json): these tests read its SSOSync* secrets.
-            - Name: Functional-Deploy
+            # Keyless deployment (deploy/wif-<AccountId>.json): ssosync runs keyless with its SSOSync* secrets.
+            - Name: Deploy-Functional
               ActionTypeId:
                 Category: Deploy
                 Owner: AWS
@@ -614,7 +615,7 @@ Resources:
                 Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND,CAPABILITY_NAMED_IAM
                 StackName: TestAccountExecution
                 RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
-                TemplateConfiguration: 'Tests::deploy/developer.json'
+                TemplateConfiguration: !Sub 'Tests::deploy/wif-${AWS::AccountId}.json'
                 TemplatePath: !Sub 'Tests::deploy/stack.yml'
               InputArtifacts:
                 - Name: Tests
@@ -624,7 +625,7 @@ Resources:
             # converge, multi-ExternalId records use this tenant's entry, and the
             # ExternalId-change path (Recreate/UpdateForced) works.
             # See cicd/tests/user_group_operations/run.sh.
-            - Name: Functional-UserGroupOperations
+            - Name: UserGroupOperations
               ActionTypeId:
                 Category: Test
                 Owner: AWS
@@ -645,7 +646,7 @@ Resources:
             # secrets, which TestAccountExecution (App + secrets) also creates, so
             # that stack is removed first (it is not redeployed afterwards) and
             # the tests run one at a time.
-            - Name: QuickStart-RemoveTestAccountExecution
+            - Name: CleanUp-Functional
               ActionTypeId:
                 Category: Deploy
                 Owner: AWS
@@ -1787,6 +1788,12 @@ Resources:
           Effect: Allow
           Principal:
             Service: [codebuild.amazonaws.com]
+        # The attribute-map and user/group-operations tests run ssosync keyless
+        # in a session of this role (tests/wif_account_execution/lib/keyless.sh).
+        - Action: ['sts:AssumeRole']
+          Effect: Allow
+          Principal:
+            AWS: !GetAtt CodeBuildTestRole.Arn
       Path: /
       Policies:
         - PolicyName: !Sub SSOSync-CodeBuild-WIF-CLI-${AWS::Region}
@@ -1954,6 +1961,13 @@ Resources:
                 - "secretsmanager:Get*"
               Effect: Allow
               Resource: '*'
+            # Keyless ssosync runs (tests/wif_account_execution/lib/keyless.sh):
+            # the CLI's Google provider trusts only SSOSync_CLIExecutionRole.
+            - Action:
+                - "sts:AssumeRole"
+              Effect: Allow
+              Resource:
+                - !Sub arn:aws:iam::${AWS::AccountId}:role/SSOSync_CLIExecutionRole
 
   CloudFormationDeployerRole:
     Type: AWS::IAM::Role
