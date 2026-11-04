@@ -207,18 +207,64 @@ if [ -n "$ATTRIBUTE_MAP" ] && ! grep -qE '^  AttributeMap:' "$WORK/template.yaml
   exit 1
 fi
 
-echo ">>> create stack $STACK_NAME"
-aws cloudformation create-stack --stack-name "$STACK_NAME" \
-  --template-body "file://$WORK/template.yaml" \
-  --parameters "file://$WORK/params.json" \
-  --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
-  --role-arn "$CFN_ROLE_ARN" --query StackId --output text
+# Failure reasons of the stack and of its nested (SAR application) stacks.
+failure_reasons() {
+  local nested
+  aws cloudformation describe-stack-events --stack-name "$1" \
+    --query 'StackEvents[?contains(ResourceStatus, `FAILED`)].ResourceStatusReason' --output text 2>/dev/null || true
+  for nested in $(aws cloudformation describe-stack-events --stack-name "$1" \
+      --query 'StackEvents[?ResourceType==`AWS::CloudFormation::Stack`].PhysicalResourceId' \
+      --output text 2>/dev/null | tr '\t' '\n' | grep '^arn:' | grep -vxF "$1" | sort -u); do
+    aws cloudformation describe-stack-events --stack-name "$nested" \
+      --query 'StackEvents[?contains(ResourceStatus, `FAILED`)].ResourceStatusReason' --output text 2>/dev/null || true
+  done
+}
+
+create_stack() {
+  echo ">>> create stack $STACK_NAME"
+  STACK_ID="$(aws cloudformation create-stack --stack-name "$STACK_NAME" \
+    --template-body "file://$WORK/template.yaml" \
+    --parameters "file://$WORK/params.json" \
+    --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
+    --role-arn "$CFN_ROLE_ARN" --query StackId --output text)"
+  echo "$STACK_ID"
+  aws cloudformation wait stack-create-complete --stack-name "$STACK_NAME"
+}
+
+# The keyless templates use a fixed role name (SSOSync_ExecutionRole), which the
+# previous quick-start test deleted moments ago. IAM is eventually consistent:
+# right after a role is recreated under the same name, Lambda can reject it
+# ("The role defined for the function cannot be assumed by Lambda"). Only for
+# that failure: delete the stack, give IAM time, and create it once more.
+if ! create_stack; then
+  if failure_reasons "$STACK_ID" | grep -q 'cannot be assumed by Lambda'; then
+    echo ">>> Lambda could not assume the just-created role yet (IAM propagation); retrying once in 60s"
+    delete_stack
+    sleep 60
+    create_stack
+  else
+    exit 1
+  fi
+fi
 rm -f "$WORK/params.json"
-aws cloudformation wait stack-create-complete --stack-name "$STACK_NAME"
 echo "ok:   stack $STACK_NAME created"
 
 # Smoke test, as tests/account_execution/lambda: the function runs without error.
-aws lambda invoke --cli-read-timeout 900 --function-name "$FUNCTION_NAME" "$WORK/response.json" > "$WORK/invoke.json"
+# The same IAM propagation delay can surface on the first invoke instead
+# ("The role defined for the function cannot be assumed by Lambda"); only for
+# that error, retry for up to five minutes.
+for attempt in $(seq 1 10); do
+  if aws lambda invoke --cli-read-timeout 900 --function-name "$FUNCTION_NAME" "$WORK/response.json" \
+       > "$WORK/invoke.json" 2> "$WORK/invoke.err"; then
+    break
+  fi
+  cat "$WORK/invoke.err"
+  if ! grep -q 'cannot be assumed by Lambda' "$WORK/invoke.err" || [ "$attempt" -eq 10 ]; then
+    exit 1
+  fi
+  echo ">>> Lambda could not assume the role yet (IAM propagation); retry $attempt/9 in 30s"
+  sleep 30
+done
 cat "$WORK/invoke.json"
 if jq -e 'has("FunctionError")' "$WORK/invoke.json" > /dev/null; then
   echo "FAIL: $FUNCTION_NAME returned FunctionError"

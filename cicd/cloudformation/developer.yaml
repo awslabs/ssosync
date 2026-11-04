@@ -197,6 +197,9 @@ Resources:
                 Repo: !Ref RepoName
                 Branch: !Ref BranchName
                 OAuthToken: !Ref GitHubOAuthToken
+                # The repository webhook starts the pipeline; polling (the
+                # default, true) started a second execution for every push.
+                PollForSourceChanges: false
         - Name: Build
           Actions:
             - Name: InspectorScan
