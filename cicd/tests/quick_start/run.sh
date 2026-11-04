@@ -23,6 +23,12 @@
 #   GROUP_MATCH           GoogleGroupMatch for the deployed function (default name:AWS*)
 #   ATTRIBUTE_MAP_FILE    optional: inline map passed as the AttributeMap parameter
 #   EXPECT_ATTRIBUTE_MAP  none (default) | secret
+#   AUTH_METHOD           legacy (default): GoogleCredentials + GoogleAdminEmail
+#                         wif: keyless (*-wif.yaml templates): the service account
+#                         and this account's -lambda credential configuration
+#                         from deploy/wif-<AccountId>.json (staging buildspec),
+#                         no key and no admin; the function must run as RoleName
+#                         (SSOSync_ExecutionRole), which that provider trusts.
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"   # artifact root
@@ -32,6 +38,9 @@ CONFIG="$DEPLOY/quickstart.json"
 FUNCTION_NAME="SSOSync"   # fixed by the quick-start templates
 GROUP_MATCH="${GROUP_MATCH:-name:AWS*}"
 EXPECT_ATTRIBUTE_MAP="${EXPECT_ATTRIBUTE_MAP:-none}"
+AUTH_METHOD="${AUTH_METHOD:-legacy}"
+ROLE_NAME="SSOSync_ExecutionRole"   # the WIF templates' RoleName default
+case "$AUTH_METHOD" in legacy|wif) ;; *) echo "ERROR: AUTH_METHOD must be legacy or wif"; exit 1;; esac
 WORK="$(mktemp -d)"
 chmod 700 "$WORK"
 
@@ -106,6 +115,7 @@ delete_leftover_log_group
 # The quick-start's Secrets stack creates these names; fail clearly if one
 # already exists outside it.
 for name in SSOSyncGoogleCustomerId SSOSyncGoogleCredentials SSOSyncGoogleAdminEmail \
+            SSOSyncGoogleImpersonateServiceAccount SSOSyncGoogleWIFConfig \
             SSOSyncSCIMEndpointUrl SSOSyncSCIMAccessToken SSOSyncAttributeMap; do
   if aws secretsmanager describe-secret --secret-id "$name" > /dev/null 2>&1; then
     echo "ERROR: secret $name already exists in this account; the quick-start creates it"
@@ -118,8 +128,18 @@ secret() { aws secretsmanager get-secret-value --secret-id "$1" --query SecretSt
 # Plain assignments, so a failed read stops the test (set -e) instead of
 # passing an empty value.
 GOOGLE_CUSTOMER_ID="$(secret "$(cfg GoogleCustomerIdArn)")"
-GOOGLE_CREDENTIALS="$(secret "$(cfg GoogleCredentialsArn)")"
-GOOGLE_ADMIN_EMAIL="$(secret "$(cfg GoogleAdminEmailArn)")"
+if [ "$AUTH_METHOD" = wif ]; then
+  ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+  WIF_PARAMS="$DEPLOY/wif-$ACCOUNT_ID.json"
+  [ -f "$WIF_PARAMS" ] || { echo "ERROR: $WIF_PARAMS not found (built by the staging step)"; exit 1; }
+  wif() { jq -er --arg k "$1" '.Parameters[$k] | select(. != null and . != "")' "$WIF_PARAMS"; }
+  GOOGLE_IMPERSONATE_SA="$(secret "$(wif GoogleImpersonateServiceAccountArn)")"
+  GOOGLE_WIF_CONFIG="$(wif GoogleWIFConfig)"   # no secret values
+  echo ">>> keyless: audience $(jq -r .audience <<<"$GOOGLE_WIF_CONFIG"), RoleName $ROLE_NAME"
+else
+  GOOGLE_CREDENTIALS="$(secret "$(cfg GoogleCredentialsArn)")"
+  GOOGLE_ADMIN_EMAIL="$(secret "$(cfg GoogleAdminEmailArn)")"
+fi
 SCIM_ENDPOINT_URL="$(secret "$(cfg SCIMEndpointUrlArn)")"
 SCIM_ACCESS_TOKEN="$(secret "$(cfg SCIMAccessTokenArn)")"
 
@@ -132,9 +152,13 @@ fi
 umask 077
 jq -n \
   --arg Release "$APP_VERSION" \
+  --arg AuthMethod "$AUTH_METHOD" \
   --arg GoogleCustomerId "$GOOGLE_CUSTOMER_ID" \
-  --arg GoogleCredentials "$GOOGLE_CREDENTIALS" \
-  --arg GoogleAdminEmail "$GOOGLE_ADMIN_EMAIL" \
+  --arg GoogleCredentials "${GOOGLE_CREDENTIALS:-}" \
+  --arg GoogleAdminEmail "${GOOGLE_ADMIN_EMAIL:-}" \
+  --arg GoogleImpersonateServiceAccount "${GOOGLE_IMPERSONATE_SA:-}" \
+  --arg GoogleWIFConfig "${GOOGLE_WIF_CONFIG:-}" \
+  --arg RoleName "$ROLE_NAME" \
   --arg SCIMEndpointUrl "$SCIM_ENDPOINT_URL" \
   --arg SCIMEndpointAccessToken "$SCIM_ACCESS_TOKEN" \
   --arg GoogleGroupMatch "$GROUP_MATCH" \
@@ -143,17 +167,32 @@ jq -n \
   '[
      {ParameterKey: "Release", ParameterValue: $Release},
      {ParameterKey: "GoogleCustomerId", ParameterValue: $GoogleCustomerId},
-     {ParameterKey: "GoogleCredentials", ParameterValue: $GoogleCredentials},
-     {ParameterKey: "GoogleAdminEmail", ParameterValue: $GoogleAdminEmail},
      {ParameterKey: "SCIMEndpointUrl", ParameterValue: $SCIMEndpointUrl},
      {ParameterKey: "SCIMEndpointAccessToken", ParameterValue: $SCIMEndpointAccessToken},
      {ParameterKey: "GoogleGroupMatch", ParameterValue: $GoogleGroupMatch},
      {ParameterKey: "ScheduleExpression", ParameterValue: ""},
      {ParameterKey: "LogLevel", ParameterValue: "info"}
-   ] + (if $HasAttributeMap == "yes" then [{ParameterKey: "AttributeMap", ParameterValue: $AttributeMap}] else [] end)' \
+   ]
+   + (if $AuthMethod == "wif" then
+        [{ParameterKey: "GoogleImpersonateServiceAccount", ParameterValue: $GoogleImpersonateServiceAccount},
+         {ParameterKey: "GoogleWIFConfig", ParameterValue: $GoogleWIFConfig},
+         {ParameterKey: "RoleName", ParameterValue: $RoleName}]
+      else
+        [{ParameterKey: "GoogleCredentials", ParameterValue: $GoogleCredentials},
+         {ParameterKey: "GoogleAdminEmail", ParameterValue: $GoogleAdminEmail}]
+      end)
+   + (if $HasAttributeMap == "yes" then [{ParameterKey: "AttributeMap", ParameterValue: $AttributeMap}] else [] end)' \
   > "$WORK/params.json"
 umask 022
-unset GOOGLE_CUSTOMER_ID GOOGLE_CREDENTIALS GOOGLE_ADMIN_EMAIL SCIM_ENDPOINT_URL SCIM_ACCESS_TOKEN
+unset GOOGLE_CUSTOMER_ID GOOGLE_CREDENTIALS GOOGLE_ADMIN_EMAIL GOOGLE_IMPERSONATE_SA GOOGLE_WIF_CONFIG SCIM_ENDPOINT_URL SCIM_ACCESS_TOKEN
+# The template must match the method (a *-wif.yaml template has no
+# GoogleCredentials parameter, the others no GoogleWIFConfig).
+if [ "$AUTH_METHOD" = wif ] && ! grep -qE '^  GoogleWIFConfig:' "$WORK/template.yaml"; then
+  echo "ERROR: AUTH_METHOD=wif but $QUICKSTART_TEMPLATE has no GoogleWIFConfig parameter"; exit 1
+fi
+if [ "$AUTH_METHOD" = legacy ] && ! grep -qE '^  GoogleCredentials:' "$WORK/template.yaml"; then
+  echo "ERROR: AUTH_METHOD=legacy but $QUICKSTART_TEMPLATE has no GoogleCredentials parameter"; exit 1
+fi
 if [ -n "$ATTRIBUTE_MAP" ] && ! grep -qE '^  AttributeMap:' "$WORK/template.yaml"; then
   echo "ERROR: ATTRIBUTE_MAP_FILE is set but $QUICKSTART_TEMPLATE has no AttributeMap parameter"
   exit 1
@@ -179,9 +218,31 @@ if jq -e 'has("FunctionError")' "$WORK/invoke.json" > /dev/null; then
 fi
 echo "ok:   $FUNCTION_NAME ran without FunctionError"
 
+# Authentication wiring (variable names and the role only; no values printed).
+aws lambda get-function-configuration --function-name "$FUNCTION_NAME" > "$WORK/function.json"
+if [ "$AUTH_METHOD" = wif ]; then
+  if ! jq -e '.Environment.Variables
+        | has("GOOGLE_IMPERSONATE_SERVICE_ACCOUNT") and has("GOOGLE_WIF_CONFIG") and has("CUSTOMER_ID")
+          and (has("GOOGLE_CREDENTIALS") | not) and (has("GOOGLE_ADMIN") | not)' "$WORK/function.json" > /dev/null; then
+    echo "FAIL: $FUNCTION_NAME is not configured for keyless authentication without an admin"
+    jq '.Environment.Variables | keys' "$WORK/function.json"
+    exit 1
+  fi
+  if ! jq -e --arg role "$ROLE_NAME" '.Role | endswith(":role/" + $role)' "$WORK/function.json" > /dev/null; then
+    echo "FAIL: $FUNCTION_NAME runs as $(jq -r .Role "$WORK/function.json"), expected $ROLE_NAME"
+    exit 1
+  fi
+  echo "ok:   keyless: impersonation and WIF configuration set, no key, no admin, role $ROLE_NAME"
+else
+  if ! jq -e '.Environment.Variables | has("GOOGLE_CREDENTIALS") and has("GOOGLE_ADMIN")' "$WORK/function.json" > /dev/null; then
+    echo "FAIL: $FUNCTION_NAME is not configured for legacy auth (GOOGLE_CREDENTIALS and GOOGLE_ADMIN)"
+    exit 1
+  fi
+  echo "ok:   legacy auth: GOOGLE_CREDENTIALS and GOOGLE_ADMIN set"
+fi
+
 # ATTRIBUTE_MAP wiring.
-ENV_MAP="$(aws lambda get-function-configuration --function-name "$FUNCTION_NAME" \
-  --query 'Environment.Variables.ATTRIBUTE_MAP' --output text)"
+ENV_MAP="$(jq -r '.Environment.Variables.ATTRIBUTE_MAP // "None"' "$WORK/function.json")"
 case "$EXPECT_ATTRIBUTE_MAP" in
   none)
     if [ "$ENV_MAP" != "None" ]; then echo "FAIL: ATTRIBUTE_MAP is set ($ENV_MAP), expected unset"; exit 1; fi

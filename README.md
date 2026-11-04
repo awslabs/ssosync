@@ -261,7 +261,8 @@ AWS_ROLE_NAME="SSOSync_ExecutionRole"
    - It is **required** for keyless authentication: the service account is not a Workspace user, so the `my_customer` alias does not identify your directory. ssosync, and the template, reject `my_customer` here. This is `--customer-id` / `CUSTOMER_ID` / `GoogleCustomerId`.
 
 8. **Configure ssosync**
-   - **Lambda / SAR / quick-start:** set `GoogleImpersonateServiceAccount` to the service account email (`$SA_EMAIL`), `GoogleWIFConfig` to the contents of `wif-config.json` (or the Arn of a secret or SSM parameter holding it), `GoogleCustomerId` to the customer ID from step 7, and leave `GoogleCredentials` and `GoogleAdminEmail` **empty**.
+   - **Quick start:** deploy [`quick-start/single-account-wif.yaml`](quick-start/single-account-wif.yaml) (or [`single-account-attribute-map-wif.yaml`](quick-start/single-account-attribute-map-wif.yaml) for a custom attribute map) with `GoogleCustomerId` (step 7), `GoogleImpersonateServiceAccount` (`$SA_EMAIL`) and `GoogleWIFConfig` (the contents of `wif-config.json`). Its `RoleName` defaults to `SSOSync_ExecutionRole`, the name used in steps 4–5. There is no key and no admin to enter.
+   - **Lambda / SAR:** set `GoogleImpersonateServiceAccount` to the service account email (`$SA_EMAIL`), `GoogleWIFConfig` to the contents of `wif-config.json` (or the Arn of a secret or SSM parameter holding it), `GoogleCustomerId` to the customer ID from step 7, `RoleName` to the role from steps 4–5, and leave `GoogleCredentials` and `GoogleAdminEmail` **empty**.
    - **CLI:**
 
      ```bash

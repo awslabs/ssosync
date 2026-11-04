@@ -598,6 +598,33 @@ Resources:
                     PrimarySource: Tests
                   InputArtifacts:
                     - Name: Tests
+                # Keyless (Workload Identity Federation) quick-starts: the
+                # function runs as SSOSync_ExecutionRole, trusted by this
+                # account's <AccountId>-lambda Google provider.
+                - Name: SingleAccountWIF
+                  ActionTypeId:
+                    Category: Test
+                    Owner: AWS
+                    Version: 1
+                    Provider: CodeBuild
+                  RunOrder: 3
+                  Configuration:
+                    ProjectName: !Ref CodeBuildQuickStartSingleAccountWIF
+                    PrimarySource: Tests
+                  InputArtifacts:
+                    - Name: Tests
+                - Name: SingleAccountAttributeMapWIF
+                  ActionTypeId:
+                    Category: Test
+                    Owner: AWS
+                    Version: 1
+                    Provider: CodeBuild
+                  RunOrder: 4
+                  Configuration:
+                    ProjectName: !Ref CodeBuildQuickStartSingleAccountAttributeMapWIF
+                    PrimarySource: Tests
+                  InputArtifacts:
+                    - Name: Tests
             - !Ref AWS::NoValue
 
   CodePipelineDeployCrossAccountSecrets:
@@ -1481,6 +1508,90 @@ Resources:
       LogGroupName: !Ref CodePipelineLogGroup
       LogStreamName: SSOSync-QuickStart-SingleAccountAttributeMap
 
+  CodeBuildQuickStartSingleAccountWIF:
+    Type: AWS::CodeBuild::Project
+    Condition: DeployDelegated
+    Properties:
+      Name: SSOSync-QuickStart-SingleAccountWIF
+      Description: "Quick start: deploy quick-start/single-account-wif.yaml (keyless, no admin) against the build under test, invoke it, remove it"
+      ServiceRole: !Ref CodeBuildTestRole
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: "tests/quick_start/buildspec.yml"
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/amazonlinux-x86_64-standard:6.0
+        Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: QUICKSTART_TEMPLATE
+            Value: single-account-wif.yaml
+          - Name: STACK_NAME
+            Value: QuickStart-SingleAccountWIF
+          - Name: CFN_ROLE_ARN
+            Value: !GetAtt CloudFormationDeployerRole.Arn
+          - Name: AUTH_METHOD
+            Value: wif
+          - Name: EXPECT_ATTRIBUTE_MAP
+            Value: none
+      Artifacts:
+        Name: SSOSync
+        Type: CODEPIPELINE
+      LogsConfig:
+        CloudWatchLogs:
+          GroupName: !Ref CodePipelineLogGroup
+          StreamName: !Ref CodeBuildQuickStartSingleAccountWIFLogs
+          Status: ENABLED
+
+  CodeBuildQuickStartSingleAccountWIFLogs:
+    Type: AWS::Logs::LogStream
+    Condition: DeployDelegated
+    Properties:
+      LogGroupName: !Ref CodePipelineLogGroup
+      LogStreamName: SSOSync-QuickStart-SingleAccountWIF
+
+  CodeBuildQuickStartSingleAccountAttributeMapWIF:
+    Type: AWS::CodeBuild::Project
+    Condition: DeployDelegated
+    Properties:
+      Name: SSOSync-QuickStart-SingleAccountAttributeMapWIF
+      Description: "Quick start: deploy quick-start/single-account-attribute-map-wif.yaml (keyless, no admin) with an inline map, invoke it, remove it"
+      ServiceRole: !Ref CodeBuildTestRole
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: "tests/quick_start/buildspec.yml"
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/amazonlinux-x86_64-standard:6.0
+        Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: QUICKSTART_TEMPLATE
+            Value: single-account-attribute-map-wif.yaml
+          - Name: STACK_NAME
+            Value: QuickStart-SingleAccountAttributeMapWIF
+          - Name: CFN_ROLE_ARN
+            Value: !GetAtt CloudFormationDeployerRole.Arn
+          - Name: AUTH_METHOD
+            Value: wif
+          - Name: ATTRIBUTE_MAP_FILE
+            Value: tests/attribute_map/maps/rich.json
+          - Name: EXPECT_ATTRIBUTE_MAP
+            Value: secret
+      Artifacts:
+        Name: SSOSync
+        Type: CODEPIPELINE
+      LogsConfig:
+        CloudWatchLogs:
+          GroupName: !Ref CodePipelineLogGroup
+          StreamName: !Ref CodeBuildQuickStartSingleAccountAttributeMapWIFLogs
+          Status: ENABLED
+
+  CodeBuildQuickStartSingleAccountAttributeMapWIFLogs:
+    Type: AWS::Logs::LogStream
+    Condition: DeployDelegated
+    Properties:
+      LogGroupName: !Ref CodePipelineLogGroup
+      LogStreamName: SSOSync-QuickStart-SingleAccountAttributeMapWIF
+
   CodeBuildTestingAppStack:
     Type: AWS::CodeBuild::Project
     Properties:
@@ -1562,6 +1673,8 @@ Resources:
               - !If [DeployDelegated, !GetAtt CodeBuildAttrMapLambdaInlineMap.Arn, !Ref AWS::NoValue]
               - !If [DeployDelegated, !GetAtt CodeBuildQuickStartSingleAccount.Arn, !Ref AWS::NoValue]
               - !If [DeployDelegated, !GetAtt CodeBuildQuickStartSingleAccountAttributeMap.Arn, !Ref AWS::NoValue]
+              - !If [DeployDelegated, !GetAtt CodeBuildQuickStartSingleAccountWIF.Arn, !Ref AWS::NoValue]
+              - !If [DeployDelegated, !GetAtt CodeBuildQuickStartSingleAccountAttributeMapWIF.Arn, !Ref AWS::NoValue]
               Effect: Allow
             - Action:
               - 's3:GetBucketPolicy'
