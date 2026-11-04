@@ -4,7 +4,7 @@ Transform: 'AWS::Serverless-2016-10-31'
 Description: 
   This CloudFormation template will deploy two instances of SSOSync from
   the AWS Serverless Application Repository (SAR). One holding the Secrets 
-  and the other the app itself. Same as single-account-attribute-map.yaml
+  and the other the app itself. Same as legacy-auth/single-account-attribute-map.yaml
   (an optional AttributeMap), but with keyless Google authentication (Workload
   Identity Federation) instead of a stored service-account key, and no Google
   admin (the service account acts as itself with a read-only Workspace admin
@@ -56,7 +56,7 @@ Parameters:
   Release:
     Type: String
     Description: |
-      Select the release to deploy. Keyless authentication needs 2.11.0 or later, so earlier releases are not offered (use single-account.yaml for those).
+      Select the release to deploy. Keyless authentication needs 2.11.0 or later, so earlier releases are not offered (use legacy-auth/single-account.yaml for those).
     #SemanticVersion 
     Default: 2.11.0
     AllowedValues:

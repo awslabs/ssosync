@@ -17,7 +17,8 @@
 #     Arn when an inline map is passed (EXPECT_ATTRIBUTE_MAP=secret).
 #
 # Environment (set by the CodeBuild project):
-#   QUICKSTART_TEMPLATE   file name under deploy/quick-start/, e.g. single-account.yaml
+#   QUICKSTART_TEMPLATE   path under deploy/quick-start/, e.g. single-account.yaml
+#                         or wif-auth/single-account.yaml
 #   STACK_NAME            stack to create (deleted again at the end)
 #   CFN_ROLE_ARN          CloudFormation service role for the stack operations
 #   GROUP_MATCH           GoogleGroupMatch for the deployed function (default name:AWS*)
@@ -29,6 +30,8 @@
 #                         from deploy/wif-<AccountId>.json (staging buildspec),
 #                         no key and no admin; the function must run as RoleName
 #                         (SSOSync_ExecutionRole), which that provider trusts.
+#                         A template with an AuthMethod parameter (the dual-method
+#                         quick-start/*.yaml) is given the matching AuthMethod.
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"   # artifact root
@@ -164,6 +167,7 @@ jq -n \
   --arg GoogleGroupMatch "$GROUP_MATCH" \
   --arg AttributeMap "$ATTRIBUTE_MAP" \
   --arg HasAttributeMap "$(grep -qE '^  AttributeMap:' "$WORK/template.yaml" && echo yes || echo no)" \
+  --arg HasAuthMethod "$(grep -qE '^  AuthMethod:' "$WORK/template.yaml" && echo yes || echo no)" \
   '[
      {ParameterKey: "Release", ParameterValue: $Release},
      {ParameterKey: "GoogleCustomerId", ParameterValue: $GoogleCustomerId},
@@ -181,6 +185,10 @@ jq -n \
         [{ParameterKey: "GoogleCredentials", ParameterValue: $GoogleCredentials},
          {ParameterKey: "GoogleAdminEmail", ParameterValue: $GoogleAdminEmail}]
       end)
+   + (if $HasAuthMethod == "yes" then
+        [{ParameterKey: "AuthMethod",
+          ParameterValue: (if $AuthMethod == "wif" then "Workload Identity Federation (keyless)" else "Legacy (stored credentials)" end)}]
+      else [] end)
    + (if $HasAttributeMap == "yes" then [{ParameterKey: "AttributeMap", ParameterValue: $AttributeMap}] else [] end)' \
   > "$WORK/params.json"
 umask 022

@@ -6,7 +6,11 @@ Description:
   the AWS Serverless Application Repository (SAR). One holding the Secrets 
   and the other the app itself. Same as single-account.yaml, plus an optional
   AttributeMap controlling how Google user attributes map onto IAM Identity
-  Center (SCIM) fields (requires release 2.10.0 or later).
+  Center (SCIM) fields (requires release 2.10.0 or later). Choose the Google
+  authentication method with AuthMethod, either keyless (Workload Identity Federation,
+  release 2.11.0 or later, no key and no admin) or legacy (a stored
+  service-account key and a Google admin). The wif-auth/ and legacy-auth/
+  folders hold single-method versions of this template.
 
 Metadata:
   AWS::CloudFormation::Interface:
@@ -17,9 +21,13 @@ Metadata:
           - SCIMEndpointUrl
           - SCIMEndpointAccessToken
       - Label:
-          default: Google Workspace Credentials 
+          default: Google Workspace (set AuthMethod, then the parameters for that method)
         Parameters:
+          - AuthMethod
           - GoogleCustomerId
+          - GoogleImpersonateServiceAccount
+          - GoogleWIFConfig
+          - RoleName
           - GoogleAdminEmail
           - GoogleCredentials
       - Label:
@@ -52,7 +60,7 @@ Parameters:
   Release:
     Type: String
     Description: |
-      Select the release to deploy. The AttributeMap parameter needs 2.10.0 or later, so earlier releases are not offered (use single-account.yaml for those).
+      Select the release to deploy. Keyless authentication (AuthMethod) needs 2.11.0 or later. The AttributeMap parameter needs 2.10.0 or later, so earlier releases are not offered (use single-account.yaml for those).
     #SemanticVersion 
     Default: 2.10.0
     AllowedValues:
@@ -192,18 +200,52 @@ Parameters:
       Google CustomerId, retrieve from https://admin.google.com/ac/accountsettings/profile
     AllowedPattern: '(?:C[0-9a-zA-Z]{8})'
 
+  AuthMethod:
+    Type: String
+    Description: |
+      How ssosync authenticates to Google Workspace. Keyless (Workload Identity Federation, release 2.11.0 or later): set GoogleImpersonateServiceAccount and GoogleWIFConfig, leave GoogleCredentials and GoogleAdminEmail empty. Legacy: set GoogleCredentials and GoogleAdminEmail, leave the keyless parameters empty. See https://github.com/awslabs/ssosync/blob/master/README.md#google-workspace-setup
+    Default: Legacy (stored credentials)
+    AllowedValues:
+      - Workload Identity Federation (keyless)
+      - Legacy (stored credentials)
+
+  GoogleImpersonateServiceAccount:
+    Type: String
+    Description: |
+      Keyless only: the email of the Google service account ssosync impersonates, with a read-only Workspace admin role assigned to it (README, Workload Identity Federation, steps 2-3).
+    Default: ""
+    AllowedPattern: '(?!.*\s)|(?:[a-z0-9][a-z0-9-]{4,28}[a-z0-9]@[a-z0-9.-]+\.gserviceaccount\.com)'
+    ConstraintDescription: 'Must be empty or a Google service account email (...@<project>.iam.gserviceaccount.com).'
+
+  GoogleWIFConfig:
+    Type: String
+    Description: |
+      Keyless only: the Workload Identity Federation credential configuration, the contents of wif-config.json (README, Workload Identity Federation, step 6), for the provider that trusts this account and RoleName. It holds no secret values; it is stored in the SSOSyncGoogleWIFConfig secret.
+    Default: ""
+    AllowedPattern: '(?!.*\s)|(?s:\s*\{.*\}\s*)'
+    ConstraintDescription: 'Must be empty or the credential configuration JSON (a JSON object).'
+
+  RoleName:
+    Type: String
+    Description: |
+      [optional] The name of the IAM role the function runs as (release 2.11.0 or later). Keyless: the role your Google workload identity provider trusts; empty means SSOSync_ExecutionRole. Legacy: empty lets CloudFormation generate a name.
+    Default: ""
+    AllowedPattern: '(?!.*\s)|[\w+=,.@-]{1,64}'
+
   GoogleCredentials:
     Type: String
     Description: |
-      Credentials to log into Google (content of credentials.json)
-    AllowedPattern: '(\{(\s)*(".*")(\s)*:(\s)*(".*")(\s)*\})'
+      Legacy only: credentials to log into Google (content of credentials.json)
+    Default: ""
+    AllowedPattern: '(?!.*\s)|(\{(\s)*(".*")(\s)*:(\s)*(".*")(\s)*\})'
     NoEcho: true
 
   GoogleAdminEmail:
     Type: String
     Description: |
-      Google Admin email
-    AllowedPattern: '(([a-zA-Z0-9.+=_-]{0,61})@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*)'
+      Legacy only: Google Admin email
+    Default: ""
+    AllowedPattern: '(?!.*\s)|(([a-zA-Z0-9.+=_-]{0,61})@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*)'
     NoEcho: true
 
   SCIMEndpointUrl:
@@ -235,6 +277,9 @@ Parameters:
 
 
 Conditions:
+  UseWIF: !Equals [!Ref AuthMethod, Workload Identity Federation (keyless)]
+  SetRoleName: !Not
+    - !Equals [!Ref RoleName, ""]
   # Same classification as the SSOSync template: inline JSON is stored in the
   # Secrets stack (SSOSyncAttributeMap) and the app reads it from there; an
   # Arn is passed straight to the app; empty means the built-in default map.
@@ -247,6 +292,33 @@ Conditions:
     - !Not
       - !Equals [!Select [0, !Split ["arn:aws:ssm:", !Ref AttributeMap]], ""]
 
+
+Rules:
+  # Exactly the parameters of the chosen AuthMethod.
+  KeylessAuth:
+    RuleCondition: !Equals [!Ref AuthMethod, Workload Identity Federation (keyless)]
+    Assertions:
+      - Assert: !Not [!Equals ['', !Ref GoogleImpersonateServiceAccount]]
+        AssertDescription: 'Keyless authentication needs GoogleImpersonateServiceAccount.'
+      - Assert: !Not [!Equals ['', !Ref GoogleWIFConfig]]
+        AssertDescription: 'Keyless authentication needs GoogleWIFConfig (the contents of wif-config.json).'
+      - Assert: !Equals ['', !Ref GoogleCredentials]
+        AssertDescription: 'Keyless authentication uses no key: leave GoogleCredentials empty.'
+      - Assert: !Equals ['', !Ref GoogleAdminEmail]
+        AssertDescription: 'Keyless authentication uses no admin: leave GoogleAdminEmail empty.'
+      - Assert: !Not [!Contains [[2.10.0], !Ref Release]]
+        AssertDescription: 'Keyless authentication needs release 2.11.0 or later.'
+  LegacyAuth:
+    RuleCondition: !Equals [!Ref AuthMethod, Legacy (stored credentials)]
+    Assertions:
+      - Assert: !Not [!Equals ['', !Ref GoogleCredentials]]
+        AssertDescription: 'Legacy authentication needs GoogleCredentials (the content of credentials.json).'
+      - Assert: !Not [!Equals ['', !Ref GoogleAdminEmail]]
+        AssertDescription: 'Legacy authentication needs GoogleAdminEmail.'
+      - Assert: !Equals ['', !Ref GoogleImpersonateServiceAccount]
+        AssertDescription: 'GoogleImpersonateServiceAccount is only used for keyless authentication: leave it empty, or set AuthMethod to keyless.'
+      - Assert: !Equals ['', !Ref GoogleWIFConfig]
+        AssertDescription: 'GoogleWIFConfig is only used for keyless authentication: leave it empty, or set AuthMethod to keyless.'
 
 Resources:
 
@@ -262,8 +334,16 @@ Resources:
         SCIMEndpointUrl: !GetAtt [Secrets, Outputs.SCIMEndpointUrl]
         SCIMEndpointAccessToken: !GetAtt [Secrets, Outputs.SCIMEndpointAccessToken]
         GoogleCustomerId: !GetAtt [Secrets, Outputs.GoogleCustomerId]
-        GoogleAdminEmail: !GetAtt [Secrets, Outputs.GoogleAdminEmail]
-        GoogleCredentials: !GetAtt [Secrets, Outputs.GoogleCredentials]
+        # Only the chosen method's parameters are passed, so a legacy
+        # deployment of an earlier release gets exactly what it always did.
+        GoogleAdminEmail: !If [UseWIF, !Ref AWS::NoValue, !GetAtt [Secrets, Outputs.GoogleAdminEmail]]
+        GoogleCredentials: !If [UseWIF, !Ref AWS::NoValue, !GetAtt [Secrets, Outputs.GoogleCredentials]]
+        GoogleImpersonateServiceAccount: !If [UseWIF, !GetAtt [Secrets, Outputs.GoogleImpersonateServiceAccount], !Ref AWS::NoValue]
+        GoogleWIFConfig: !If [UseWIF, !GetAtt [Secrets, Outputs.GoogleWIFConfig], !Ref AWS::NoValue]
+        RoleName: !If
+          - SetRoleName
+          - !Ref RoleName
+          - !If [UseWIF, SSOSync_ExecutionRole, !Ref AWS::NoValue]
         PrecacheOrgUnits: !Ref PrecacheOrgUnits
         GoogleUserMatch: !Ref GoogleUserMatch
         GoogleGroupMatch: !Ref GoogleGroupMatch
@@ -295,7 +375,15 @@ Resources:
         SCIMEndpointUrl: !Ref SCIMEndpointUrl
         SCIMEndpointAccessToken: !Ref SCIMEndpointAccessToken
         GoogleCustomerId: !Ref GoogleCustomerId
-        GoogleAdminEmail: !Ref GoogleAdminEmail
-        GoogleCredentials: !Ref GoogleCredentials
+        GoogleAdminEmail: !If [UseWIF, !Ref AWS::NoValue, !Ref GoogleAdminEmail]
+        GoogleCredentials: !If [UseWIF, !Ref AWS::NoValue, !Ref GoogleCredentials]
+        GoogleImpersonateServiceAccount: !If [UseWIF, !Ref GoogleImpersonateServiceAccount, !Ref AWS::NoValue]
+        GoogleWIFConfig: !If [UseWIF, !Ref GoogleWIFConfig, !Ref AWS::NoValue]
         # Only inline JSON becomes a secret; an Arn or empty value creates nothing.
         AttributeMap: !If [AttributeMapIsInline, !Ref AttributeMap, !Ref AWS::NoValue]
+
+Outputs:
+  RoleName:
+    Condition: UseWIF
+    Description: "The name of the IAM role the function runs as; your Google workload identity provider must trust it"
+    Value: !GetAtt [Function, Outputs.RoleName]

@@ -121,7 +121,7 @@ jobs:
           echo "env.SemanticVersion: ${{ env.SEMANTIC_VERSION }}"
 
       - name: Show current SemanticVersion
-        run: grep SemanticVersion quick-start/*.yaml || true
+        run: git grep -n -A1 -e "#SemanticVersion" -- quick-start || true
 
       - name: Update Templates
         run: |
@@ -134,7 +134,7 @@ jobs:
           }"
 
       - name: Show Templates SemanticVersion
-        run: grep SemanticVersion quick-start/*.yaml || true
+        run: git grep -n -A1 -e "#SemanticVersion" -- quick-start || true
 
       - name: Download release changelog
         uses: actions/download-artifact@v7

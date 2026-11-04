@@ -24,7 +24,14 @@ SSO Sync is a powerful CLI tool and AWS Lambda function that enables automatic p
 - **📈 Scalable**: Supports large directories with user caching and pagination
 
 ## 🚀 Quick Start
-Use one of the [quick start](/quick-start/) templates to simplify the your deployment. Use these templates, with the **Sync from Git** option, to make updates to your deployment far simpler.
+Use one of the [quick start](/quick-start/) templates to simplify your deployment. Use these templates, with the **Sync from Git** option, to make updates to your deployment far simpler.
+
+| Template | Google authentication |
+|---|---|
+| [`quick-start/wif-auth/single-account.yaml`](/quick-start/wif-auth/single-account.yaml) | **Recommended.** Keyless, [Workload Identity Federation](#workload-identity-federation-keyless) (release 2.11.0 or later): no stored key and no Google admin |
+| [`quick-start/wif-auth/single-account-attribute-map.yaml`](/quick-start/wif-auth/single-account-attribute-map.yaml) | As above, plus a custom [attribute map](#attribute-mapping) |
+| [`quick-start/legacy-auth/single-account.yaml`](/quick-start/legacy-auth/single-account.yaml), [`…/single-account-attribute-map.yaml`](/quick-start/legacy-auth/single-account-attribute-map.yaml) | [Legacy auth](#legacy-auth-stored-credentials): a stored service-account key and a Google admin |
+| [`quick-start/single-account.yaml`](/quick-start/single-account.yaml), [`…/single-account-attribute-map.yaml`](/quick-start/single-account-attribute-map.yaml) | Either method, chosen with the `AuthMethod` parameter (default: legacy, so existing **Sync from Git** deployments of these paths keep working unchanged) |
 
 ## 🚀 Step-by-Step Guide
 
@@ -261,7 +268,7 @@ AWS_ROLE_NAME="SSOSync_ExecutionRole"
    - It is **required** for keyless authentication: the service account is not a Workspace user, so the `my_customer` alias does not identify your directory. ssosync, and the template, reject `my_customer` here. This is `--customer-id` / `CUSTOMER_ID` / `GoogleCustomerId`.
 
 8. **Configure ssosync**
-   - **Quick start:** deploy [`quick-start/single-account-wif.yaml`](quick-start/single-account-wif.yaml) (or [`single-account-attribute-map-wif.yaml`](quick-start/single-account-attribute-map-wif.yaml) for a custom attribute map) with `GoogleCustomerId` (step 7), `GoogleImpersonateServiceAccount` (`$SA_EMAIL`) and `GoogleWIFConfig` (the contents of `wif-config.json`). Its `RoleName` defaults to `SSOSync_ExecutionRole`, the name used in steps 4–5. There is no key and no admin to enter.
+   - **Quick start:** deploy [`quick-start/wif-auth/single-account.yaml`](quick-start/wif-auth/single-account.yaml) (or [`wif-auth/single-account-attribute-map.yaml`](quick-start/wif-auth/single-account-attribute-map.yaml) for a custom attribute map) with `GoogleCustomerId` (step 7), `GoogleImpersonateServiceAccount` (`$SA_EMAIL`) and `GoogleWIFConfig` (the contents of `wif-config.json`). Its `RoleName` defaults to `SSOSync_ExecutionRole`, the name used in steps 4–5. There is no key and no admin to enter. To switch an existing deployment of `quick-start/single-account.yaml` to keyless, set its `AuthMethod` to keyless with the same three values and clear `GoogleCredentials` and `GoogleAdminEmail`.
    - **Lambda / SAR:** set `GoogleImpersonateServiceAccount` to the service account email (`$SA_EMAIL`), `GoogleWIFConfig` to the contents of `wif-config.json` (or the Arn of a secret or SSM parameter holding it), `GoogleCustomerId` to the customer ID from step 7, `RoleName` to the role from steps 4–5, and leave `GoogleCredentials` and `GoogleAdminEmail` **empty**.
    - **CLI:**
 
