@@ -25,8 +25,14 @@ phases:
             --s3-bucket "$ARTIFACT_S3_BUCKET" --s3-prefix "quick-start-tests/${CODEBUILD_BUILD_NUMBER}" \
             --kms-key-id "$ARTIFACT_KMS_KEY" \
             --output-template-file "packaged/$name"
-          grep -E '^\s+TemplateURL: https://' "packaged/$name"
+          # The local nested template path must have been replaced by its S3 URL.
+          grep -n 'TemplateURL' "packaged/$name" || true
+          if grep -q 'quick-start/' "packaged/$name" && ! grep -q 'https://' "packaged/$name"; then
+            echo "ERROR: packaged/$name still refers to the local nested template"
+            exit 1
+          fi
         done
+        ls -l packaged/
 
 artifacts:
   files:
