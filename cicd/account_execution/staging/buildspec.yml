@@ -2,6 +2,11 @@ version: 0.2
 
 phases:
 
+  install:
+    commands:
+      # tests/quick_start/test_rewrite.py
+      - pip3 install --quiet pyyaml
+
   build:
     commands:
       # Create parameters
@@ -17,66 +22,85 @@ phases:
       - mkdir deploy
       - cp cicd/account_execution/staging/stack.yml ./deploy/
 
-      # Quick-start templates and what their smoke tests need
-      # (tests/quick_start/, run in the release pipeline's delegated admin
-      # account): the staging app and version, and the Arns of the secrets
-      # whose values the templates take. Arns only, no secret values. The
-      # customer id secret is not in SecretsConfig, so it is looked up by name;
-      # where it cannot be (the developer pipeline), its Arn is left empty.
-      - cp -r quick-start ./deploy/
+      # The customer id secret is not in SecretsConfig, so it is looked up by
+      # name. Every param set below passes its Arn (stack.yml has no
+      # my_customer fallback), so stop here if it cannot be found.
       - |
-        GoogleCustomerIdArn=$(aws secretsmanager describe-secret --secret-id PipelineGoogleCustomerId --query ARN --output text 2>/dev/null || true)
-        jq -n \
-          --arg AppArn "$AppArn" \
-          --arg AppVersion "$AppVersion" \
-          --arg GoogleCustomerIdArn "$GoogleCustomerIdArn" \
-          --arg GoogleCredentialsArn "$SecretGoogleCredentials" \
-          --arg GoogleAdminEmailArn "$SecretGoogleAdminEmail" \
-          --arg SCIMEndpointUrlArn "$SecretSCIMEndpoint" \
-          --arg SCIMAccessTokenArn "$SecretSCIMAccessToken" \
-          '$ARGS.named' > ./deploy/quickstart.json
-      - cat ./deploy/quickstart.json
+        GoogleCustomerIdArn=$(aws secretsmanager describe-secret --secret-id PipelineGoogleCustomerId --query ARN --output text)
+        if [ -z "$GoogleCustomerIdArn" ] || [ "$GoogleCustomerIdArn" = "None" ]; then
+          echo "PipelineGoogleCustomerId not found (or no secretsmanager:DescribeSecret on it)"
+          exit 1
+        fi
 
-      # Update params with the values for this run for a developer account
+      # Update params with the values for this run for a developer account:
+      # legacy auth (the key and an admin), deployed by the LegacyAuth tests only.
       - |
         jq -n \
-        --argjson Parameters "{\"AppArn\": \"$AppArn\", \"AppVersion\": \"$AppVersion\", \"GoogleAdminEmailArn\": \"$SecretGoogleAdminEmail\", \"GoogleCredentialsArn\": \"$SecretGoogleCredentials\", \"SCIMEndpointUrlArn\": \"$SecretSCIMEndpoint\", \"SCIMAccessTokenArn\": \"$SecretSCIMAccessToken\", \"RegionArn\": \"$SecretRegion\", \"IdentityStoreIdArn\": \"$SecretIdentityStoreID\", \"GroupMatch\": \"name:AWS*,name=NestedGroups\"}" \
+        --argjson Parameters "{\"AppArn\": \"$AppArn\", \"AppVersion\": \"$AppVersion\", \"GoogleAdminEmailArn\": \"$SecretGoogleAdminEmail\", \"GoogleCredentialsArn\": \"$SecretGoogleCredentials\", \"SCIMEndpointUrlArn\": \"$SecretSCIMEndpoint\", \"SCIMAccessTokenArn\": \"$SecretSCIMAccessToken\", \"RegionArn\": \"$SecretRegion\", \"GoogleCustomerIdArn\": \"$GoogleCustomerIdArn\", \"GroupMatch\": \"name:AWS*,name=NestedGroups\"}" \
         --argjson StackPolicy "{\"Statement\":[{\"Effect\": \"Allow\", \"NotAction\": \"Update:Delete\", \"Principal\": \"*\", \"Resource\": \"*\"}]}" \
         '$ARGS.named' > ./deploy/developer.json
       - cat ./deploy/developer.json
 
-      # Params for the AttributeMapTests Lambda inline-map test: the developer
-      # params plus maps/rich.json passed inline as the AttributeMap parameter
-      # (the function's ATTRIBUTE_MAP environment variable).
+      # WIFAuth stage: keyless Google authentication (Workload Identity
+      # Federation, issue #345) with no admin (the service account acts as
+      # itself, issue #192): no key, no admin email, the customer id required.
+      # PipelineGoogleWIFConfig holds one credential configuration (no secret
+      # values). The test environment has a Google provider per role per
+      # account, and only the provider at the end of its "audience" differs:
+      #   <AccountId>-lambda  trusts SSOSync_ExecutionRole    (the function)
+      #   <AccountId>-cli     trusts SSOSync_CLIExecutionRole (the CLI test)
+      # For each account (ShareWith in the release pipeline, this account in the
+      # developer pipeline), named by account id so each pipeline picks up its own:
+      #   deploy/wif-<AccountId>.json: the stack params, with the -lambda
+      #     configuration inline (the app stores it as SSOSyncGoogleWIFConfig).
+      #     Every test except LegacyAuth deploys it.
+      #   deploy/attributemap-<AccountId>.json: the same plus maps/rich.json
+      #     inline as AttributeMap (the attribute-map Lambda inline-map test).
+      #   tests/wif_account_execution/cli/wif-config-<AccountId>.json: the -cli
+      #     configuration.
+      #   deploy/quick-start-tests/: the quick-start tests (tests/quick_start/
+      #     build.py): the quick-starts rewritten to this build, a wrapper per
+      #     test that passes the secrets as dynamic references, and
+      #     <Test>-<AccountId>.json parameter files (secret Arns only).
       - |
-        jq --arg AttributeMap "$(jq -c . cicd/tests/attribute_map/maps/rich.json)" \
-          '.Parameters.AttributeMap = $AttributeMap' \
-          ./deploy/developer.json > ./deploy/attributemap.json
-      - cat ./deploy/attributemap.json
-
-      # Update params with the values for this run for the management account
-      - |
-        jq -n \
-        --argjson Parameters "{\"AppArn\": \"$AppArn\", \"AppVersion\": \"$AppVersion\", \"GoogleAdminEmailArn\": \"$SecretGoogleAdminEmail\", \"GoogleCredentialsArn\": \"$SecretGoogleCredentials\", \"SCIMEndpointUrlArn\": \"$SecretSCIMEndpoint\", \"SCIMAccessTokenArn\": \"$SecretSCIMAccessToken\", \"RegionArn\": \"$SecretRegion\", \"IdentityStoreIdArn\": \"$SecretIdentityStoreID\", \"GroupMatch\": \"name:Man*\"}" \
-        --argjson StackPolicy "{\"Statement\":[{\"Effect\": \"Allow\", \"NotAction\": \"Update:Delete\", \"Principal\": \"*\", \"Resource\": \"*\"}]}" \
-        '$ARGS.named' > ./deploy/cli.json
-      - cat ./deploy/cli.json
-
-      # Update params with the values for this run for the delegated account
-      - |
-        jq -n \
-        --argjson Parameters "{\"AppArn\": \"$AppArn\", \"AppVersion\": \"$AppVersion\",  \"GoogleAdminEmailArn\": \"$SecretGoogleAdminEmail\", \"GoogleCredentialsArn\": \"$SecretGoogleCredentials\", \"SCIMEndpointUrlArn\": \"$SecretSCIMEndpoint\", \"SCIMAccessTokenArn\": \"$SecretSCIMAccessToken\", \"RegionArn\": \"$SecretRegion\", \"IdentityStoreIdArn\": \"$SecretIdentityStoreID\", \"GroupMatch\": \"name:Del*\"}" \
-        --argjson StackPolicy "{\"Statement\":[{\"Effect\": \"Allow\", \"NotAction\": \"Update:Delete\", \"Principal\": \"*\", \"Resource\": \"*\"}]}" \
-        '$ARGS.named' > ./deploy/lambda.json
-      - cat ./deploy/lambda.json
-
-      # Update params with the values for this run for non-delegated account
-      - |
-        jq -n \
-        --argjson Parameters "{\"AppArn\": \"$AppArn\", \"AppVersion\": \"$AppVersion\", \"GoogleAdminEmailArn\": \"$SecretGoogleAdminEmail\", \"GoogleCredentialsArn\": \"$SecretGoogleCredentials\", \"SCIMEndpointUrlArn\": \"$SecretSCIMEndpoint\", \"SCIMAccessTokenArn\": \"$SecretSCIMAccessToken\", \"RegionArn\": \"$SecretRegion\", \"IdentityStoreIdArn\": \"$SecretIdentityStoreID\", \"GroupMatch\": \"name:Non*\"}" \
-        --argjson StackPolicy "{\"Statement\":[{\"Effect\": \"Allow\", \"NotAction\": \"Update:Delete\", \"Principal\": \"*\", \"Resource\": \"*\"}]}" \
-        '$ARGS.named' > ./deploy/codepipeline.json
-      - cat ./deploy/codepipeline.json
+        # Unset SecretsConfig entries are the literal "".
+        if [ "$SecretWIFClientLibraryConfig" = '""' ]; then SecretWIFClientLibraryConfig=""; fi
+        if [ "$SecretWIFServiceAccountEmail" = '""' ]; then SecretWIFServiceAccountEmail=""; fi
+        if [ -z "$SecretWIFClientLibraryConfig" ] || [ -z "$SecretWIFServiceAccountEmail" ] || [ -z "$GoogleCustomerIdArn" ]; then
+          echo "WARNING: SecretsConfig has no WIF configuration or service account, or PipelineGoogleCustomerId was not found; no WIFAuth params written, the WIFAuth stage will fail"
+        else
+          aws secretsmanager get-secret-value --secret-id "$SecretWIFClientLibraryConfig" --query SecretString --output text > wif-config.json
+          if [ -z "$ShareWith" ] || [ "$ShareWith" = "NOT-SHARED" ]; then
+            Accounts=$(aws sts get-caller-identity --query Account --output text)
+          else
+            Accounts=$(echo "$ShareWith" | tr ',' ' ')
+          fi
+          for AccountId in $Accounts; do
+            sed -E "s#(/providers/)[^\"]*\"#\1${AccountId}-lambda\"#" wif-config.json > wif-config-lambda.json
+            jq -n \
+              --arg AppArn "$AppArn" \
+              --arg AppVersion "$AppVersion" \
+              --arg GoogleImpersonateServiceAccountArn "$SecretWIFServiceAccountEmail" \
+              --arg GoogleWIFConfig "$(jq -c . wif-config-lambda.json)" \
+              --arg GoogleCustomerIdArn "$GoogleCustomerIdArn" \
+              --arg SCIMEndpointUrlArn "$SecretSCIMEndpoint" \
+              --arg SCIMAccessTokenArn "$SecretSCIMAccessToken" \
+              --arg RegionArn "$SecretRegion" \
+              '{Parameters: ($ARGS.named + {RoleName: "SSOSync_ExecutionRole", GroupMatch: "name:AWS*,name=NestedGroups"}),
+                StackPolicy: {Statement: [{Effect: "Allow", NotAction: "Update:Delete", Principal: "*", Resource: "*"}]}}' \
+              > "./deploy/wif-${AccountId}.json"
+            jq --arg AttributeMap "$(jq -c . cicd/tests/attribute_map/maps/rich.json)" \
+              '.Parameters.AttributeMap = $AttributeMap' \
+              "./deploy/wif-${AccountId}.json" > "./deploy/attributemap-${AccountId}.json"
+            sed -E "s#(/providers/)[^\"]*\"#\1${AccountId}-cli\"#" wif-config.json > "./tests/wif_account_execution/cli/wif-config-${AccountId}.json"
+            jq .audience wif-config-lambda.json "./tests/wif_account_execution/cli/wif-config-${AccountId}.json"
+          done
+          python3 cicd/tests/quick_start/test_rewrite.py
+          GoogleCustomerIdArn="$GoogleCustomerIdArn" SecretWIFServiceAccountEmail="$SecretWIFServiceAccountEmail" \
+            python3 cicd/tests/quick_start/build.py --quick-start-dir quick-start \
+              --out ./deploy/quick-start-tests --wif-config wif-config.json --accounts "$Accounts"
+          rm -f wif-config.json wif-config-lambda.json
+        fi
 
 
 artifacts:

@@ -1,0 +1,59 @@
+version: 0.2
+
+# WIFAuth: run the CLI with keyless Google authentication (Workload Identity
+# Federation, issue #345) and no admin (issue #192), using the secrets the
+# deploy/wif-<AccountId>.json deployment created. There is no key file and no --google-admin.
+#
+# The project runs as its own service role (SSOSync_CLIExecutionRole), which
+# has its own Google provider in each account (one provider per role per
+# account); see wif-config-<AccountId>.json below.
+
+env:
+  secrets-manager:
+    SCIMEndpointUrl: SSOSyncSCIMEndpointUrl
+    SCIMAccessToken: SSOSyncSCIMAccessToken
+    GoogleCustomerId: SSOSyncGoogleCustomerId
+    GoogleImpersonateServiceAccount: SSOSyncGoogleImpersonateServiceAccount
+  variables:
+    ExpectedExitState: 0
+
+phases:
+  pre_build:
+    commands:
+      # Print all environment variables (handy for AWS CodeBuild logs)
+      - env
+
+  build:
+    commands:
+      - ./ssosync --version
+
+      # This account's credential configuration for this project's role's
+      # provider, written by the staging buildspec as wif-config-<AccountId>.json.
+      # It holds no secret: pool, provider and where to get AWS credentials.
+      - AccountId=$(aws sts get-caller-identity --query Account --output text)
+      - cp "tests/wif_account_execution/cli/wif-config-${AccountId}.json" wif-config.json
+      - jq -e '.type == "external_account"' wif-config.json >/dev/null
+      - jq '{type, audience}' wif-config.json
+
+      # No key may be in play.
+      - rm -f credentials.json
+
+      # Google's AWS credential source reads AWS_ACCESS_KEY_ID /
+      # AWS_SECRET_ACCESS_KEY / AWS_SESSION_TOKEN, or the EC2 metadata server;
+      # CodeBuild serves the service role through the container credentials
+      # endpoint, so export them. AWS_REGION is set by CodeBuild.
+      - eval "$(aws configure export-credentials --format env)"
+      - aws sts get-caller-identity --query Arn --output text
+
+      - ./ssosync -t "${SCIMAccessToken}" -e "${SCIMEndpointUrl}" --customer-id "${GoogleCustomerId}" --google-impersonate-service-account "${GoogleImpersonateServiceAccount}" --google-wif-config wif-config.json -s "groups" -g "name:AWS*"; ExitState=$?
+      - echo "ExitState= ${ExitState}"
+      - echo "ExpectedExitState= ${ExpectedExitState}"
+
+      - |
+        if expr "${ExitState}" : "${ExpectedExitState}" >/dev/null; then
+          echo "We got what we expected"
+          exit 0
+        else
+          echo "We didn't get what we expected"
+          exit 1
+        fi

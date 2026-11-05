@@ -36,18 +36,18 @@
 #   UGO_TEST_GROUP  name of an in-scope Google test group
 # S2/S3/S8 use them too when set, else the first managed user/group by name.
 #
-# Environment: SCIMEndpointUrl, SCIMAccessToken, GoogleAdminEmail (Secrets
-# Manager), GROUP_MATCH (default "name:AWS*"), TEST_ACCOUNT_TYPE (set by the
+# Environment: SCIMEndpointUrl, SCIMAccessToken, GoogleCustomerId,
+# GoogleImpersonateServiceAccount (Secrets Manager; ssosync runs keyless, see
+# tests/wif_account_execution/lib/keyless.sh), GROUP_MATCH (default "name:AWS*"), TEST_ACCOUNT_TYPE (set by the
 # release testing stacks: Management | Delegated | NonDelegated).
 
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 
-for v in SCIMEndpointUrl SCIMAccessToken GoogleAdminEmail; do
+for v in SCIMEndpointUrl SCIMAccessToken; do
   if [ -z "${!v:-}" ]; then echo "ERROR: $v is not set"; exit 1; fi
 done
-aws secretsmanager get-secret-value --secret-id SSOSyncGoogleCredentials \
-  --query SecretString --output text > "$ROOT/credentials.json"
+keyless_setup "$ROOT"
 "$SSOSYNC" --version
 
 finish() {

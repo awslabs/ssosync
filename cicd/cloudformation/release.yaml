@@ -40,7 +40,7 @@ Parameters:
   SecretsConfig:
     Description:  Output from the secrets.yaml stack
     Type: String
-    AllowedPattern: '(arn:aws:secretsmanager:((us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-\d):[0-9]{8,12}:secret:[a-zA-Z0-9/_+=.@-]{1,512})(,(arn:aws:secretsmanager:((us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-\d):[0-9]{8,12}:secret:[a-zA-Z0-9/_+=.@-]{1,512})){3}((,arn:aws:secretsmanager:((us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-\d):[0-9]{8,12}:secret:[a-zA-Z0-9/_+=.@-]{1,512})|(,"")){4}(,arn:aws:kms:((us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-\d):[0-9]{12}:key/[a-zA-Z0-9/_+=.@-]{1,512})'
+    AllowedPattern: '(arn:aws:secretsmanager:((us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-\d):[0-9]{8,12}:secret:[a-zA-Z0-9/_+=.@-]{1,512})(,(arn:aws:secretsmanager:((us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-\d):[0-9]{8,12}:secret:[a-zA-Z0-9/_+=.@-]{1,512})){2}((,arn:aws:secretsmanager:((us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-\d):[0-9]{8,12}:secret:[a-zA-Z0-9/_+=.@-]{1,512})|(,"")){5}(,arn:aws:kms:((us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-\d):[0-9]{12}:key/[a-zA-Z0-9/_+=.@-]{1,512})'
 
 Metadata:
   AWS::CloudFormation::Interface:
@@ -388,19 +388,6 @@ Resources:
                       Operator: EQ
                       Value: 'true'
           Actions:
-            - Name: Does_this_commit_have_a_release_tag
-              ActionTypeId:
-                Category: Build
-                Owner: AWS
-                Version: 1
-                Provider: CodeBuild
-              RunOrder: '1'
-              Configuration:
-                ProjectName: !Ref CodeBuildApproveRelease
-                PrimarySource: Source
-                EnvironmentVariables: '[{"name":"GitIsRelease","value":"#{Git.IsRelease}","type":"PLAINTEXT"}]'
-              InputArtifacts:
-                - Name: Source
             - Name: SAR-Release
               ActionTypeId:
                 Category: Build
@@ -416,7 +403,7 @@ Resources:
               InputArtifacts:
                 - Name: Source
                 - Name: Packaged
-              RunOrder: 2
+              RunOrder: 1
 
   GitMetadata:
     Type: AWS::CodeBuild::Project
@@ -549,8 +536,6 @@ Resources:
             Value: !Select [1, !Split [',', !Ref SecretsConfig]]
           - Name: SecretRegion
             Value: !Select [2, !Split [',', !Ref SecretsConfig]]
-          - Name: SecretIdentityStoreID
-            Value: !Select [3, !Split [',', !Ref SecretsConfig]]
           - Name: SecretGoogleCredentials
             Value: !Select [4, !Split [',', !Ref SecretsConfig]]
           - Name: SecretGoogleAdminEmail
@@ -687,8 +672,6 @@ Resources:
             Value: !Select [1, !Split [',', !Ref SecretsConfig]]
           - Name: SecretRegion
             Value: !Select [2, !Split [',', !Ref SecretsConfig]]
-          - Name: SecretIdentityStoreID
-            Value: !Select [3, !Split [',', !Ref SecretsConfig]]
           - Name: SecretGoogleCredentials
             Value: !Select [4, !Split [',', !Ref SecretsConfig]]
           - Name: SecretGoogleAdminEmail
@@ -719,37 +702,6 @@ Resources:
     Properties:
       LogGroupName: !Ref CodePipelineLogGroup
       LogStreamName: "SSOSync-Testing"
-
-  CodeBuildApproveRelease:
-    Type: AWS::CodeBuild::Project
-    Properties:
-      Name: "SSOSync-ApproveRelease"
-      Description: !Sub Use the GitHub metadata to determine whether this commit is a release
-      ServiceRole: !Ref CodeBuildPublishRole
-      Source:
-        Type: CODEPIPELINE
-        BuildSpec: "cicd/release/approve/buildspec.yml"
-      Environment:
-        ComputeType: BUILD_GENERAL1_SMALL
-        Image: aws/codebuild/amazonlinux-x86_64-standard:6.0
-        Type: LINUX_CONTAINER
-        EnvironmentVariables:
-          - Name: ARTIFACT_S3_BUCKET
-            Value: !Sub ${ArtifactBucket}
-      Artifacts:
-        Name: SSOSync-Build
-        Type: CODEPIPELINE
-      LogsConfig:
-        CloudWatchLogs:
-          GroupName: !Ref CodePipelineLogGroup
-          StreamName: !Ref CodeBuildApproveReleaseLogs
-          Status: ENABLED
-
-  CodeBuildApproveReleaseLogs:
-    Type: AWS::Logs::LogStream
-    Properties:
-      LogGroupName: !Ref CodePipelineLogGroup
-      LogStreamName: "SSOSync-ApproveRelease"
 
   CodeBuildRelease:
     Type: AWS::CodeBuild::Project
@@ -830,7 +782,6 @@ Resources:
               - !Sub ${CodeBuildTestingDelegated.Arn}
               - !Sub ${CodeBuildTestingNonDelegated.Arn}
               - !Sub ${CodeBuildTestingSingleStack.Arn}
-              - !Sub ${CodeBuildApproveRelease.Arn}
               - !Sub ${CodeBuildRelease.Arn}
             - Effect: Allow
               Action:
@@ -878,7 +829,6 @@ Resources:
               - !Sub ${CodeBuildTestingDelegated.Arn}
               - !Sub ${CodeBuildTestingNonDelegated.Arn}
               - !Sub ${CodeBuildTestingSingleStack.Arn}
-              - !Sub ${CodeBuildApproveRelease.Arn}
               - !Sub ${CodeBuildRelease.Arn}
               Effect: Allow
             - Action:
@@ -1057,13 +1007,25 @@ Resources:
               Effect: Allow
               Resource:
               - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/SSOSync/*
-            # Staging records the customer id secret's Arn (not its value) in
-            # deploy/quickstart.json for the quick-start tests.
+            # Configurations looks the customer id secret up by name (it is not in
+            # SecretsConfig) and puts its Arn, not its value, in the test parameters.
             - Action:
               - 'secretsmanager:DescribeSecret'
               Effect: Allow
               Resource:
               - !Sub arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:PipelineGoogleCustomerId-*
+            # Staging writes each account's WIF CLI credential configuration
+            # (no secret values) from PipelineGoogleWIFConfig into the tests.
+            - Action:
+              - 'secretsmanager:GetSecretValue'
+              Effect: Allow
+              Resource:
+              - !Sub arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:PipelineGoogleWIFConfig-*
+            - Action:
+              - 'kms:Decrypt'
+              Effect: Allow
+              Resource:
+              - !Select [8, !Split [',', !Ref SecretsConfig]]
       
   CodeBuildTestRole:
     Type: AWS::IAM::Role

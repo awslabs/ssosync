@@ -1,0 +1,55 @@
+version: 0.2
+
+# WIFAuth: invoke the function deployed with keyless Google authentication
+# (Workload Identity Federation, issue #345) and no admin (issue #192), from
+# deploy/wif-<AccountId>.json. The function must be configured without a key or admin, run
+# as the role the Google provider trusts, and complete without a FunctionError.
+
+env:
+  variables:
+    ExpectedResponse: "false"
+    ExpectedRoleName: "SSOSync_ExecutionRole"
+
+phases:
+  pre_build:
+    commands:
+      # Print all environment variables (handy for AWS CodeBuild logs)
+      - env
+
+  build:
+    commands:
+      # The deployment is keyless: impersonation and WIF configuration set, no
+      # key and no admin (only the names are printed, not the values).
+      - aws lambda get-function-configuration --function-name "SSOSyncFunction" > function.json
+      - "jq '{Role, Variables: (.Environment.Variables | keys)}' function.json"
+      - |
+        if ! jq -e '.Environment.Variables
+              | has("GOOGLE_IMPERSONATE_SERVICE_ACCOUNT") and has("GOOGLE_WIF_CONFIG") and has("CUSTOMER_ID")
+                and (has("GOOGLE_CREDENTIALS") | not) and (has("GOOGLE_ADMIN") | not)' function.json >/dev/null; then
+          echo "The function is not configured for keyless authentication without an admin"
+          exit 1
+        fi
+      - |
+        if ! jq -e --arg role "$ExpectedRoleName" '.Role | endswith(":role/" + $role)' function.json >/dev/null; then
+          echo "The function does not run as ${ExpectedRoleName}, the role the Google provider trusts"
+          exit 1
+        fi
+
+      # Execute the lambda
+      - FunctionError=$(aws lambda invoke --function-name "SSOSyncFunction" response.json | jq 'has("FunctionError")')
+      - echo "FunctionError= ${FunctionError}"
+      - echo "ExpectedResponse= ${ExpectedResponse}"
+      - |
+        if expr "${FunctionError}" : "${ExpectedResponse}" >/dev/null; then
+          echo "We got what we expected"
+          exit 0
+        else
+          echo "We didn't get what we expected"
+          cat response.json
+          exit 1
+        fi
+
+
+artifacts:
+  files:
+    - response.json

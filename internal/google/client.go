@@ -28,8 +28,11 @@ import (
 	"ssosync/internal/interfaces"
 
 	log "github.com/sirupsen/logrus"
+
+	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	admin "google.golang.org/api/admin/directory/v1"
+	"google.golang.org/api/impersonate"
 	"google.golang.org/api/option"
 )
 
@@ -52,22 +55,176 @@ const (
 	MaxRetries = 5
 )
 
-// NewClient creates a new client for Google's Admin API. customerID is the
-// Google Workspace customer to operate against; pass "my_customer" (or the
-// DefaultCustomerID constant) to target the customer associated with the
-// service account's domain.
-func NewClient(ctx context.Context, adminEmail, customerID string, serviceAccountKey []byte) (Client, error) {
-	config, err := google.JWTConfigFromJSON(serviceAccountKey, admin.AdminDirectoryGroupReadonlyScope,
-		admin.AdminDirectoryGroupMemberReadonlyScope,
-		admin.AdminDirectoryUserReadonlyScope)
+// Scopes are the read-only Admin SDK Directory scopes ssosync requests. When
+// acting on behalf of an admin (legacy domain-wide delegation) they must be
+// authorized for the service account's client ID; when the service account
+// acts as itself (always for keyless), its assigned Workspace admin role
+// governs access.
+var Scopes = []string{
+	admin.AdminDirectoryGroupReadonlyScope,
+	admin.AdminDirectoryGroupMemberReadonlyScope,
+	admin.AdminDirectoryUserReadonlyScope,
+}
 
+// Auth selects how ssosync authenticates to the Google Admin SDK. Exactly one
+// method is used, chosen explicitly (see Keyless):
+//
+//   - Service-account key (legacy): ServiceAccountKey holds the JSON key of
+//     the service account. With an admin, domain-wide delegation on behalf of
+//     that admin; without, the service account acts as itself (issue #192).
+//   - Keyless (issue #345): ImpersonateServiceAccount names the service
+//     account to impersonate. The base credentials come from WIFConfig, a
+//     Workload Identity Federation credential configuration (for example an
+//     AWS Lambda role federated to Google Cloud), or from Application Default
+//     Credentials when WIFConfig is empty. The service account always acts as
+//     itself, with the Workspace admin role assigned to it: no admin is
+//     impersonated, there is no domain-wide delegation, and no long-lived key
+//     exists.
+type Auth struct {
+	// ServiceAccountKey is the service-account key JSON (key authentication).
+	ServiceAccountKey []byte
+	// ImpersonateServiceAccount is the email of the service account to
+	// impersonate; setting it selects keyless authentication.
+	ImpersonateServiceAccount string
+	// WIFConfig is an optional Workload Identity Federation credential
+	// configuration (type "external_account") used as the base credentials
+	// for keyless authentication. Only that credential type is accepted.
+	WIFConfig []byte
+}
+
+// Keyless reports whether keyless (impersonation) authentication is selected.
+func (a Auth) Keyless() bool {
+	return a.ImpersonateServiceAccount != ""
+}
+
+// Validate checks that exactly one authentication method is configured.
+func (a Auth) Validate() error {
+	switch {
+	case a.Keyless() && len(a.ServiceAccountKey) > 0:
+		return errors.New("google authentication: both a service-account key and a service account to impersonate are set; use one: the key, or keyless impersonation")
+	case !a.Keyless() && len(a.WIFConfig) > 0:
+		return errors.New("google authentication: a Workload Identity Federation configuration is set without a service account to impersonate")
+	case !a.Keyless() && len(a.ServiceAccountKey) == 0:
+		return errors.New("google authentication: no service-account key and no service account to impersonate; provide one")
+	}
+	if len(a.WIFConfig) > 0 {
+		return validateWIFConfig(a.WIFConfig)
+	}
+	return nil
+}
+
+// validateWIFConfig accepts only a Workload Identity Federation credential
+// configuration (type "external_account"). The credential-type option of the
+// Google client library is not enforced on the impersonation path, so any
+// other credential (e.g. a service-account key supplied by mistake) would
+// otherwise be used as the base credentials.
+func validateWIFConfig(b []byte) error {
+	var c struct {
+		Type string `json:"type"`
+	}
+	if err := json.Unmarshal(b, &c); err != nil {
+		return fmt.Errorf("google authentication: the Workload Identity Federation configuration is not valid JSON: %w", err)
+	}
+	if c.Type != "external_account" {
+		return fmt.Errorf("google authentication: the Workload Identity Federation configuration must be of type \"external_account\", got %q", c.Type)
+	}
+	return nil
+}
+
+// DefaultCustomerID is the Admin SDK alias for "the customer of the
+// authenticated user". It only resolves when acting on behalf of a Workspace
+// user (domain-wide delegation); a service account calling as itself must name
+// the customer explicitly (issue #192).
+const DefaultCustomerID = "my_customer"
+
+// validateCustomer requires an explicit Google Workspace customer ID (not the
+// my_customer alias) whenever the service account may call the Admin SDK as
+// itself rather than on behalf of an admin: always for keyless authentication
+// (Workload Identity Federation), and for the key whenever no admin is given
+// (issue #192). The alias only resolves against the acting admin's customer.
+func validateCustomer(adminEmail, customerID string, auth Auth) error {
+	if customerID != "" && customerID != DefaultCustomerID {
+		return nil
+	}
+	switch {
+	case auth.Keyless():
+		return errors.New("google authentication: keyless authentication (Workload Identity Federation) requires the Google Workspace customer ID (--customer-id / CUSTOMER_ID, for example C01234abc, from Admin console > Account > Account settings); my_customer is not accepted")
+	case adminEmail == "":
+		return errors.New("google authentication: without a Google admin to act on behalf of (--google-admin / GOOGLE_ADMIN), the service account calls the Admin SDK as itself, so the Google Workspace customer ID must be set (--customer-id / CUSTOMER_ID, for example C01234abc); my_customer is not accepted")
+	}
+	return nil
+}
+
+// validateAdmin rejects a Google admin with keyless authentication: keyless
+// removes impersonation of a Workspace admin altogether, so the service account
+// always acts as itself (with its own Workspace admin role) and domain-wide
+// delegation is not used.
+func validateAdmin(adminEmail string, auth Auth) error {
+	if auth.Keyless() && adminEmail != "" {
+		return errors.New("google authentication: keyless authentication (Workload Identity Federation) does not act on behalf of a Google admin; leave --google-admin / GOOGLE_ADMIN empty and assign a read-only Workspace admin role to the service account instead")
+	}
+	return nil
+}
+
+// tokenSource returns the token source for the configured authentication
+// method. Key: with adminEmail set, ssosync acts on behalf of that Workspace
+// admin through domain-wide delegation (the admin is the JWT Subject); with
+// adminEmail empty (issue #192), the service account calls the Admin SDK as
+// itself and needs a Google Workspace admin role assigned to it. Keyless: the
+// service account always acts as itself (adminEmail must be empty).
+func tokenSource(ctx context.Context, adminEmail string, auth Auth) (oauth2.TokenSource, error) {
+	if err := auth.Validate(); err != nil {
+		return nil, err
+	}
+	if err := validateAdmin(adminEmail, auth); err != nil {
+		return nil, err
+	}
+	if !auth.Keyless() {
+		// Service-account key; an empty Subject means the service account itself.
+		config, err := google.JWTConfigFromJSON(auth.ServiceAccountKey, Scopes...)
+		if err != nil {
+			return nil, err
+		}
+		config.Subject = adminEmail
+		return config.TokenSource(ctx), nil
+	}
+
+	// Keyless: impersonate the service account, with no Subject: a plain access
+	// token for the service account itself (iam.serviceAccounts.getAccessToken,
+	// roles/iam.workloadIdentityUser).
+	var opts []option.ClientOption
+	if len(auth.WIFConfig) > 0 {
+		opts = append(opts, option.WithAuthCredentialsJSON(option.ExternalAccount, auth.WIFConfig))
+	}
+	ts, err := impersonate.CredentialsTokenSource(ctx, impersonate.CredentialsConfig{
+		TargetPrincipal: auth.ImpersonateServiceAccount,
+		Scopes:          Scopes,
+	}, opts...)
+	if err != nil {
+		return nil, fmt.Errorf("google authentication: cannot impersonate %s: %w", auth.ImpersonateServiceAccount, err)
+	}
+	return ts, nil
+}
+
+// NewClient creates a new client for Google's Admin API, authenticated as
+// described by auth. With the key and adminEmail set it acts on behalf of that
+// Workspace admin (domain-wide delegation); otherwise the service account
+// calls as itself and needs a Google Workspace admin role (issue #192).
+// Keyless authentication never takes an admin. customerID is the Google
+// Workspace customer to operate against. "my_customer" (DefaultCustomerID)
+// targets the acting admin's customer, so it is only valid with the key and
+// adminEmail; otherwise pass the customer ID.
+func NewClient(ctx context.Context, adminEmail, customerID string, auth Auth) (Client, error) {
+	if err := validateAdmin(adminEmail, auth); err != nil {
+		return nil, err
+	}
+	if err := validateCustomer(adminEmail, customerID, auth); err != nil {
+		return nil, err
+	}
+	ts, err := tokenSource(ctx, adminEmail, auth)
 	if err != nil {
 		return nil, err
 	}
-
-	config.Subject = adminEmail
-
-	ts := config.TokenSource(ctx)
 
 	srv, err := admin.NewService(ctx, option.WithTokenSource(ts))
 	if err != nil {

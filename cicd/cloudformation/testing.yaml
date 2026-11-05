@@ -187,9 +187,20 @@ Resources:
                 S3Bucket: !Ref StagingBucket
                 S3ObjectKey: tests.zip
                 PollForSourceChanges: false
-        - Name: TestsLambda
+        # All tests run in one stage, in sequence, as in the developer
+        # pipeline (actions prefixed with their block). Every account runs
+        # WIFAuth and LegacyAuth (with their Deploy- and CleanUp- actions);
+        # the delegated administrator account also runs AttributeMap,
+        # Functional and QuickStart (they reset and use its dedicated test
+        # Identity Store).
+        - Name: Tests
           Actions:
-            - Name: Deploy
+            # Workload Identity Federation (keyless, issue #345) with no admin (the
+            # service account acts as itself, issue #192), first so a keyless
+            # failure fails fast: deploy from deploy/wif-<AccountId>.json (no key,
+            # no admin, the customer id, RoleName SSOSync_ExecutionRole), then the
+            # Lambda, CLI and CodePipeline tests. See tests/wif_account_execution/.
+            - Name: Deploy-WIFAuth
               ActionTypeId:
                 Category: Deploy
                 Owner: AWS
@@ -200,12 +211,12 @@ Resources:
                 Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND,CAPABILITY_NAMED_IAM
                 StackName: TestAccountExecution
                 RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
-                TemplateConfiguration: 'Tests::deploy/lambda.json'
-                TemplatePath: !Sub 'Tests::deploy/stack.yml'
+                TemplateConfiguration: !Sub 'Tests::deploy/wif-${AWS::AccountId}.json'
+                TemplatePath: 'Tests::deploy/stack.yml'
               InputArtifacts:
                 - Name: Tests
               RunOrder: 1
-            - Name: Lambda
+            - Name: WIFAuth-Lambda
               ActionTypeId:
                 Category: Test
                 Owner: AWS
@@ -213,274 +224,41 @@ Resources:
                 Provider: CodeBuild
               RunOrder: 2
               Configuration:
-                ProjectName: !Ref CodeBuildSmokeLambda
+                ProjectName: !Ref CodeBuildWIFLambda
                 PrimarySource: Tests
               OutputArtifacts:
-                - Name: AccountExecutionLambda
+                - Name: WIFLambda
               InputArtifacts:
                 - Name: Tests
-        - Name: TestsCLI
-          Actions:
-            - Name: Deploy
-              ActionTypeId:
-                Category: Deploy
-                Owner: AWS
-                Version: '1'
-                Provider: CloudFormation
-              Configuration:
-                ActionMode: CREATE_UPDATE
-                Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND,CAPABILITY_NAMED_IAM
-                StackName: TestAccountExecution
-                RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
-                TemplateConfiguration: 'Tests::deploy/cli.json'
-                TemplatePath: !Sub 'Tests::deploy/stack.yml'
-              InputArtifacts:
-                - Name: Tests
-              RunOrder: 1
-            - Name: CLI
+            - Name: WIFAuth-CLI
               ActionTypeId:
                 Category: Test
                 Owner: AWS
                 Version: 1
                 Provider: CodeBuild
-              RunOrder: 2
+              RunOrder: 3
               Configuration:
-                ProjectName: !Ref CodeBuildSmokeCLI
+                ProjectName: !Ref CodeBuildWIFCLI
                 PrimarySource: Tests
               OutputArtifacts:
-                - Name: SmokeCLI
+                - Name: WIFCLI
               InputArtifacts:
                 - Name: Tests
-        # Attribute-map integration tests (tests/attribute_map/), delegated
-        # administrator account only. Each live test resets the (dedicated test)
-        # Identity Store to tests/attribute_map/baseline/, deleting every user
-        # and group in it, so every action runs in sequence (distinct RunOrder).
-        - !If
-            - DeployDelegated
-            - Name: AttributeMapTests
-              Actions:
-                - Name: InvalidMap
-                  ActionTypeId:
-                    Category: Test
-                    Owner: AWS
-                    Version: 1
-                    Provider: CodeBuild
-                  RunOrder: 1
-                  Configuration:
-                    ProjectName: !Ref CodeBuildAttrMapInvalidMap
-                    PrimarySource: Tests
-                  InputArtifacts:
-                    - Name: Tests
-                  OutputArtifacts:
-                    - Name: AttrMapInvalidMap
-                - Name: DefaultMap
-                  ActionTypeId:
-                    Category: Test
-                    Owner: AWS
-                    Version: 1
-                    Provider: CodeBuild
-                  RunOrder: 2
-                  Configuration:
-                    ProjectName: !Ref CodeBuildAttrMapDefaultMap
-                    PrimarySource: Tests
-                  InputArtifacts:
-                    - Name: Tests
-                  OutputArtifacts:
-                    - Name: AttrMapDefaultMap
-                - Name: Determinism
-                  ActionTypeId:
-                    Category: Test
-                    Owner: AWS
-                    Version: 1
-                    Provider: CodeBuild
-                  RunOrder: 3
-                  Configuration:
-                    ProjectName: !Ref CodeBuildAttrMapDeterminism
-                    PrimarySource: Tests
-                  InputArtifacts:
-                    - Name: Tests
-                  OutputArtifacts:
-                    - Name: AttrMapDeterminism
-                - Name: RichMap
-                  ActionTypeId:
-                    Category: Test
-                    Owner: AWS
-                    Version: 1
-                    Provider: CodeBuild
-                  RunOrder: 4
-                  Configuration:
-                    ProjectName: !Ref CodeBuildAttrMapRichMap
-                    PrimarySource: Tests
-                  InputArtifacts:
-                    - Name: Tests
-                  OutputArtifacts:
-                    - Name: AttrMapRichMap
-                - Name: ValidationWarnings
-                  ActionTypeId:
-                    Category: Test
-                    Owner: AWS
-                    Version: 1
-                    Provider: CodeBuild
-                  RunOrder: 5
-                  Configuration:
-                    ProjectName: !Ref CodeBuildAttrMapValidationWarnings
-                    PrimarySource: Tests
-                  InputArtifacts:
-                    - Name: Tests
-                  OutputArtifacts:
-                    - Name: AttrMapValidationWarnings
-                - Name: UsernameRemap
-                  ActionTypeId:
-                    Category: Test
-                    Owner: AWS
-                    Version: 1
-                    Provider: CodeBuild
-                  RunOrder: 6
-                  Configuration:
-                    ProjectName: !Ref CodeBuildAttrMapUsernameRemap
-                    PrimarySource: Tests
-                  InputArtifacts:
-                    - Name: Tests
-                  OutputArtifacts:
-                    - Name: AttrMapUsernameRemap
-                - Name: ManagerOptIn
-                  ActionTypeId:
-                    Category: Test
-                    Owner: AWS
-                    Version: 1
-                    Provider: CodeBuild
-                  RunOrder: 7
-                  Configuration:
-                    ProjectName: !Ref CodeBuildAttrMapManagerOptIn
-                    PrimarySource: Tests
-                  InputArtifacts:
-                    - Name: Tests
-                  OutputArtifacts:
-                    - Name: AttrMapManagerOptIn
-                # TestsCLI left the stack on cli.json (GroupMatch name:Man*);
-                # redeploy with the developer params (name:AWS*, the baseline
-                # groups) and the built-in default map (AttributeMap unset).
-                - Name: DeployDefaultAttributeMap
-                  ActionTypeId:
-                    Category: Deploy
-                    Owner: AWS
-                    Version: '1'
-                    Provider: CloudFormation
-                  Configuration:
-                    ActionMode: CREATE_UPDATE
-                    Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND,CAPABILITY_NAMED_IAM
-                    StackName: TestAccountExecution
-                    RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
-                    TemplateConfiguration: 'Tests::deploy/developer.json'
-                    TemplatePath: 'Tests::deploy/stack.yml'
-                  InputArtifacts:
-                    - Name: Tests
-                  RunOrder: 8
-                - Name: LambdaDefaultMap
-                  ActionTypeId:
-                    Category: Test
-                    Owner: AWS
-                    Version: 1
-                    Provider: CodeBuild
-                  RunOrder: 9
-                  Configuration:
-                    ProjectName: !Ref CodeBuildAttrMapLambdaDefault
-                    PrimarySource: Tests
-                  InputArtifacts:
-                    - Name: Tests
-                  OutputArtifacts:
-                    - Name: AttrMapLambdaDefault
-                # Redeploy the function with maps/rich.json inline in ATTRIBUTE_MAP.
-                - Name: DeployInlineAttributeMap
-                  ActionTypeId:
-                    Category: Deploy
-                    Owner: AWS
-                    Version: '1'
-                    Provider: CloudFormation
-                  Configuration:
-                    ActionMode: CREATE_UPDATE
-                    Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND,CAPABILITY_NAMED_IAM
-                    StackName: TestAccountExecution
-                    RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
-                    TemplateConfiguration: 'Tests::deploy/attributemap.json'
-                    TemplatePath: 'Tests::deploy/stack.yml'
-                  InputArtifacts:
-                    - Name: Tests
-                  RunOrder: 10
-                - Name: LambdaInlineMap
-                  ActionTypeId:
-                    Category: Test
-                    Owner: AWS
-                    Version: 1
-                    Provider: CodeBuild
-                  RunOrder: 11
-                  Configuration:
-                    ProjectName: !Ref CodeBuildAttrMapLambdaInlineMap
-                    PrimarySource: Tests
-                  InputArtifacts:
-                    - Name: Tests
-                  OutputArtifacts:
-                    - Name: AttrMapLambdaInlineMap
-            - !Ref AWS::NoValue
-        # Functional tests against the live tenant.
-        - Name: FunctionalTests
-          Actions:
-            # Live proof of getUserOperations/getGroupOperations (issue #383) in
-            # this account type (Management, Delegated or NonDelegated): the
-            # expected IssuerArn is built from the instance owner account and
-            # matches the real ExternalId Issuer wherever ssosync runs.
-            # See tests/user_group_operations/run.sh.
-            - Name: UserGroupOperations
+            - Name: WIFAuth-CodePipeline
               ActionTypeId:
-                Category: Test
+                Category: Invoke
                 Owner: AWS
                 Version: 1
-                Provider: CodeBuild
-              RunOrder: 1
+                Provider: Lambda
+              RunOrder: 4
               Configuration:
-                ProjectName: !Ref CodeBuildUserGroupOperations
-                PrimarySource: Tests
+                FunctionName: SSOSyncFunction
               OutputArtifacts:
-                - Name: UserGroupOperations
+                - Name: WIFCodePipeline
               InputArtifacts:
                 - Name: Tests
-        - !If
-            - DeployDelegated
-            - Name: TestsCodePipeline
-              Actions:
-                - Name: Deploy
-                  ActionTypeId:
-                    Category: Deploy
-                    Owner: AWS
-                    Version: '1'
-                    Provider: CloudFormation
-                  Configuration:
-                    ActionMode: CREATE_UPDATE
-                    Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND,CAPABILITY_NAMED_IAM
-                    StackName: TestAccountExecution
-                    RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
-                    TemplateConfiguration: 'Tests::deploy/codepipeline.json'
-                    TemplatePath: !Sub 'Tests::deploy/stack.yml'
-                  InputArtifacts:
-                    - Name: Tests
-                  RunOrder: 1
-                - Name: CodePipeline
-                  ActionTypeId:
-                    Category: Invoke
-                    Owner: AWS
-                    Version: 1
-                    Provider: Lambda
-                  RunOrder: 2
-                  Configuration:
-                    FunctionName: SSOSyncFunction
-                  OutputArtifacts:
-                    - Name: AccountExecutionCodePipeline
-                  InputArtifacts:
-                    - Name: Tests
-            - !Ref AWS::NoValue
-        - Name: CleanUp
-          Actions:
-            - Name: RemoveStack
+            # Remove TestAccountExecution, so the next block starts from a fresh deployment.
+            - Name: CleanUp-WIFAuth
               ActionTypeId:
                 Category: Deploy
                 Owner: AWS
@@ -492,42 +270,603 @@ Resources:
                 RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
               InputArtifacts:
                 - Name: Tests
-              RunOrder: 1
-        # Quick-start templates (quick-start/*.yaml) against the build under
-        # test, delegated admin account only. Each action deploys its template
-        # (rewritten to the staging SAR app and version), invokes the function
-        # and deletes the stack again; see tests/quick_start/run.sh. They run
-        # after CleanUp and one at a time, because every quick-start creates the
-        # same SSOSync* secrets and SSOSync function as TestAccountExecution.
-        - !If
-            - DeployDelegated
-            - Name: QuickStartTests
-              Actions:
-                - Name: SingleAccount
-                  ActionTypeId:
-                    Category: Test
-                    Owner: AWS
-                    Version: 1
-                    Provider: CodeBuild
-                  RunOrder: 1
-                  Configuration:
-                    ProjectName: !Ref CodeBuildQuickStartSingleAccount
-                    PrimarySource: Tests
-                  InputArtifacts:
-                    - Name: Tests
-                - Name: SingleAccountAttributeMap
-                  ActionTypeId:
-                    Category: Test
-                    Owner: AWS
-                    Version: 1
-                    Provider: CodeBuild
-                  RunOrder: 2
-                  Configuration:
-                    ProjectName: !Ref CodeBuildQuickStartSingleAccountAttributeMap
-                    PrimarySource: Tests
-                  InputArtifacts:
-                    - Name: Tests
-            - !Ref AWS::NoValue
+              RunOrder: 5
+            # Legacy auth (stored credentials): the service-account key and an admin
+            # to act on behalf of (deploy/developer.json).
+            - Name: Deploy-LegacyAuth
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Version: '1'
+                Provider: CloudFormation
+              Configuration:
+                ActionMode: CREATE_UPDATE
+                Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND,CAPABILITY_NAMED_IAM
+                StackName: TestAccountExecution
+                RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
+                TemplateConfiguration: 'Tests::deploy/developer.json'
+                TemplatePath: !Sub 'Tests::deploy/stack.yml'
+              InputArtifacts:
+                - Name: Tests
+              RunOrder: 6
+            - Name: LegacyAuth-Lambda
+              ActionTypeId:
+                Category: Test
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              RunOrder: 7
+              Configuration:
+                ProjectName: !Ref CodeBuildSmokeLambda
+                PrimarySource: Tests
+              OutputArtifacts:
+                - Name: SmokeLambda
+              InputArtifacts:
+                - Name: Tests
+            - Name: LegacyAuth-CLI
+              ActionTypeId:
+                Category: Test
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              RunOrder: 8
+              Configuration:
+                ProjectName: !Ref CodeBuildSmokeCLI
+                PrimarySource: Tests
+              OutputArtifacts:
+                - Name: SmokeCLI
+              InputArtifacts:
+                - Name: Tests
+            - Name: LegacyAuth-CodePipeline
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Version: 1
+                Provider: Lambda
+              RunOrder: 9
+              Configuration:
+                FunctionName: SSOSyncFunction
+              OutputArtifacts:
+                - Name: SmokeCodePipeline
+              InputArtifacts:
+                - Name: Tests
+            # Remove TestAccountExecution, so the next block starts from a fresh deployment.
+            - Name: CleanUp-LegacyAuth
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Version: 1
+                Provider: CloudFormation
+              Configuration:
+                ActionMode: DELETE_ONLY
+                StackName: TestAccountExecution
+                RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
+              InputArtifacts:
+                - Name: Tests
+              RunOrder: 10
+            # Attribute-map integration tests (cicd/tests/attribute_map/). They share
+            # one Identity Store, so every action runs in sequence (distinct RunOrder).
+            # Each live test resets the Identity Store to tests/attribute_map/baseline/.
+            # Keyless deployment (deploy/wif-<AccountId>.json): the CLI tests run ssosync
+            # keyless with its SSOSync* secrets, the Lambda tests invoke SSOSyncFunction.
+            - !If
+              - DeployDelegated
+              - Name: Deploy-AttributeMap
+                ActionTypeId:
+                  Category: Deploy
+                  Owner: AWS
+                  Version: '1'
+                  Provider: CloudFormation
+                Configuration:
+                  ActionMode: CREATE_UPDATE
+                  Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND,CAPABILITY_NAMED_IAM
+                  StackName: TestAccountExecution
+                  RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
+                  TemplateConfiguration: !Sub 'Tests::deploy/wif-${AWS::AccountId}.json'
+                  TemplatePath: !Sub 'Tests::deploy/stack.yml'
+                InputArtifacts:
+                  - Name: Tests
+                RunOrder: 11
+              - !Ref AWS::NoValue
+            - !If
+              - DeployDelegated
+              - Name: AttributeMap-InvalidMap
+                ActionTypeId:
+                  Category: Test
+                  Owner: AWS
+                  Version: 1
+                  Provider: CodeBuild
+                RunOrder: 12
+                Configuration:
+                  ProjectName: !Ref CodeBuildAttrMapInvalidMap
+                  PrimarySource: Tests
+                InputArtifacts:
+                  - Name: Tests
+                OutputArtifacts:
+                  - Name: AttrMapInvalidMap
+              - !Ref AWS::NoValue
+            - !If
+              - DeployDelegated
+              - Name: AttributeMap-DefaultMap
+                ActionTypeId:
+                  Category: Test
+                  Owner: AWS
+                  Version: 1
+                  Provider: CodeBuild
+                RunOrder: 13
+                Configuration:
+                  ProjectName: !Ref CodeBuildAttrMapDefaultMap
+                  PrimarySource: Tests
+                InputArtifacts:
+                  - Name: Tests
+                OutputArtifacts:
+                  - Name: AttrMapDefaultMap
+              - !Ref AWS::NoValue
+            - !If
+              - DeployDelegated
+              - Name: AttributeMap-Determinism
+                ActionTypeId:
+                  Category: Test
+                  Owner: AWS
+                  Version: 1
+                  Provider: CodeBuild
+                RunOrder: 14
+                Configuration:
+                  ProjectName: !Ref CodeBuildAttrMapDeterminism
+                  PrimarySource: Tests
+                InputArtifacts:
+                  - Name: Tests
+                OutputArtifacts:
+                  - Name: AttrMapDeterminism
+              - !Ref AWS::NoValue
+            - !If
+              - DeployDelegated
+              - Name: AttributeMap-RichMap
+                ActionTypeId:
+                  Category: Test
+                  Owner: AWS
+                  Version: 1
+                  Provider: CodeBuild
+                RunOrder: 15
+                Configuration:
+                  ProjectName: !Ref CodeBuildAttrMapRichMap
+                  PrimarySource: Tests
+                InputArtifacts:
+                  - Name: Tests
+                OutputArtifacts:
+                  - Name: AttrMapRichMap
+              - !Ref AWS::NoValue
+            - !If
+              - DeployDelegated
+              - Name: AttributeMap-ValidationWarnings
+                ActionTypeId:
+                  Category: Test
+                  Owner: AWS
+                  Version: 1
+                  Provider: CodeBuild
+                RunOrder: 16
+                Configuration:
+                  ProjectName: !Ref CodeBuildAttrMapValidationWarnings
+                  PrimarySource: Tests
+                InputArtifacts:
+                  - Name: Tests
+                OutputArtifacts:
+                  - Name: AttrMapValidationWarnings
+              - !Ref AWS::NoValue
+            - !If
+              - DeployDelegated
+              - Name: AttributeMap-UsernameRemap
+                ActionTypeId:
+                  Category: Test
+                  Owner: AWS
+                  Version: 1
+                  Provider: CodeBuild
+                RunOrder: 17
+                Configuration:
+                  ProjectName: !Ref CodeBuildAttrMapUsernameRemap
+                  PrimarySource: Tests
+                InputArtifacts:
+                  - Name: Tests
+                OutputArtifacts:
+                  - Name: AttrMapUsernameRemap
+              - !Ref AWS::NoValue
+            - !If
+              - DeployDelegated
+              - Name: AttributeMap-ManagerOptIn
+                ActionTypeId:
+                  Category: Test
+                  Owner: AWS
+                  Version: 1
+                  Provider: CodeBuild
+                RunOrder: 18
+                Configuration:
+                  ProjectName: !Ref CodeBuildAttrMapManagerOptIn
+                  PrimarySource: Tests
+                InputArtifacts:
+                  - Name: Tests
+                OutputArtifacts:
+                  - Name: AttrMapManagerOptIn
+              - !Ref AWS::NoValue
+            - !If
+              - DeployDelegated
+              - Name: AttributeMap-LambdaDefaultMap
+                ActionTypeId:
+                  Category: Test
+                  Owner: AWS
+                  Version: 1
+                  Provider: CodeBuild
+                RunOrder: 19
+                Configuration:
+                  ProjectName: !Ref CodeBuildAttrMapLambdaDefault
+                  PrimarySource: Tests
+                InputArtifacts:
+                  - Name: Tests
+                OutputArtifacts:
+                  - Name: AttrMapLambdaDefault
+              - !Ref AWS::NoValue
+            # Redeploy the (keyless) function with maps/rich.json inline in ATTRIBUTE_MAP.
+            - !If
+              - DeployDelegated
+              - Name: AttributeMap-DeployInlineAttributeMap
+                ActionTypeId:
+                  Category: Deploy
+                  Owner: AWS
+                  Version: '1'
+                  Provider: CloudFormation
+                Configuration:
+                  ActionMode: CREATE_UPDATE
+                  Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND,CAPABILITY_NAMED_IAM
+                  StackName: TestAccountExecution
+                  RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
+                  TemplateConfiguration: !Sub 'Tests::deploy/attributemap-${AWS::AccountId}.json'
+                  TemplatePath: 'Tests::deploy/stack.yml'
+                InputArtifacts:
+                  - Name: Tests
+                RunOrder: 20
+              - !Ref AWS::NoValue
+            - !If
+              - DeployDelegated
+              - Name: AttributeMap-LambdaInlineMap
+                ActionTypeId:
+                  Category: Test
+                  Owner: AWS
+                  Version: 1
+                  Provider: CodeBuild
+                RunOrder: 21
+                Configuration:
+                  ProjectName: !Ref CodeBuildAttrMapLambdaInlineMap
+                  PrimarySource: Tests
+                InputArtifacts:
+                  - Name: Tests
+                OutputArtifacts:
+                  - Name: AttrMapLambdaInlineMap
+              - !Ref AWS::NoValue
+            # Remove TestAccountExecution, so the next block starts from a fresh deployment.
+            - !If
+              - DeployDelegated
+              - Name: CleanUp-AttributeMap
+                ActionTypeId:
+                  Category: Deploy
+                  Owner: AWS
+                  Version: 1
+                  Provider: CloudFormation
+                Configuration:
+                  ActionMode: DELETE_ONLY
+                  StackName: TestAccountExecution
+                  RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
+                InputArtifacts:
+                  - Name: Tests
+                RunOrder: 22
+              - !Ref AWS::NoValue
+            # Functional tests against the live tenant.
+            # Keyless deployment (deploy/wif-<AccountId>.json): ssosync runs keyless with its SSOSync* secrets.
+            - !If
+              - DeployDelegated
+              - Name: Deploy-Functional
+                ActionTypeId:
+                  Category: Deploy
+                  Owner: AWS
+                  Version: '1'
+                  Provider: CloudFormation
+                Configuration:
+                  ActionMode: CREATE_UPDATE
+                  Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND,CAPABILITY_NAMED_IAM
+                  StackName: TestAccountExecution
+                  RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
+                  TemplateConfiguration: !Sub 'Tests::deploy/wif-${AWS::AccountId}.json'
+                  TemplatePath: !Sub 'Tests::deploy/stack.yml'
+                InputArtifacts:
+                  - Name: Tests
+                RunOrder: 23
+              - !Ref AWS::NoValue
+            # Live proof of getUserOperations/getGroupOperations (issue #383):
+            # expected IssuerArn == the real ExternalId Issuer, managed records
+            # converge, multi-ExternalId records use this tenant's entry, and the
+            # ExternalId-change path (Recreate/UpdateForced) works.
+            # See cicd/tests/user_group_operations/run.sh.
+            - !If
+              - DeployDelegated
+              - Name: UserGroupOperations
+                ActionTypeId:
+                  Category: Test
+                  Owner: AWS
+                  Version: 1
+                  Provider: CodeBuild
+                RunOrder: 24
+                Configuration:
+                  ProjectName: !Ref CodeBuildUserGroupOperations
+                  PrimarySource: Tests
+                OutputArtifacts:
+                  - Name: UserGroupOperations
+                InputArtifacts:
+                  - Name: Tests
+              - !Ref AWS::NoValue
+            # Quick-start templates (quick-start/*.yaml, wif-auth/, legacy-auth/)
+            # against the build under test. Configurations (tests/quick_start/
+            # build.py) wrote a wrapper per test that deploys the quick-start as a
+            # nested stack, passing every secret as a Secrets Manager dynamic
+            # reference, and per-account parameter files of secret Arns.
+            # QuickStart-Package uploads the nested templates (only) to this
+            # account's artifact bucket. Each quick-start then updates the same
+            # QuickStartTests stack and the function is invoked, so unchanged
+            # resources (the IAM role, ...) carry over; the order moves from the
+            # legacy templates to the keyless ones, a legacy -> keyless upgrade.
+            # Every quick-start creates the SSOSync* secrets, which
+            # TestAccountExecution (App + secrets) also creates, so that stack is
+            # removed first.
+            - !If
+              - DeployDelegated
+              - Name: CleanUp-Functional
+                ActionTypeId:
+                  Category: Deploy
+                  Owner: AWS
+                  Version: 1
+                  Provider: CloudFormation
+                Configuration:
+                  ActionMode: DELETE_ONLY
+                  StackName: TestAccountExecution
+                  RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
+                InputArtifacts:
+                  - Name: Tests
+                RunOrder: 25
+              - !Ref AWS::NoValue
+            - !If
+              - DeployDelegated
+              - Name: QuickStart-Package
+                ActionTypeId:
+                  Category: Build
+                  Owner: AWS
+                  Version: 1
+                  Provider: CodeBuild
+                RunOrder: 26
+                Configuration:
+                  ProjectName: !Ref CodeBuildQuickStartPackage
+                  PrimarySource: Tests
+                InputArtifacts:
+                  - Name: Tests
+                OutputArtifacts:
+                  - Name: QuickStarts
+              - !Ref AWS::NoValue
+            - !If
+              - DeployDelegated
+              - Name: Deploy-QuickStart-LegacySingleAccount
+                ActionTypeId:
+                  Category: Deploy
+                  Owner: AWS
+                  Version: '1'
+                  Provider: CloudFormation
+                Configuration:
+                  ActionMode: CREATE_UPDATE
+                  Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND,CAPABILITY_NAMED_IAM
+                  StackName: QuickStartTests
+                  RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
+                  TemplateConfiguration: !Sub 'Tests::deploy/quick-start-tests/LegacySingleAccount-${AWS::AccountId}.json'
+                  TemplatePath: 'QuickStarts::packaged/LegacySingleAccount.yml'
+                InputArtifacts:
+                  - Name: Tests
+                  - Name: QuickStarts
+                RunOrder: 27
+              - !Ref AWS::NoValue
+            - !If
+              - DeployDelegated
+              - Name: QuickStart-LegacySingleAccount
+                ActionTypeId:
+                  Category: Invoke
+                  Owner: AWS
+                  Version: 1
+                  Provider: Lambda
+                RunOrder: 28
+                Configuration:
+                  FunctionName: SSOSync
+                InputArtifacts:
+                  - Name: Tests
+              - !Ref AWS::NoValue
+            - !If
+              - DeployDelegated
+              - Name: Deploy-QuickStart-LegacySingleAccountAttributeMap
+                ActionTypeId:
+                  Category: Deploy
+                  Owner: AWS
+                  Version: '1'
+                  Provider: CloudFormation
+                Configuration:
+                  ActionMode: CREATE_UPDATE
+                  Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND,CAPABILITY_NAMED_IAM
+                  StackName: QuickStartTests
+                  RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
+                  TemplateConfiguration: !Sub 'Tests::deploy/quick-start-tests/LegacySingleAccountAttributeMap-${AWS::AccountId}.json'
+                  TemplatePath: 'QuickStarts::packaged/LegacySingleAccountAttributeMap.yml'
+                InputArtifacts:
+                  - Name: Tests
+                  - Name: QuickStarts
+                RunOrder: 29
+              - !Ref AWS::NoValue
+            - !If
+              - DeployDelegated
+              - Name: QuickStart-LegacySingleAccountAttributeMap
+                ActionTypeId:
+                  Category: Invoke
+                  Owner: AWS
+                  Version: 1
+                  Provider: Lambda
+                RunOrder: 30
+                Configuration:
+                  FunctionName: SSOSync
+                InputArtifacts:
+                  - Name: Tests
+              - !Ref AWS::NoValue
+            - !If
+              - DeployDelegated
+              - Name: Deploy-QuickStart-SingleAccount
+                ActionTypeId:
+                  Category: Deploy
+                  Owner: AWS
+                  Version: '1'
+                  Provider: CloudFormation
+                Configuration:
+                  ActionMode: CREATE_UPDATE
+                  Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND,CAPABILITY_NAMED_IAM
+                  StackName: QuickStartTests
+                  RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
+                  TemplateConfiguration: !Sub 'Tests::deploy/quick-start-tests/SingleAccount-${AWS::AccountId}.json'
+                  TemplatePath: 'QuickStarts::packaged/SingleAccount.yml'
+                InputArtifacts:
+                  - Name: Tests
+                  - Name: QuickStarts
+                RunOrder: 31
+              - !Ref AWS::NoValue
+            - !If
+              - DeployDelegated
+              - Name: QuickStart-SingleAccount
+                ActionTypeId:
+                  Category: Invoke
+                  Owner: AWS
+                  Version: 1
+                  Provider: Lambda
+                RunOrder: 32
+                Configuration:
+                  FunctionName: SSOSync
+                InputArtifacts:
+                  - Name: Tests
+              - !Ref AWS::NoValue
+            - !If
+              - DeployDelegated
+              - Name: Deploy-QuickStart-SingleAccountAttributeMap
+                ActionTypeId:
+                  Category: Deploy
+                  Owner: AWS
+                  Version: '1'
+                  Provider: CloudFormation
+                Configuration:
+                  ActionMode: CREATE_UPDATE
+                  Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND,CAPABILITY_NAMED_IAM
+                  StackName: QuickStartTests
+                  RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
+                  TemplateConfiguration: !Sub 'Tests::deploy/quick-start-tests/SingleAccountAttributeMap-${AWS::AccountId}.json'
+                  TemplatePath: 'QuickStarts::packaged/SingleAccountAttributeMap.yml'
+                InputArtifacts:
+                  - Name: Tests
+                  - Name: QuickStarts
+                RunOrder: 33
+              - !Ref AWS::NoValue
+            - !If
+              - DeployDelegated
+              - Name: QuickStart-SingleAccountAttributeMap
+                ActionTypeId:
+                  Category: Invoke
+                  Owner: AWS
+                  Version: 1
+                  Provider: Lambda
+                RunOrder: 34
+                Configuration:
+                  FunctionName: SSOSync
+                InputArtifacts:
+                  - Name: Tests
+              - !Ref AWS::NoValue
+            - !If
+              - DeployDelegated
+              - Name: Deploy-QuickStart-SingleAccountWIF
+                ActionTypeId:
+                  Category: Deploy
+                  Owner: AWS
+                  Version: '1'
+                  Provider: CloudFormation
+                Configuration:
+                  ActionMode: CREATE_UPDATE
+                  Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND,CAPABILITY_NAMED_IAM
+                  StackName: QuickStartTests
+                  RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
+                  TemplateConfiguration: !Sub 'Tests::deploy/quick-start-tests/SingleAccountWIF-${AWS::AccountId}.json'
+                  TemplatePath: 'QuickStarts::packaged/SingleAccountWIF.yml'
+                InputArtifacts:
+                  - Name: Tests
+                  - Name: QuickStarts
+                RunOrder: 35
+              - !Ref AWS::NoValue
+            - !If
+              - DeployDelegated
+              - Name: QuickStart-SingleAccountWIF
+                ActionTypeId:
+                  Category: Invoke
+                  Owner: AWS
+                  Version: 1
+                  Provider: Lambda
+                RunOrder: 36
+                Configuration:
+                  FunctionName: SSOSync
+                InputArtifacts:
+                  - Name: Tests
+              - !Ref AWS::NoValue
+            - !If
+              - DeployDelegated
+              - Name: Deploy-QuickStart-SingleAccountAttributeMapWIF
+                ActionTypeId:
+                  Category: Deploy
+                  Owner: AWS
+                  Version: '1'
+                  Provider: CloudFormation
+                Configuration:
+                  ActionMode: CREATE_UPDATE
+                  Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND,CAPABILITY_NAMED_IAM
+                  StackName: QuickStartTests
+                  RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
+                  TemplateConfiguration: !Sub 'Tests::deploy/quick-start-tests/SingleAccountAttributeMapWIF-${AWS::AccountId}.json'
+                  TemplatePath: 'QuickStarts::packaged/SingleAccountAttributeMapWIF.yml'
+                InputArtifacts:
+                  - Name: Tests
+                  - Name: QuickStarts
+                RunOrder: 37
+              - !Ref AWS::NoValue
+            - !If
+              - DeployDelegated
+              - Name: QuickStart-SingleAccountAttributeMapWIF
+                ActionTypeId:
+                  Category: Invoke
+                  Owner: AWS
+                  Version: 1
+                  Provider: Lambda
+                RunOrder: 38
+                Configuration:
+                  FunctionName: SSOSync
+                InputArtifacts:
+                  - Name: Tests
+              - !Ref AWS::NoValue
+            - !If
+              - DeployDelegated
+              - Name: CleanUp-QuickStart
+                ActionTypeId:
+                  Category: Deploy
+                  Owner: AWS
+                  Version: 1
+                  Provider: CloudFormation
+                Configuration:
+                  ActionMode: DELETE_ONLY
+                  StackName: QuickStartTests
+                  RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
+                InputArtifacts:
+                  - Name: Tests
+                RunOrder: 39
+              - !Ref AWS::NoValue
 
   CodePipelineDeployCrossAccountSecrets:
     Type: AWS::CodePipeline::Pipeline
@@ -964,6 +1303,67 @@ Resources:
       LogGroupName: !Ref CodePipelineLogGroup
       LogStreamName: SSOSync-Smoke-Lambda
 
+  # --- WIFAuth: keyless Google authentication (tests/wif_account_execution/) ---
+
+  CodeBuildWIFLambda:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: SSOSync-WIF-Lambda
+      Description: "Invoke the keyless (Workload Identity Federation) deployment of the function"
+      ServiceRole: !Ref CodeBuildTestRole
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: "tests/wif_account_execution/lambda/buildspec.yml"
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/amazonlinux-x86_64-standard:6.0
+        Type: LINUX_CONTAINER
+      Artifacts:
+        Name: SSOSync
+        Type: CODEPIPELINE
+      LogsConfig:
+        CloudWatchLogs:
+          GroupName: !Ref CodePipelineLogGroup
+          StreamName: !Ref CodeBuildWIFLambdaLogs
+          Status: ENABLED
+
+  CodeBuildWIFLambdaLogs:
+    Type: AWS::Logs::LogStream
+    Properties:
+      LogGroupName: !Ref CodePipelineLogGroup
+      LogStreamName: SSOSync-WIF-Lambda
+
+  # Runs as CodeBuildWIFCLIRole (SSOSync_CLIExecutionRole), trusted by this
+  # account's <AccountId>-cli Google provider; the staging buildspec writes
+  # its configuration as tests/wif_account_execution/cli/wif-config-<AccountId>.json.
+  CodeBuildWIFCLI:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: SSOSync-WIF-CLI
+      Description: "Run the cli with keyless (Workload Identity Federation) authentication"
+      ServiceRole: !Ref CodeBuildWIFCLIRole
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: "tests/wif_account_execution/cli/buildspec.yml"
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/amazonlinux-x86_64-standard:6.0
+        Type: LINUX_CONTAINER
+      Artifacts:
+        Name: SSOSync
+        Type: CODEPIPELINE
+      LogsConfig:
+        CloudWatchLogs:
+          GroupName: !Ref CodePipelineLogGroup
+          StreamName: !Ref CodeBuildWIFCLILogs
+          Status: ENABLED
+
+  CodeBuildWIFCLILogs:
+    Type: AWS::Logs::LogStream
+    Properties:
+      LogGroupName: !Ref CodePipelineLogGroup
+      LogStreamName: SSOSync-WIF-CLI
+
   CodeBuildUserGroupOperations:
     Type: AWS::CodeBuild::Project
     Properties:
@@ -1267,87 +1667,41 @@ Resources:
       LogGroupName: !Ref CodePipelineLogGroup
       LogStreamName: SSOSync-AttrMap-LambdaInlineMap
 
-  # Quick-start template smoke tests (tests/quick_start/): delegated
-  # administrator account only, see the QuickStartTests stage.
-  CodeBuildQuickStartSingleAccount:
+  # QuickStart-Package (tests/quick_start/package/buildspec.yml)
+  CodeBuildQuickStartPackage:
     Type: AWS::CodeBuild::Project
     Condition: DeployDelegated
     Properties:
-      Name: SSOSync-QuickStart-SingleAccount
-      Description: "Quick start: deploy quick-start/single-account.yaml against the build under test, invoke it, remove it"
+      Name: SSOSync-QuickStart-Package
+      Description: "Quick start: upload the nested quick-start templates of the test wrappers (aws cloudformation package)"
       ServiceRole: !Ref CodeBuildTestRole
       Source:
         Type: CODEPIPELINE
-        BuildSpec: "tests/quick_start/buildspec.yml"
+        BuildSpec: "tests/quick_start/package/buildspec.yml"
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
         Image: aws/codebuild/amazonlinux-x86_64-standard:6.0
         Type: LINUX_CONTAINER
         EnvironmentVariables:
-          - Name: QUICKSTART_TEMPLATE
-            Value: single-account.yaml
-          - Name: STACK_NAME
-            Value: QuickStart-SingleAccount
-          - Name: CFN_ROLE_ARN
-            Value: !GetAtt CloudFormationDeployerRole.Arn
-          - Name: EXPECT_ATTRIBUTE_MAP
-            Value: none
+          - Name: ARTIFACT_S3_BUCKET
+            Value: !Ref ArtifactBucket
+          - Name: ARTIFACT_KMS_KEY
+            Value: !GetAtt ArtifactBucketKey.Arn
       Artifacts:
         Name: SSOSync
         Type: CODEPIPELINE
       LogsConfig:
         CloudWatchLogs:
           GroupName: !Ref CodePipelineLogGroup
-          StreamName: !Ref CodeBuildQuickStartSingleAccountLogs
+          StreamName: !Ref CodeBuildQuickStartPackageLogs
           Status: ENABLED
 
-  CodeBuildQuickStartSingleAccountLogs:
+  CodeBuildQuickStartPackageLogs:
     Type: AWS::Logs::LogStream
     Condition: DeployDelegated
     Properties:
       LogGroupName: !Ref CodePipelineLogGroup
-      LogStreamName: SSOSync-QuickStart-SingleAccount
-
-  CodeBuildQuickStartSingleAccountAttributeMap:
-    Type: AWS::CodeBuild::Project
-    Condition: DeployDelegated
-    Properties:
-      Name: SSOSync-QuickStart-SingleAccountAttributeMap
-      Description: "Quick start: deploy quick-start/single-account-attribute-map.yaml with an inline map (stored as the SSOSyncAttributeMap secret), invoke it, remove it"
-      ServiceRole: !Ref CodeBuildTestRole
-      Source:
-        Type: CODEPIPELINE
-        BuildSpec: "tests/quick_start/buildspec.yml"
-      Environment:
-        ComputeType: BUILD_GENERAL1_SMALL
-        Image: aws/codebuild/amazonlinux-x86_64-standard:6.0
-        Type: LINUX_CONTAINER
-        EnvironmentVariables:
-          - Name: QUICKSTART_TEMPLATE
-            Value: single-account-attribute-map.yaml
-          - Name: STACK_NAME
-            Value: QuickStart-SingleAccountAttributeMap
-          - Name: CFN_ROLE_ARN
-            Value: !GetAtt CloudFormationDeployerRole.Arn
-          - Name: ATTRIBUTE_MAP_FILE
-            Value: tests/attribute_map/maps/rich.json
-          - Name: EXPECT_ATTRIBUTE_MAP
-            Value: secret
-      Artifacts:
-        Name: SSOSync
-        Type: CODEPIPELINE
-      LogsConfig:
-        CloudWatchLogs:
-          GroupName: !Ref CodePipelineLogGroup
-          StreamName: !Ref CodeBuildQuickStartSingleAccountAttributeMapLogs
-          Status: ENABLED
-
-  CodeBuildQuickStartSingleAccountAttributeMapLogs:
-    Type: AWS::Logs::LogStream
-    Condition: DeployDelegated
-    Properties:
-      LogGroupName: !Ref CodePipelineLogGroup
-      LogStreamName: SSOSync-QuickStart-SingleAccountAttributeMap
+      LogStreamName: SSOSync-QuickStart-Package
 
   CodeBuildTestingAppStack:
     Type: AWS::CodeBuild::Project
@@ -1416,6 +1770,8 @@ Resources:
               - !Sub ${CodeBuildSmokeCLI.Arn}
               - !Sub ${CodeBuildSmokeLambda.Arn}
               - !Sub ${CodeBuildUserGroupOperations.Arn}
+              - !Sub ${CodeBuildWIFLambda.Arn}
+              - !Sub ${CodeBuildWIFCLI.Arn}
               # Attribute-map test projects exist in the delegated account only.
               - !If [DeployDelegated, !GetAtt CodeBuildAttrMapInvalidMap.Arn, !Ref AWS::NoValue]
               - !If [DeployDelegated, !GetAtt CodeBuildAttrMapDefaultMap.Arn, !Ref AWS::NoValue]
@@ -1426,8 +1782,7 @@ Resources:
               - !If [DeployDelegated, !GetAtt CodeBuildAttrMapManagerOptIn.Arn, !Ref AWS::NoValue]
               - !If [DeployDelegated, !GetAtt CodeBuildAttrMapLambdaDefault.Arn, !Ref AWS::NoValue]
               - !If [DeployDelegated, !GetAtt CodeBuildAttrMapLambdaInlineMap.Arn, !Ref AWS::NoValue]
-              - !If [DeployDelegated, !GetAtt CodeBuildQuickStartSingleAccount.Arn, !Ref AWS::NoValue]
-              - !If [DeployDelegated, !GetAtt CodeBuildQuickStartSingleAccountAttributeMap.Arn, !Ref AWS::NoValue]
+              - !If [DeployDelegated, !GetAtt CodeBuildQuickStartPackage.Arn, !Ref AWS::NoValue]
               Effect: Allow
             - Action:
               - 's3:GetBucketPolicy'
@@ -1455,6 +1810,8 @@ Resources:
               - 'lambda:InvokeFunction'
               Resource:
               - !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:SSOSyncFunction
+              # QuickStart-* (the quick-starts name their function SSOSync)
+              - !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:SSOSync
               Effect: Allow
             - Action:
               - 'cloudformation:CreateStack'
@@ -1544,6 +1901,12 @@ Resources:
               -  'lambda:invokeFunction'
               Effect: Allow
               Resource: '*'
+            # tests/wif_account_execution/lambda checks the function is keyless.
+            - Action:
+              - 'lambda:GetFunctionConfiguration'
+              Effect: Allow
+              Resource:
+              - !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:SSOSyncFunction
             - Action:
                 - "identitystore:ListGroups"
                 - "identitystore:ListUsers"
@@ -1586,76 +1949,6 @@ Resources:
                 Resource:
                   - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/SSOSyncFunction:*
               - !Ref AWS::NoValue
-            # tests/quick_start (delegated account only): create and delete the
-            # QuickStart-* stacks through CloudFormationDeployerRole, read the
-            # staging SAR app the rewritten templates point at, read the release
-            # account's Pipeline* secret values (cross-account, KMS-encrypted),
-            # check that no SSOSync* secret already exists, and inspect the
-            # SSOSync function the quick-start creates.
-            - !If
-              - DeployDelegated
-              - Action:
-                  - "cloudformation:CreateStack"
-                  - "cloudformation:DeleteStack"
-                  - "cloudformation:DescribeStacks"
-                  - "cloudformation:DescribeStackEvents"
-                  - "cloudformation:DescribeStackResources"
-                  - "cloudformation:CreateChangeSet"
-                Effect: Allow
-                Resource:
-                  - !Sub arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/QuickStart-*/*
-                  - !Sub arn:aws:cloudformation:${AWS::Region}:aws:transform/Serverless-2016-10-31
-              - !Ref AWS::NoValue
-            - !If
-              - DeployDelegated
-              - Action:
-                  - "iam:PassRole"
-                Effect: Allow
-                Resource:
-                  - !GetAtt CloudFormationDeployerRole.Arn
-              - !Ref AWS::NoValue
-            - !If
-              - DeployDelegated
-              - Action:
-                  - "serverlessrepo:CreateCloudFormationTemplate"
-                  - "serverlessrepo:GetCloudFormationTemplate"
-                  - "serverlessrepo:GetApplication"
-                Effect: Allow
-                Resource:
-                  - !Sub arn:aws:serverlessrepo:${AWS::Region}:${ProductionAccount}:applications/SSOSync-Staging
-              - !Ref AWS::NoValue
-            - !If
-              - DeployDelegated
-              - Action:
-                  - "kms:Decrypt"
-                Effect: Allow
-                Resource:
-                  - !Sub arn:aws:kms:${AWS::Region}:${ProductionAccount}:key/*
-                Condition:
-                  StringEquals:
-                    kms:ViaService: !Sub secretsmanager.${AWS::Region}.amazonaws.com
-              - !Ref AWS::NoValue
-            - !If
-              - DeployDelegated
-              - Action:
-                  - "secretsmanager:DescribeSecret"
-                  - "lambda:GetFunctionConfiguration"
-                Effect: Allow
-                Resource:
-                  - !Sub arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:SSOSync*
-                  - !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:SSOSync
-              - !Ref AWS::NoValue
-            # tests/quick_start: remove a /aws/lambda/SSOSync log group left
-            # outside a deleted quick-start stack (it blocks the next create).
-            - !If
-              - DeployDelegated
-              - Action:
-                  - "logs:DeleteLogGroup"
-                Effect: Allow
-                Resource:
-                  - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/SSOSync
-                  - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/SSOSync:*
-              - !Ref AWS::NoValue
             - Sid: SsoAdminAccessPolicy
               Effect: Allow
               Action: 
@@ -1667,6 +1960,78 @@ Resources:
               Resource:
                 - "*"
               Effect: Allow
+            # Keyless ssosync runs (tests/wif_account_execution/lib/keyless.sh):
+            # the CLI's Google provider trusts only SSOSync_CLIExecutionRole.
+            - Action:
+                - "sts:AssumeRole"
+              Effect: Allow
+              Resource:
+                - !Sub arn:aws:iam::${AWS::AccountId}:role/SSOSync_CLIExecutionRole
+
+  # The service role of the WIFAuth CLI test (tests/wif_account_execution/cli).
+  # ssosync federates to Google as this role, so its name is fixed: this
+  # account's <AccountId>-cli Google provider trusts it. Only what the CLI
+  # needs to sync.
+  CodeBuildWIFCLIRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: SSOSync_CLIExecutionRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Action: ['sts:AssumeRole']
+          Effect: Allow
+          Principal:
+            Service: [codebuild.amazonaws.com]
+        # The attribute-map and user/group-operations tests run ssosync keyless
+        # in a session of this role (tests/wif_account_execution/lib/keyless.sh).
+        - Action: ['sts:AssumeRole']
+          Effect: Allow
+          Principal:
+            AWS: !GetAtt CodeBuildTestRole.Arn
+      Path: /
+      Policies:
+        - PolicyName: !Sub SSOSync-CodeBuild-WIF-CLI-${AWS::Region}
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+            - Action:
+              - 'logs:CreateLogGroup'
+              - 'logs:CreateLogStream'
+              - 'logs:PutLogEvents'
+              Effect: Allow
+              Resource: '*'
+            - Action:
+              - 'kms:DescribeKey'
+              - 'kms:GenerateDataKey*'
+              - 'kms:Encrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:Decrypt'
+              Effect: Allow
+              Resource:
+              - !GetAtt ArtifactBucketKey.Arn
+            - Action: 's3:*'
+              Effect: Allow
+              Resource:
+              - !Sub ${ArtifactBucket.Arn}/*
+            - Action:
+              - 'secretsmanager:GetSecretValue'
+              - 'secretsmanager:DescribeSecret'
+              Effect: Allow
+              Resource:
+              - !Sub arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:SSOSync*
+            - Action:
+              - 'sso:ListInstances'
+              Effect: Allow
+              Resource: '*'
+            - Action:
+              - 'identitystore:ListGroups'
+              - 'identitystore:ListUsers'
+              - 'identitystore:ListGroupMemberships'
+              - 'identitystore:IsMemberInGroups'
+              - 'identitystore:GetGroupMembershipId'
+              Effect: Allow
+              Resource: '*'
 
   CloudFormationDeployerRole:
     Type: AWS::IAM::Role

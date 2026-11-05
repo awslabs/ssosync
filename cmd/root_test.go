@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"os"
 	"testing"
 
 	"ssosync/internal/config"
@@ -85,4 +86,28 @@ func TestLambdaAWSConfig_UsesFunctionRegionNotIdentityCenterRegion(t *testing.T)
 		assert.NoError(t, err)
 		assert.Equal(t, "us-east-2", awsCfg.Region, "cfg.Region=%q", identityCenterRegion)
 	}
+}
+
+// Keyless CLI authentication ignores the "credentials.json" default unless a
+// key file was given explicitly (flag or SSOSYNC_GOOGLE_CREDENTIALS).
+func TestGoogleCredentialsExplicit(t *testing.T) {
+	f := rootCmd.Flags().Lookup("google-credentials")
+	if f == nil {
+		t.Fatal("google-credentials flag not registered")
+	}
+	prevChanged := f.Changed
+	t.Cleanup(func() { f.Changed = prevChanged })
+
+	f.Changed = false
+	t.Setenv("SSOSYNC_GOOGLE_CREDENTIALS", "")
+	assert.True(t, googleCredentialsExplicit(), "set in the environment (even empty) counts as explicit")
+
+	t.Setenv("SSOSYNC_GOOGLE_CREDENTIALS", "x") // ensure restore, then unset for the default case
+	if err := os.Unsetenv("SSOSYNC_GOOGLE_CREDENTIALS"); err != nil {
+		t.Fatal(err)
+	}
+	assert.False(t, googleCredentialsExplicit(), "neither flag nor environment: the default")
+
+	f.Changed = true
+	assert.True(t, googleCredentialsExplicit(), "flag given")
 }

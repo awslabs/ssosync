@@ -79,18 +79,54 @@ func TestConfigValidate_Success(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestConfigValidate_MissingGoogleAdmin(t *testing.T) {
-	cfg := &Config{
-		SCIMEndpoint:    "https://scim.example.com",
-		SCIMAccessToken: "token123",
-		Region:          "us-east-1",
-		IdentityStoreID: "d-123456789",
-		SyncMethod:      "groups",
+// The Google admin is optional (issue #192), but without one, and always for
+// keyless authentication, the customer ID must be explicit (not my_customer).
+func TestConfigValidate_GoogleAdminAndCustomerID(t *testing.T) {
+	tests := []struct {
+		name                         string
+		admin, impersonate, customer string
+		wantErr                      bool
+	}{
+		{"key, admin, my_customer (2.x default)", "admin@example.com", "", DefaultCustomerID, false},
+		{"key, no admin, my_customer", "", "", DefaultCustomerID, true},
+		{"key, no admin, customer ID", "", "", "C01234abc", false},
+		{"keyless, no admin, customer ID", "", "sa@p.iam.gserviceaccount.com", "C01234abc", false},
+		{"keyless, no admin, my_customer", "", "sa@p.iam.gserviceaccount.com", DefaultCustomerID, true},
+		{"keyless, no customer ID", "", "sa@p.iam.gserviceaccount.com", "", true},
 	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := &Config{
+				SCIMEndpoint:                    "https://scim.example.com",
+				SCIMAccessToken:                 "token123",
+				SyncMethod:                      "groups",
+				GoogleAdmin:                     tc.admin,
+				GoogleImpersonateServiceAccount: tc.impersonate,
+				CustomerID:                      tc.customer,
+			}
+			err := cfg.Validate()
+			if tc.wantErr {
+				assert.ErrorContains(t, err, "customer ID must be set")
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
 
-	err := cfg.Validate()
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "google admin email is required")
+// Keyless authentication never acts on behalf of a Google admin.
+func TestConfigValidate_KeylessRejectsGoogleAdmin(t *testing.T) {
+	for _, customer := range []string{"C01234abc", DefaultCustomerID} {
+		cfg := &Config{
+			SCIMEndpoint:                    "https://scim.example.com",
+			SCIMAccessToken:                 "token123",
+			SyncMethod:                      "groups",
+			GoogleAdmin:                     "admin@example.com",
+			GoogleImpersonateServiceAccount: "sa@p.iam.gserviceaccount.com",
+			CustomerID:                      customer,
+		}
+		assert.ErrorContains(t, cfg.Validate(), "does not take a google admin email", customer)
+	}
 }
 
 func TestConfigValidate_MissingSCIMEndpoint(t *testing.T) {
