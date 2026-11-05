@@ -76,7 +76,7 @@ Set the parameters for one authentication method (see [Google](#google)); the te
 | `GoogleImpersonateServiceAccount` | `GOOGLE_IMPERSONATE_SERVICE_ACCOUNT` | **Keyless:** the email of the Google service account to impersonate, or the ARN of a secret containing it. Setting it selects keyless authentication. | `""` |
 | `GoogleWIFConfig` | `GOOGLE_WIF_CONFIG` | **Keyless:** the Workload Identity Federation credential configuration (the `external_account` JSON from `gcloud iam workload-identity-pools create-cred-config --aws`), or the ARN of a Secrets Manager secret or SSM Parameter Store parameter containing it. | `""` |
 | `GoogleCredentials` | `GOOGLE_CREDENTIALS` | **Legacy:** contents of the `credentials.json` file, or the ARN of a secret containing it. Leave empty for keyless. | `""` |
-| `GoogleAdminEmail` | `GOOGLE_ADMIN` | **Legacy:** email address of a Google Workspace admin to act on behalf of (domain-wide delegation), or the ARN of a secret containing it. Leave empty for keyless (the service account then acts as itself). | `""` |
+| `GoogleAdminEmail` | `GOOGLE_ADMIN` | **Legacy:** email address of a Google Workspace admin to act on behalf of (domain-wide delegation), or the ARN of a secret containing it. Must be empty for keyless: the service account acts as itself, and the template rejects an admin with keyless authentication. | `""` |
 | `GoogleCustomerId` | `CUSTOMER_ID` | Google Workspace customer ID (from the [account settings profile](https://admin.google.com/ac/accountsettings/profile)), or the ARN of a secret containing it. The real ID (not `my_customer`) is **required** for keyless authentication, when `GoogleAdminEmail` is empty, and when using `memberKey` in `GoogleGroupMatch`. | `my_customer` |
 
 ### AWS IAM Identity Center

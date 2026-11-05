@@ -56,9 +56,10 @@ const (
 )
 
 // Scopes are the read-only Admin SDK Directory scopes ssosync requests. When
-// acting on behalf of an admin (domain-wide delegation) they must be
+// acting on behalf of an admin (legacy domain-wide delegation) they must be
 // authorized for the service account's client ID; when the service account
-// acts as itself, its assigned Workspace admin role governs access.
+// acts as itself (always for keyless), its assigned Workspace admin role
+// governs access.
 var Scopes = []string{
 	admin.AdminDirectoryGroupReadonlyScope,
 	admin.AdminDirectoryGroupMemberReadonlyScope,
@@ -68,16 +69,17 @@ var Scopes = []string{
 // Auth selects how ssosync authenticates to the Google Admin SDK. Exactly one
 // method is used, chosen explicitly (see Keyless):
 //
-//   - Service-account key (the 2.x default): ServiceAccountKey holds the JSON
-//     key of the service account; domain-wide delegation is performed with
-//     the key, on behalf of the Workspace admin.
+//   - Service-account key (legacy): ServiceAccountKey holds the JSON key of
+//     the service account. With an admin, domain-wide delegation on behalf of
+//     that admin; without, the service account acts as itself (issue #192).
 //   - Keyless (issue #345): ImpersonateServiceAccount names the service
 //     account to impersonate. The base credentials come from WIFConfig, a
 //     Workload Identity Federation credential configuration (for example an
 //     AWS Lambda role federated to Google Cloud), or from Application Default
-//     Credentials when WIFConfig is empty. The impersonation carries the
-//     Workspace admin as Subject, so domain-wide delegation still applies and
-//     no long-lived key exists.
+//     Credentials when WIFConfig is empty. The service account always acts as
+//     itself, with the Workspace admin role assigned to it: no admin is
+//     impersonated, there is no domain-wide delegation, and no long-lived key
+//     exists.
 type Auth struct {
 	// ServiceAccountKey is the service-account key JSON (key authentication).
 	ServiceAccountKey []byte
@@ -153,14 +155,28 @@ func validateCustomer(adminEmail, customerID string, auth Auth) error {
 	return nil
 }
 
+// validateAdmin rejects a Google admin with keyless authentication: keyless
+// removes impersonation of a Workspace admin altogether, so the service account
+// always acts as itself (with its own Workspace admin role) and domain-wide
+// delegation is not used.
+func validateAdmin(adminEmail string, auth Auth) error {
+	if auth.Keyless() && adminEmail != "" {
+		return errors.New("google authentication: keyless authentication (Workload Identity Federation) does not act on behalf of a Google admin; leave --google-admin / GOOGLE_ADMIN empty and assign a read-only Workspace admin role to the service account instead")
+	}
+	return nil
+}
+
 // tokenSource returns the token source for the configured authentication
-// method. With adminEmail set, ssosync acts on behalf of that Workspace admin
-// through domain-wide delegation (the admin is the JWT Subject). With
+// method. Key: with adminEmail set, ssosync acts on behalf of that Workspace
+// admin through domain-wide delegation (the admin is the JWT Subject); with
 // adminEmail empty (issue #192), the service account calls the Admin SDK as
-// itself and needs a Google Workspace admin role assigned to it; no user is
-// impersonated and no domain-wide delegation is used.
+// itself and needs a Google Workspace admin role assigned to it. Keyless: the
+// service account always acts as itself (adminEmail must be empty).
 func tokenSource(ctx context.Context, adminEmail string, auth Auth) (oauth2.TokenSource, error) {
 	if err := auth.Validate(); err != nil {
+		return nil, err
+	}
+	if err := validateAdmin(adminEmail, auth); err != nil {
 		return nil, err
 	}
 	if !auth.Keyless() {
@@ -173,11 +189,9 @@ func tokenSource(ctx context.Context, adminEmail string, auth Auth) (oauth2.Toke
 		return config.TokenSource(ctx), nil
 	}
 
-	// Keyless: impersonate the service account. Without a Subject this is a
-	// plain access token for the service account (iam.serviceAccounts.
-	// getAccessToken, e.g. roles/iam.workloadIdentityUser). With a Subject the
-	// delegation JWT is signed through the IAM Credentials API, which needs
-	// iam.serviceAccounts.signJwt (roles/iam.serviceAccountTokenCreator).
+	// Keyless: impersonate the service account, with no Subject: a plain access
+	// token for the service account itself (iam.serviceAccounts.getAccessToken,
+	// roles/iam.workloadIdentityUser).
 	var opts []option.ClientOption
 	if len(auth.WIFConfig) > 0 {
 		opts = append(opts, option.WithAuthCredentialsJSON(option.ExternalAccount, auth.WIFConfig))
@@ -185,7 +199,6 @@ func tokenSource(ctx context.Context, adminEmail string, auth Auth) (oauth2.Toke
 	ts, err := impersonate.CredentialsTokenSource(ctx, impersonate.CredentialsConfig{
 		TargetPrincipal: auth.ImpersonateServiceAccount,
 		Scopes:          Scopes,
-		Subject:         adminEmail,
 	}, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("google authentication: cannot impersonate %s: %w", auth.ImpersonateServiceAccount, err)
@@ -194,13 +207,17 @@ func tokenSource(ctx context.Context, adminEmail string, auth Auth) (oauth2.Toke
 }
 
 // NewClient creates a new client for Google's Admin API, authenticated as
-// described by auth. With adminEmail set it acts on behalf of that Workspace
-// admin (domain-wide delegation); with adminEmail empty the service account
+// described by auth. With the key and adminEmail set it acts on behalf of that
+// Workspace admin (domain-wide delegation); otherwise the service account
 // calls as itself and needs a Google Workspace admin role (issue #192).
-// customerID is the Google Workspace customer to operate against. "my_customer"
-// (DefaultCustomerID) targets the acting admin's customer, so it is only valid
-// with adminEmail; otherwise pass the customer ID.
+// Keyless authentication never takes an admin. customerID is the Google
+// Workspace customer to operate against. "my_customer" (DefaultCustomerID)
+// targets the acting admin's customer, so it is only valid with the key and
+// adminEmail; otherwise pass the customer ID.
 func NewClient(ctx context.Context, adminEmail, customerID string, auth Auth) (Client, error) {
+	if err := validateAdmin(adminEmail, auth); err != nil {
+		return nil, err
+	}
 	if err := validateCustomer(adminEmail, customerID, auth); err != nil {
 		return nil, err
 	}

@@ -243,6 +243,12 @@ func New() *Config {
 
 // Validate checks if the configuration is valid
 func (c *Config) Validate() error {
+	// Keyless authentication never acts on behalf of a Google admin: the
+	// service account acts as itself (issue #345).
+	if c.GoogleImpersonateServiceAccount != "" && c.GoogleAdmin != "" {
+		return errors.New("keyless authentication (google impersonate service account) does not take a google admin email; the service account acts as itself with its own Workspace admin role")
+	}
+
 	// GoogleAdmin is optional (issue #192). The customer ID must be explicit
 	// (not my_customer) for keyless authentication, and without an admin.
 	if (c.GoogleImpersonateServiceAccount != "" || c.GoogleAdmin == "") &&

@@ -262,7 +262,7 @@ Parameters:
   GoogleImpersonateServiceAccount:
     Type: String
     Description: |
-      [optional] Keyless authentication (Workload Identity Federation): the email of the Google service account to impersonate, or the Arn of a secret that contains it. Setting it replaces GoogleCredentials, which must then be empty, and requires the actual GoogleCustomerId (not my_customer).
+      [optional] Keyless authentication (Workload Identity Federation): the email of the Google service account to impersonate, or the Arn of a secret that contains it. Setting it replaces GoogleCredentials and GoogleAdminEmail, which must then be empty (the service account acts as itself, with a read-only Workspace admin role), and requires the actual GoogleCustomerId (not my_customer).
     Default: ""
     AllowedPattern: '(?!.*\s)|(?:arn:aws:secretsmanager:(?:(?:us(?:-gov)?|ap|ca|cn|eu|sa)-(?:central|(?:north|south)?(?:east|west)?)-\d):[0-9]{8,12}:secret:[a-zA-Z0-9\/_+=.@-]{1,512})|(?:[a-z0-9][a-z0-9-]{4,28}[a-z0-9]@[a-z0-9.-]+\.gserviceaccount\.com)'
     ConstraintDescription: 'Must be empty, a Google service account email (...@<project>.iam.gserviceaccount.com), or the Arn of a Secrets Manager secret.'
@@ -278,7 +278,7 @@ Parameters:
   GoogleAdminEmail:
     Type: String
     Description: |
-      [optional] Google Workspace admin email for the service account to act on behalf of (domain-wide delegation), or the Arn of a secret that contains it. Leave empty to have the service account call the Admin SDK as itself, using the admin role assigned to it; GoogleCustomerId must then be the actual customer ID (not my_customer).
+      [optional] Legacy (key) authentication only: Google Workspace admin email for the service account to act on behalf of (domain-wide delegation), or the Arn of a secret that contains it. Must be empty with keyless authentication. Leave empty to have the service account call the Admin SDK as itself, using the admin role assigned to it; GoogleCustomerId must then be the actual customer ID (not my_customer).
     Default: ""
     AllowedPattern: '(?!.*\s)|(?:arn:aws:secretsmanager:(?:(?:us(?:-gov)?|ap|ca|cn|eu|sa)-(?:central|(?:north|south)?(?:east|west)?)-\d):[0-9]{8,12}:secret:[a-zA-Z0-9\/_+=.@-]{1,512})|(([a-zA-Z0-9.+=_-]{0,61})@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*)'
     NoEcho: true
@@ -512,6 +512,8 @@ Rules:
     Assertions:
       - Assert: !Equals ['', !Ref GoogleCredentials]
         AssertDescription: 'Use one Google authentication method: leave GoogleCredentials empty when GoogleImpersonateServiceAccount (keyless) is set.'
+      - Assert: !Equals ['', !Ref GoogleAdminEmail]
+        AssertDescription: 'Keyless authentication does not act on behalf of a Google admin: leave GoogleAdminEmail empty and assign a read-only Workspace admin role to the service account.'
       - Assert: !Not
           - !Equals [!Ref GoogleCustomerId, "my_customer"]
         AssertDescription: 'Keyless authentication (GoogleImpersonateServiceAccount) requires the actual GoogleCustomerId (Cxxxxxxxx, or the Arn of a secret containing it), not my_customer.'

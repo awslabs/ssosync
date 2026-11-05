@@ -286,8 +286,6 @@ AWS_ROLE_NAME="SSOSync_ExecutionRole"
 
 > **Troubleshooting:** `Permission 'iam.serviceAccounts.getAccessToken' denied` means step 5 is missing or names a different role (compare it with the role in `aws sts get-caller-identity`). `The given credential is rejected by the attribute condition` means the role, or account, does not match the provider created in step 4. `Not Authorized to access this resource/api` from the Admin SDK means the admin role (step 3) is not assigned to the service account, lacks a privilege, or has not taken effect yet (Google allows up to 24 hours), or the customer ID (step 7) is wrong. If you delete and recreate the service account, even with the same email, it loses both the step 5 grant and the step 3 role assignment: redo both. Run with `--dry-run --log-level debug` until the sync connects.
 
-> **Acting on behalf of an admin instead (domain-wide delegation):** keyless authentication also works with `--google-admin` / `GoogleAdminEmail`, as in legacy auth. Instead of step 3, authorize the service account's Client ID (`gcloud iam service-accounts describe "$SA_EMAIL" --format='value(oauth2ClientId)'`) for the scopes in [legacy step 5](#legacy-auth-stored-credentials); in step 5 grant *Service Account Token Creator* (`roles/iam.serviceAccountTokenCreator`) instead of *Workload Identity User*, because acting on behalf of the admin needs `iam.serviceAccounts.signJwt`. The customer ID is then optional.
-
 #### Legacy auth (stored credentials)
 
 The service account authenticates with a downloaded JSON **key** (`credentials.json`). It remains supported in 2.x; [Workload Identity Federation](#workload-identity-federation-keyless) is recommended instead. The steps below produce the two things ssosync needs: the `credentials.json` key file and the email address of an admin for the service account to act on behalf of.
@@ -401,7 +399,7 @@ export SSOSYNC_DRY_RUN="true"
 
 | Flag | Environment Variable | Description | Default |
 |------|---------------------|-------------|---------|
-| `--google-admin` / `-u` | `SSOSYNC_GOOGLE_ADMIN` | Google Workspace admin to act on behalf of (domain-wide delegation; required for legacy auth as documented). Leave empty to have the service account act as itself with its own admin role, which requires `--customer-id`. | `""` |
+| `--google-admin` / `-u` | `SSOSYNC_GOOGLE_ADMIN` | Legacy auth only: Google Workspace admin to act on behalf of (domain-wide delegation; required for legacy auth as documented). Rejected with `--google-impersonate-service-account` (keyless never acts on behalf of an admin). Leave empty to have the service account act as itself with its own admin role, which requires `--customer-id`. | `""` |
 | `--google-credentials` / `-c` | `SSOSYNC_GOOGLE_CREDENTIALS` | Legacy auth: path to the Google service-account key JSON. Not read when `--google-impersonate-service-account` is set (giving both explicitly is an error). | `credentials.json` |
 | `--google-impersonate-service-account` | `SSOSYNC_GOOGLE_IMPERSONATE_SERVICE_ACCOUNT` | Keyless auth: email of the service account to impersonate; selects [Workload Identity Federation](#workload-identity-federation-keyless) instead of the key. | `""` |
 | `--google-wif-config` | `SSOSYNC_GOOGLE_WIF_CONFIG` | Keyless auth: path to the Workload Identity Federation credential configuration (`external_account` JSON). When unset, Application Default Credentials are used. | `""` |

@@ -122,8 +122,9 @@ func TestNewClient_ServiceAccountKey(t *testing.T) {
 	assert.NotNil(t, client)
 }
 
-// Keyless authentication always needs the customer ID (not my_customer), with
-// or without an admin; the key needs it only without an admin (issue #192).
+// Keyless authentication always needs the customer ID (not my_customer) and
+// never takes an admin (the service account acts as itself); the key needs the
+// customer ID only without an admin (issue #192).
 func TestNewClient_CustomerIDRules(t *testing.T) {
 	keyless := Auth{ImpersonateServiceAccount: targetSA, WIFConfig: []byte(awsWIFConfig)}
 	key := Auth{ServiceAccountKey: []byte(serviceAccountKeyJSON(t))}
@@ -134,7 +135,8 @@ func TestNewClient_CustomerIDRules(t *testing.T) {
 		wantErr         string
 	}{
 		{"keyless, my_customer", "", "my_customer", keyless, "keyless authentication (Workload Identity Federation) requires the Google Workspace customer ID"},
-		{"keyless, admin, my_customer", "admin@example.com", "my_customer", keyless, "keyless authentication (Workload Identity Federation) requires the Google Workspace customer ID"},
+		{"keyless, admin, my_customer", "admin@example.com", "my_customer", keyless, "does not act on behalf of a Google admin"},
+		{"keyless, admin, customer ID", "admin@example.com", testCustomer, keyless, "does not act on behalf of a Google admin"},
 		{"keyless, empty customer", "", "", keyless, "requires the Google Workspace customer ID"},
 		{"keyless, customer ID", "", testCustomer, keyless, ""},
 		{"key, admin, my_customer (2.x default)", "admin@example.com", "my_customer", key, ""},
