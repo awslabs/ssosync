@@ -60,9 +60,12 @@ const (
 // authorized for the service account's client ID; when the service account
 // acts as itself (always for keyless), its assigned Workspace admin role
 // governs access.
+//
+// Least privilege (issue #322): groups.list needs admin.directory.group.readonly,
+// which members.list also accepts, so admin.directory.group.member.readonly is
+// not requested; users.list needs admin.directory.user.readonly.
 var Scopes = []string{
 	admin.AdminDirectoryGroupReadonlyScope,
-	admin.AdminDirectoryGroupMemberReadonlyScope,
 	admin.AdminDirectoryUserReadonlyScope,
 }
 

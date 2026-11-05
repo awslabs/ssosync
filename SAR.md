@@ -50,7 +50,7 @@ Steps 1–4 are done in the [Google Cloud Console](https://console.cloud.google.
 5. **Grant domain-wide delegation** in the Admin console: **Security** > **Access and data control** > **API controls** > **Manage Domain Wide Delegation** > **Add new**. Enter the Client ID from step 4 and the following read-only scopes, then click **Authorize**:
 
    ```
-   https://www.googleapis.com/auth/admin.directory.group.readonly,https://www.googleapis.com/auth/admin.directory.group.member.readonly,https://www.googleapis.com/auth/admin.directory.user.readonly
+   https://www.googleapis.com/auth/admin.directory.group.readonly,https://www.googleapis.com/auth/admin.directory.user.readonly
    ```
 
 6. **Choose the admin to act on behalf of.** Note the email address of an existing Google Workspace admin that can read the directory (a super admin always works). This is the value for `GoogleAdminEmail`.

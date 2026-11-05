@@ -317,9 +317,8 @@ These steps mirror the [AWS Control Tower workshop](https://catalog.workshops.aw
      - **Client ID**: the Client ID you copied in step 4.
      - **OAuth scopes** (comma-separated, read-only):
        - `https://www.googleapis.com/auth/admin.directory.group.readonly`
-       - `https://www.googleapis.com/auth/admin.directory.group.member.readonly`
        - `https://www.googleapis.com/auth/admin.directory.user.readonly`
-   - Click **Authorize**. Only these three read-only scopes are needed; do not grant broader access.
+   - Click **Authorize**. Only these two read-only scopes are needed; do not grant broader access. (Group memberships are read with `admin.directory.group.readonly`; `admin.directory.group.member.readonly`, listed by earlier versions, is no longer requested and can be removed from an existing entry.)
 
 6. **Choose the admin user to impersonate**
    - ssosync must impersonate an existing **Google Workspace admin** that can read the directory. Note that user's email address — it is the value you pass as `--google-admin` (`GOOGLE_ADMIN`). A super admin always works; a custom admin role with the Users and Groups read privileges is sufficient.
