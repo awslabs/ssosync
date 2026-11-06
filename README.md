@@ -424,8 +424,8 @@ export SSOSYNC_DRY_RUN="true"
 | `--endpoint` / `-e` | `SSOSYNC_SCIM_ENDPOINT` | AWS SCIM endpoint URL | Required |
 | `--access-token` / `-t` | `SSOSYNC_SCIM_ACCESS_TOKEN` | AWS SCIM access token | Required |
 | `--sync-method` / `-s` | `SSOSYNC_SYNC_METHOD` | Sync method (`groups` or `users_groups`) | `groups` |
-| `--group-match` / `-g` | `SSOSYNC_GROUP_MATCH` | Google Groups filter query | `*` |
-| `--user-match` / `-m` | `SSOSYNC_USER_MATCH` | Google Users filter query | `""` |
+| `--group-match` / `-g` | `SSOSYNC_GROUP_MATCH` | Google Groups filter query, passed to Google verbatim; see [Quoting values in queries](#quoting-values-in-queries) | `*` |
+| `--user-match` / `-m` | `SSOSYNC_USER_MATCH` | Google Users filter query, passed to Google verbatim; see [Quoting values in queries](#quoting-values-in-queries) | `""` |
 | `--ignore-users` | `SSOSYNC_IGNORE_USERS` | Comma-separated list of users to ignore | `[]` |
 | `--ignore-groups` | `SSOSYNC_IGNORE_GROUPS` | Comma-separated list of groups to ignore | `[]` |
 | `--include-groups` | `SSOSYNC_INCLUDE_GROUPS` | Include only these groups (users_groups method only) | `[]` |
@@ -577,7 +577,7 @@ The `--user-match` parameter supports the following query fields and operators:
 
 | Field | Prefix (`:`) | Exact (`=`) | Example |
 |-------|:---:|:---:|---------|
-| `name` | ✓ | ✓ | `name:John*` or `name=John Doe` |
+| `name` | ✓ | ✓ | `name:John*` or `name='John Doe'` |
 | `email` | ✓ | ✓ | `email:admin*` or `email=john@company.com` |
 | `manager` | — | ✓ | `manager=boss@company.com` |
 | `managerId` | ✓ | ✓ | `managerId:abc123*` |
@@ -586,8 +586,8 @@ The `--user-match` parameter supports the following query fields and operators:
 | `orgCostCenter` | ✓ | ✓ | `orgCostCenter=CC-1234` |
 
 - Use `:` for prefix/wildcard matching (e.g. `name:John*`)
-- Use `=` for exact matching (e.g. `name=John Doe` or `email=admin@company.com`)
-- Use `"` for exact values containing spaces (e.g. `orgName="My Department"`)
+- Use `=` for exact matching (e.g. `name='John Doe'` or `email=admin@company.com`)
+- Single-quote values containing spaces or an apostrophe (e.g. `orgName='My Department'`); see [Quoting values in queries](#quoting-values-in-queries)
 - Combine multiple patterns with `,` or space separator
 - Use `*` alone to sync all users
 
@@ -612,6 +612,15 @@ The `--user-match` parameter supports the following query fields and operators:
 
 # Sync all users
 --user-match "*"
+```
+
+#### Quoting values in queries
+
+ssosync passes the `--group-match` and `--user-match` values to Google verbatim; it does not quote or escape them. A value containing spaces or an apostrophe must be single-quoted, with the apostrophe escaped as `\'`, for example `name='Valentine\'s Day'`. Commas still separate queries, so a value cannot contain a comma.
+
+```bash
+# Sync the group named "Valentine's Day"
+--group-match "name='Valentine\'s Day'"
 ```
 
 For complete query syntax, see:

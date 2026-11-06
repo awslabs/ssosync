@@ -168,18 +168,24 @@ func (s *syncGSuite) recordCacheOp(orgPath string, operation CacheOperationType)
 	}
 }
 
+// quoteGoogleQueryValue renders a runtime value (an email address, an OU path)
+// as a quoted string value for a Google Admin SDK users.list query. Google's
+// search syntax takes a string value in single quotes and escapes a single
+// quote inside it as \' (for example name='Valentine\'s Day'), so an
+// apostrophe or a space in the value no longer breaks the query (#401).
+// Operator-written queries (UserMatch, GroupMatch) are passed to Google
+// verbatim and must not go through this helper.
+func quoteGoogleQueryValue(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", `\'`) + "'"
+}
+
 func (s *syncGSuite) outputCacheMetrics() {
 	if !s.cfg.CacheMetrics {
 		return
 	}
 
 	for orgUnitPath, entry := range s.cacheMetrics {
-		var query string
-		if strings.ContainsRune(orgUnitPath, ' ') {
-			query = "OrgUnitPath='" + orgUnitPath + "'"
-		} else {
-			query = "OrgUnitPath=" + orgUnitPath
-		}
+		query := "OrgUnitPath=" + quoteGoogleQueryValue(orgUnitPath)
 		googleUsers, err := s.google.GetUsers(query, s.cfg.UserFilter)
 		if err != nil {
 			log.WithFields(log.Fields{
@@ -249,7 +255,8 @@ func (s *syncGSuite) LegacySyncUsers(query string) error {
 		if err != aws.ErrUserNotFound && err != nil {
 			log.WithFields(log.Fields{
 				"email": u.PrimaryEmail,
-			}).Warn("Error deleting google user")
+				"error": err,
+			}).Error("Error looking up deleted google user in AWS, aborting sync")
 			return err
 		}
 
@@ -297,7 +304,11 @@ func (s *syncGSuite) LegacySyncUsers(query string) error {
 	for _, awsUser := range awsUsers {
 		scimUser, err := s.aws.FindUserByEmail(awsUser.Username)
 		if err != nil {
-			log.WithField("user", awsUser.Username).Error("error getting active status for user")
+			log.WithFields(log.Fields{
+				"user":   awsUser.Username,
+				"userId": awsUser.ID,
+				"error":  err,
+			}).Error("error getting active status for user, aborting sync")
 			return err
 		}
 		awsUser.Active = scimUser.Active
@@ -318,6 +329,10 @@ func (s *syncGSuite) LegacySyncUsers(query string) error {
 	setUser := func(username string) error {
 		uu, err := s.aws.FindUserByEmail(username)
 		if err != nil {
+			log.WithFields(log.Fields{
+				"user":  username,
+				"error": err,
+			}).Error("error looking up synced user in AWS, aborting sync")
 			return err
 		}
 		s.users[uu.Username] = uu
@@ -584,6 +599,12 @@ func (s *syncGSuite) LegacySyncGroups(query string) error {
 				var err error
 				b, err = identitystore.IsMemberInGroups(context.Background(), s.identityStore, &s.cfg.IdentityStoreID, []string{group.ID}, &u.ID)
 				if err != nil {
+					// log already carries the group email.
+					log.WithField("user", u.Username).
+						WithField("userId", u.ID).
+						WithField("groupId", group.ID).
+						WithField("error", err).
+						Error("error checking group membership in AWS, aborting sync")
 					return err
 				}
 			}
@@ -695,7 +716,11 @@ func (s *syncGSuite) Sync(queryGroups string, queryUsers string) error {
 		scimUser, err := s.aws.FindUserByEmail(awsUser.Username)
 
 		if err != nil {
-			log.Error("error getting active status for user " + awsUser.ID)
+			log.WithFields(log.Fields{
+				"user":   awsUser.Username,
+				"userId": awsUser.ID,
+				"error":  err,
+			}).Error("error getting active status for user, aborting sync")
 			return err
 		}
 
@@ -882,6 +907,10 @@ func (s *syncGSuite) Sync(queryGroups string, queryUsers string) error {
 		log.Debug("finding user")
 		awsUserFull, err := s.aws.FindUserByEmail(awsUser.Username)
 		if err != nil {
+			// log already carries the user.
+			log.WithField("userId", awsUser.ID).
+				WithField("error", err).
+				Error("error looking up user to delete in AWS, aborting sync")
 			return err
 		}
 
@@ -965,11 +994,7 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 			if orgUnitPath != "/" {
 				orgUnitPath = strings.TrimSuffix(orgUnitPath, "/")
 			}
-			if strings.ContainsRune(orgUnitPath, ' ') {
-				precacheQueries = precacheQueries + ",OrgUnitPath='" + orgUnitPath + "'"
-			} else {
-				precacheQueries = precacheQueries + ",OrgUnitPath=" + orgUnitPath
-			}
+			precacheQueries = precacheQueries + ",OrgUnitPath=" + quoteGoogleQueryValue(orgUnitPath)
 		}
 		log.WithFields(log.Fields{
 			"func":            funcName,
@@ -2749,13 +2774,20 @@ func (s *syncGSuite) getGoogleUsersInGroup(group *admin.Group, userCache map[str
 			}).Debug("Cache: user not found")
 			// Looking up the user based on the member email address,
 			// it might be an alias
-			googleUsers, err := s.google.GetUsers("email="+m.Email, s.cfg.UserFilter)
+			query := "email=" + quoteGoogleQueryValue(m.Email)
+			googleUsers, err := s.google.GetUsers(query, s.cfg.UserFilter)
 			if err != nil {
+				// The run still fails here; log enough to identify the member,
+				// the group and the exact query (with filter) Google rejected.
 				log.WithFields(log.Fields{
 					"func":         funcName,
 					"error":        err,
 					"Member.Email": m.Email,
-				}).Error("Fetching user")
+					"Member#":      memberIndex,
+					"GroupId":      group.Id,
+					"GroupEmail":   group.Email,
+					"query":        query + s.cfg.UserFilter,
+				}).Error("Fetching group member from Google failed, aborting sync")
 				return nil, err
 			}
 			// Add user to the cache
