@@ -30,7 +30,7 @@ CfnLoader.add_multi_constructor("!", lambda loader, suffix, node: None)
 
 
 def templates():
-    # quick-start/*.yaml and the single-method subfolders (wif-auth/, legacy-auth/).
+    # quick-start/*.yaml (classic) and quick-start/next-gen/*.yaml.
     found = sorted(glob.glob(os.path.join(QUICK_START, "**", "*.yaml"), recursive=True))
     assert found, "no quick-start templates found"
     return found

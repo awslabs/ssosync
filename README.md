@@ -14,7 +14,7 @@ SSO Sync is a powerful CLI tool and AWS Lambda function that enables automatic p
 
 ## ✨ Key Features
 
-- **🔄 Uni-directional Sync**: Supports both `groups` and `users_groups` sync methods
+- **🔄 Uni-directional Sync**: Supports both `groups` and `users_groups` sync methods (`users_groups` in the CLI and the classic `SSOSync` app only)
 - **🎯 Advanced Filtering**: Flexible user and group filtering with Google API query parameters
 - **🛡️ Dry-Run Mode**: Test synchronization without making actual changes
 - **⚡ High Performance**: Built with AWS SDK v2 for improved performance and reliability
@@ -26,12 +26,28 @@ SSO Sync is a powerful CLI tool and AWS Lambda function that enables automatic p
 ## 🚀 Quick Start
 Use one of the [quick start](/quick-start/) templates to simplify your deployment. Use these templates, with the **Sync from Git** option, to make updates to your deployment far simpler.
 
-| Template | Google authentication |
-|---|---|
-| [`quick-start/wif-auth/single-account.yaml`](/quick-start/wif-auth/single-account.yaml) | **Recommended.** Keyless, [Workload Identity Federation](#workload-identity-federation-keyless) (release 2.11.0 or later): no stored key and no Google admin |
-| [`quick-start/wif-auth/single-account-attribute-map.yaml`](/quick-start/wif-auth/single-account-attribute-map.yaml) | As above, plus a custom [attribute map](#attribute-mapping) |
-| [`quick-start/legacy-auth/single-account.yaml`](/quick-start/legacy-auth/single-account.yaml), [`…/single-account-attribute-map.yaml`](/quick-start/legacy-auth/single-account-attribute-map.yaml) | [Legacy auth](#legacy-auth-stored-credentials): a stored service-account key and a Google admin |
-| [`quick-start/single-account.yaml`](/quick-start/single-account.yaml), [`…/single-account-attribute-map.yaml`](/quick-start/single-account-attribute-map.yaml) | Either method, chosen with the `AuthMethod` parameter (default: legacy, so existing **Sync from Git** deployments of these paths keep working unchanged) |
+| Template | Application | Google authentication |
+|---|---|---|
+| [`quick-start/next-gen/single-account.yaml`](/quick-start/next-gen/single-account.yaml) | [`ssosync`](#two-serverless-applications) (next generation) | **Recommended.** Keyless, [Workload Identity Federation](#workload-identity-federation-keyless) (release 2.11.0 or later): no stored key and no Google admin |
+| [`quick-start/next-gen/single-account-attribute-map.yaml`](/quick-start/next-gen/single-account-attribute-map.yaml) | `ssosync` | As above, plus a custom [attribute map](#attribute-mapping) |
+| [`quick-start/single-account.yaml`](/quick-start/single-account.yaml), [`…/single-account-attribute-map.yaml`](/quick-start/single-account-attribute-map.yaml) | [`SSOSync`](#two-serverless-applications) (classic) | [Legacy auth](#legacy-auth-stored-credentials): a stored service-account key and a Google admin. These keep the 2.10.0 parameters, so existing **Sync from Git** deployments of these paths upgrade to 2.11.0 unchanged |
+
+### Two Serverless applications
+
+From 2.11.0 ssosync is published to the AWS Serverless Application Repository as two applications, built from the same code and released with the same version number:
+
+| | [`SSOSync`](https://serverlessrepo.aws.amazon.com/applications/us-east-2/004480582608/SSOSync) (classic) | [`ssosync`](https://serverlessrepo.aws.amazon.com/applications/us-east-2/004480582608/ssosync) (next generation) |
+|---|---|---|
+| Parameters | Those of 2.10.0, unchanged | Keyless only: `GoogleImpersonateServiceAccount`, `GoogleWIFConfig` and `RoleName`; no `GoogleCredentials`, `GoogleAdminEmail`, `SyncMethod` or `IncludeGroups` |
+| Google authentication | [Legacy auth](#legacy-auth-stored-credentials) (key + admin) | [Workload Identity Federation](#workload-identity-federation-keyless) |
+| Sync method | `groups` or `users_groups` | `groups` only |
+| `GoogleCustomerId` | Optional (`my_customer` by default) | Required, the actual customer ID (`my_customer` is rejected) |
+| Fixed resource names | `SSOSync*` secrets, `AWSSyncSchedule` rule, `alias/SSOSync`, unprefixed exports (`FunctionARN`, …) | `SSOSyncNG*` secrets, `SSOSyncNGSchedule` rule, `alias/SSOSyncNG`, `SSOSyncNG*` exports (`SSOSyncNGFunctionARN`, …) |
+| Quick-starts | [`quick-start/`](/quick-start/) | [`quick-start/next-gen/`](/quick-start/next-gen/) |
+
+New features are added to `ssosync`; `SSOSync` keeps the 2.10.0 configuration. The CLI is unchanged and supports both authentication methods.
+
+**Moving a quick-start deployment to the next generation:** complete the [Workload Identity Federation](#workload-identity-federation-keyless) steps first (use `SSOSync_ExecutionRole` as the role name, the next-gen default `RoleName`), then update the stack, replacing its template with the matching one in `quick-start/next-gen/` (with **Sync from Git**, point the deployment file at the new path), and enter `GoogleCustomerId`, `GoogleImpersonateServiceAccount` and `GoogleWIFConfig`. CloudFormation creates the next-gen function (`SSOSyncNG`) and its resources, then deletes the classic ones; their names differ, so the two do not clash during the update. Anything that imports the classic exports must switch to the `SSOSyncNG*` ones. Once the next-gen function syncs, delete the service-account key in Google Cloud and, if nothing else uses it, the domain-wide delegation entry.
 
 ## 🚀 Step-by-Step Guide
 
@@ -41,7 +57,7 @@ Want to dive straight in? Try this [hands-on lab](https://catalog.workshops.aws/
 
 | Method | Best For | Setup Time |
 |--------|----------|------------|
-| **[AWS Serverless App Repository](https://console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync)** | Production use | 5 minutes |
+| **AWS Serverless App Repository**: [`ssosync`](https://console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/ssosync) (next generation) or [`SSOSync`](https://console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync) (classic), see [Two Serverless applications](#two-serverless-applications) | Production use | 5 minutes |
 | **CLI Binary** | Local testing, CI/CD | 2 minutes |
 | **AWS SAM** | Custom deployments | 10 minutes |
 
@@ -120,7 +136,7 @@ However, in the situation where an email address has been re-assigned to a diffe
 The recommended installation is:
 * [Setup IAM Identity Center](https://docs.aws.amazon.com/singlesignon/latest/userguide/get-started-enable-identity-center.html), in the management account of your organization
 * Create a linked account (for example an `Identity` account) from which to run ssosync
-* Deploy the [SSOSync app](https://console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync) from the AWS Serverless Application Repository into that linked account
+* Deploy the [ssosync app](https://console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/ssosync) (next generation; or the classic [SSOSync app](https://console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync), see [Two Serverless applications](#two-serverless-applications)) from the AWS Serverless Application Repository into that linked account, preferably through a [quick-start](#-quick-start) template
 
 > [!NOTE]
 > From `v2.5.0` ssosync no longer requires IAM Identity Center **delegated administration**. It operates through the Identity Store and SCIM APIs using only the IAM permissions granted to its execution role, so the best practice is now to deploy it in an ordinary linked account without delegating IAM Identity Center administration to that account. Deploying into the management account is still not recommended.
@@ -144,6 +160,7 @@ ssosync reads your directory as a Google **service account**. There are two ways
 | Works with the `iam.disableServiceAccountKeyCreation` org policy | Yes | No |
 | Directory access | The service account is assigned a read-only Workspace admin role and acts as itself | The service account acts on behalf of a Workspace admin (domain-wide delegation) |
 | Configure with | `--google-impersonate-service-account` + `--google-wif-config` + `--customer-id` | `--google-credentials` + `--google-admin` |
+| Serverless application | [`ssosync`](#two-serverless-applications) (next generation), `quick-start/next-gen/` | [`SSOSync`](#two-serverless-applications) (classic), `quick-start/` |
 | Status | **Recommended** (2.11.0 or later); planned to become the only method from v3 | Supported in 2.x (and still the CLI default when `--google-impersonate-service-account` is not set); planned for removal in v3 |
 
 #### Workload Identity Federation (keyless)
@@ -165,8 +182,8 @@ The commands use these values; work them out first:
 - **`POOL_ID`** and **`PROVIDER_ID`**: IDs you choose for the workload identity pool and its AWS provider (lowercase letters, digits and hyphens). They cannot be changed later. `ssosync` for both is fine for a single AWS account; with several accounts, give each its own provider ID (see step 4).
 - **`AWS_ACCOUNT_ID`**: the 12-digit ID of the AWS account ssosync runs in (`aws sts get-caller-identity --query Account --output text`).
 - **`AWS_ROLE_NAME`**: the IAM role ssosync runs as. Google matches it in the ARN of ssosync's AWS session, `arn:aws:sts::<account>:assumed-role/<role name>/<session>`.
-  - **If you are using the Workload Identity Federation quick-start templates, use `SSOSync_ExecutionRole`.** It is their default `RoleName`, so you can complete these steps before deploying.
-  - **Lambda (SAR deployment):** set the template's **`RoleName`** parameter (for example `SSOSync_ExecutionRole`) so the role has a predictable name that does not change when the stack is redeployed, and use that name. IAM role names are global in the account, so give each ssosync deployment in an account its own. If you leave `RoleName` empty, CloudFormation generates a name (for example `serverlessrepo-SSOSync-SSOSyncRoleLocal-ABC123`); deploy first, then read it from the stack's **`RoleName` output**, and redo steps 4–5 if the stack is ever recreated with a new one.
+  - **If you are using the next-gen quick-start templates (`quick-start/next-gen/`), use `SSOSync_ExecutionRole`.** It is their default `RoleName`, so you can complete these steps before deploying.
+  - **Lambda (SAR deployment of the next-gen `ssosync` app):** set the template's **`RoleName`** parameter (for example `SSOSync_ExecutionRole`) so the role has a predictable name that does not change when the stack is redeployed, and use that name. IAM role names are global in the account, so give each ssosync deployment in an account its own. If you leave `RoleName` empty, CloudFormation generates a name (for example `serverlessrepo-ssosync-SSOSyncRoleLocal-ABC123`); deploy first, then read it from the stack's **`RoleName` output**, and redo steps 4–5 if the stack is ever recreated with a new one.
   - **CLI:** the role your AWS credentials belong to; `aws sts get-caller-identity` shows it in the `assumed-role/<role name>/...` ARN.
 
 Set them, replacing the example values:
@@ -268,8 +285,8 @@ AWS_ROLE_NAME="SSOSync_ExecutionRole"
    - It is **required** for keyless authentication: the service account is not a Workspace user, so the `my_customer` alias does not identify your directory. ssosync, and the template, reject `my_customer` here. This is `--customer-id` / `CUSTOMER_ID` / `GoogleCustomerId`.
 
 8. **Configure ssosync**
-   - **Quick start:** deploy [`quick-start/wif-auth/single-account.yaml`](quick-start/wif-auth/single-account.yaml) (or [`wif-auth/single-account-attribute-map.yaml`](quick-start/wif-auth/single-account-attribute-map.yaml) for a custom attribute map) with `GoogleCustomerId` (step 7), `GoogleImpersonateServiceAccount` (`$SA_EMAIL`) and `GoogleWIFConfig` (the contents of `wif-config.json`). Its `RoleName` defaults to `SSOSync_ExecutionRole`, the name used in steps 4–5. There is no key and no admin to enter. To switch an existing deployment of `quick-start/single-account.yaml` to keyless, set its `AuthMethod` to keyless with the same three values and clear `GoogleCredentials` and `GoogleAdminEmail`.
-   - **Lambda / SAR:** set `GoogleImpersonateServiceAccount` to the service account email (`$SA_EMAIL`), `GoogleWIFConfig` to the contents of `wif-config.json` (or the Arn of a secret or SSM parameter holding it), `GoogleCustomerId` to the customer ID from step 7, `RoleName` to the role from steps 4–5, and leave `GoogleCredentials` and `GoogleAdminEmail` **empty**.
+   - **Quick start:** deploy [`quick-start/next-gen/single-account.yaml`](quick-start/next-gen/single-account.yaml) (or [`next-gen/single-account-attribute-map.yaml`](quick-start/next-gen/single-account-attribute-map.yaml) for a custom attribute map) with `GoogleCustomerId` (step 7), `GoogleImpersonateServiceAccount` (`$SA_EMAIL`) and `GoogleWIFConfig` (the contents of `wif-config.json`). Its `RoleName` defaults to `SSOSync_ExecutionRole`, the name used in steps 4–5. There is no key and no admin to enter. To switch an existing deployment of the classic `quick-start/single-account.yaml`, replace its template with the next-gen one (see [Two Serverless applications](#two-serverless-applications)).
+   - **Lambda / SAR:** deploy the next-gen [`ssosync`](https://console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/ssosync) app with `GoogleImpersonateServiceAccount` set to the service account email (`$SA_EMAIL`), `GoogleWIFConfig` to the contents of `wif-config.json` (or the Arn of a secret or SSM parameter holding it), `GoogleCustomerId` to the customer ID from step 7, and `RoleName` to the role from steps 4–5. The classic `SSOSync` app does not support keyless authentication.
    - **CLI:**
 
      ```bash
@@ -288,7 +305,7 @@ AWS_ROLE_NAME="SSOSync_ExecutionRole"
 
 #### Legacy auth (stored credentials)
 
-The service account authenticates with a downloaded JSON **key** (`credentials.json`). It remains supported in 2.x; [Workload Identity Federation](#workload-identity-federation-keyless) is recommended instead. The steps below produce the two things ssosync needs: the `credentials.json` key file and the email address of an admin for the service account to act on behalf of.
+The service account authenticates with a downloaded JSON **key** (`credentials.json`). It remains supported in 2.x by the CLI, the classic [`SSOSync`](#two-serverless-applications) app and the classic `quick-start/` templates; [Workload Identity Federation](#workload-identity-federation-keyless) is recommended instead. The steps below produce the two things ssosync needs: the `credentials.json` key file and the email address of an admin for the service account to act on behalf of.
 
 These steps mirror the [AWS Control Tower workshop](https://catalog.workshops.aws/control-tower/en-US/authentication-authorization/google-workspace/3-provisioning-scim), which you can follow for a fully guided walkthrough.
 
@@ -815,7 +832,9 @@ go test -tags=integration ./internal -v
 
 ### Serverless Application Repository (Recommended)
 
-Deploy directly from the [AWS Serverless Application Repository](https://console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync).
+Deploy from the AWS Serverless Application Repository: the next-gen [`ssosync`](https://console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/ssosync) app (keyless) or the classic [`SSOSync`](https://console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync) app (2.10.0 parameters). See [Two Serverless applications](#two-serverless-applications); the [quick-start](#-quick-start) templates are the simplest way to deploy and update either.
+
+Both applications are generated from [`template.yaml`](template.yaml), which keeps every parameter: `make sar-variants` applies the patches in `cicd/build/package/` (`legacy.patch` or `next-gen.patch`, then a name patch) and writes the variants to `dist/sar/`.
 
 ### Deployment Patterns
 

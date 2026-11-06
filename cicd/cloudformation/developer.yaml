@@ -641,7 +641,7 @@ Resources:
                 - Name: UserGroupOperations
               InputArtifacts:
                 - Name: Tests
-            # Quick-start templates (quick-start/*.yaml, wif-auth/, legacy-auth/)
+            # Quick-start templates (quick-start/*.yaml, next-gen/)
             # against the build under test. Configurations (tests/quick_start/
             # build.py) wrote a wrapper per test that deploys the quick-start as a
             # nested stack, passing every secret as a Secrets Manager dynamic
