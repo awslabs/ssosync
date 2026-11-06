@@ -37,24 +37,26 @@
      Labels: [serverless, sso, lambda, scim]
      HomePageUrl: https://github.com/awslabs/ssosync
      # Update the semantic version and run sam publish to publish a new version of your app
-@@ -247,42 +239,23 @@
+@@ -245,44 +237,25 @@
+ 
+ # Secrets
    GoogleCustomerId:
-     Type: String
-     Description: |
+-    Type: String
+-    Description: |
 -      Google CustomerId, retrieve from https://admin.google.com/ac/accountsettings/profile, [Required from v3.x] or the Arn of a secret that contains it. The actual customer ID (not my_customer) is required for keyless authentication and when GoogleAdminEmail is empty.
 -    Default: "my_customer"
 -    AllowedPattern: '(my_customer)|(?:arn:aws:secretsmanager:(?:(?:us(?:-gov)?|ap|ca|cn|eu|sa)-(?:central|(?:north|south)?(?:east|west)?)-\d):[0-9]{8,12}:secret:[a-zA-Z0-9\/_+=.@-]{1,512})|(?:C[0-9a-zA-Z]{8})'
-+      Google CustomerId (Cxxxxxxxx), retrieve from https://admin.google.com/ac/accountsettings/profile, or the Arn of a secret that contains it. Required: the service account acts as itself, so the my_customer alias is not accepted.
-+    AllowedPattern: '(?:arn:aws:secretsmanager:(?:(?:us(?:-gov)?|ap|ca|cn|eu|sa)-(?:central|(?:north|south)?(?:east|west)?)-\d):[0-9]{8,12}:secret:[a-zA-Z0-9\/_+=.@-]{1,512})|(?:C[0-9a-zA-Z]{8})'
- 
+-
 -  GoogleCredentials:
--    Type: String
--    Description: |
+     Type: String
+     Description: |
 -      Service-account key authentication (the default): the service account key to log into Google (content of credentials.json) or the Arn of a secret that contains it. Leave empty only when using keyless authentication (GoogleImpersonateServiceAccount).
 -    Default: ""
 -    AllowedPattern: '(?!.*\s)|(?:arn:aws:secretsmanager:(?:(?:us(?:-gov)?|ap|ca|cn|eu|sa)-(?:central|(?:north|south)?(?:east|west)?)-\d):[0-9]{8,12}:secret:[a-zA-Z0-9\/_+=.@-]{1,512})|(\{(\s)*(".*")(\s)*:(\s)*(".*")(\s)*\})'
 -    NoEcho: true
--
++      Google CustomerId (Cxxxxxxxx), retrieve from https://admin.google.com/ac/accountsettings/profile, or the Arn of a secret that contains it. Required: the service account acts as itself, so the my_customer alias is not accepted.
++    AllowedPattern: '(?:arn:aws:secretsmanager:(?:(?:us(?:-gov)?|ap|ca|cn|eu|sa)-(?:central|(?:north|south)?(?:east|west)?)-\d):[0-9]{8,12}:secret:[a-zA-Z0-9\/_+=.@-]{1,512})|(?:C[0-9a-zA-Z]{8})'
+ 
    GoogleImpersonateServiceAccount:
      Type: String
      Description: |
@@ -88,7 +90,7 @@
    SCIMEndpointUrl:
      Type: String
      Description: |
-@@ -340,20 +313,6 @@
+@@ -340,21 +313,7 @@
      Default: ""
      AllowedPattern: '(?!.*\s)|((([a-zA-Z0-9.\-_]{1,64})@([a-zA-Z0-9.\-]{5,260}))(,(([a-zA-Z0-9.\-_]{1,64})@([a-zA-Z0-9.\-]{5,260})))*)'
  
@@ -98,7 +100,7 @@
 -      [optional] Include only these Google Workspace groups, leave empty if not required. (Only applicable for SyncMethod user_groups)
 -    Default: ""
 -    AllowedPattern: '(?!.*\s)|((([a-zA-Z0-9.\-_]{1,64})@([a-zA-Z0-9.\-]{5,260}))(,(([a-zA-Z0-9.\-_]{1,64})@([a-zA-Z0-9.\-]{5,260})))*)'
--
+ 
 -  SyncMethod:
 -    Type: String
 -    Description: Sync method to use 
@@ -106,9 +108,10 @@
 -    AllowedValues:
 -      - groups
 -      - users_groups
- 
+-
    AttributeMap:
      Type: String
+     Description: |
 @@ -368,25 +327,14 @@
      - !Equals [!Ref FunctionName, "" ]
    SetRoleName: !Not
@@ -293,10 +296,47 @@
            DRY_RUN: !If [SetDryRun, 'True', !Ref AWS::NoValue]
            SYNC_SUSPENDED: !If [SetSyncSuspended, 'True', !Ref AWS::NoValue]
            PRECACHE_ORG_UNITS: !If [DisablePrecaching, !Ref AWS::NoValue, !Ref PrecacheOrgUnits]
-@@ -889,28 +761,6 @@
-             - secretsmanager:GetSecretValue
-           Resource: '*'
- 
+@@ -819,7 +691,7 @@
+     Type: AWS::Events::Rule
+     Condition: OnSchedule
+     Properties:
+-      Name: AWSSyncSchedule
++      Name: SSOSyncNGSchedule
+       ScheduleExpression: !Ref ScheduleExpression
+       Targets:
+         - Id: SSOSync
+@@ -836,7 +708,7 @@
+     Type: AWS::KMS::Alias
+     Condition: CreateKey
+     Properties:
+-      AliasName: alias/SSOSync
++      AliasName: alias/SSOSyncNG
+       TargetKeyId: !Ref KeyForSecrets
+   KeyForSecrets:
+     Type: AWS::KMS::Key
+@@ -871,7 +743,7 @@
+     Type: "AWS::SecretsManager::Secret"
+     Condition: CreateSecrets
+     Properties:
+-      Name: SSOSyncGoogleCustomerId
++      Name: SSOSyncNGGoogleCustomerId
+       SecretString: !Ref GoogleCustomerId
+       KmsKeyId: !If [CreateKey, !Ref KeyAlias, alias/aws/secretsmanager]
+   SecretGoogleCustomerIdPolicy:
+@@ -879,28 +751,6 @@
+     Condition: CreateKey
+     Properties:
+       SecretId: !Ref SecretGoogleCustomerId
+-      ResourcePolicy:
+-        Version: 2012-10-17
+-        Statement:
+-        - Effect: Allow
+-          Principal:
+-            AWS: !Sub arn:aws:iam::${AppAccount}:root
+-          Action:
+-            - secretsmanager:GetSecretValue
+-          Resource: '*'
+-
 -  SecretGoogleCredentials:
 -    Type: "AWS::SecretsManager::Secret"
 -    Condition: CreateGoogleCredentialsSecret
@@ -309,20 +349,28 @@
 -    Condition: ShareGoogleCredentialsSecret
 -    Properties:
 -      SecretId: !Ref SecretGoogleCredentials
--      ResourcePolicy:
--        Version: 2012-10-17
--        Statement:
--        - Effect: Allow
--          Principal:
--            AWS: !Sub arn:aws:iam::${AppAccount}:root
--          Action:
--            - secretsmanager:GetSecretValue
--          Resource: '*'
--
-   # Keyless Google authentication (issue #345).
-   SecretGoogleImpersonateServiceAccount:
+       ResourcePolicy:
+         Version: 2012-10-17
+         Statement:
+@@ -916,7 +766,7 @@
      Type: "AWS::SecretsManager::Secret"
-@@ -956,28 +806,6 @@
+     Condition: CreateGoogleImpersonateSecret
+     Properties:
+-      Name: SSOSyncGoogleImpersonateServiceAccount
++      Name: SSOSyncNGGoogleImpersonateServiceAccount
+       SecretString: !Ref GoogleImpersonateServiceAccount
+       KmsKeyId: !If [CreateKey, !Ref KeyAlias, alias/aws/secretsmanager]
+   SecretGoogleImpersonateServiceAccountPolicy:
+@@ -938,7 +788,7 @@
+     Type: "AWS::SecretsManager::Secret"
+     Condition: CreateGoogleWIFConfigSecret
+     Properties:
+-      Name: SSOSyncGoogleWIFConfig
++      Name: SSOSyncNGGoogleWIFConfig
+       SecretString: !Ref GoogleWIFConfig
+       KmsKeyId: !If [CreateKey, !Ref KeyAlias, alias/aws/secretsmanager]
+   SecretGoogleWIFConfigPolicy:
+@@ -956,33 +806,11 @@
              - secretsmanager:GetSecretValue
            Resource: '*'
  
@@ -351,29 +399,103 @@
    SecretSCIMEndpoint: # This can be moved to custom provider
      Type: "AWS::SecretsManager::Secret"
      Condition: CreateSecrets
-@@ -1063,12 +891,6 @@
+     Properties:
+-      Name: SSOSyncSCIMEndpointUrl
++      Name: SSOSyncNGSCIMEndpointUrl
+       SecretString: !Ref SCIMEndpointUrl
+       KmsKeyId: !If [CreateKey, !Ref KeyAlias, alias/aws/secretsmanager]
+   SecretSCIMEndpointPolicy:
+@@ -1004,7 +832,7 @@
+     Type: "AWS::SecretsManager::Secret"
+     Condition: CreateSecrets
+     Properties:
+-      Name: SSOSyncSCIMAccessToken
++      Name: SSOSyncNGSCIMAccessToken
+       SecretString: !Ref SCIMEndpointAccessToken
+       KmsKeyId: !If [CreateKey, !Ref KeyAlias, alias/aws/secretsmanager]
+   SecretSCIMAccessTokenPolicy:
+@@ -1026,7 +854,7 @@
+     Type: "AWS::SecretsManager::Secret"
+     Condition: CreateAttributeMapSecret
+     Properties:
+-      Name: SSOSyncAttributeMap
++      Name: SSOSyncNGAttributeMap
+       SecretString: !Ref AttributeMap
+       KmsKeyId: !If [CreateKey, !Ref KeyAlias, alias/aws/secretsmanager]
+   SecretAttributeMapPolicy:
+@@ -1050,64 +878,52 @@
+     Description: "The Arn of the deployed lambda function"
+     Value: !GetAtt SSOSyncFunction.Arn
+     Export:
+-      Name: FunctionARN
++      Name: SSOSyncNGFunctionARN
+   RoleName:
+     Condition: CreateFunction
+     Description: "The name of the IAM role the function runs as (the RoleName parameter, or the name CloudFormation generated); use it to set up keyless Google authentication (Workload Identity Federation)"
+     Value: !If [RemoteSecrets, !Ref SSOSyncRoleRemote, !Ref SSOSyncRoleLocal]
+     Export:
+-      Name: RoleName
++      Name: SSOSyncNGRoleName
+   GoogleCustomerId:
+     Condition: CreateSecrets
+     Description: "The Arn of the secret containing the GoogleCustomerId"
      Value: !Ref SecretGoogleCustomerId
      Export:
-       Name: GoogleCustomerId
+-      Name: GoogleCustomerId
 -  GoogleCredentials:
 -    Condition: CreateGoogleCredentialsSecret
 -    Description: "The Arn of the secret containing the GoogleCredentials"
 -    Value: !Ref SecretGoogleCredentials
 -    Export:
 -      Name: GoogleCredentials
++      Name: SSOSyncNGGoogleCustomerId
    GoogleImpersonateServiceAccount:
      Condition: CreateGoogleImpersonateSecret
      Description: "The Arn of the secret containing the GoogleImpersonateServiceAccount"
-@@ -1081,12 +903,6 @@
+     Value: !Ref SecretGoogleImpersonateServiceAccount
+     Export:
+-      Name: GoogleImpersonateServiceAccount
++      Name: SSOSyncNGGoogleImpersonateServiceAccount
+   GoogleWIFConfig:
+     Condition: CreateGoogleWIFConfigSecret
+     Description: "The Arn of the secret containing the GoogleWIFConfig"
      Value: !Ref SecretGoogleWIFConfig
      Export:
-       Name: GoogleWIFConfig
+-      Name: GoogleWIFConfig
 -  GoogleAdminEmail:
 -    Condition: CreateGoogleAdminEmailSecret
 -    Description: "The Arn of the secret containing the GoogleAdminEmail"
 -    Value: !Ref SecretGoogleAdminEmail
 -    Export:
 -      Name: GoogleAdminEmail
++      Name: SSOSyncNGGoogleWIFConfig
    SCIMEndpointUrl:
      Condition: CreateSecrets
      Description: "The Arn of the secret containing the SCIMEndpointUrl"
+     Value: !Ref SecretSCIMEndpoint
+     Export:
+-      Name: SCIMEndpointUrl
++      Name: SSOSyncNGSCIMEndpointUrl
+   SCIMEndpointAccessToken:
+     Condition: CreateSecrets
+     Description: "The Arn of the secret containing the SCIMEndpointAccessToken"
+     Value: !Ref SecretSCIMAccessToken
+     Export:
+-      Name: SCIMEndpointAccessToken
++      Name: SSOSyncNGSCIMEndpointAccessToken
+   AttributeMap:
+     Condition: CreateAttributeMapSecret
+     Description: "The Arn of the secret containing the AttributeMap"
+     Value: !Ref SecretAttributeMap
+     Export:
+-      Name: AttributeMap
++      Name: SSOSyncNGAttributeMap
+   KeyAlias:
+     Condition: CreateKey
+     Description: "The Arn of the KMS key used to encrypt the secrets"
+     Value: !Sub arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/${KeyForSecrets}
+     Export:
+-      Name: KeyAlias
+\ No newline at end of file
++      Name: SSOSyncNGKeyAlias
+\ No newline at end of file
