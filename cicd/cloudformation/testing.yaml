@@ -608,9 +608,10 @@ Resources:
             # reference, and per-account parameter files of secret Arns.
             # QuickStart-Package uploads the nested templates (only) to this
             # account's artifact bucket. Each quick-start then updates the same
-            # QuickStartTests stack and the function is invoked, so unchanged
-            # resources (the IAM role, ...) carry over; the order moves from the
-            # legacy templates to the keyless ones, a legacy -> keyless upgrade.
+            # QuickStartTests stack and the function is invoked. The order moves
+            # from the classic quick-starts (legacy SSOSync application) to
+            # quick-start/next-gen/ (ssosync, issue #399): a customer's upgrade,
+            # replacing the nested applications in place.
             # Every quick-start creates the SSOSync* secrets, which
             # TestAccountExecution (App + secrets) also creates, so that stack is
             # removed first.
@@ -649,74 +650,6 @@ Resources:
               - !Ref AWS::NoValue
             - !If
               - DeployDelegated
-              - Name: Deploy-QuickStart-LegacySingleAccount
-                ActionTypeId:
-                  Category: Deploy
-                  Owner: AWS
-                  Version: '1'
-                  Provider: CloudFormation
-                Configuration:
-                  ActionMode: CREATE_UPDATE
-                  Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND,CAPABILITY_NAMED_IAM
-                  StackName: QuickStartTests
-                  RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
-                  TemplateConfiguration: !Sub 'Tests::deploy/quick-start-tests/LegacySingleAccount-${AWS::AccountId}.json'
-                  TemplatePath: 'QuickStarts::packaged/LegacySingleAccount.yml'
-                InputArtifacts:
-                  - Name: Tests
-                  - Name: QuickStarts
-                RunOrder: 27
-              - !Ref AWS::NoValue
-            - !If
-              - DeployDelegated
-              - Name: QuickStart-LegacySingleAccount
-                ActionTypeId:
-                  Category: Invoke
-                  Owner: AWS
-                  Version: 1
-                  Provider: Lambda
-                RunOrder: 28
-                Configuration:
-                  FunctionName: SSOSync
-                InputArtifacts:
-                  - Name: Tests
-              - !Ref AWS::NoValue
-            - !If
-              - DeployDelegated
-              - Name: Deploy-QuickStart-LegacySingleAccountAttributeMap
-                ActionTypeId:
-                  Category: Deploy
-                  Owner: AWS
-                  Version: '1'
-                  Provider: CloudFormation
-                Configuration:
-                  ActionMode: CREATE_UPDATE
-                  Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND,CAPABILITY_NAMED_IAM
-                  StackName: QuickStartTests
-                  RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
-                  TemplateConfiguration: !Sub 'Tests::deploy/quick-start-tests/LegacySingleAccountAttributeMap-${AWS::AccountId}.json'
-                  TemplatePath: 'QuickStarts::packaged/LegacySingleAccountAttributeMap.yml'
-                InputArtifacts:
-                  - Name: Tests
-                  - Name: QuickStarts
-                RunOrder: 29
-              - !Ref AWS::NoValue
-            - !If
-              - DeployDelegated
-              - Name: QuickStart-LegacySingleAccountAttributeMap
-                ActionTypeId:
-                  Category: Invoke
-                  Owner: AWS
-                  Version: 1
-                  Provider: Lambda
-                RunOrder: 30
-                Configuration:
-                  FunctionName: SSOSync
-                InputArtifacts:
-                  - Name: Tests
-              - !Ref AWS::NoValue
-            - !If
-              - DeployDelegated
               - Name: Deploy-QuickStart-SingleAccount
                 ActionTypeId:
                   Category: Deploy
@@ -733,7 +666,7 @@ Resources:
                 InputArtifacts:
                   - Name: Tests
                   - Name: QuickStarts
-                RunOrder: 31
+                RunOrder: 27
               - !Ref AWS::NoValue
             - !If
               - DeployDelegated
@@ -743,7 +676,7 @@ Resources:
                   Owner: AWS
                   Version: 1
                   Provider: Lambda
-                RunOrder: 32
+                RunOrder: 28
                 Configuration:
                   FunctionName: SSOSync
                 InputArtifacts:
@@ -767,7 +700,7 @@ Resources:
                 InputArtifacts:
                   - Name: Tests
                   - Name: QuickStarts
-                RunOrder: 33
+                RunOrder: 29
               - !Ref AWS::NoValue
             - !If
               - DeployDelegated
@@ -777,77 +710,77 @@ Resources:
                   Owner: AWS
                   Version: 1
                   Provider: Lambda
+                RunOrder: 30
+                Configuration:
+                  FunctionName: SSOSync
+                InputArtifacts:
+                  - Name: Tests
+              - !Ref AWS::NoValue
+            - !If
+              - DeployDelegated
+              - Name: Deploy-QuickStart-NextGenSingleAccount
+                ActionTypeId:
+                  Category: Deploy
+                  Owner: AWS
+                  Version: '1'
+                  Provider: CloudFormation
+                Configuration:
+                  ActionMode: CREATE_UPDATE
+                  Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND,CAPABILITY_NAMED_IAM
+                  StackName: QuickStartTests
+                  RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
+                  TemplateConfiguration: !Sub 'Tests::deploy/quick-start-tests/NextGenSingleAccount-${AWS::AccountId}.json'
+                  TemplatePath: 'QuickStarts::packaged/NextGenSingleAccount.yml'
+                InputArtifacts:
+                  - Name: Tests
+                  - Name: QuickStarts
+                RunOrder: 31
+              - !Ref AWS::NoValue
+            - !If
+              - DeployDelegated
+              - Name: QuickStart-NextGenSingleAccount
+                ActionTypeId:
+                  Category: Invoke
+                  Owner: AWS
+                  Version: 1
+                  Provider: Lambda
+                RunOrder: 32
+                Configuration:
+                  FunctionName: SSOSyncNG
+                InputArtifacts:
+                  - Name: Tests
+              - !Ref AWS::NoValue
+            - !If
+              - DeployDelegated
+              - Name: Deploy-QuickStart-NextGenSingleAccountAttributeMap
+                ActionTypeId:
+                  Category: Deploy
+                  Owner: AWS
+                  Version: '1'
+                  Provider: CloudFormation
+                Configuration:
+                  ActionMode: CREATE_UPDATE
+                  Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND,CAPABILITY_NAMED_IAM
+                  StackName: QuickStartTests
+                  RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
+                  TemplateConfiguration: !Sub 'Tests::deploy/quick-start-tests/NextGenSingleAccountAttributeMap-${AWS::AccountId}.json'
+                  TemplatePath: 'QuickStarts::packaged/NextGenSingleAccountAttributeMap.yml'
+                InputArtifacts:
+                  - Name: Tests
+                  - Name: QuickStarts
+                RunOrder: 33
+              - !Ref AWS::NoValue
+            - !If
+              - DeployDelegated
+              - Name: QuickStart-NextGenSingleAccountAttributeMap
+                ActionTypeId:
+                  Category: Invoke
+                  Owner: AWS
+                  Version: 1
+                  Provider: Lambda
                 RunOrder: 34
                 Configuration:
-                  FunctionName: SSOSync
-                InputArtifacts:
-                  - Name: Tests
-              - !Ref AWS::NoValue
-            - !If
-              - DeployDelegated
-              - Name: Deploy-QuickStart-SingleAccountWIF
-                ActionTypeId:
-                  Category: Deploy
-                  Owner: AWS
-                  Version: '1'
-                  Provider: CloudFormation
-                Configuration:
-                  ActionMode: CREATE_UPDATE
-                  Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND,CAPABILITY_NAMED_IAM
-                  StackName: QuickStartTests
-                  RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
-                  TemplateConfiguration: !Sub 'Tests::deploy/quick-start-tests/SingleAccountWIF-${AWS::AccountId}.json'
-                  TemplatePath: 'QuickStarts::packaged/SingleAccountWIF.yml'
-                InputArtifacts:
-                  - Name: Tests
-                  - Name: QuickStarts
-                RunOrder: 35
-              - !Ref AWS::NoValue
-            - !If
-              - DeployDelegated
-              - Name: QuickStart-SingleAccountWIF
-                ActionTypeId:
-                  Category: Invoke
-                  Owner: AWS
-                  Version: 1
-                  Provider: Lambda
-                RunOrder: 36
-                Configuration:
-                  FunctionName: SSOSync
-                InputArtifacts:
-                  - Name: Tests
-              - !Ref AWS::NoValue
-            - !If
-              - DeployDelegated
-              - Name: Deploy-QuickStart-SingleAccountAttributeMapWIF
-                ActionTypeId:
-                  Category: Deploy
-                  Owner: AWS
-                  Version: '1'
-                  Provider: CloudFormation
-                Configuration:
-                  ActionMode: CREATE_UPDATE
-                  Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND,CAPABILITY_NAMED_IAM
-                  StackName: QuickStartTests
-                  RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
-                  TemplateConfiguration: !Sub 'Tests::deploy/quick-start-tests/SingleAccountAttributeMapWIF-${AWS::AccountId}.json'
-                  TemplatePath: 'QuickStarts::packaged/SingleAccountAttributeMapWIF.yml'
-                InputArtifacts:
-                  - Name: Tests
-                  - Name: QuickStarts
-                RunOrder: 37
-              - !Ref AWS::NoValue
-            - !If
-              - DeployDelegated
-              - Name: QuickStart-SingleAccountAttributeMapWIF
-                ActionTypeId:
-                  Category: Invoke
-                  Owner: AWS
-                  Version: 1
-                  Provider: Lambda
-                RunOrder: 38
-                Configuration:
-                  FunctionName: SSOSync
+                  FunctionName: SSOSyncNG
                 InputArtifacts:
                   - Name: Tests
               - !Ref AWS::NoValue
@@ -865,7 +798,7 @@ Resources:
                   RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
                 InputArtifacts:
                   - Name: Tests
-                RunOrder: 39
+                RunOrder: 35
               - !Ref AWS::NoValue
 
   CodePipelineDeployCrossAccountSecrets:
@@ -1810,8 +1743,9 @@ Resources:
               - 'lambda:InvokeFunction'
               Resource:
               - !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:SSOSyncFunction
-              # QuickStart-* (the quick-starts name their function SSOSync)
+              # QuickStart-*: the classic quick-starts name their function SSOSync, next-gen SSOSyncNG
               - !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:SSOSync
+              - !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:SSOSyncNG
               Effect: Allow
             - Action:
               - 'cloudformation:CreateStack'

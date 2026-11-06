@@ -7,10 +7,10 @@ env:
   shell: bash
   secrets-manager:
     # Keyless Google authentication (tests/wif_account_execution/lib/keyless.sh).
-    GoogleCustomerId: SSOSyncGoogleCustomerId
-    GoogleImpersonateServiceAccount: SSOSyncGoogleImpersonateServiceAccount
-    SCIMEndpointUrl: SSOSyncSCIMEndpointUrl
-    SCIMAccessToken: SSOSyncSCIMAccessToken
+    GoogleCustomerId: SSOSyncNGGoogleCustomerId
+    GoogleImpersonateServiceAccount: SSOSyncNGGoogleImpersonateServiceAccount
+    SCIMEndpointUrl: SSOSyncNGSCIMEndpointUrl
+    SCIMAccessToken: SSOSyncNGSCIMAccessToken
   variables:
     GROUP_MATCH: "name:AWS*"
     # A dedicated Google test user (primary email) and group (name), both in

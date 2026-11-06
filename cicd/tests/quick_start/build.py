@@ -20,10 +20,13 @@ Output (--out, e.g. deploy/quick-start-tests):
   <Test>-<AccountId>.json         the CloudFormation action's TemplateConfiguration
 
 All tests deploy the same stack, one after another, so it is updated from one
-quick-start to the next; TESTS is in that order, and the switch from a legacy to
-a keyless template exercises a customer's legacy -> keyless upgrade.
+quick-start to the next; TESTS is in that order. The classic quick-starts deploy
+the legacy SSOSync application, quick-start/next-gen/ the next-gen ssosync one
+(issue #399): the switch from a classic to a next-gen template is a customer's
+upgrade, replacing the nested applications in place.
 
-Environment (set by the staging buildspec): AppArn, AppVersion,
+Environment (set by the staging buildspec): AppArn (the legacy staging
+application), NextGenAppArn (the next-gen one), AppVersion,
 GoogleCustomerIdArn, SecretGoogleCredentials, SecretGoogleAdminEmail,
 SecretWIFServiceAccountEmail, SecretSCIMEndpoint, SecretSCIMAccessToken.
 """
@@ -38,19 +41,17 @@ from rewrite import rewrite
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ATTRIBUTE_MAP = os.path.join(HERE, "..", "attribute_map", "maps", "rich.json")
-WIF = "Workload Identity Federation (keyless)"
-LEGACY = "Legacy (stored credentials)"
 ROLE_NAME = "SSOSync_ExecutionRole"   # trusted by the <AccountId>-lambda provider
 GROUP_MATCH = "name:AWS*"
 
-# (test name, quick-start path, auth method), in deployment order.
+# (test name, quick-start path, auth method), in deployment order. The pipeline
+# invokes the function each quick-start names: SSOSync (classic), SSOSyncNG
+# (next-gen).
 TESTS = [
-    ("LegacySingleAccount", "legacy-auth/single-account.yaml", "legacy"),
-    ("LegacySingleAccountAttributeMap", "legacy-auth/single-account-attribute-map.yaml", "legacy"),
     ("SingleAccount", "single-account.yaml", "legacy"),
-    ("SingleAccountAttributeMap", "single-account-attribute-map.yaml", "wif"),   # legacy -> keyless
-    ("SingleAccountWIF", "wif-auth/single-account.yaml", "wif"),
-    ("SingleAccountAttributeMapWIF", "wif-auth/single-account-attribute-map.yaml", "wif"),
+    ("SingleAccountAttributeMap", "single-account-attribute-map.yaml", "legacy"),
+    ("NextGenSingleAccount", "next-gen/single-account.yaml", "wif"),   # classic -> next-gen
+    ("NextGenSingleAccountAttributeMap", "next-gen/single-account-attribute-map.yaml", "wif"),
 ]
 
 # Secret parameters: quick-start parameter -> wrapper parameter holding the Arn.
@@ -106,8 +107,6 @@ def wrapper(name, path, method, qs_params):
         nested["GoogleWIFConfig"] = "!Ref GoogleWIFConfig"
         if "RoleName" in qs_params:
             nested["RoleName"] = ROLE_NAME
-    if "AuthMethod" in qs_params:
-        nested["AuthMethod"] = json.dumps(WIF if method == "wif" else LEGACY)
     if "AttributeMap" in qs_params:
         nested["AttributeMap"] = "!Ref AttributeMap"
     nested.update({"GoogleGroupMatch": json.dumps(GROUP_MATCH), "ScheduleExpression": '""',
@@ -144,7 +143,7 @@ def main():
     ap.add_argument("--accounts", required=True, help="space or comma separated account ids")
     a = ap.parse_args()
 
-    env = {k: os.environ.get(k, "") for k in ["AppArn", "AppVersion", *set(ARN_SOURCES.values())]}
+    env = {k: os.environ.get(k, "") for k in ["AppArn", "NextGenAppArn", "AppVersion", *set(ARN_SOURCES.values())]}
     empty = [k for k, v in env.items() if not v or v == '""']
     if empty:
         sys.exit(f"build.py: not set: {', '.join(sorted(empty))}")
@@ -156,7 +155,7 @@ def main():
 
     for name, path, method in TESTS:
         with open(os.path.join(a.quick_start_dir, path)) as f:
-            text, _ = rewrite(f.read(), env["AppArn"], env["AppVersion"])
+            text, _ = rewrite(f.read(), env["AppArn"], env["AppVersion"], env["NextGenAppArn"])
         dst = os.path.join(a.out, "quick-start", path)
         os.makedirs(os.path.dirname(dst), exist_ok=True)
         with open(dst, "w") as f:

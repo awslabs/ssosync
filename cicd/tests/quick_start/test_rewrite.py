@@ -18,6 +18,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 # inside the test artifact.
 QUICK_START = os.environ.get("QUICK_START_DIR", os.path.join(HERE, "..", "..", "..", "quick-start"))
 ARN = "arn:aws:serverlessrepo:us-east-2:123456789012:applications/SSOSync-Staging"
+NG_ARN = "arn:aws:serverlessrepo:us-east-2:123456789012:applications/ssosync-staging"
 VERSION = "2.10.0-abc1234"
 
 
@@ -41,23 +42,25 @@ class RewriteQuickStarts(unittest.TestCase):
             with self.subTest(template=os.path.basename(path)):
                 with open(path) as f:
                     original = f.read()
-                result, app_ids = rewrite(original, ARN, VERSION)
+                result, app_ids = rewrite(original, ARN, VERSION, NG_ARN)
                 self.assertGreaterEqual(app_ids, 1)
                 self.assertNotIn("004480582608", result, "public SAR application still referenced")
                 doc = yaml.load(result, Loader=CfnLoader)
                 release = doc["Parameters"]["Release"]
                 self.assertEqual(VERSION, str(release["Default"]))
                 self.assertEqual([VERSION], [str(v) for v in release["AllowedValues"]])
+                # quick-start/next-gen/ deploys the next-gen application, the others the legacy one.
+                expected = NG_ARN if os.sep + "next-gen" + os.sep in path else ARN
                 for name, res in doc["Resources"].items():
                     if res.get("Type") == "AWS::Serverless::Application":
-                        self.assertEqual(ARN, res["Properties"]["Location"]["ApplicationId"], name)
+                        self.assertEqual(expected, res["Properties"]["Location"]["ApplicationId"], name)
 
     def test_only_the_release_and_application_lines_change(self):
         for path in templates():
             with self.subTest(template=os.path.basename(path)):
                 with open(path) as f:
                     original = f.read()
-                result, _ = rewrite(original, ARN, VERSION)
+                result, _ = rewrite(original, ARN, VERSION, NG_ARN)
                 before = [l for l in original.split("\n") if "ApplicationId:" not in l]
                 after = [l for l in result.split("\n") if "ApplicationId:" not in l]
                 # Drop the Release block (Default + AllowedValues items) from both.
@@ -77,6 +80,10 @@ class RewriteQuickStarts(unittest.TestCase):
     def test_missing_release_block_fails(self):
         with self.assertRaises(ValueError):
             rewrite("Resources:\n  A:\n    Properties:\n      ApplicationId: arn:aws:serverlessrepo:x\n", ARN, VERSION)
+
+    def test_unknown_application_fails(self):
+        with self.assertRaises(ValueError):
+            rewrite("    #SemanticVersion\n    Default: 1\n    AllowedValues:\n      - 1\nResources:\n  A:\n    Properties:\n      ApplicationId: arn:aws:serverlessrepo:us-east-2:1:applications/Other\n", ARN, VERSION, NG_ARN)
 
     def test_missing_application_fails(self):
         with self.assertRaises(ValueError):
