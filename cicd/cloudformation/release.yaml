@@ -495,6 +495,10 @@ Resources:
             Value: !Ref AppBucket
           - Name: Template
             Value: template.yaml
+          # Share both staging SAR applications (SSOSync-Staging, ssosync-staging)
+          # with the staging accounts (cicd/build/package/buildspec.yml).
+          - Name: ShareWith
+            Value: !Sub "${ManagementAccount},${DelegatedAccount},${NonDelegatedAccount}"
       Artifacts:
         Name: SSOSync-Build
         Type: CODEPIPELINE

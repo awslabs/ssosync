@@ -1,57 +1,79 @@
 version: 0.2
-
+# Package the two SAR applications from template.yaml (issue #399), each with a
+# staging and a release variant. template.yaml holds every feature; a feature
+# patch selects what an application exposes, then a name patch sets its
+# Serverless Application Repository name:
+#
+#   legacy   (SSOSync): legacy.patch, the 2.10.0 parameters (key + admin
+#            authentication, both sync methods); README SAR.md
+#            staging.patch -> SSOSync-Staging,   release.patch -> SSOSync
+#   next-gen (ssosync): next-gen.patch, keyless (Workload Identity Federation)
+#            only, groups sync only, required customer id; README SAR-next-gen.md
+#            next-gen-staging.patch -> ssosync-staging; release: no name patch
+#            (template.yaml's name, ssosync)
+#
+# `patch` fails the build if a hunk no longer applies, so a template.yaml
+# change that conflicts with a feature patch is caught here; regenerate the
+# patches with `make sar-variants` (see the Makefile).
 env:
   variables:
     ShareWith: "NOT-SHARED"
-
 phases:
   pre_build:
     commands:
       # Print all environment variables (handy for AWS CodeBuild logs)
       - env
       - ls -laR ${CODEBUILD_SRC_DIR_Built}/
-
       # Check that the files need to package exist
       - ls README.md
       - ls SAR.md
+      - ls SAR-next-gen.md
       - cp ${CODEBUILD_SRC_DIR_Built}/dist/ssosync_linux_arm64_v8.0/ssosync bootstrap
- 
   build:
     commands:
-      # Create staging & release variants of the template.yaml
-      - cp template.yaml staging.yaml
-      - patch staging.yaml cicd/build/package/staging.patch
-      - sam package --force-upload --no-progressbar --template-file staging.yaml --s3-bucket ${S3Bucket} --output-template-file packaged-staging.yaml
-
-      - cp template.yaml release.yaml
-      - patch release.yaml cicd/build/package/release.patch
-      - sam package --force-upload --no-progressbar --template-file release.yaml --s3-bucket ${S3Bucket} --output-template-file packaged-release.yaml
-
-      - ls packaged-staging.yaml
-      - ls packaged-release.yaml
-
+      - |
+        set -euo pipefail
+        variant() { # <output> <feature patch> [<name patch>]
+          cp template.yaml "$1"
+          patch "$1" "cicd/build/package/$2"
+          if [ -n "${3:-}" ]; then patch "$1" "cicd/build/package/$3"; fi
+          grep -E '^    (Name|ReadmeUrl):' "$1"
+        }
+        variant staging.yaml    legacy.patch   staging.patch
+        variant release.yaml    legacy.patch   release.patch
+        variant ng-staging.yaml next-gen.patch next-gen-staging.patch
+        variant ng-release.yaml next-gen.patch
+        for t in staging release ng-staging ng-release; do
+          sam package --force-upload --no-progressbar --template-file "$t.yaml" --s3-bucket ${S3Bucket} --output-template-file "packaged-$t.yaml"
+          ls "packaged-$t.yaml"
+        done
   post_build:
     commands:
       # Create parameters
       - export AppVersion="${GitTag#v}-${GitVersionHash}"
       - aws ssm put-parameter --name "/SSOSync/Staging/Version" --value ${AppVersion} --type String --overwrite
-
-      # remove the previous builds
-      #- aws serverlessrepo delete-application --application-id ${AppArn}
-
-      # Package our application with AWS SAM
-      - echo sam publish --template packaged-staging.yaml --semantic-version ${AppVersion}
-      - sam publish --template packaged-staging.yaml --semantic-version ${AppVersion}
-
-      # Share with the StagingAccount
+      # Publish both staging applications (sam publish creates an application
+      # the first time).
+      - |
+        set -euo pipefail
+        for t in staging ng-staging; do
+          echo sam publish --template "packaged-$t.yaml" --semantic-version ${AppVersion}
+          sam publish --template "packaged-$t.yaml" --semantic-version ${AppVersion}
+        done
+      # Share both staging applications with the staging accounts.
       - |
         if expr "${ShareWith}" : "NOT-SHARED" >/dev/null; then
           echo "Skipping Sharing"
         else
-          aws serverlessrepo put-application-policy --application-id ${AppArn} --statements Principals=${ShareWith},Actions=Deploy
+          for name in SSOSync-Staging ssosync-staging; do
+            aws serverlessrepo put-application-policy \
+              --application-id "arn:aws:serverlessrepo:${AWS_REGION}:$(aws sts get-caller-identity --query Account --output text):applications/${name}" \
+              --statements Principals=${ShareWith},Actions=Deploy
+          done
         fi
-
 artifacts:
   files:
     - packaged-staging.yaml
     - packaged-release.yaml
+    - packaged-ng-staging.yaml
+    - packaged-ng-release.yaml
