@@ -2,13 +2,13 @@ AWSTemplateFormatVersion: '2010-09-09'
 Transform: 'AWS::Serverless-2016-10-31'
 
 Description: 
-  This CloudFormation template will deploy two instances of SSOSync from
-  the AWS Serverless Application Repository (SAR). One holding the Secrets 
-  and the other the app itself. Same as legacy-auth/single-account-attribute-map.yaml
-  (an optional AttributeMap), but with keyless Google authentication (Workload
-  Identity Federation) instead of a stored service-account key, and no Google
-  admin (the service account acts as itself with a read-only Workspace admin
-  role). Requires release 2.11.0 or later. See
+  This CloudFormation template will deploy two instances of the next generation
+  ssosync application from the AWS Serverless Application Repository (SAR). One
+  holding the Secrets and the other the app itself. Keyless Google authentication
+  (Workload Identity Federation), with no stored service-account key and no Google admin
+  (the service account acts as itself with a read-only Workspace admin role).
+  (an optional AttributeMap) Requires release 2.11.0 or later. To move a deployment of
+  quick-start/single-account-attribute-map.yaml over, replace its template with this one. See
   https://github.com/awslabs/ssosync/blob/master/README.md#workload-identity-federation-keyless
 
 Metadata:
@@ -56,7 +56,7 @@ Parameters:
   Release:
     Type: String
     Description: |
-      Select the release to deploy. Keyless authentication needs 2.11.0 or later, so earlier releases are not offered (use legacy-auth/single-account.yaml for those).
+      Select the release to deploy. Keyless authentication needs 2.11.0 or later, so earlier releases are not offered (use quick-start/single-account.yaml for those).
     #SemanticVersion 
     Default: 2.11.0
     AllowedValues:
@@ -265,11 +265,11 @@ Resources:
     Type: AWS::Serverless::Application
     Properties:
       Location:
-        ApplicationId: arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync
+        ApplicationId: arn:aws:serverlessrepo:us-east-2:004480582608:applications/ssosync
         SemanticVersion: !Ref Release
       Parameters:
         DeployPattern: App only
-        FunctionName: SSOSync
+        FunctionName: SSOSyncNG
         SCIMEndpointUrl: !GetAtt [Secrets, Outputs.SCIMEndpointUrl]
         SCIMEndpointAccessToken: !GetAtt [Secrets, Outputs.SCIMEndpointAccessToken]
         GoogleCustomerId: !GetAtt [Secrets, Outputs.GoogleCustomerId]
@@ -279,7 +279,6 @@ Resources:
         PrecacheOrgUnits: !Ref PrecacheOrgUnits
         GoogleUserMatch: !Ref GoogleUserMatch
         GoogleGroupMatch: !Ref GoogleGroupMatch
-        SyncMethod: groups
         ScheduleExpression: !Ref ScheduleExpression
         SyncSuspended: !Ref SyncSuspended
         ExternalIdChange: !Ref ExternalIdChange
@@ -300,7 +299,7 @@ Resources:
     Type: AWS::Serverless::Application
     Properties:
       Location:
-        ApplicationId: arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync
+        ApplicationId: arn:aws:serverlessrepo:us-east-2:004480582608:applications/ssosync
         SemanticVersion: !Ref Release
       Parameters:
         DeployPattern: Secrets only
