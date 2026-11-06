@@ -141,7 +141,7 @@ go-build: install-goreleaser install-upx
 
 .PHONY: go-build-lambda
 go-build-lambda: install-goreleaser
-	$(Q)$(GORELEASER_BIN) build --snapshot --clean --id SAR $(VERBOSE_BUILD_FLAG) $(GOREL_ARGS)
+	$(Q)$(GORELEASER_BIN) build --snapshot --clean --id ssosync $(VERBOSE_BUILD_FLAG) $(GOREL_ARGS)
 
 # The two SAR applications (issue #399) are template.yaml with a feature patch
 # (legacy.patch or next-gen.patch) and a name patch, as in
