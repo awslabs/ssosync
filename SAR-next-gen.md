@@ -62,8 +62,8 @@ Sensitive values can be provided inline or as the ARN of a secret in [AWS Secret
 
 | Parameter | Environment Variable | Description | Default |
 |-----------|---------------------|-------------|---------|
-| `GoogleGroupMatch` | `GROUP_MATCH` | Google Workspace groups filter query. Use `*` to sync all groups (and their member users). See [Group matching](#group-matching) below. | `*` |
-| `GoogleUserMatch` | `USER_MATCH` | Google Workspace users filter query. Leave empty to select only users that are members of matched groups; use `*` to sync all users. See [Google Users Search](https://developers.google.com/admin-sdk/directory/v1/guides/search-users). | `""` |
+| `GoogleGroupMatch` | `GROUP_MATCH` | Google Workspace groups filter query. Use `*` to sync all groups (and their member users). Passed to Google verbatim; see [Group matching](#group-matching) and [Quoting values in queries](#quoting-values-in-queries) below. | `*` |
+| `GoogleUserMatch` | `USER_MATCH` | Google Workspace users filter query. Leave empty to select only users that are members of matched groups; use `*` to sync all users. Passed to Google verbatim; see [Quoting values in queries](#quoting-values-in-queries) and [Google Users Search](https://developers.google.com/admin-sdk/directory/v1/guides/search-users). | `""` |
 | `IgnoreGroups` | `IGNORE_GROUPS` | Comma-separated list of Google Workspace group emails to ignore. | `""` |
 | `IgnoreUsers` | `IGNORE_USERS` | Comma-separated list of Google Workspace user emails to ignore. | `""` |
 | `SyncSuspended` | `SYNC_SUSPENDED` | Whether to include suspended users when syncing (`ignore` or `sync`). | `ignore` |
@@ -118,7 +118,11 @@ Google's directory query syntax only matches group `name` and `email` with prefi
 
 ssosync then selects every group that has the marker group as a member, no matter how those groups are named. Add or remove the marker group from a group's membership to change the sync scope later.
 
-For the complete query syntax see [Google Groups Search](https://developers.google.com/admin-sdk/directory/v1/guides/search-groups).
+### Quoting values in queries
+
+`GoogleGroupMatch` and `GoogleUserMatch` are passed to Google verbatim; ssosync does not quote or escape them. A value containing spaces or an apostrophe must be single-quoted, with the apostrophe escaped as `\'`, for example `name='Valentine\'s Day'`. Commas still separate queries, so a value cannot contain a comma.
+
+For the complete query syntax see [Google Groups Search](https://developers.google.com/admin-sdk/directory/v1/guides/search-groups) and [Google Users Search](https://developers.google.com/admin-sdk/directory/v1/guides/search-users).
 
 ## Attribute mapping
 
