@@ -199,6 +199,8 @@ func initConfig() {
 	}
 
 	if cfg.IsLambda {
+		// Before configLambda, which logs each setting it reads.
+		logVersion()
 		configLambda()
 	} else {
 		// CLI path: resolve the attribute map from --attribute-map-file. The
@@ -222,6 +224,12 @@ func initConfig() {
 
 	// config logger
 	logConfig(cfg)
+
+	if !cfg.IsLambda {
+		// CLI: after logConfig, so the configured log format and level apply,
+		// and before the settings-derived lookups below log.
+		logVersion()
+	}
 
 	if cfg.SyncSuspended {
 		cfg.UserFilter = " isArchived=false"
@@ -548,6 +556,18 @@ func addFlags(_ *cobra.Command, cfg *config.Config) {
 	rootCmd.PersistentFlags().BoolVarP(&cfg.CacheMetrics, "cache-metrics", "", config.DefaultCacheMetrics, "Gather metrics for cache hits/miss, and output at end of run to help refine OrgUnitPath string.")
 	rootCmd.PersistentFlags().BoolVarP(&cfg.ForceExternalIdUpdate, "force-externalid-update", "", config.DefaultForceExternalIdUpdate, "By default a when the ExternalId of Identity store user mismatches with the Google Workspace directory user with the same email address, the user id removed and a new user created to prevent inheritance of privileges from the old user. When set this flag forces the existing user to be updated, and means there is a risk of silent permission inheritance. If an email address is re-assigned in the Google Workspace Directory")
 	rootCmd.PersistentFlags().BoolVarP(&cfg.RetainUnmatched, "retain-unmatched", "r", config.DefaultRetainUnmatched, "Retain 'local' users and groups that exist in the IAM Identity Store but cannot be matched to the Google Workspace directory, instead of deleting them. A 'local' user or group is one which has been created in the Identity Store directly and not synced via SCIM, from any external identity provider.")
+}
+
+// logVersion logs the build information goreleaser stamps into this package
+// (see .goreleaser.yml ldflags), so every run's log, and so every bug report,
+// shows which ssosync produced it.
+func logVersion() {
+	log.WithFields(log.Fields{
+		"version": version,
+		"commit":  commit,
+		"date":    date,
+		"builtBy": builtBy,
+	}).Info("ssosync version")
 }
 
 func logConfig(cfg *config.Config) {

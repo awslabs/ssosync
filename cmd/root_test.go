@@ -7,8 +7,35 @@ import (
 
 	"ssosync/internal/config"
 
+	log "github.com/sirupsen/logrus"
+	logtest "github.com/sirupsen/logrus/hooks/test"
 	"github.com/stretchr/testify/assert"
 )
+
+// The version line carries the goreleaser-stamped build information at info
+// level, so it is in every run's log and every bug report.
+func TestLogVersion_LogsStampedBuildInfoAtInfo(t *testing.T) {
+	saved := []string{version, commit, date, builtBy}
+	t.Cleanup(func() { version, commit, date, builtBy = saved[0], saved[1], saved[2], saved[3] })
+	version, commit, date, builtBy = "2.11.0", "0123456789abcdef", "2026-01-02T03:04:05Z", "goreleaser"
+
+	hook := logtest.NewGlobal()
+	t.Cleanup(hook.Reset)
+
+	logVersion()
+
+	entry := hook.LastEntry()
+	if assert.NotNil(t, entry) {
+		assert.Equal(t, log.InfoLevel, entry.Level)
+		assert.Equal(t, "ssosync version", entry.Message)
+		assert.Equal(t, log.Fields{
+			"version": "2.11.0",
+			"commit":  "0123456789abcdef",
+			"date":    "2026-01-02T03:04:05Z",
+			"builtBy": "goreleaser",
+		}, entry.Data)
+	}
+}
 
 // The real Issuer stamped by IAM Identity Center keeps the provisioning tenant
 // id's original (mixed) case, and ssosync compares Issuers case-sensitively, so
