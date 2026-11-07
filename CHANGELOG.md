@@ -12,6 +12,10 @@
 - **`RoleName` parameter and output (next-gen app).** The function's IAM role can be given a fixed name (for example `SSOSync_ExecutionRole`) so a Google workload identity provider can trust it across redeployments; the `RoleName` output shows the role's name, generated or not.
 - **Next-gen quick-start templates.** `quick-start/next-gen/single-account.yaml` and `quick-start/next-gen/single-account-attribute-map.yaml` (release 2.11.0 or later) deploy the `ssosync` app (function `SSOSyncNG`) with keyless authentication and no admin; their `RoleName` defaults to `SSOSync_ExecutionRole`. To move a classic quick-start deployment over, set up Workload Identity Federation, then update the stack with the matching next-gen template. The classic templates in `quick-start/` are unchanged from 2.10.0.
 
+### Fixes
+
+- **`ssosync --version` reported `dev, commit none, built at unknown by unknown`.** The build's linker flags named the package `github.com/awslabs/ssosync/cmd`, but the module is `ssosync`, so the version, commit and build date were never stamped into the binaries (the Go linker silently ignores an unknown symbol). Binaries now report their release version (snapshot builds: `<next patch>-<commit>`), full commit and build date.
+
 ### Breaking / behavioural changes
 
 > [!IMPORTANT]

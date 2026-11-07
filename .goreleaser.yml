@@ -34,16 +34,19 @@ builds:
         goarch: "386"
     flags:
       - -trimpath
+    # -X needs the package's full import path, which is ssosync/cmd (go.mod:
+    # module ssosync). The linker silently ignores a symbol it cannot find, so
+    # a wrong path leaves the defaults (dev, none, unknown) in every binary.
     ldflags:
-      - -s -w 
-      - -X github.com/awslabs/ssosync/cmd.version={{.Version}} 
-      - -X github.com/awslabs/ssosync/cmd.commit={{.FullCommit}} 
-      - -X github.com/awslabs/ssosync/cmd.date={{.Date}} 
-      - -X github.com/awslabs/ssosync/cmd.builtBy=goreleaser
+      - -s -w
+      - -X ssosync/cmd.version={{.Version}}
+      - -X ssosync/cmd.commit={{.FullCommit}}
+      - -X ssosync/cmd.date={{.Date}}
+      - -X ssosync/cmd.builtBy=goreleaser
 
 upx:
   - enabled: true
-    ids: [ssosync,SAR]
+    ids: [ssosync]
     goos: [linux]
     goarch: [arm, arm64, amd64]
     compress: best
