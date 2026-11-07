@@ -30,7 +30,7 @@ Use one of the [quick start](/quick-start/) templates to simplify your deploymen
 |---|---|---|
 | [`quick-start/next-gen/single-account.yaml`](/quick-start/next-gen/single-account.yaml) | [`ssosync`](#two-serverless-applications) (next generation) | **Recommended.** Keyless, [Workload Identity Federation](#workload-identity-federation-keyless) (release 2.11.0 or later): no stored key and no Google admin |
 | [`quick-start/next-gen/single-account-attribute-map.yaml`](/quick-start/next-gen/single-account-attribute-map.yaml) | `ssosync` | As above, plus a custom [attribute map](#attribute-mapping) |
-| [`quick-start/single-account.yaml`](/quick-start/single-account.yaml), [`…/single-account-attribute-map.yaml`](/quick-start/single-account-attribute-map.yaml) | [`SSOSync`](#two-serverless-applications) (classic) | [Legacy auth](#legacy-auth-stored-credentials): a stored service-account key and a Google admin. These keep the 2.10.0 parameters, so existing **Sync from Git** deployments of these paths upgrade to 2.11.0 unchanged |
+| [`quick-start/single-account.yaml`](/quick-start/single-account.yaml), [`…/single-account-attribute-map.yaml`](/quick-start/single-account-attribute-map.yaml) | [`SSOSync`](#two-serverless-applications) (classic) | [Legacy auth](#legacy-auth-stored-credentials): a stored service-account key and a Google admin. These keep the 2.10.0 parameters (their patterns widened to accept apostrophes), so existing **Sync from Git** deployments of these paths upgrade to 2.11.0 unchanged |
 
 ### Two Serverless applications
 
@@ -38,7 +38,7 @@ From 2.11.0 ssosync is published to the AWS Serverless Application Repository as
 
 | | [`SSOSync`](https://serverlessrepo.aws.amazon.com/applications/us-east-2/004480582608/SSOSync) (classic) | [`ssosync`](https://serverlessrepo.aws.amazon.com/applications/us-east-2/004480582608/ssosync) (next generation) |
 |---|---|---|
-| Parameters | Those of 2.10.0, unchanged | Keyless only: `GoogleImpersonateServiceAccount`, `GoogleWIFConfig` and `RoleName`; no `GoogleCredentials`, `GoogleAdminEmail`, `SyncMethod` or `IncludeGroups` |
+| Parameters | Those of 2.10.0, with the email, name and OU patterns widened to accept apostrophes (#401) | Keyless only: `GoogleImpersonateServiceAccount`, `GoogleWIFConfig` and `RoleName`; no `GoogleCredentials`, `GoogleAdminEmail`, `SyncMethod` or `IncludeGroups` |
 | Google authentication | [Legacy auth](#legacy-auth-stored-credentials) (key + admin) | [Workload Identity Federation](#workload-identity-federation-keyless) |
 | Sync method | `groups` or `users_groups` | `groups` only |
 | `GoogleCustomerId` | Optional (`my_customer` by default) | Required, the actual customer ID (`my_customer` is rejected) |

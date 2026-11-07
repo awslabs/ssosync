@@ -3,7 +3,7 @@
 This AWS Serverless Application populates AWS IAM Identity Center (formerly AWS SSO) directly with your Google Workspace users and groups.
 
 > [!TIP]
-> **Next generation:** the [ssosync](https://serverlessrepo.aws.amazon.com/applications/us-east-2/004480582608/ssosync) application is built from the same code with keyless Google authentication (Workload Identity Federation): no stored service-account key and no Google admin. New features are added there; this application keeps the 2.10.0 configuration. To move a quick-start deployment over, replace its template with the matching one in [`quick-start/next-gen/`](https://github.com/awslabs/ssosync/tree/master/quick-start/next-gen).
+> **Next generation:** the [ssosync](https://serverlessrepo.aws.amazon.com/applications/us-east-2/004480582608/ssosync) application is built from the same code with keyless Google authentication (Workload Identity Federation): no stored service-account key and no Google admin. New features are added there; this application keeps the 2.10.0 parameters, with the email, name and OU patterns widened to accept apostrophes. To move a quick-start deployment over, replace its template with the matching one in [`quick-start/next-gen/`](https://github.com/awslabs/ssosync/tree/master/quick-start/next-gen).
 
 > [!IMPORTANT]
 > The recommended way to deploy ssosync is **not** to launch this Serverless Application Repository template directly. Instead use one of the [quick-start](https://github.com/awslabs/ssosync/tree/master/quick-start) templates with the **Sync from Git** option. The quick-start templates wrap this application and make ongoing updates far simpler, letting you track a released version straight from the repository.

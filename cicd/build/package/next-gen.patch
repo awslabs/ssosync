@@ -92,14 +92,14 @@
      Description: |
 @@ -340,21 +313,7 @@
      Default: ""
-     AllowedPattern: '(?!.*\s)|((([a-zA-Z0-9.\-_]{1,64})@([a-zA-Z0-9.\-]{5,260}))(,(([a-zA-Z0-9.\-_]{1,64})@([a-zA-Z0-9.\-]{5,260})))*)'
+     AllowedPattern: '(?!.*\s)|((([a-zA-Z0-9.\-_'']{1,64})@([a-zA-Z0-9.\-]{5,260}))(,(([a-zA-Z0-9.\-_'']{1,64})@([a-zA-Z0-9.\-]{5,260})))*)'
  
 -  IncludeGroups:
 -    Type: String
 -    Description: |
 -      [optional] Include only these Google Workspace groups, leave empty if not required. (Only applicable for SyncMethod user_groups)
 -    Default: ""
--    AllowedPattern: '(?!.*\s)|((([a-zA-Z0-9.\-_]{1,64})@([a-zA-Z0-9.\-]{5,260}))(,(([a-zA-Z0-9.\-_]{1,64})@([a-zA-Z0-9.\-]{5,260})))*)'
+-    AllowedPattern: '(?!.*\s)|((([a-zA-Z0-9.\-_'']{1,64})@([a-zA-Z0-9.\-]{5,260}))(,(([a-zA-Z0-9.\-_'']{1,64})@([a-zA-Z0-9.\-]{5,260})))*)'
  
 -  SyncMethod:
 -    Type: String

@@ -4,7 +4,8 @@ version: 0.2
 # patch selects what an application exposes, then a name patch sets its
 # Serverless Application Repository name:
 #
-#   legacy   (SSOSync): legacy.patch, the 2.10.0 parameters (key + admin
+#   legacy   (SSOSync): legacy.patch, the 2.10.0 parameters, patterns widened
+#            to accept apostrophes (#401) (key + admin
 #            authentication, both sync methods); README SAR.md
 #            staging.patch -> SSOSync-Staging,   release.patch -> SSOSync
 #   next-gen (ssosync): next-gen.patch, keyless (Workload Identity Federation)
