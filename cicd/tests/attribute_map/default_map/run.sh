@@ -9,14 +9,27 @@
 # Google test data relied on (see google_test_users.json and baseline/):
 #   crpates  - primary organization, title "Science Officer"
 #   AceHole  - primary (school) organization with no title; blank given name
-#   olaf     - suspended; no organizations
+#   olaf     - suspended; no organizations; apostrophe in his primary email
+#              and in his OU (#401), which this suite precaches
 source "$(dirname "$0")/../lib/common.sh"
 setup_cli
+
+# #401: precache an OU path with an apostrophe and report cache metrics, so both
+# OrgUnitPath queries (precache and the per-OU usercache count) carry a quote.
+SSOSYNC_EXTRA_ARGS=(--precache-ous "/Red Dwarf/Petersen's Locker" --cache-metrics)
 
 reset_baseline
 
 ADOPT="$LOG_DIR/adopt.log"
 run_ssosync live "" "$ADOPT"
+
+# The OU queries were sent and none of them failed (these errors don't fail a run).
+check assert_log count "$ADOPT" --msg "Precaching users" --min 1
+check assert_log absent "$ADOPT" --msg "Precaching failed, caching on the fly"
+check assert_log absent "$ADOPT" --msg "Precaching return no users? Switching to caching on the fly"
+check assert_log count "$ADOPT" --msg "Caching Performance" --min 1
+check assert_log absent "$ADOPT" --msg "Failed retrieving usercache count"
+check assert_log absent "$ADOPT" --msg "Fetching group member from Google failed, aborting sync"
 
 check assert_log summary "$ADOPT" \
   --users adoptLocal=4 create=0 delete=0 recreate=0 updateForced=0 \

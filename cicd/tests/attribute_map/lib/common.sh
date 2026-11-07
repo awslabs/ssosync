@@ -70,12 +70,16 @@ setup_cli() {
 # Runs the groups sync method over GROUP_MATCH, including suspended users, with
 # JSON debug logs captured to <log-file> (and echoed to the build log).
 # Returns ssosync's exit code. "" for map-file means the built-in default map.
+# A test can set the array SSOSYNC_EXTRA_ARGS (e.g. --precache-ous ...) before
+# calling it; those arguments are appended to every run, convergence included.
+SSOSYNC_EXTRA_ARGS=()
 run_ssosync() {
   local mode=$1 map=$2 log=$3
   local args=(-t "$SCIMAccessToken" -e "$SCIMEndpointUrl" -s groups -g "$GROUP_MATCH"
               --suspended --log-format json --log-level debug)
   if [ -n "$map" ]; then args+=(--attribute-map-file "$map"); fi
   if [ "$mode" = "dry" ]; then args+=(--dry-run); fi
+  args+=(${SSOSYNC_EXTRA_ARGS[@]+"${SSOSYNC_EXTRA_ARGS[@]}"})
   echo ">>> ssosync (keyless) mode=$mode map=${map:-built-in default} log=$log"
   local rc=0
   keyless_ssosync "${args[@]}" > "$log" 2>&1 || rc=$?

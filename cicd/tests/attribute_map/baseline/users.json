@@ -96,7 +96,7 @@
         ]
     },
     {
-        "UserName": "olaf@nothing2see.info",
+        "UserName": "olaf.o'petersen@nothing2see.info",
         "DisplayName": "Olaf Petersen",
         "GivenName": "Olaf",
         "FamilyName": "Petersen",
@@ -109,7 +109,7 @@
         ],
         "Emails": [
             {
-                "Value": "olaf@nothing2see.info",
+                "Value": "olaf.o'petersen@nothing2see.info",
                 "Type": "work",
                 "Primary": true
             }

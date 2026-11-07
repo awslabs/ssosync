@@ -208,7 +208,7 @@ class SuiteExpectations(unittest.TestCase):
 
     def test_reference_is_a_patch_body(self):
         # Only Directory API user fields; no free-text notes.
-        allowed = {"primaryEmail", "id", "name", "suspended", "organizations", "phones",
+        allowed = {"primaryEmail", "id", "name", "suspended", "orgUnitPath", "organizations", "phones",
                    "addresses", "relations", "customSchemas"}
         for u in users():
             self.assertLessEqual(set(u), allowed, f"{u['primaryEmail']}: unexpected keys {set(u) - allowed}")
@@ -233,6 +233,18 @@ class SuiteExpectations(unittest.TestCase):
         self.assertEqual(absent, int(re.search(r"rule=requiredField --field field=userName --min (\d+)", script).group(1)))
         self.assertEqual(absent, int(re.search(r"field=LongValue --min (\d+)", script).group(1)))
         self.assertEqual(len(holders), int(re.search(r"rule=maxLength --field field=userName --min (\d+)", script).group(1)))
+
+    def test_default_map_precaches_an_apostrophe_ou(self):
+        # #401: default_map precaches an OU whose path has an apostrophe, and
+        # that OU holds a test user whose primary email has one too.
+        m = re.search(r"--precache-ous \"([^\"]+)\"", read("default_map", "run.sh"))
+        self.assertIsNotNone(m, "default_map must pass --precache-ous")
+        ou = m.group(1)
+        self.assertIn("'", ou)
+        self.assertNotIn(",", ou, "getUsers splits queries on commas")
+        holders = [u for u in users() if u.get("orgUnitPath") == ou]
+        self.assertEqual(1, len(holders), f"exactly one test user must be in {ou}")
+        self.assertIn("'", holders[0]["primaryEmail"])
 
     def test_baseline_matches_google_users(self):
         with open(os.path.join(AM_DIR, "baseline", "users.json")) as f:
