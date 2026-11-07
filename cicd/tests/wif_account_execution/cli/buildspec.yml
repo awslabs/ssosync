@@ -10,10 +10,10 @@ version: 0.2
 
 env:
   secrets-manager:
-    SCIMEndpointUrl: SSOSyncSCIMEndpointUrl
-    SCIMAccessToken: SSOSyncSCIMAccessToken
-    GoogleCustomerId: SSOSyncGoogleCustomerId
-    GoogleImpersonateServiceAccount: SSOSyncGoogleImpersonateServiceAccount
+    SCIMEndpointUrl: SSOSyncNGSCIMEndpointUrl
+    SCIMAccessToken: SSOSyncNGSCIMAccessToken
+    GoogleCustomerId: SSOSyncNGGoogleCustomerId
+    GoogleImpersonateServiceAccount: SSOSyncNGGoogleImpersonateServiceAccount
   variables:
     ExpectedExitState: 0
 

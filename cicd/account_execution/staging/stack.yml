@@ -62,6 +62,8 @@ Parameters:
     Type: String
 
 Conditions:
+  SetRoleName: !Not [!Equals [!Ref RoleName, '']]
+  SetGoogleWIFConfig: !Not [!Equals [!Ref GoogleWIFConfig, '']]
   SetGoogleAdminEmail: !Not [!Equals [!Ref GoogleAdminEmailArn, '']]
   SetGoogleCredentials: !Not [!Equals [!Ref GoogleCredentialsArn, '']]
   SetGoogleImpersonateServiceAccount: !Not [!Equals [!Ref GoogleImpersonateServiceAccountArn, '']]
@@ -75,20 +77,23 @@ Resources:
         SemanticVersion: !Ref AppVersion
       Parameters:
         FunctionName: SSOSyncFunction
-        RoleName: !Ref RoleName
+        # AppArn is the legacy (SSOSync) or the next-gen (ssosync) staging
+        # application (issue #399); each takes only its own parameters, so
+        # unset ones are not passed at all.
+        RoleName: !If [SetRoleName, !Ref RoleName, !Ref AWS::NoValue]
         GoogleAdminEmail: !If
           - SetGoogleAdminEmail
           - !Join ['', ['{{resolve:secretsmanager:', !Ref GoogleAdminEmailArn, '}}']]
-          - ''
+          - !Ref AWS::NoValue
         GoogleCredentials: !If
           - SetGoogleCredentials
           - !Join ['', ['{{resolve:secretsmanager:', !Ref GoogleCredentialsArn, '}}']]
-          - ''
+          - !Ref AWS::NoValue
         GoogleImpersonateServiceAccount: !If
           - SetGoogleImpersonateServiceAccount
           - !Join ['', ['{{resolve:secretsmanager:', !Ref GoogleImpersonateServiceAccountArn, '}}']]
-          - ''
-        GoogleWIFConfig: !Ref GoogleWIFConfig
+          - !Ref AWS::NoValue
+        GoogleWIFConfig: !If [SetGoogleWIFConfig, !Ref GoogleWIFConfig, !Ref AWS::NoValue]
         GoogleCustomerId: !Join ['', ['{{resolve:secretsmanager:', !Ref GoogleCustomerIdArn, '}}']]
         SCIMEndpointUrl: !Join
           - ''
@@ -105,7 +110,6 @@ Resources:
           - - '{{resolve:secretsmanager:'
             - !Ref RegionArn
             - '}}'
-        SyncMethod: groups
         GoogleGroupMatch: !Ref GroupMatch
         AttributeMap: !Ref AttributeMap
         SyncSuspended: sync

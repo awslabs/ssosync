@@ -2,8 +2,11 @@
 
 This AWS Serverless Application populates AWS IAM Identity Center (formerly AWS SSO) directly with your Google Workspace users and groups.
 
+> [!TIP]
+> **Next generation:** the [ssosync](https://serverlessrepo.aws.amazon.com/applications/us-east-2/004480582608/ssosync) application is built from the same code with keyless Google authentication (Workload Identity Federation): no stored service-account key and no Google admin. New features are added there; this application keeps the 2.10.0 configuration. To move a quick-start deployment over, replace its template with the matching one in [`quick-start/next-gen/`](https://github.com/awslabs/ssosync/tree/master/quick-start/next-gen).
+
 > [!IMPORTANT]
-> The recommended way to deploy ssosync is **not** to launch this Serverless Application Repository template directly. Instead use one of the [quick-start](https://github.com/awslabs/ssosync/tree/master/quick-start) templates with the **Sync from Git** option; for keyless authentication start from [`quick-start/wif-auth/`](https://github.com/awslabs/ssosync/tree/master/quick-start/wif-auth). The quick-start templates wrap this application and make ongoing updates far simpler, letting you track a released version straight from the repository.
+> The recommended way to deploy ssosync is **not** to launch this Serverless Application Repository template directly. Instead use one of the [quick-start](https://github.com/awslabs/ssosync/tree/master/quick-start) templates with the **Sync from Git** option. The quick-start templates wrap this application and make ongoing updates far simpler, letting you track a released version straight from the repository.
 
 > [!NOTE]
 > Deploy ssosync into an ordinary linked account. It works through the Identity Store and SCIM APIs using only the IAM permissions granted to its execution role, and does not require IAM Identity Center delegated administration. Deploying into the Organization management account is not recommended.
@@ -14,32 +17,7 @@ Before you start, [enable AWS IAM Identity Center](https://docs.aws.amazon.com/s
 
 ### Google
 
-ssosync reads your directory as a Google **service account**. It can authenticate as that service account in one of two ways; use exactly one.
-
-| | Keyless (Workload Identity Federation), **recommended** | Legacy (stored credentials) |
-|---|---|---|
-| Credential ssosync holds | None long-lived: the function's AWS role is exchanged for short-lived Google credentials on every run | A downloaded service-account key (`credentials.json`) |
-| Directory access | The service account has a read-only Workspace admin role and acts as itself | The service account acts on behalf of a Workspace admin (domain-wide delegation) |
-| Parameters | `GoogleImpersonateServiceAccount`, `GoogleWIFConfig`, `GoogleCustomerId` (required), `RoleName` | `GoogleCredentials`, `GoogleAdminEmail` |
-| Releases | 2.11.0 or later | All |
-
-#### Keyless (Workload Identity Federation)
-
-Google Cloud trusts the IAM role the function runs as; no service-account key is created or stored, and it works where the `iam.disableServiceAccountKeyCreation` organization policy forbids keys. The [project README](https://github.com/awslabs/ssosync/blob/master/README.md#workload-identity-federation-keyless) has the full, copy-pasteable Cloud Shell steps; in short:
-
-1. **Enable the APIs** (Admin SDK, IAM, Security Token Service, IAM Service Account Credentials) in a Google Cloud project.
-2. **Create a service account** without a key.
-3. **Assign it a read-only admin role** in the [Google Admin console](https://admin.google.com/) (a **super admin** is needed): a custom role with only *Users* > *Read* and *Groups* > *Read*, assigned to the service account. No domain-wide delegation is needed.
-4. **Create a workload identity pool and an AWS provider** for the AWS account, with an attribute condition that accepts only the function's role. Set `RoleName` (for example `SSOSync_ExecutionRole`) so the role has a fixed name to trust; otherwise read the generated name from the stack's `RoleName` output after deploying.
-5. **Grant *Workload Identity User*** (`roles/iam.workloadIdentityUser`) on the service account to that role.
-6. **Create the credential configuration** (`gcloud iam workload-identity-pools create-cred-config ... --aws`, without `--service-account`). Its contents are the value for `GoogleWIFConfig`; it holds no secret.
-7. **Note the customer ID** (Admin console > *Account* > *Account settings* > *Profile*). It is required for keyless authentication; `my_customer` is not accepted.
-
-Set `GoogleImpersonateServiceAccount` to the service account email, and leave `GoogleCredentials` and `GoogleAdminEmail` empty.
-
-#### Legacy (stored credentials)
-
-The service account authenticates with a downloaded JSON key and acts on behalf of a Google Workspace admin through **domain-wide delegation**. These steps produce the two things ssosync needs: the `credentials.json` key (`GoogleCredentials`) and the admin email it acts on behalf of (`GoogleAdminEmail`). The [AWS Control Tower workshop](https://catalog.workshops.aws/control-tower/en-US/authentication-authorization/google-workspace/3-provisioning-scim) provides a fully guided walkthrough.
+ssosync reads your directory as a **service account** that impersonates a Google Workspace admin via **domain-wide delegation**. These steps produce the two things ssosync needs: the `credentials.json` key (`GoogleCredentials`) and the admin email it impersonates (`GoogleAdminEmail`). The [AWS Control Tower workshop](https://catalog.workshops.aws/control-tower/en-US/authentication-authorization/google-workspace/3-provisioning-scim) provides a fully guided walkthrough.
 
 Steps 1–4 are done in the [Google Cloud Console](https://console.cloud.google.com/); step 5 is done in the [Google Admin console](https://admin.google.com/) and requires a **super admin**.
 
@@ -53,7 +31,7 @@ Steps 1–4 are done in the [Google Cloud Console](https://console.cloud.google.
    https://www.googleapis.com/auth/admin.directory.group.readonly,https://www.googleapis.com/auth/admin.directory.user.readonly
    ```
 
-6. **Choose the admin to act on behalf of.** Note the email address of an existing Google Workspace admin that can read the directory (a super admin always works). This is the value for `GoogleAdminEmail`.
+6. **Choose the admin to impersonate.** Note the email address of an existing Google Workspace admin that can read the directory (a super admin always works). This is the value for `GoogleAdminEmail`.
 
 ### AWS
 
@@ -69,15 +47,11 @@ Sensitive values can be provided inline or as the ARN of a secret in [AWS Secret
 
 ### Google Workspace Credentials
 
-Set the parameters for one authentication method (see [Google](#google)); the template rejects a mix.
-
 | Parameter | Environment Variable | Description | Default |
 |-----------|---------------------|-------------|---------|
-| `GoogleImpersonateServiceAccount` | `GOOGLE_IMPERSONATE_SERVICE_ACCOUNT` | **Keyless:** the email of the Google service account to impersonate, or the ARN of a secret containing it. Setting it selects keyless authentication. | `""` |
-| `GoogleWIFConfig` | `GOOGLE_WIF_CONFIG` | **Keyless:** the Workload Identity Federation credential configuration (the `external_account` JSON from `gcloud iam workload-identity-pools create-cred-config --aws`), or the ARN of a Secrets Manager secret or SSM Parameter Store parameter containing it. | `""` |
-| `GoogleCredentials` | `GOOGLE_CREDENTIALS` | **Legacy:** contents of the `credentials.json` file, or the ARN of a secret containing it. Leave empty for keyless. | `""` |
-| `GoogleAdminEmail` | `GOOGLE_ADMIN` | **Legacy:** email address of a Google Workspace admin to act on behalf of (domain-wide delegation), or the ARN of a secret containing it. Must be empty for keyless: the service account acts as itself, and the template rejects an admin with keyless authentication. | `""` |
-| `GoogleCustomerId` | `CUSTOMER_ID` | Google Workspace customer ID (from the [account settings profile](https://admin.google.com/ac/accountsettings/profile)), or the ARN of a secret containing it. The real ID (not `my_customer`) is **required** for keyless authentication, when `GoogleAdminEmail` is empty, and when using `memberKey` in `GoogleGroupMatch`. | `my_customer` |
+| `GoogleCredentials` | `GOOGLE_CREDENTIALS` | Contents of the `credentials.json` file, or the ARN of a secret containing it. | Required |
+| `GoogleAdminEmail` | `GOOGLE_ADMIN` | Email address of a Google Workspace super admin, or the ARN of a secret containing it. | Required |
+| `GoogleCustomerId` | `CUSTOMER_ID` | Google Workspace customer ID (from the [account settings profile](https://admin.google.com/ac/accountsettings/profile)), or the ARN of a secret containing it. Must be set to your real customer ID (not `my_customer`) when using `memberKey` in `GoogleGroupMatch`. | `my_customer` |
 
 ### AWS IAM Identity Center
 
@@ -108,7 +82,6 @@ Set the parameters for one authentication method (see [Google](#google)); the te
 | Parameter | Description | Default |
 |-----------|-------------|---------|
 | `FunctionName` | Optional fixed name for the function, useful when triggering ssosync from a pipeline. | `""` |
-| `RoleName` | Optional fixed name for the function's IAM role. Set it for keyless authentication, so the Google workload identity provider can trust a name that does not change when the stack is redeployed (for example `SSOSync_ExecutionRole`); IAM role names are unique per account. Empty: CloudFormation generates a name, shown in the `RoleName` output. | `""` |
 | `ScheduleExpression` | CloudWatch schedule expression controlling how often ssosync runs. Leave empty to trigger by another method. | `rate(15 minutes)` |
 | `DryRun` | `dry-run` simulates the changes without modifying the Identity Store; `live` applies them. | `live` |
 | `MemorySize` | RAM allocated to the function (128–10240 MB). | `128` |

@@ -33,7 +33,8 @@ phases:
         fi
 
       # Update params with the values for this run for a developer account:
-      # legacy auth (the key and an admin), deployed by the LegacyAuth tests only.
+      # the legacy (SSOSync) staging application with legacy auth (the key and an
+      # admin), deployed by the LegacyAuth tests only.
       - |
         jq -n \
         --argjson Parameters "{\"AppArn\": \"$AppArn\", \"AppVersion\": \"$AppVersion\", \"GoogleAdminEmailArn\": \"$SecretGoogleAdminEmail\", \"GoogleCredentialsArn\": \"$SecretGoogleCredentials\", \"SCIMEndpointUrlArn\": \"$SecretSCIMEndpoint\", \"SCIMAccessTokenArn\": \"$SecretSCIMAccessToken\", \"RegionArn\": \"$SecretRegion\", \"GoogleCustomerIdArn\": \"$GoogleCustomerIdArn\", \"GroupMatch\": \"name:AWS*,name=NestedGroups\"}" \
@@ -51,7 +52,8 @@ phases:
       #   <AccountId>-cli     trusts SSOSync_CLIExecutionRole (the CLI test)
       # For each account (ShareWith in the release pipeline, this account in the
       # developer pipeline), named by account id so each pipeline picks up its own:
-      #   deploy/wif-<AccountId>.json: the stack params, with the -lambda
+      #   deploy/wif-<AccountId>.json: the stack params for the next-gen (ssosync)
+      #     staging application (issue #399), with the -lambda
       #     configuration inline (the app stores it as SSOSyncGoogleWIFConfig).
       #     Every test except LegacyAuth deploys it.
       #   deploy/attributemap-<AccountId>.json: the same plus maps/rich.json
@@ -78,7 +80,7 @@ phases:
           for AccountId in $Accounts; do
             sed -E "s#(/providers/)[^\"]*\"#\1${AccountId}-lambda\"#" wif-config.json > wif-config-lambda.json
             jq -n \
-              --arg AppArn "$AppArn" \
+              --arg AppArn "$NextGenAppArn" \
               --arg AppVersion "$AppVersion" \
               --arg GoogleImpersonateServiceAccountArn "$SecretWIFServiceAccountEmail" \
               --arg GoogleWIFConfig "$(jq -c . wif-config-lambda.json)" \

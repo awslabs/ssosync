@@ -143,6 +143,24 @@ go-build: install-goreleaser install-upx
 go-build-lambda: install-goreleaser
 	$(Q)$(GORELEASER_BIN) build --snapshot --clean --id SAR $(VERBOSE_BUILD_FLAG) $(GOREL_ARGS)
 
+# The two SAR applications (issue #399) are template.yaml with a feature patch
+# (legacy.patch or next-gen.patch) and a name patch, as in
+# cicd/build/package/buildspec.yml. Writes them to dist/sar/ to check that the
+# patches still apply after a template.yaml change (and lints them when cfn-lint
+# is installed). To change a variant: edit its dist/sar/ file and regenerate the
+# feature patch, e.g. diff -u template.yaml dist/sar/next-gen.yaml > cicd/build/package/next-gen.patch
+.PHONY: sar-variants
+sar-variants:
+	@mkdir -p dist/sar
+	@set -e; for v in legacy next-gen; do \
+	  cp template.yaml dist/sar/$$v.yaml; patch -s dist/sar/$$v.yaml cicd/build/package/$$v.patch; done; \
+	cp dist/sar/legacy.yaml dist/sar/legacy-staging.yaml;   patch -s dist/sar/legacy-staging.yaml cicd/build/package/staging.patch; \
+	cp dist/sar/legacy.yaml dist/sar/legacy-release.yaml;   patch -s dist/sar/legacy-release.yaml cicd/build/package/release.patch; \
+	cp dist/sar/next-gen.yaml dist/sar/next-gen-staging.yaml; patch -s dist/sar/next-gen-staging.yaml cicd/build/package/next-gen-staging.patch; \
+	cp dist/sar/next-gen.yaml dist/sar/next-gen-release.yaml
+	@grep -H -E '^    Name:' dist/sar/*-staging.yaml dist/sar/*-release.yaml
+	@if command -v cfn-lint >/dev/null 2>&1; then cfn-lint -i W1030,W1031 -- dist/sar/legacy.yaml dist/sar/next-gen.yaml && echo "cfn-lint: ok"; fi
+
 .PHONY: clean
 clean:
 	rm -f $(OUTPUT) $(PACKAGED_TEMPLATE) bootstrap coverage.out coverage.html

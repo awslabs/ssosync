@@ -1,0 +1,501 @@
+--- template.yaml
++++ next-gen.yaml
+@@ -13,8 +13,6 @@
+           default: Google Workspace Credentials 
+         Parameters:
+           - GoogleCustomerId
+-          - GoogleAdminEmail
+-          - GoogleCredentials
+           - GoogleImpersonateServiceAccount
+           - GoogleWIFConfig
+       - Label:
+@@ -52,25 +50,19 @@
+           - AppAccount
+           - KMSKey
+       - Label:
+-          default: "Configuration options for users_groups Mode only, to be deprecated in version 3.x"
+-        Parameters:
+-          - SyncMethod
+-          - IncludeGroups
+-      - Label:
+           default: "Deprecated Parameters, to be deprecated in version 3.x"
+         Parameters:
+           - IdentityStoreID
+           - Region
+ 
+-
+   AWS::ServerlessRepo::Application:
+     Name: ssosync
+-    Description: Helping you populate AWS SSO directly with your Google Apps users.
++    Description: Next generation ssosync. Populates AWS IAM Identity Center with your Google Workspace users and groups, with keyless Google authentication (Workload Identity Federation).
+     Author: Sebastian Doell
+     SpdxLicenseId: Apache-2.0
+     # paths are relative to .aws-sam/build directory
+     LicenseUrl: LICENSE
+-    ReadmeUrl: SAR.md
++    ReadmeUrl: SAR-next-gen.md
+     Labels: [serverless, sso, lambda, scim]
+     HomePageUrl: https://github.com/awslabs/ssosync
+     # Update the semantic version and run sam publish to publish a new version of your app
+@@ -245,44 +237,25 @@
+ 
+ # Secrets
+   GoogleCustomerId:
+-    Type: String
+-    Description: |
+-      Google CustomerId, retrieve from https://admin.google.com/ac/accountsettings/profile, [Required from v3.x] or the Arn of a secret that contains it. The actual customer ID (not my_customer) is required for keyless authentication and when GoogleAdminEmail is empty.
+-    Default: "my_customer"
+-    AllowedPattern: '(my_customer)|(?:arn:aws:secretsmanager:(?:(?:us(?:-gov)?|ap|ca|cn|eu|sa)-(?:central|(?:north|south)?(?:east|west)?)-\d):[0-9]{8,12}:secret:[a-zA-Z0-9\/_+=.@-]{1,512})|(?:C[0-9a-zA-Z]{8})'
+-
+-  GoogleCredentials:
+     Type: String
+     Description: |
+-      Service-account key authentication (the default): the service account key to log into Google (content of credentials.json) or the Arn of a secret that contains it. Leave empty only when using keyless authentication (GoogleImpersonateServiceAccount).
+-    Default: ""
+-    AllowedPattern: '(?!.*\s)|(?:arn:aws:secretsmanager:(?:(?:us(?:-gov)?|ap|ca|cn|eu|sa)-(?:central|(?:north|south)?(?:east|west)?)-\d):[0-9]{8,12}:secret:[a-zA-Z0-9\/_+=.@-]{1,512})|(\{(\s)*(".*")(\s)*:(\s)*(".*")(\s)*\})'
+-    NoEcho: true
++      Google CustomerId (Cxxxxxxxx), retrieve from https://admin.google.com/ac/accountsettings/profile, or the Arn of a secret that contains it. Required: the service account acts as itself, so the my_customer alias is not accepted.
++    AllowedPattern: '(?:arn:aws:secretsmanager:(?:(?:us(?:-gov)?|ap|ca|cn|eu|sa)-(?:central|(?:north|south)?(?:east|west)?)-\d):[0-9]{8,12}:secret:[a-zA-Z0-9\/_+=.@-]{1,512})|(?:C[0-9a-zA-Z]{8})'
+ 
+   GoogleImpersonateServiceAccount:
+     Type: String
+     Description: |
+-      [optional] Keyless authentication (Workload Identity Federation): the email of the Google service account to impersonate, or the Arn of a secret that contains it. Setting it replaces GoogleCredentials and GoogleAdminEmail, which must then be empty (the service account acts as itself, with a read-only Workspace admin role), and requires the actual GoogleCustomerId (not my_customer).
+-    Default: ""
+-    AllowedPattern: '(?!.*\s)|(?:arn:aws:secretsmanager:(?:(?:us(?:-gov)?|ap|ca|cn|eu|sa)-(?:central|(?:north|south)?(?:east|west)?)-\d):[0-9]{8,12}:secret:[a-zA-Z0-9\/_+=.@-]{1,512})|(?:[a-z0-9][a-z0-9-]{4,28}[a-z0-9]@[a-z0-9.-]+\.gserviceaccount\.com)'
+-    ConstraintDescription: 'Must be empty, a Google service account email (...@<project>.iam.gserviceaccount.com), or the Arn of a Secrets Manager secret.'
++      Workload Identity Federation (keyless): the email of the Google service account ssosync impersonates, or the Arn of a secret that contains it. The service account acts as itself, with a read-only Workspace admin role assigned to it.
++    AllowedPattern: '(?:arn:aws:secretsmanager:(?:(?:us(?:-gov)?|ap|ca|cn|eu|sa)-(?:central|(?:north|south)?(?:east|west)?)-\d):[0-9]{8,12}:secret:[a-zA-Z0-9\/_+=.@-]{1,512})|(?:[a-z0-9][a-z0-9-]{4,28}[a-z0-9]@[a-z0-9.-]+\.gserviceaccount\.com)'
++    ConstraintDescription: 'Must be a Google service account email (...@<project>.iam.gserviceaccount.com), or the Arn of a Secrets Manager secret.'
+ 
+   GoogleWIFConfig:
+     Type: String
+     Description: |
+-      [optional] Keyless authentication: the Workload Identity Federation credential configuration (the external_account JSON from `gcloud iam workload-identity-pools create-cred-config --aws`), the Arn of a Secrets Manager secret, or the Arn of an SSM Parameter Store parameter that contains it. Required for keyless authentication from AWS Lambda; only used with GoogleImpersonateServiceAccount.
+-    Default: ""
+-    AllowedPattern: '(?!.*\s)|(?:arn:aws:secretsmanager:(?:(?:us(?:-gov)?|ap|ca|cn|eu|sa)-(?:central|(?:north|south)?(?:east|west)?)-\d):[0-9]{8,12}:secret:[a-zA-Z0-9\/_+=.@-]{1,512})|(?:arn:aws:ssm:(?:(?:us(?:-gov)?|ap|ca|cn|eu|sa)-(?:central|(?:north|south)?(?:east|west)?)-\d):[0-9]{8,12}:parameter\/[a-zA-Z0-9\/_.-]{1,2048})|(?s:\s*\{.*\}\s*)'
+-    ConstraintDescription: 'Must be empty, inline Workload Identity Federation configuration JSON, the Arn of a Secrets Manager secret, or the Arn of an SSM Parameter Store parameter.'
++      The Workload Identity Federation credential configuration (the external_account JSON from `gcloud iam workload-identity-pools create-cred-config --aws`, without --service-account), the Arn of a Secrets Manager secret, or the Arn of an SSM Parameter Store parameter that contains it.
++    AllowedPattern: '(?:arn:aws:secretsmanager:(?:(?:us(?:-gov)?|ap|ca|cn|eu|sa)-(?:central|(?:north|south)?(?:east|west)?)-\d):[0-9]{8,12}:secret:[a-zA-Z0-9\/_+=.@-]{1,512})|(?:arn:aws:ssm:(?:(?:us(?:-gov)?|ap|ca|cn|eu|sa)-(?:central|(?:north|south)?(?:east|west)?)-\d):[0-9]{8,12}:parameter\/[a-zA-Z0-9\/_.-]{1,2048})|(?s:\s*\{.*\}\s*)'
++    ConstraintDescription: 'Must be inline Workload Identity Federation configuration JSON, the Arn of a Secrets Manager secret, or the Arn of an SSM Parameter Store parameter.'
+ 
+-  GoogleAdminEmail:
+-    Type: String
+-    Description: |
+-      [optional] Legacy (key) authentication only: Google Workspace admin email for the service account to act on behalf of (domain-wide delegation), or the Arn of a secret that contains it. Must be empty with keyless authentication. Leave empty to have the service account call the Admin SDK as itself, using the admin role assigned to it; GoogleCustomerId must then be the actual customer ID (not my_customer).
+-    Default: ""
+-    AllowedPattern: '(?!.*\s)|(?:arn:aws:secretsmanager:(?:(?:us(?:-gov)?|ap|ca|cn|eu|sa)-(?:central|(?:north|south)?(?:east|west)?)-\d):[0-9]{8,12}:secret:[a-zA-Z0-9\/_+=.@-]{1,512})|(([a-zA-Z0-9.+=_-]{0,61})@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*)'
+-    NoEcho: true
+-
+   SCIMEndpointUrl:
+     Type: String
+     Description: |
+@@ -340,21 +313,7 @@
+     Default: ""
+     AllowedPattern: '(?!.*\s)|((([a-zA-Z0-9.\-_]{1,64})@([a-zA-Z0-9.\-]{5,260}))(,(([a-zA-Z0-9.\-_]{1,64})@([a-zA-Z0-9.\-]{5,260})))*)'
+ 
+-  IncludeGroups:
+-    Type: String
+-    Description: |
+-      [optional] Include only these Google Workspace groups, leave empty if not required. (Only applicable for SyncMethod user_groups)
+-    Default: ""
+-    AllowedPattern: '(?!.*\s)|((([a-zA-Z0-9.\-_]{1,64})@([a-zA-Z0-9.\-]{5,260}))(,(([a-zA-Z0-9.\-_]{1,64})@([a-zA-Z0-9.\-]{5,260})))*)'
+ 
+-  SyncMethod:
+-    Type: String
+-    Description: Sync method to use 
+-    Default: groups
+-    AllowedValues:
+-      - groups
+-      - users_groups
+-
+   AttributeMap:
+     Type: String
+     Description: |
+@@ -368,25 +327,14 @@
+     - !Equals [!Ref FunctionName, "" ]
+   SetRoleName: !Not
+     - !Equals [!Ref RoleName, ""]
+-  LegacySync: !Equals [ !Ref SyncMethod, "users_groups" ]
+-  SetGoogleUserMatch: !And
+-    - !Not 
+-      - !Condition LegacySync
+-    - !Not
+-      - !Equals [ !Ref GoogleUserMatch, "" ]
+-  SetGoogleGroupMatch: !And 
+-    - !Not 
+-      - !Condition LegacySync
+-    - !Not
+-      - !Equals [ !Ref GoogleGroupMatch, "" ]
++  SetGoogleUserMatch: !Not
++    - !Equals [ !Ref GoogleUserMatch, "" ]
++  SetGoogleGroupMatch: !Not
++    - !Equals [ !Ref GoogleGroupMatch, "" ]
+   SetIgnoreGroups: !Not
+     - !Equals [ !Ref IgnoreGroups, "" ]
+   SetIgnoreUsers: !Not
+     - !Equals [ !Ref IgnoreUsers, "" ]
+-  SetIncludeGroups: !And
+-    - !Condition LegacySync
+-    - !Not
+-      - !Equals [!Ref IncludeGroups, ""]
+   SetLogRetention: !And
+     - !Condition CreateFunction
+     - !Not
+@@ -421,19 +369,9 @@
+   ShareAttributeMapSecret: !And
+     - !Condition CreateKey
+     - !Condition CreateAttributeMapSecret
+-  # Google authentication (issue #345): exactly one method (see Rules).
+-  # Keyless is selected by GoogleImpersonateServiceAccount; the key in
+-  # GoogleCredentials is the default. Values that are already Arns are passed
+-  # through; literal values are stored as SSOSync* secrets by the patterns
+-  # that create secrets, like the other secret-backed parameters.
+-  SetGoogleCredentials: !Not
+-    - !Equals [!Ref GoogleCredentials, ""]
+-  CreateGoogleCredentialsSecret: !And
+-    - !Condition CreateSecrets
+-    - !Condition SetGoogleCredentials
+-  ShareGoogleCredentialsSecret: !And
+-    - !Condition CreateKey
+-    - !Condition CreateGoogleCredentialsSecret
++  # Google authentication: Workload Identity Federation (keyless) only. Values
++  # that are already Arns are passed through; literal values are stored as
++  # SSOSync* secrets by the patterns that create secrets.
+   GoogleKeyless: !Not
+     - !Equals [!Ref GoogleImpersonateServiceAccount, ""]
+   GoogleImpersonateIsSecretArn: !And
+@@ -462,16 +400,6 @@
+   ShareGoogleWIFConfigSecret: !And
+     - !Condition CreateKey
+     - !Condition CreateGoogleWIFConfigSecret
+-  # Google admin (issue #192): optional. Set -> domain-wide delegation on
+-  # behalf of that admin; empty -> the service account acts as itself.
+-  SetGoogleAdminEmail: !Not
+-    - !Equals [!Ref GoogleAdminEmail, ""]
+-  CreateGoogleAdminEmailSecret: !And
+-    - !Condition CreateSecrets
+-    - !Condition SetGoogleAdminEmail
+-  ShareGoogleAdminEmailSecret: !And
+-    - !Condition CreateKey
+-    - !Condition CreateGoogleAdminEmailSecret
+   OnSchedule: !And
+     - !Condition CreateFunction
+     - !Not
+@@ -490,49 +418,13 @@
+     - !Equals [!Ref DeployPattern, "App only"]
+ 
+ Rules:
+-  memberKeyQuery:
+-    RuleCondition: !Contains [[memberkey, memberKey, MEMBERKEY], !Ref GoogleGroupMatch]
+-    Assertions:
+-      - Assert: !Not
+-        - !Equals [!Ref GoogleCustomerId, "my_customer"]
+-        AssertDescription: 'If memberKey is used in GroupMatch, the actual CustomerId must also be supplied.'
+-  # The secret parameters (GoogleCustomerId, GoogleCredentials, GoogleAdminEmail,
++  # The secret parameters (GoogleCustomerId, GoogleImpersonateServiceAccount,
+   # SCIMEndpointUrl, SCIMEndpointAccessToken) must be secret Arns for this
+   # pattern. Rules cannot test a prefix: Fn::Contains is an exact match against
+   # the list items, so the former Contains [['arn:aws:secretsmanager:'], ...]
+   # assertions rejected every real Arn. Each value's AllowedPattern accepts a
+   # secret Arn, and SSOSyncRoleRemote uses the values directly as IAM policy
+   # Resources, which IAM rejects unless they are Arns.
+-  # Google authentication: exactly one method. Keyless (impersonation) is
+-  # selected by GoogleImpersonateServiceAccount; otherwise the key in
+-  # GoogleCredentials is required, and a WIF configuration makes no sense.
+-  GoogleKeylessAuth:
+-    RuleCondition: !Not
+-      - !Equals [!Ref GoogleImpersonateServiceAccount, ""]
+-    Assertions:
+-      - Assert: !Equals ['', !Ref GoogleCredentials]
+-        AssertDescription: 'Use one Google authentication method: leave GoogleCredentials empty when GoogleImpersonateServiceAccount (keyless) is set.'
+-      - Assert: !Equals ['', !Ref GoogleAdminEmail]
+-        AssertDescription: 'Keyless authentication does not act on behalf of a Google admin: leave GoogleAdminEmail empty and assign a read-only Workspace admin role to the service account.'
+-      - Assert: !Not
+-          - !Equals [!Ref GoogleCustomerId, "my_customer"]
+-        AssertDescription: 'Keyless authentication (GoogleImpersonateServiceAccount) requires the actual GoogleCustomerId (Cxxxxxxxx, or the Arn of a secret containing it), not my_customer.'
+-  # Without an admin the service account calls the Admin SDK as itself, so
+-  # the customer must be explicit (matches validateCustomer in the code).
+-  GoogleNoAdmin:
+-    RuleCondition: !Equals [!Ref GoogleAdminEmail, ""]
+-    Assertions:
+-      - Assert: !Not
+-          - !Equals [!Ref GoogleCustomerId, "my_customer"]
+-        AssertDescription: 'When GoogleAdminEmail is empty (the service account acts as itself), the actual GoogleCustomerId (Cxxxxxxxx, or the Arn of a secret containing it) is required, not my_customer.'
+-  GoogleKeyAuth:
+-    RuleCondition: !Equals [!Ref GoogleImpersonateServiceAccount, ""]
+-    Assertions:
+-      - Assert: !Not
+-          - !Equals ['', !Ref GoogleCredentials]
+-        AssertDescription: 'Google authentication is required: provide GoogleCredentials (service-account key) or GoogleImpersonateServiceAccount (keyless).'
+-      - Assert: !Equals ['', !Ref GoogleWIFConfig]
+-        AssertDescription: 'GoogleWIFConfig is only used for keyless authentication; also set GoogleImpersonateServiceAccount, or leave it empty.'
+   SecretValues:
+     RuleCondition: !Equals [!Ref DeployPattern, "App for cross-account"]
+     Assertions:
+@@ -594,10 +486,6 @@
+                 Resource:
+                   - !If [CreateSecrets, !Ref SecretGoogleCustomerId, !Ref GoogleCustomerId]
+                   - !If
+-                    - CreateGoogleCredentialsSecret
+-                    - !Ref SecretGoogleCredentials
+-                    - !If [SetGoogleCredentials, !Ref GoogleCredentials, !Ref AWS::NoValue]
+-                  - !If
+                     - CreateGoogleImpersonateSecret
+                     - !Ref SecretGoogleImpersonateServiceAccount
+                     - !If [GoogleImpersonateIsSecretArn, !Ref GoogleImpersonateServiceAccount, !Ref AWS::NoValue]
+@@ -605,10 +493,6 @@
+                     - CreateGoogleWIFConfigSecret
+                     - !Ref SecretGoogleWIFConfig
+                     - !If [GoogleWIFConfigIsSecretArn, !Ref GoogleWIFConfig, !Ref AWS::NoValue]
+-                  - !If
+-                    - CreateGoogleAdminEmailSecret
+-                    - !Ref SecretGoogleAdminEmail
+-                    - !If [SetGoogleAdminEmail, !Ref GoogleAdminEmail, !Ref AWS::NoValue]
+                   - !If [CreateSecrets, !Ref SecretSCIMEndpoint, !Ref SCIMEndpointUrl]
+                   - !If [CreateSecrets, !Ref SecretSCIMAccessToken, !Ref SCIMEndpointAccessToken]
+                   - !If
+@@ -692,10 +576,8 @@
+                   - "secretsmanager:DescribeSecret"
+                 Resource:
+                   - !Ref GoogleCustomerId # GoogleCustomerId
+-                  - !If [SetGoogleCredentials, !Ref GoogleCredentials, !Ref AWS::NoValue] # GoogleCredentials
+                   - !If [GoogleImpersonateIsSecretArn, !Ref GoogleImpersonateServiceAccount, !Ref AWS::NoValue]
+                   - !If [GoogleWIFConfigIsSecretArn, !Ref GoogleWIFConfig, !Ref AWS::NoValue]
+-                  - !If [SetGoogleAdminEmail, !Ref GoogleAdminEmail, !Ref AWS::NoValue] # GoogleAdminEmail
+                   - !Ref SCIMEndpointUrl # SCIMEndpointUrl
+                   - !Ref SCIMEndpointAccessToken # SCIMEndpointAccessToken
+                   - !If [AttributeMapIsSecretArn, !Ref AttributeMap, !Ref AWS::NoValue] # AttributeMap
+@@ -772,10 +654,6 @@
+           LOG_LEVEL: !Ref LogLevel
+           LOG_FORMAT: !Ref LogFormat
+           CUSTOMER_ID: !If [CreateSecrets, !Ref SecretGoogleCustomerId, !Ref GoogleCustomerId]
+-          GOOGLE_CREDENTIALS: !If
+-            - CreateGoogleCredentialsSecret
+-            - !Ref SecretGoogleCredentials
+-            - !If [SetGoogleCredentials, !Ref GoogleCredentials, !Ref AWS::NoValue]
+           GOOGLE_IMPERSONATE_SERVICE_ACCOUNT: !If
+             - CreateGoogleImpersonateSecret
+             - !Ref SecretGoogleImpersonateServiceAccount
+@@ -784,18 +662,12 @@
+             - CreateGoogleWIFConfigSecret
+             - !Ref SecretGoogleWIFConfig
+             - !If [SetGoogleWIFConfig, !Ref GoogleWIFConfig, !Ref AWS::NoValue]
+-          GOOGLE_ADMIN: !If
+-            - CreateGoogleAdminEmailSecret
+-            - !Ref SecretGoogleAdminEmail
+-            - !If [SetGoogleAdminEmail, !Ref GoogleAdminEmail, !Ref AWS::NoValue]
+           SCIM_ENDPOINT: !If [CreateSecrets, !Ref SecretSCIMEndpoint, !Ref SCIMEndpointUrl]
+           SCIM_ACCESS_TOKEN: !If [CreateSecrets, !Ref SecretSCIMAccessToken, !Ref SCIMEndpointAccessToken]
+           USER_MATCH: !If [SetGoogleUserMatch, !Ref GoogleUserMatch, !Ref AWS::NoValue]
+           GROUP_MATCH: !If [SetGoogleGroupMatch, !Ref GoogleGroupMatch, !Ref AWS::NoValue]
+-          SYNC_METHOD: !If [LegacySync, !Ref SyncMethod, !Ref AWS::NoValue]
+           IGNORE_GROUPS: !If [SetIgnoreGroups, !Ref IgnoreGroups, !Ref AWS::NoValue]
+           IGNORE_USERS: !If [SetIgnoreUsers, !Ref IgnoreUsers, !Ref AWS::NoValue]
+-          INCLUDE_GROUPS: !If [SetIncludeGroups, !Ref IncludeGroups, !Ref AWS::NoValue]
+           DRY_RUN: !If [SetDryRun, 'True', !Ref AWS::NoValue]
+           SYNC_SUSPENDED: !If [SetSyncSuspended, 'True', !Ref AWS::NoValue]
+           PRECACHE_ORG_UNITS: !If [DisablePrecaching, !Ref AWS::NoValue, !Ref PrecacheOrgUnits]
+@@ -819,7 +691,7 @@
+     Type: AWS::Events::Rule
+     Condition: OnSchedule
+     Properties:
+-      Name: AWSSyncSchedule
++      Name: SSOSyncNGSchedule
+       ScheduleExpression: !Ref ScheduleExpression
+       Targets:
+         - Id: SSOSync
+@@ -836,7 +708,7 @@
+     Type: AWS::KMS::Alias
+     Condition: CreateKey
+     Properties:
+-      AliasName: alias/SSOSync
++      AliasName: alias/SSOSyncNG
+       TargetKeyId: !Ref KeyForSecrets
+   KeyForSecrets:
+     Type: AWS::KMS::Key
+@@ -871,7 +743,7 @@
+     Type: "AWS::SecretsManager::Secret"
+     Condition: CreateSecrets
+     Properties:
+-      Name: SSOSyncGoogleCustomerId
++      Name: SSOSyncNGGoogleCustomerId
+       SecretString: !Ref GoogleCustomerId
+       KmsKeyId: !If [CreateKey, !Ref KeyAlias, alias/aws/secretsmanager]
+   SecretGoogleCustomerIdPolicy:
+@@ -879,28 +751,6 @@
+     Condition: CreateKey
+     Properties:
+       SecretId: !Ref SecretGoogleCustomerId
+-      ResourcePolicy:
+-        Version: 2012-10-17
+-        Statement:
+-        - Effect: Allow
+-          Principal:
+-            AWS: !Sub arn:aws:iam::${AppAccount}:root
+-          Action:
+-            - secretsmanager:GetSecretValue
+-          Resource: '*'
+-
+-  SecretGoogleCredentials:
+-    Type: "AWS::SecretsManager::Secret"
+-    Condition: CreateGoogleCredentialsSecret
+-    Properties:
+-      Name: SSOSyncGoogleCredentials
+-      SecretString: !Ref GoogleCredentials
+-      KmsKeyId: !If [CreateKey, !Ref KeyAlias, alias/aws/secretsmanager]
+-  SecretGoogleCredentialsPolicy:
+-    Type: AWS::SecretsManager::ResourcePolicy
+-    Condition: ShareGoogleCredentialsSecret
+-    Properties:
+-      SecretId: !Ref SecretGoogleCredentials
+       ResourcePolicy:
+         Version: 2012-10-17
+         Statement:
+@@ -916,7 +766,7 @@
+     Type: "AWS::SecretsManager::Secret"
+     Condition: CreateGoogleImpersonateSecret
+     Properties:
+-      Name: SSOSyncGoogleImpersonateServiceAccount
++      Name: SSOSyncNGGoogleImpersonateServiceAccount
+       SecretString: !Ref GoogleImpersonateServiceAccount
+       KmsKeyId: !If [CreateKey, !Ref KeyAlias, alias/aws/secretsmanager]
+   SecretGoogleImpersonateServiceAccountPolicy:
+@@ -938,7 +788,7 @@
+     Type: "AWS::SecretsManager::Secret"
+     Condition: CreateGoogleWIFConfigSecret
+     Properties:
+-      Name: SSOSyncGoogleWIFConfig
++      Name: SSOSyncNGGoogleWIFConfig
+       SecretString: !Ref GoogleWIFConfig
+       KmsKeyId: !If [CreateKey, !Ref KeyAlias, alias/aws/secretsmanager]
+   SecretGoogleWIFConfigPolicy:
+@@ -956,33 +806,11 @@
+             - secretsmanager:GetSecretValue
+           Resource: '*'
+ 
+-  SecretGoogleAdminEmail:
+-    Type: "AWS::SecretsManager::Secret"
+-    Condition: CreateGoogleAdminEmailSecret
+-    Properties:
+-      Name: SSOSyncGoogleAdminEmail
+-      SecretString: !Ref GoogleAdminEmail
+-      KmsKeyId: !If [CreateKey, !Ref KeyAlias, alias/aws/secretsmanager]
+-  SecretGoogleAdminEmailPolicy:
+-    Type: AWS::SecretsManager::ResourcePolicy
+-    Condition: ShareGoogleAdminEmailSecret
+-    Properties:
+-      SecretId: !Ref SecretGoogleAdminEmail
+-      ResourcePolicy:
+-        Version: 2012-10-17
+-        Statement:
+-        - Effect: Allow
+-          Principal:
+-            AWS: !Sub arn:aws:iam::${AppAccount}:root
+-          Action:
+-            - secretsmanager:GetSecretValue
+-          Resource: '*'
+-
+   SecretSCIMEndpoint: # This can be moved to custom provider
+     Type: "AWS::SecretsManager::Secret"
+     Condition: CreateSecrets
+     Properties:
+-      Name: SSOSyncSCIMEndpointUrl
++      Name: SSOSyncNGSCIMEndpointUrl
+       SecretString: !Ref SCIMEndpointUrl
+       KmsKeyId: !If [CreateKey, !Ref KeyAlias, alias/aws/secretsmanager]
+   SecretSCIMEndpointPolicy:
+@@ -1004,7 +832,7 @@
+     Type: "AWS::SecretsManager::Secret"
+     Condition: CreateSecrets
+     Properties:
+-      Name: SSOSyncSCIMAccessToken
++      Name: SSOSyncNGSCIMAccessToken
+       SecretString: !Ref SCIMEndpointAccessToken
+       KmsKeyId: !If [CreateKey, !Ref KeyAlias, alias/aws/secretsmanager]
+   SecretSCIMAccessTokenPolicy:
+@@ -1026,7 +854,7 @@
+     Type: "AWS::SecretsManager::Secret"
+     Condition: CreateAttributeMapSecret
+     Properties:
+-      Name: SSOSyncAttributeMap
++      Name: SSOSyncNGAttributeMap
+       SecretString: !Ref AttributeMap
+       KmsKeyId: !If [CreateKey, !Ref KeyAlias, alias/aws/secretsmanager]
+   SecretAttributeMapPolicy:
+@@ -1050,64 +878,52 @@
+     Description: "The Arn of the deployed lambda function"
+     Value: !GetAtt SSOSyncFunction.Arn
+     Export:
+-      Name: FunctionARN
++      Name: SSOSyncNGFunctionARN
+   RoleName:
+     Condition: CreateFunction
+     Description: "The name of the IAM role the function runs as (the RoleName parameter, or the name CloudFormation generated); use it to set up keyless Google authentication (Workload Identity Federation)"
+     Value: !If [RemoteSecrets, !Ref SSOSyncRoleRemote, !Ref SSOSyncRoleLocal]
+     Export:
+-      Name: RoleName
++      Name: SSOSyncNGRoleName
+   GoogleCustomerId:
+     Condition: CreateSecrets
+     Description: "The Arn of the secret containing the GoogleCustomerId"
+     Value: !Ref SecretGoogleCustomerId
+     Export:
+-      Name: GoogleCustomerId
+-  GoogleCredentials:
+-    Condition: CreateGoogleCredentialsSecret
+-    Description: "The Arn of the secret containing the GoogleCredentials"
+-    Value: !Ref SecretGoogleCredentials
+-    Export:
+-      Name: GoogleCredentials
++      Name: SSOSyncNGGoogleCustomerId
+   GoogleImpersonateServiceAccount:
+     Condition: CreateGoogleImpersonateSecret
+     Description: "The Arn of the secret containing the GoogleImpersonateServiceAccount"
+     Value: !Ref SecretGoogleImpersonateServiceAccount
+     Export:
+-      Name: GoogleImpersonateServiceAccount
++      Name: SSOSyncNGGoogleImpersonateServiceAccount
+   GoogleWIFConfig:
+     Condition: CreateGoogleWIFConfigSecret
+     Description: "The Arn of the secret containing the GoogleWIFConfig"
+     Value: !Ref SecretGoogleWIFConfig
+     Export:
+-      Name: GoogleWIFConfig
+-  GoogleAdminEmail:
+-    Condition: CreateGoogleAdminEmailSecret
+-    Description: "The Arn of the secret containing the GoogleAdminEmail"
+-    Value: !Ref SecretGoogleAdminEmail
+-    Export:
+-      Name: GoogleAdminEmail
++      Name: SSOSyncNGGoogleWIFConfig
+   SCIMEndpointUrl:
+     Condition: CreateSecrets
+     Description: "The Arn of the secret containing the SCIMEndpointUrl"
+     Value: !Ref SecretSCIMEndpoint
+     Export:
+-      Name: SCIMEndpointUrl
++      Name: SSOSyncNGSCIMEndpointUrl
+   SCIMEndpointAccessToken:
+     Condition: CreateSecrets
+     Description: "The Arn of the secret containing the SCIMEndpointAccessToken"
+     Value: !Ref SecretSCIMAccessToken
+     Export:
+-      Name: SCIMEndpointAccessToken
++      Name: SSOSyncNGSCIMEndpointAccessToken
+   AttributeMap:
+     Condition: CreateAttributeMapSecret
+     Description: "The Arn of the secret containing the AttributeMap"
+     Value: !Ref SecretAttributeMap
+     Export:
+-      Name: AttributeMap
++      Name: SSOSyncNGAttributeMap
+   KeyAlias:
+     Condition: CreateKey
+     Description: "The Arn of the KMS key used to encrypt the secrets"
+     Value: !Sub arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/${KeyForSecrets}
+     Export:
+-      Name: KeyAlias
+\ No newline at end of file
++      Name: SSOSyncNGKeyAlias
+\ No newline at end of file

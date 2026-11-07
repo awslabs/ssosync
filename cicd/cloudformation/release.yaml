@@ -495,6 +495,10 @@ Resources:
             Value: !Ref AppBucket
           - Name: Template
             Value: template.yaml
+          # Share both staging SAR applications (SSOSync-Staging, ssosync-staging)
+          # with the staging accounts (cicd/build/package/buildspec.yml).
+          - Name: ShareWith
+            Value: !Sub "${ManagementAccount},${DelegatedAccount},${NonDelegatedAccount}"
       Artifacts:
         Name: SSOSync-Build
         Type: CODEPIPELINE
@@ -530,6 +534,9 @@ Resources:
             Value: !Sub "${ManagementAccount},${DelegatedAccount},${NonDelegatedAccount}"
           - Name: AppArn
             Value: !Sub "arn:aws:serverlessrepo:${AWS::Region}:${AWS::AccountId}:applications/SSOSync-Staging"
+          # The next-gen staging application (issue #399), see cicd/build/package/buildspec.yml.
+          - Name: NextGenAppArn
+            Value: !Sub "arn:aws:serverlessrepo:${AWS::Region}:${AWS::AccountId}:applications/ssosync-staging"
           - Name: SecretSCIMEndpoint
             Value: !Select [0, !Split [',', !Ref SecretsConfig]]
           - Name: SecretSCIMAccessToken
