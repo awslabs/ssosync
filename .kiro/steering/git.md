@@ -1,5 +1,9 @@
 # Git Workflow
 
+## Branch naming
+- Always name a feature or bugfix branch with GitHub's issue-branch convention: the issue number, then the issue title slugified (lower case, every run of non-alphanumerics becomes one `-`), e.g. `322-least-privilege-drop-group-member-readonly-scope`. This is the name GitHub's "Create a branch" (or `gh issue develop <n>`) gives for that issue.
+- If the work has no issue, raise one first (or ask the user).
+
 ## Changing a branch that has already been merged
 - PRs in this repo are merged with **merge + squash**, so the branch's own commits never appear on `master`; only the single squash commit does.
 - Before committing anything on a branch whose PR is already merged, **rebase it onto the current `master` first** (`git fetch origin` then rebase onto `origin/master`).
