@@ -115,7 +115,7 @@ Resources:
         SyncSuspended: sync
         ScheduleExpression: ""
         # Olaf's OU has an apostrophe (#401), so the Lambda's precache query must
-        # quote it. PrecacheOrgUnits' AllowedPattern takes at most two paths.
-        PrecacheOrgUnits: '/Maintenance/Vending Machines,/Red Dwarf/Petersen''s Locker'
+        # quote it.
+        PrecacheOrgUnits: '/Catering/,/Maintenance/Vending Machines,/Red Dwarf/Petersen''s Locker'
         LogLevel: debug
         LogFormat: json
