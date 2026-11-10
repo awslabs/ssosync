@@ -195,6 +195,26 @@ Resources:
         # Identity Store).
         - Name: Tests
           Actions:
+            # A cancelled run can leave QuickStartTests behind; its classic Secrets
+            # nested stack owns the GoogleCustomerId export, which would fail
+            # Deploy-LegacyAuth. Delete it before any test deploy. DELETE_ONLY on a
+            # stack that does not exist succeeds at once.
+            - !If
+              - DeployDelegated
+              - Name: PreClean-QuickStart
+                ActionTypeId:
+                  Category: Deploy
+                  Owner: AWS
+                  Version: 1
+                  Provider: CloudFormation
+                Configuration:
+                  ActionMode: DELETE_ONLY
+                  StackName: QuickStartTests
+                  RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
+                InputArtifacts:
+                  - Name: Tests
+                RunOrder: 1
+              - !Ref AWS::NoValue
             # Workload Identity Federation (keyless, issue #345) with no admin (the
             # service account acts as itself, issue #192), first so a keyless
             # failure fails fast: deploy from deploy/wif-<AccountId>.json (no key,
@@ -215,14 +235,14 @@ Resources:
                 TemplatePath: 'Tests::deploy/stack.yml'
               InputArtifacts:
                 - Name: Tests
-              RunOrder: 1
+              RunOrder: 2
             - Name: WIFAuth-Lambda
               ActionTypeId:
                 Category: Test
                 Owner: AWS
                 Version: 1
                 Provider: CodeBuild
-              RunOrder: 2
+              RunOrder: 3
               Configuration:
                 ProjectName: !Ref CodeBuildWIFLambda
                 PrimarySource: Tests
@@ -236,7 +256,7 @@ Resources:
                 Owner: AWS
                 Version: 1
                 Provider: CodeBuild
-              RunOrder: 3
+              RunOrder: 4
               Configuration:
                 ProjectName: !Ref CodeBuildWIFCLI
                 PrimarySource: Tests
@@ -250,7 +270,7 @@ Resources:
                 Owner: AWS
                 Version: 1
                 Provider: Lambda
-              RunOrder: 4
+              RunOrder: 5
               Configuration:
                 FunctionName: SSOSyncFunction
               OutputArtifacts:
@@ -270,7 +290,7 @@ Resources:
                 RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
               InputArtifacts:
                 - Name: Tests
-              RunOrder: 5
+              RunOrder: 6
             # Legacy auth (stored credentials): the service-account key and an admin
             # to act on behalf of (deploy/developer.json).
             - Name: Deploy-LegacyAuth
@@ -288,14 +308,14 @@ Resources:
                 TemplatePath: !Sub 'Tests::deploy/stack.yml'
               InputArtifacts:
                 - Name: Tests
-              RunOrder: 6
+              RunOrder: 7
             - Name: LegacyAuth-Lambda
               ActionTypeId:
                 Category: Test
                 Owner: AWS
                 Version: 1
                 Provider: CodeBuild
-              RunOrder: 7
+              RunOrder: 8
               Configuration:
                 ProjectName: !Ref CodeBuildSmokeLambda
                 PrimarySource: Tests
@@ -309,7 +329,7 @@ Resources:
                 Owner: AWS
                 Version: 1
                 Provider: CodeBuild
-              RunOrder: 8
+              RunOrder: 9
               Configuration:
                 ProjectName: !Ref CodeBuildSmokeCLI
                 PrimarySource: Tests
@@ -323,7 +343,7 @@ Resources:
                 Owner: AWS
                 Version: 1
                 Provider: Lambda
-              RunOrder: 9
+              RunOrder: 10
               Configuration:
                 FunctionName: SSOSyncFunction
               OutputArtifacts:
@@ -343,7 +363,7 @@ Resources:
                 RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
               InputArtifacts:
                 - Name: Tests
-              RunOrder: 10
+              RunOrder: 11
             # Attribute-map integration tests (cicd/tests/attribute_map/). They share
             # one Identity Store, so every action runs in sequence (distinct RunOrder).
             # Each live test resets the Identity Store to tests/attribute_map/baseline/.
@@ -366,7 +386,7 @@ Resources:
                   TemplatePath: !Sub 'Tests::deploy/stack.yml'
                 InputArtifacts:
                   - Name: Tests
-                RunOrder: 11
+                RunOrder: 12
               - !Ref AWS::NoValue
             - !If
               - DeployDelegated
@@ -376,7 +396,7 @@ Resources:
                   Owner: AWS
                   Version: 1
                   Provider: CodeBuild
-                RunOrder: 12
+                RunOrder: 13
                 Configuration:
                   ProjectName: !Ref CodeBuildAttrMapInvalidMap
                   PrimarySource: Tests
@@ -393,7 +413,7 @@ Resources:
                   Owner: AWS
                   Version: 1
                   Provider: CodeBuild
-                RunOrder: 13
+                RunOrder: 14
                 Configuration:
                   ProjectName: !Ref CodeBuildAttrMapDefaultMap
                   PrimarySource: Tests
@@ -410,7 +430,7 @@ Resources:
                   Owner: AWS
                   Version: 1
                   Provider: CodeBuild
-                RunOrder: 14
+                RunOrder: 15
                 Configuration:
                   ProjectName: !Ref CodeBuildAttrMapDeterminism
                   PrimarySource: Tests
@@ -427,7 +447,7 @@ Resources:
                   Owner: AWS
                   Version: 1
                   Provider: CodeBuild
-                RunOrder: 15
+                RunOrder: 16
                 Configuration:
                   ProjectName: !Ref CodeBuildAttrMapRichMap
                   PrimarySource: Tests
@@ -444,7 +464,7 @@ Resources:
                   Owner: AWS
                   Version: 1
                   Provider: CodeBuild
-                RunOrder: 16
+                RunOrder: 17
                 Configuration:
                   ProjectName: !Ref CodeBuildAttrMapValidationWarnings
                   PrimarySource: Tests
@@ -461,7 +481,7 @@ Resources:
                   Owner: AWS
                   Version: 1
                   Provider: CodeBuild
-                RunOrder: 17
+                RunOrder: 18
                 Configuration:
                   ProjectName: !Ref CodeBuildAttrMapUsernameRemap
                   PrimarySource: Tests
@@ -478,7 +498,7 @@ Resources:
                   Owner: AWS
                   Version: 1
                   Provider: CodeBuild
-                RunOrder: 18
+                RunOrder: 19
                 Configuration:
                   ProjectName: !Ref CodeBuildAttrMapManagerOptIn
                   PrimarySource: Tests
@@ -495,7 +515,7 @@ Resources:
                   Owner: AWS
                   Version: 1
                   Provider: CodeBuild
-                RunOrder: 19
+                RunOrder: 20
                 Configuration:
                   ProjectName: !Ref CodeBuildAttrMapLambdaDefault
                   PrimarySource: Tests
@@ -522,7 +542,7 @@ Resources:
                   TemplatePath: 'Tests::deploy/stack.yml'
                 InputArtifacts:
                   - Name: Tests
-                RunOrder: 20
+                RunOrder: 21
               - !Ref AWS::NoValue
             - !If
               - DeployDelegated
@@ -532,7 +552,7 @@ Resources:
                   Owner: AWS
                   Version: 1
                   Provider: CodeBuild
-                RunOrder: 21
+                RunOrder: 22
                 Configuration:
                   ProjectName: !Ref CodeBuildAttrMapLambdaInlineMap
                   PrimarySource: Tests
@@ -556,7 +576,7 @@ Resources:
                   RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
                 InputArtifacts:
                   - Name: Tests
-                RunOrder: 22
+                RunOrder: 23
               - !Ref AWS::NoValue
             # Functional tests against the live tenant.
             # Keyless deployment (deploy/wif-<AccountId>.json): ssosync runs keyless with its SSOSync* secrets.
@@ -577,7 +597,7 @@ Resources:
                   TemplatePath: !Sub 'Tests::deploy/stack.yml'
                 InputArtifacts:
                   - Name: Tests
-                RunOrder: 23
+                RunOrder: 24
               - !Ref AWS::NoValue
             # Live proof of getUserOperations/getGroupOperations (issue #383):
             # expected IssuerArn == the real ExternalId Issuer, managed records
@@ -592,7 +612,7 @@ Resources:
                   Owner: AWS
                   Version: 1
                   Provider: CodeBuild
-                RunOrder: 24
+                RunOrder: 25
                 Configuration:
                   ProjectName: !Ref CodeBuildUserGroupOperations
                   PrimarySource: Tests
@@ -629,7 +649,7 @@ Resources:
                   RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
                 InputArtifacts:
                   - Name: Tests
-                RunOrder: 25
+                RunOrder: 26
               - !Ref AWS::NoValue
             - !If
               - DeployDelegated
@@ -639,7 +659,7 @@ Resources:
                   Owner: AWS
                   Version: 1
                   Provider: CodeBuild
-                RunOrder: 26
+                RunOrder: 27
                 Configuration:
                   ProjectName: !Ref CodeBuildQuickStartPackage
                   PrimarySource: Tests
@@ -666,7 +686,7 @@ Resources:
                 InputArtifacts:
                   - Name: Tests
                   - Name: QuickStarts
-                RunOrder: 27
+                RunOrder: 28
               - !Ref AWS::NoValue
             - !If
               - DeployDelegated
@@ -676,7 +696,7 @@ Resources:
                   Owner: AWS
                   Version: 1
                   Provider: Lambda
-                RunOrder: 28
+                RunOrder: 29
                 Configuration:
                   FunctionName: SSOSync
                 InputArtifacts:
@@ -700,7 +720,7 @@ Resources:
                 InputArtifacts:
                   - Name: Tests
                   - Name: QuickStarts
-                RunOrder: 29
+                RunOrder: 30
               - !Ref AWS::NoValue
             - !If
               - DeployDelegated
@@ -710,7 +730,7 @@ Resources:
                   Owner: AWS
                   Version: 1
                   Provider: Lambda
-                RunOrder: 30
+                RunOrder: 31
                 Configuration:
                   FunctionName: SSOSync
                 InputArtifacts:
@@ -734,7 +754,7 @@ Resources:
                 InputArtifacts:
                   - Name: Tests
                   - Name: QuickStarts
-                RunOrder: 31
+                RunOrder: 32
               - !Ref AWS::NoValue
             - !If
               - DeployDelegated
@@ -744,7 +764,7 @@ Resources:
                   Owner: AWS
                   Version: 1
                   Provider: Lambda
-                RunOrder: 32
+                RunOrder: 33
                 Configuration:
                   FunctionName: SSOSyncNG
                 InputArtifacts:
@@ -768,7 +788,7 @@ Resources:
                 InputArtifacts:
                   - Name: Tests
                   - Name: QuickStarts
-                RunOrder: 33
+                RunOrder: 34
               - !Ref AWS::NoValue
             - !If
               - DeployDelegated
@@ -778,7 +798,7 @@ Resources:
                   Owner: AWS
                   Version: 1
                   Provider: Lambda
-                RunOrder: 34
+                RunOrder: 35
                 Configuration:
                   FunctionName: SSOSyncNG
                 InputArtifacts:
@@ -798,7 +818,7 @@ Resources:
                   RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
                 InputArtifacts:
                   - Name: Tests
-                RunOrder: 35
+                RunOrder: 36
               - !Ref AWS::NoValue
 
   CodePipelineDeployCrossAccountSecrets:

@@ -114,6 +114,8 @@ Resources:
         AttributeMap: !Ref AttributeMap
         SyncSuspended: sync
         ScheduleExpression: ""
-        PrecacheOrgUnits: '/Catering/,/Maintenance/Vending Machines'
+        # Olaf's OU has an apostrophe (#401), so the Lambda's precache query must
+        # quote it.
+        PrecacheOrgUnits: '/Catering/,/Maintenance/Vending Machines,/Red Dwarf/Petersen''s Locker'
         LogLevel: debug
         LogFormat: json

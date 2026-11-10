@@ -3,7 +3,7 @@
 This AWS Serverless Application populates AWS IAM Identity Center (formerly AWS SSO) directly with your Google Workspace users and groups.
 
 > [!TIP]
-> **Next generation:** the [ssosync](https://serverlessrepo.aws.amazon.com/applications/us-east-2/004480582608/ssosync) application is built from the same code with keyless Google authentication (Workload Identity Federation): no stored service-account key and no Google admin. New features are added there; this application keeps the 2.10.0 configuration. To move a quick-start deployment over, replace its template with the matching one in [`quick-start/next-gen/`](https://github.com/awslabs/ssosync/tree/master/quick-start/next-gen).
+> **Next generation:** the [ssosync](https://serverlessrepo.aws.amazon.com/applications/us-east-2/004480582608/ssosync) application is built from the same code with keyless Google authentication (Workload Identity Federation): no stored service-account key and no Google admin. New features are added there; this application keeps the 2.10.0 parameters, with the email, name and OU patterns widened to accept apostrophes. To move a quick-start deployment over, replace its template with the matching one in [`quick-start/next-gen/`](https://github.com/awslabs/ssosync/tree/master/quick-start/next-gen).
 
 > [!IMPORTANT]
 > The recommended way to deploy ssosync is **not** to launch this Serverless Application Repository template directly. Instead use one of the [quick-start](https://github.com/awslabs/ssosync/tree/master/quick-start) templates with the **Sync from Git** option. The quick-start templates wrap this application and make ongoing updates far simpler, letting you track a released version straight from the repository.
@@ -67,8 +67,8 @@ Sensitive values can be provided inline or as the ARN of a secret in [AWS Secret
 
 | Parameter | Environment Variable | Description | Default |
 |-----------|---------------------|-------------|---------|
-| `GoogleGroupMatch` | `GROUP_MATCH` | Google Workspace groups filter query. Use `*` to sync all groups (and their member users). See [Group matching](#group-matching) below. | `*` |
-| `GoogleUserMatch` | `USER_MATCH` | Google Workspace users filter query. Leave empty to select only users that are members of matched groups; use `*` to sync all users. See [Google Users Search](https://developers.google.com/admin-sdk/directory/v1/guides/search-users). | `""` |
+| `GoogleGroupMatch` | `GROUP_MATCH` | Google Workspace groups filter query. Use `*` to sync all groups (and their member users). Passed to Google verbatim; see [Group matching](#group-matching) and [Quoting values in queries](#quoting-values-in-queries) below. | `*` |
+| `GoogleUserMatch` | `USER_MATCH` | Google Workspace users filter query. Leave empty to select only users that are members of matched groups; use `*` to sync all users. Passed to Google verbatim; see [Quoting values in queries](#quoting-values-in-queries) and [Google Users Search](https://developers.google.com/admin-sdk/directory/v1/guides/search-users). | `""` |
 | `IgnoreGroups` | `IGNORE_GROUPS` | Comma-separated list of Google Workspace group emails to ignore. | `""` |
 | `IgnoreUsers` | `IGNORE_USERS` | Comma-separated list of Google Workspace user emails to ignore. | `""` |
 | `SyncSuspended` | `SYNC_SUSPENDED` | Whether to include suspended users when syncing (`ignore` or `sync`). | `ignore` |
@@ -131,7 +131,11 @@ ssosync then selects every group that has the marker group as a member, no matte
 
 Remember that `memberKey` requires `GoogleCustomerId` to be set to your real customer ID (not `my_customer`); the template fails deployment otherwise.
 
-For the complete query syntax see [Google Groups Search](https://developers.google.com/admin-sdk/directory/v1/guides/search-groups).
+### Quoting values in queries
+
+`GoogleGroupMatch` and `GoogleUserMatch` are passed to Google verbatim; ssosync does not quote or escape them. A value containing spaces or an apostrophe must be single-quoted, with the apostrophe escaped as `\'`, for example `name='Valentine\'s Day'`. Commas still separate queries, so a value cannot contain a comma.
+
+For the complete query syntax see [Google Groups Search](https://developers.google.com/admin-sdk/directory/v1/guides/search-groups) and [Google Users Search](https://developers.google.com/admin-sdk/directory/v1/guides/search-users).
 
 ## Attribute mapping
 

@@ -17,7 +17,8 @@
 #             dept "Maintenance"; two phones, neither primary;
 #             work address "Cargo Bay, Red Dwarf"; SSOSync-Test.CostCodes: "WORK-300";
 #             SSOSync-Test.ProjectCodes (multi-valued): one value
-#   AceHole, olaf - SSOSync-Test schema present, no CostCodes, no ProjectCodes
+#   AceHole, olaf - SSOSync-Test schema present, no CostCodes, no ProjectCodes;
+#             olaf's primary email has an apostrophe (#401)
 source "$(dirname "$0")/../lib/common.sh"
 setup_cli
 
@@ -27,6 +28,8 @@ LOG="$LOG_DIR/rich.log"
 run_ssosync live "$MAPS/rich.json" "$LOG"
 
 check assert_log summary "$LOG" --users create=0 delete=0 recreate=0 updateForced=0
+# #401: no precache here, so olaf's apostrophe email goes through the member lookup.
+check assert_log absent "$LOG" --msg "Fetching group member from Google failed, aborting sync"
 
 resolved() { check assert_log count "$LOG" --msg "attribute map: entry resolved" \
   --field "source=$1" --field "resolved=$2" --min 1; }

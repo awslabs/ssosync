@@ -23,7 +23,10 @@
     "  than 128 characters (the SCIM userName maxLength).",
     "- AceHole's givenName is a single space: Google requires a non-empty given",
     "  name, and ssosync treats it as blank (requiredField warning).",
-    "- No user has websites (the tenant's user schema has no websites field)."
+    "- No user has websites (the tenant's user schema has no websites field).",
+    "- Olaf's primaryEmail and orgUnitPath contain an apostrophe (#401): the",
+    "  member lookup and the OrgUnitPath queries must quote and escape them.",
+    "  default_map precaches his OU with --precache-ous; no comma in the path."
   ],
   "users": [
     {
@@ -125,10 +128,11 @@
       }
     },
     {
-      "primaryEmail": "olaf@nothing2see.info",
+      "primaryEmail": "olaf.o'petersen@nothing2see.info",
       "id": "117930356878090693739",
       "name": { "givenName": "Olaf", "familyName": "Petersen" },
       "suspended": true,
+      "orgUnitPath": "/Red Dwarf/Petersen's Locker",
       "organizations": [],
       "phones": [],
       "addresses": [],

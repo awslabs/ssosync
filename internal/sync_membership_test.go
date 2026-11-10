@@ -60,7 +60,7 @@ func membershipSuite(t *testing.T, awsGroups []types.Group, awsUsers []types.Use
 	googleClient.EXPECT().GetGroupMembers(mock.Anything).Return([]*admin.Member{
 		{Email: "jane@example.com", Type: "USER", Status: "ACTIVE"},
 	}, nil)
-	googleClient.EXPECT().GetUsers("email=jane@example.com", cfg.UserFilter).
+	googleClient.EXPECT().GetUsers("email='jane@example.com'", cfg.UserFilter).
 		Return([]*admin.User{gUser("gid-1", "jane@example.com", "Jane", "Doe", false)}, nil)
 
 	identityStore := mocks.NewMockIdentityStoreAPI(t)

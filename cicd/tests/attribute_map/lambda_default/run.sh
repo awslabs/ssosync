@@ -14,6 +14,11 @@ FIRST="$LOG_DIR/lambda_default.log"
 invoke_lambda "$FIRST"
 check assert_log summary "$FIRST" --users "adoptLocal>=4" delete=0 recreate=0 updateForced=0
 check assert_log count "$FIRST" --msg "attribute map: mapping Google user" --min 4
+# #401: the stack precaches "/Red Dwarf/Petersen's Locker"; the quoted OU query
+# was sent and Google did not reject it (this error doesn't fail a run). The
+# stack can't enable CacheMetrics, so there is no usercache count to check.
+check assert_log count "$FIRST" --msg "Precaching users" --min 1
+check assert_log absent "$FIRST" --msg "Precaching failed, caching on the fly"
 
 SECOND="$LOG_DIR/lambda_default_2.log"
 invoke_lambda "$SECOND"

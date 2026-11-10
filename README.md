@@ -30,7 +30,7 @@ Use one of the [quick start](/quick-start/) templates to simplify your deploymen
 |---|---|---|
 | [`quick-start/next-gen/single-account.yaml`](/quick-start/next-gen/single-account.yaml) | [`ssosync`](#two-serverless-applications) (next generation) | **Recommended.** Keyless, [Workload Identity Federation](#workload-identity-federation-keyless) (release 2.11.0 or later): no stored key and no Google admin |
 | [`quick-start/next-gen/single-account-attribute-map.yaml`](/quick-start/next-gen/single-account-attribute-map.yaml) | `ssosync` | As above, plus a custom [attribute map](#attribute-mapping) |
-| [`quick-start/single-account.yaml`](/quick-start/single-account.yaml), [`…/single-account-attribute-map.yaml`](/quick-start/single-account-attribute-map.yaml) | [`SSOSync`](#two-serverless-applications) (classic) | [Legacy auth](#legacy-auth-stored-credentials): a stored service-account key and a Google admin. These keep the 2.10.0 parameters, so existing **Sync from Git** deployments of these paths upgrade to 2.11.0 unchanged |
+| [`quick-start/single-account.yaml`](/quick-start/single-account.yaml), [`…/single-account-attribute-map.yaml`](/quick-start/single-account-attribute-map.yaml) | [`SSOSync`](#two-serverless-applications) (classic) | [Legacy auth](#legacy-auth-stored-credentials): a stored service-account key and a Google admin. These keep the 2.10.0 parameters (their patterns widened to accept apostrophes), so existing **Sync from Git** deployments of these paths upgrade to 2.11.0 unchanged |
 
 ### Two Serverless applications
 
@@ -38,7 +38,7 @@ From 2.11.0 ssosync is published to the AWS Serverless Application Repository as
 
 | | [`SSOSync`](https://serverlessrepo.aws.amazon.com/applications/us-east-2/004480582608/SSOSync) (classic) | [`ssosync`](https://serverlessrepo.aws.amazon.com/applications/us-east-2/004480582608/ssosync) (next generation) |
 |---|---|---|
-| Parameters | Those of 2.10.0, unchanged | Keyless only: `GoogleImpersonateServiceAccount`, `GoogleWIFConfig` and `RoleName`; no `GoogleCredentials`, `GoogleAdminEmail`, `SyncMethod` or `IncludeGroups` |
+| Parameters | Those of 2.10.0, with the email, name and OU patterns widened to accept apostrophes (#401) | Keyless only: `GoogleImpersonateServiceAccount`, `GoogleWIFConfig` and `RoleName`; no `GoogleCredentials`, `GoogleAdminEmail`, `SyncMethod` or `IncludeGroups` |
 | Google authentication | [Legacy auth](#legacy-auth-stored-credentials) (key + admin) | [Workload Identity Federation](#workload-identity-federation-keyless) |
 | Sync method | `groups` or `users_groups` | `groups` only |
 | `GoogleCustomerId` | Optional (`my_customer` by default) | Required, the actual customer ID (`my_customer` is rejected) |
@@ -424,8 +424,8 @@ export SSOSYNC_DRY_RUN="true"
 | `--endpoint` / `-e` | `SSOSYNC_SCIM_ENDPOINT` | AWS SCIM endpoint URL | Required |
 | `--access-token` / `-t` | `SSOSYNC_SCIM_ACCESS_TOKEN` | AWS SCIM access token | Required |
 | `--sync-method` / `-s` | `SSOSYNC_SYNC_METHOD` | Sync method (`groups` or `users_groups`) | `groups` |
-| `--group-match` / `-g` | `SSOSYNC_GROUP_MATCH` | Google Groups filter query | `*` |
-| `--user-match` / `-m` | `SSOSYNC_USER_MATCH` | Google Users filter query | `""` |
+| `--group-match` / `-g` | `SSOSYNC_GROUP_MATCH` | Google Groups filter query, passed to Google verbatim; see [Quoting values in queries](#quoting-values-in-queries) | `*` |
+| `--user-match` / `-m` | `SSOSYNC_USER_MATCH` | Google Users filter query, passed to Google verbatim; see [Quoting values in queries](#quoting-values-in-queries) | `""` |
 | `--ignore-users` | `SSOSYNC_IGNORE_USERS` | Comma-separated list of users to ignore | `[]` |
 | `--ignore-groups` | `SSOSYNC_IGNORE_GROUPS` | Comma-separated list of groups to ignore | `[]` |
 | `--include-groups` | `SSOSYNC_INCLUDE_GROUPS` | Include only these groups (users_groups method only) | `[]` |
@@ -577,7 +577,7 @@ The `--user-match` parameter supports the following query fields and operators:
 
 | Field | Prefix (`:`) | Exact (`=`) | Example |
 |-------|:---:|:---:|---------|
-| `name` | ✓ | ✓ | `name:John*` or `name=John Doe` |
+| `name` | ✓ | ✓ | `name:John*` or `name='John Doe'` |
 | `email` | ✓ | ✓ | `email:admin*` or `email=john@company.com` |
 | `manager` | — | ✓ | `manager=boss@company.com` |
 | `managerId` | ✓ | ✓ | `managerId:abc123*` |
@@ -586,8 +586,8 @@ The `--user-match` parameter supports the following query fields and operators:
 | `orgCostCenter` | ✓ | ✓ | `orgCostCenter=CC-1234` |
 
 - Use `:` for prefix/wildcard matching (e.g. `name:John*`)
-- Use `=` for exact matching (e.g. `name=John Doe` or `email=admin@company.com`)
-- Use `"` for exact values containing spaces (e.g. `orgName="My Department"`)
+- Use `=` for exact matching (e.g. `name='John Doe'` or `email=admin@company.com`)
+- Single-quote values containing spaces or an apostrophe (e.g. `orgName='My Department'`); see [Quoting values in queries](#quoting-values-in-queries)
 - Combine multiple patterns with `,` or space separator
 - Use `*` alone to sync all users
 
@@ -612,6 +612,15 @@ The `--user-match` parameter supports the following query fields and operators:
 
 # Sync all users
 --user-match "*"
+```
+
+#### Quoting values in queries
+
+ssosync passes the `--group-match` and `--user-match` values to Google verbatim; it does not quote or escape them. A value containing spaces or an apostrophe must be single-quoted, with the apostrophe escaped as `\'`, for example `name='Valentine\'s Day'`. Commas still separate queries, so a value cannot contain a comma.
+
+```bash
+# Sync the group named "Valentine's Day"
+--group-match "name='Valentine\'s Day'"
 ```
 
 For complete query syntax, see:
