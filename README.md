@@ -843,7 +843,7 @@ go test -tags=integration ./internal -v
 
 Deploy from the AWS Serverless Application Repository: the next-gen [`ssosync`](https://console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/ssosync) app (keyless) or the classic [`SSOSync`](https://console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync) app (2.10.0 parameters). See [Two Serverless applications](#two-serverless-applications); the [quick-start](#-quick-start) templates are the simplest way to deploy and update either.
 
-Both applications are generated from [`template.yaml`](template.yaml), which keeps every parameter: `make sar-variants` applies the patches in `cicd/build/package/` (`legacy.patch` or `next-gen.patch`, then a name patch) and writes the variants to `dist/sar/`.
+Both applications are generated from [`template.yaml`](template.yaml), which keeps every parameter: `make sar-variants` applies the patches in `cicd/build/package/` (`legacy.patch` or `next-gen.patch`, which removes the other application's parameters and sets the release name, then for staging `legacy-staging.patch` or `next-gen-staging.patch`, which changes only the name) and writes the variants to `dist/sar/`.
 
 ### Deployment Patterns
 

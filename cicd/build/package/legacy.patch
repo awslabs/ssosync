@@ -17,6 +17,15 @@
            - ScheduleExpression
            - DryRun
            - MemorySize
+@@ -64,7 +61,7 @@
+ 
+ 
+   AWS::ServerlessRepo::Application:
+-    Name: ssosync
++    Name: SSOSync
+     Description: Helping you populate AWS SSO directly with your Google Apps users.
+     Author: Sebastian Doell
+     SpdxLicenseId: Apache-2.0
 @@ -116,14 +113,6 @@
      Default: ""
      AllowedPattern: '(?!.*\s)|[a-zA-Z0-9-_]{1,140}'
@@ -290,7 +299,7 @@
            SCIM_ENDPOINT: !If [CreateSecrets, !Ref SecretSCIMEndpoint, !Ref SCIMEndpointUrl]
            SCIM_ACCESS_TOKEN: !If [CreateSecrets, !Ref SecretSCIMAccessToken, !Ref SCIMEndpointAccessToken]
            USER_MATCH: !If [SetGoogleUserMatch, !Ref GoogleUserMatch, !Ref AWS::NoValue]
-@@ -891,39 +729,16 @@
+@@ -891,14 +729,14 @@
  
    SecretGoogleCredentials:
      Type: "AWS::SecretsManager::Secret"
@@ -306,16 +315,11 @@
 +    Condition: CreateKey
      Properties:
        SecretId: !Ref SecretGoogleCredentials
--      ResourcePolicy:
--        Version: 2012-10-17
--        Statement:
--        - Effect: Allow
--          Principal:
--            AWS: !Sub arn:aws:iam::${AppAccount}:root
--          Action:
--            - secretsmanager:GetSecretValue
--          Resource: '*'
--
+       ResourcePolicy:
+@@ -911,61 +749,16 @@
+             - secretsmanager:GetSecretValue
+           Resource: '*'
+ 
 -  # Keyless Google authentication (issue #345).
 -  SecretGoogleImpersonateServiceAccount:
 -    Type: "AWS::SecretsManager::Secret"
@@ -329,13 +333,16 @@
 -    Condition: ShareGoogleImpersonateSecret
 -    Properties:
 -      SecretId: !Ref SecretGoogleImpersonateServiceAccount
-       ResourcePolicy:
-         Version: 2012-10-17
-         Statement:
-@@ -934,38 +749,16 @@
-             - secretsmanager:GetSecretValue
-           Resource: '*'
- 
+-      ResourcePolicy:
+-        Version: 2012-10-17
+-        Statement:
+-        - Effect: Allow
+-          Principal:
+-            AWS: !Sub arn:aws:iam::${AppAccount}:root
+-          Action:
+-            - secretsmanager:GetSecretValue
+-          Resource: '*'
+-
 -  SecretGoogleWIFConfig:
 -    Type: "AWS::SecretsManager::Secret"
 -    Condition: CreateGoogleWIFConfigSecret
