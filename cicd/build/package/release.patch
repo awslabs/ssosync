@@ -1,0 +1,11 @@
+--- ../../../template.yaml	2025-08-14 14:37:47
++++ release.yaml	2025-08-14 15:04:51
+@@ -45,7 +45,7 @@
+           - PrecacheOrgUnits
+ 
+   AWS::ServerlessRepo::Application:
+-    Name: ssosync
++    Name: SSOSync
+     Description: Helping you populate AWS SSO directly with your Google Apps users.
+     Author: Sebastian Doell
+     SpdxLicenseId: Apache-2.0

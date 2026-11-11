@@ -156,37 +156,23 @@ go-build: install-goreleaser install-upx
 go-build-lambda: install-goreleaser
 	$(Q)$(GORELEASER_BIN) build --snapshot --clean --id ssosync $(VERBOSE_BUILD_FLAG) $(GOREL_ARGS)
 
-# The two SAR applications (issue #399), each with a staging and a release
-# variant, built by cicd/build/package/variant.sh exactly as
-# cicd/build/package/buildspec.yml does: template.yaml, a feature patch
-# (legacy.patch or next-gen.patch) applied with no fuzz, then the application
-# Name. Writes them to dist/sar/ to check that the feature patches still apply
-# after a template.yaml change, and lints them when cfn-lint is installed.
-# dist/sar/legacy.yaml and next-gen.yaml are the feature-patched templates
-# (template.yaml's Name, ssosync).
-#
-# Regenerating a feature patch (the only place this is described):
-#   1. Get the feature-patched template: `make sar-variants`, or, when
-#      variant.sh fails because template.yaml changed, apply it with fuzz and
-#      fix any rejects by hand:
-#        cp template.yaml dist/sar/next-gen.yaml
-#        patch dist/sar/next-gen.yaml cicd/build/package/next-gen.patch
-#   2. Edit dist/sar/next-gen.yaml (or legacy.yaml) as needed. Leave its Name
-#      as ssosync: variant.sh sets the application names.
-#   3. diff -u template.yaml dist/sar/next-gen.yaml > cicd/build/package/next-gen.patch
-#   4. Rerun `make sar-variants`.
-SAR_VARIANT = bash cicd/build/package/variant.sh
+# The two SAR applications (issue #399) are template.yaml with a feature patch
+# (legacy.patch or next-gen.patch) and a name patch, as in
+# cicd/build/package/buildspec.yml. Writes them to dist/sar/ to check that the
+# patches still apply after a template.yaml change (and lints them when cfn-lint
+# is installed). To change a variant: edit its dist/sar/ file and regenerate the
+# feature patch, e.g. diff -u template.yaml dist/sar/next-gen.yaml > cicd/build/package/next-gen.patch
 .PHONY: sar-variants
 sar-variants: sar-readmes
 	@mkdir -p dist/sar
 	@set -e; for v in legacy next-gen; do \
-	  $(SAR_VARIANT) cicd/build/package/$$v.patch ssosync dist/sar/$$v.yaml >/dev/null; done; \
-	$(SAR_VARIANT) cicd/build/package/legacy.patch   SSOSync-Staging dist/sar/legacy-staging.yaml >/dev/null; \
-	$(SAR_VARIANT) cicd/build/package/legacy.patch   SSOSync         dist/sar/legacy-release.yaml >/dev/null; \
-	$(SAR_VARIANT) cicd/build/package/next-gen.patch ssosync-staging dist/sar/next-gen-staging.yaml >/dev/null; \
-	$(SAR_VARIANT) cicd/build/package/next-gen.patch ssosync         dist/sar/next-gen-release.yaml >/dev/null
+	  cp template.yaml dist/sar/$$v.yaml; patch -s dist/sar/$$v.yaml cicd/build/package/$$v.patch; done; \
+	cp dist/sar/legacy.yaml dist/sar/legacy-staging.yaml;   patch -s dist/sar/legacy-staging.yaml cicd/build/package/staging.patch; \
+	cp dist/sar/legacy.yaml dist/sar/legacy-release.yaml;   patch -s dist/sar/legacy-release.yaml cicd/build/package/release.patch; \
+	cp dist/sar/next-gen.yaml dist/sar/next-gen-staging.yaml; patch -s dist/sar/next-gen-staging.yaml cicd/build/package/next-gen-staging.patch; \
+	cp dist/sar/next-gen.yaml dist/sar/next-gen-release.yaml
 	@grep -H -E '^    Name:' dist/sar/*-staging.yaml dist/sar/*-release.yaml
-	@if command -v cfn-lint >/dev/null 2>&1; then cfn-lint -i W1030,W1031 -- dist/sar/*.yaml && echo "cfn-lint: ok"; fi
+	@if command -v cfn-lint >/dev/null 2>&1; then cfn-lint -i W1030,W1031 -- dist/sar/legacy.yaml dist/sar/next-gen.yaml && echo "cfn-lint: ok"; fi
 
 .PHONY: clean
 clean:

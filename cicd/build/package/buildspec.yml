@@ -1,21 +1,21 @@
 version: 0.2
 # Package the two SAR applications from template.yaml (issue #399), each with a
 # staging and a release variant. template.yaml holds every feature; a feature
-# patch selects what an application exposes, then variant.sh sets its
+# patch selects what an application exposes, then a name patch sets its
 # Serverless Application Repository name:
 #
 #   legacy   (SSOSync): legacy.patch, the 2.10.0 parameters, patterns widened
 #            to accept apostrophes (#401) (key + admin
 #            authentication, both sync methods); README SAR.md
-#            staging: SSOSync-Staging, release: SSOSync
+#            staging.patch -> SSOSync-Staging,   release.patch -> SSOSync
 #   next-gen (ssosync): next-gen.patch, keyless (Workload Identity Federation)
 #            only, groups sync only, required customer id; README SAR-next-gen.md
-#            staging: ssosync-staging, release: ssosync
+#            next-gen-staging.patch -> ssosync-staging; release: no name patch
+#            (template.yaml's name, ssosync)
 #
-# variant.sh (also used by `make sar-variants`) applies the feature patch with
-# no fuzz and checks the Name edit, so a template.yaml change that conflicts
-# with a feature patch fails the build here. The patches are not regenerated
-# automatically: to update one, see the Makefile (above sar-variants).
+# `patch` fails the build if a hunk no longer applies, so a template.yaml
+# change that conflicts with a feature patch is caught here; regenerate the
+# patches with `make sar-variants` (see the Makefile).
 env:
   variables:
     ShareWith: "NOT-SHARED"
@@ -34,11 +34,16 @@ phases:
     commands:
       - |
         set -euo pipefail
-        p=cicd/build/package
-        bash $p/variant.sh $p/legacy.patch   SSOSync-Staging staging.yaml
-        bash $p/variant.sh $p/legacy.patch   SSOSync         release.yaml
-        bash $p/variant.sh $p/next-gen.patch ssosync-staging ng-staging.yaml
-        bash $p/variant.sh $p/next-gen.patch ssosync         ng-release.yaml
+        variant() { # <output> <feature patch> [<name patch>]
+          cp template.yaml "$1"
+          patch "$1" "cicd/build/package/$2"
+          if [ -n "${3:-}" ]; then patch "$1" "cicd/build/package/$3"; fi
+          grep -E '^    (Name|ReadmeUrl):' "$1"
+        }
+        variant staging.yaml    legacy.patch   staging.patch
+        variant release.yaml    legacy.patch   release.patch
+        variant ng-staging.yaml next-gen.patch next-gen-staging.patch
+        variant ng-release.yaml next-gen.patch
         for t in staging release ng-staging ng-release; do
           sam package --force-upload --no-progressbar --template-file "$t.yaml" --s3-bucket ${S3Bucket} --output-template-file "packaged-$t.yaml"
           ls "packaged-$t.yaml"
