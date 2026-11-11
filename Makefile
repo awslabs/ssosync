@@ -166,16 +166,18 @@ go-build-lambda: install-goreleaser
 #   next-gen-staging.patch  renames ssosync to ssosync-staging; Name line only
 # There is no next-gen-release.patch: template.yaml's default Name, ssosync, is
 # already the next-gen release name. Both legacy name patches apply to
-# legacy.yaml (never one after the other). The four combinations, as in
-# cicd/build/package/buildspec.yml:
+# legacy.yaml (never one after the other). The four combinations, with the
+# names cicd/build/package/buildspec.yml (which runs this target) packages
+# them as:
 #   legacy.patch + legacy-release.patch      => SSOSync          (release.yaml)
 #   legacy.patch + legacy-staging.patch      => SSOSync-Staging  (staging.yaml)
 #   next-gen.patch                           => ssosync          (ng-release.yaml)
 #   next-gen.patch + next-gen-staging.patch  => ssosync-staging  (ng-staging.yaml)
 # Every patch is applied with no fuzz (patch -N -F 0), so a patch whose context
-# no longer matches exactly fails here, as it does in the build. Writes the
+# no longer matches exactly fails here (and so fails the build). Writes the
 # variants to dist/sar/ (and lints the feature variants when cfn-lint is
-# installed); a failed patch leaves its .rej there.
+# installed; it is skipped otherwise, as on CodeBuild); a failed patch prints
+# its rejects and leaves its .rej there.
 #
 # The patches are not regenerated automatically. To change one (<app> is legacy
 # or next-gen, <stage> is staging or release):
@@ -192,18 +194,22 @@ go-build-lambda: install-goreleaser
 #   Then rerun make sar-variants. A feature-patch change to the lines around
 #   Name also needs that app's name patches regenerated.
 #   A name patch must change only the Name line: a staging template and its
-#   release template may differ in nothing else. sar-variants and the
-#   packaging buildspec both check this and fail otherwise.
+#   release template may differ in nothing else. sar-variants checks this
+#   and fails otherwise.
 .PHONY: sar-variants
 sar-variants: sar-readmes
 	@mkdir -p dist/sar && rm -f dist/sar/*.orig dist/sar/*.rej
 	@set -e; p=cicd/build/package; \
+	apply() { patch -N -F 0 dist/sar/$$1.yaml $$p/$$2.patch || { \
+	  cat dist/sar/$$1.yaml.rej >&2 || true; \
+	  echo "error: $$p/$$2.patch does not apply to dist/sar/$$1.yaml with no fuzz; regenerate it (see above sar-variants in the Makefile)" >&2; \
+	  exit 1; }; }; \
 	for v in legacy next-gen; do \
-	  cp template.yaml dist/sar/$$v.yaml; patch -N -F 0 dist/sar/$$v.yaml $$p/$$v.patch; done; \
+	  cp template.yaml dist/sar/$$v.yaml; apply $$v $$v; done; \
 	for v in legacy-staging legacy-release next-gen-staging; do \
-	  cp dist/sar/$${v%-*}.yaml dist/sar/$$v.yaml; patch -N -F 0 dist/sar/$$v.yaml $$p/$$v.patch; done; \
+	  cp dist/sar/$${v%-*}.yaml dist/sar/$$v.yaml; apply $$v $$v; done; \
 	cp dist/sar/next-gen.yaml dist/sar/next-gen-release.yaml
-	@grep -H -E '^    Name:' dist/sar/*-staging.yaml dist/sar/*-release.yaml
+	@grep -H -E '^    (Name|ReadmeUrl):' dist/sar/*-staging.yaml dist/sar/*-release.yaml
 	@# Staging and release must differ only in the SAR Name line: each has
 	@# exactly one "    Name:" line, and diff -I ignores only that line.
 	@set -e; for v in legacy next-gen; do \
@@ -327,7 +333,7 @@ setup: install-deps config
 	@echo "Development environment setup complete"
 
 .PHONY: ci
-ci: vet test
+ci: vet test sar-variants
 	@echo "CI pipeline completed successfully"
 
 .PHONY: help
@@ -340,6 +346,7 @@ help:
 	@echo "  generate-mock   - Generate mocks using mockery"
 	@echo "  test            - Run tests with coverage"
 	@echo "  sar-readmes     - Check SAR.md and SAR-next-gen.md use only basic Markdown (run by test)"
+	@echo "  sar-variants    - Build and check the four SAR templates in dist/sar/ (run by ci)"
 	@echo "  test-verbose    - Run tests with verbose output"
 	@echo "  test-coverage   - Generate HTML coverage report"
 	@echo "  vet/lint        - Run linters"
@@ -349,7 +356,7 @@ help:
 	@echo "  dry-run         - Test release without publishing"
 	@echo "  clean           - Clean build artifacts"
 	@echo "  clean-all       - Clean everything including development tools (.bin/)"
-	@echo "  ci              - Run CI pipeline (fmt, vet, test)"
+	@echo "  ci              - Run CI pipeline (vet, test, sar-variants)"
 	@echo "  dev             - Run development build (auto-detects $(OS)/$(ARCH))"
 	@echo "  dev-help        - Show help for development build"
 	@echo "  help            - Show this help message"
