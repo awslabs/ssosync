@@ -7,15 +7,18 @@ version: 0.2
 #   legacy   (SSOSync): legacy.patch, the 2.10.0 parameters, patterns widened
 #            to accept apostrophes (#401) (key + admin
 #            authentication, both sync methods); README SAR.md
-#            staging.patch -> SSOSync-Staging,   release.patch -> SSOSync
+#            legacy-staging.patch -> SSOSync-Staging,
+#            legacy-release.patch -> SSOSync
 #   next-gen (ssosync): next-gen.patch, keyless (Workload Identity Federation)
 #            only, groups sync only, required customer id; README SAR-next-gen.md
 #            next-gen-staging.patch -> ssosync-staging; release: no name patch
 #            (template.yaml's name, ssosync)
 #
-# `patch` fails the build if a hunk no longer applies, so a template.yaml
-# change that conflicts with a feature patch is caught here; regenerate the
-# patches with `make sar-variants` (see the Makefile).
+# Every patch is applied with no fuzz (patch -F 0), so a hunk whose context no
+# longer matches exactly fails the build here. `make sar-variants` applies the
+# same patches in the same order. The patches are not regenerated
+# automatically: how to regenerate each kind is in the Makefile, above
+# sar-variants.
 env:
   variables:
     ShareWith: "NOT-SHARED"
@@ -36,12 +39,19 @@ phases:
         set -euo pipefail
         variant() { # <output> <feature patch> [<name patch>]
           cp template.yaml "$1"
-          patch "$1" "cicd/build/package/$2"
-          if [ -n "${3:-}" ]; then patch "$1" "cicd/build/package/$3"; fi
+          for p in "$2" ${3:+"$3"}; do
+            # -F 0: no fuzz; -N: never offer to reverse a patch.
+            if ! patch -N -F 0 "$1" "cicd/build/package/$p"; then
+              cat "$1.rej" >&2 || true
+              rm -f "$1.orig" "$1.rej"
+              echo "error: cicd/build/package/$p does not apply to $1 with no fuzz; regenerate it (see the Makefile, above sar-variants)" >&2
+              return 1
+            fi
+          done
           grep -E '^    (Name|ReadmeUrl):' "$1"
         }
-        variant staging.yaml    legacy.patch   staging.patch
-        variant release.yaml    legacy.patch   release.patch
+        variant staging.yaml    legacy.patch   legacy-staging.patch
+        variant release.yaml    legacy.patch   legacy-release.patch
         variant ng-staging.yaml next-gen.patch next-gen-staging.patch
         variant ng-release.yaml next-gen.patch
         for t in staging release ng-staging ng-release; do

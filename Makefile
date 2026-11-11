@@ -156,20 +156,40 @@ go-build: install-goreleaser install-upx
 go-build-lambda: install-goreleaser
 	$(Q)$(GORELEASER_BIN) build --snapshot --clean --id ssosync $(VERBOSE_BUILD_FLAG) $(GOREL_ARGS)
 
-# The two SAR applications (issue #399) are template.yaml with a feature patch
-# (legacy.patch or next-gen.patch) and a name patch, as in
-# cicd/build/package/buildspec.yml. Writes them to dist/sar/ to check that the
-# patches still apply after a template.yaml change (and lints them when cfn-lint
-# is installed). To change a variant: edit its dist/sar/ file and regenerate the
-# feature patch, e.g. diff -u template.yaml dist/sar/next-gen.yaml > cicd/build/package/next-gen.patch
+# The two SAR applications (issue #399), each with a staging and a release
+# variant, are template.yaml with patches from cicd/build/package/, applied in
+# the same order as cicd/build/package/buildspec.yml:
+#   legacy-staging    legacy.patch, then legacy-staging.patch       SSOSync-Staging
+#   legacy-release    legacy.patch, then legacy-release.patch       SSOSync
+#   next-gen-staging  next-gen.patch, then next-gen-staging.patch   ssosync-staging
+#   next-gen-release  next-gen.patch only (template.yaml's name)    ssosync
+# Every patch is applied with no fuzz (patch -N -F 0), so a patch whose context
+# no longer matches exactly fails here, as it does in the build. Writes the
+# variants to dist/sar/ (and lints the feature variants when cfn-lint is
+# installed); a failed patch leaves its .rej there.
+#
+# The patches are not regenerated automatically. To change one (<app> is legacy
+# or next-gen, <stage> is staging or release):
+#   Feature patch <app>.patch, against template.yaml:
+#     1. make sar-variants (if it fails on <app>.patch itself, build
+#        dist/sar/<app>.yaml by hand from template.yaml instead)
+#     2. edit dist/sar/<app>.yaml; leave its Name as ssosync
+#     3. diff -u --label template.yaml --label <app>.yaml template.yaml dist/sar/<app>.yaml > cicd/build/package/<app>.patch
+#   Name patch <app>-<stage>.patch, against the feature variant <app>.yaml:
+#     1. make sar-variants (the feature variants are written first)
+#     2. cp dist/sar/<app>.yaml dist/sar/<app>-<stage>.yaml, and set the Name
+#        line of its AWS::ServerlessRepo::Application block
+#     3. diff -u --label <app>.yaml --label <app>-<stage>.yaml dist/sar/<app>.yaml dist/sar/<app>-<stage>.yaml > cicd/build/package/<app>-<stage>.patch
+#   Then rerun make sar-variants. A feature-patch change to the lines around
+#   Name also needs that app's name patches regenerated.
 .PHONY: sar-variants
 sar-variants: sar-readmes
-	@mkdir -p dist/sar
-	@set -e; for v in legacy next-gen; do \
-	  cp template.yaml dist/sar/$$v.yaml; patch -s dist/sar/$$v.yaml cicd/build/package/$$v.patch; done; \
-	cp dist/sar/legacy.yaml dist/sar/legacy-staging.yaml;   patch -s dist/sar/legacy-staging.yaml cicd/build/package/staging.patch; \
-	cp dist/sar/legacy.yaml dist/sar/legacy-release.yaml;   patch -s dist/sar/legacy-release.yaml cicd/build/package/release.patch; \
-	cp dist/sar/next-gen.yaml dist/sar/next-gen-staging.yaml; patch -s dist/sar/next-gen-staging.yaml cicd/build/package/next-gen-staging.patch; \
+	@mkdir -p dist/sar && rm -f dist/sar/*.orig dist/sar/*.rej
+	@set -e; p=cicd/build/package; \
+	for v in legacy next-gen; do \
+	  cp template.yaml dist/sar/$$v.yaml; patch -N -F 0 dist/sar/$$v.yaml $$p/$$v.patch; done; \
+	for v in legacy-staging legacy-release next-gen-staging; do \
+	  cp dist/sar/$${v%-*}.yaml dist/sar/$$v.yaml; patch -N -F 0 dist/sar/$$v.yaml $$p/$$v.patch; done; \
 	cp dist/sar/next-gen.yaml dist/sar/next-gen-release.yaml
 	@grep -H -E '^    Name:' dist/sar/*-staging.yaml dist/sar/*-release.yaml
 	@if command -v cfn-lint >/dev/null 2>&1; then cfn-lint -i W1030,W1031 -- dist/sar/legacy.yaml dist/sar/next-gen.yaml && echo "cfn-lint: ok"; fi
