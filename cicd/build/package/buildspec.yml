@@ -56,16 +56,16 @@ phases:
         variant release.yaml    legacy.patch   legacy-release.patch
         variant ng-staging.yaml next-gen.patch next-gen-staging.patch
         variant ng-release.yaml next-gen.patch
-        # Staging and release must differ only in the SAR Name line: the diff
-        # is exactly one "NcN" hunk whose two sides are both "    Name:" lines.
+        # Staging and release must differ only in the SAR Name line: each has
+        # exactly one "    Name:" line, and diff -I ignores only that line.
         names_only() { # <staging> <release>
-          diff "$1" "$2" > names.diff || true
-          if [ "$(grep -c '' names.diff)" != 4 ] || grep -v -E '^([0-9]+c[0-9]+|---|[<>]     Name: .+)$' names.diff >/dev/null; then
-            cat names.diff >&2
+          for f in "$1" "$2"; do
+            [ "$(grep -c '^    Name:' "$f")" = 1 ] || { echo "error: $f must have exactly one '    Name:' line" >&2; return 1; }
+          done
+          diff -I '^    Name:' "$1" "$2" || {
             echo "error: $1 and $2 must differ only in their Name line; a name patch may change only that line (see the Makefile, above sar-variants)" >&2
             return 1
-          fi
-          rm -f names.diff
+          }
         }
         names_only staging.yaml release.yaml
         names_only ng-staging.yaml ng-release.yaml

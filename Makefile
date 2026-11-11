@@ -204,15 +204,14 @@ sar-variants: sar-readmes
 	  cp dist/sar/$${v%-*}.yaml dist/sar/$$v.yaml; patch -N -F 0 dist/sar/$$v.yaml $$p/$$v.patch; done; \
 	cp dist/sar/next-gen.yaml dist/sar/next-gen-release.yaml
 	@grep -H -E '^    Name:' dist/sar/*-staging.yaml dist/sar/*-release.yaml
-	@# Staging and release must differ only in the SAR Name line: the diff is
-	@# exactly one "NcN" hunk whose two sides are both "    Name:" lines.
+	@# Staging and release must differ only in the SAR Name line: each has
+	@# exactly one "    Name:" line, and diff -I ignores only that line.
 	@set -e; for v in legacy next-gen; do \
-	  d=dist/sar/$$v-names.diff; \
-	  diff dist/sar/$$v-staging.yaml dist/sar/$$v-release.yaml > $$d || true; \
-	  if [ "$$(grep -c '' $$d)" != 4 ] || grep -v -E '^([0-9]+c[0-9]+|---|[<>]     Name: .+)$$' $$d >/dev/null; then \
-	    cat $$d >&2; \
+	  for f in dist/sar/$$v-staging.yaml dist/sar/$$v-release.yaml; do \
+	    [ "$$(grep -c '^    Name:' $$f)" = 1 ] || { echo "error: $$f must have exactly one '    Name:' line" >&2; exit 1; }; done; \
+	  diff -I '^    Name:' dist/sar/$$v-staging.yaml dist/sar/$$v-release.yaml || { \
 	    echo "error: dist/sar/$$v-staging.yaml and dist/sar/$$v-release.yaml must differ only in their Name line; a name patch may change only that line" >&2; \
-	    exit 1; fi; \
+	    exit 1; }; \
 	done; echo "staging vs release, Name only: ok"
 	@if command -v cfn-lint >/dev/null 2>&1; then cfn-lint -i W1030,W1031 -- dist/sar/legacy.yaml dist/sar/next-gen.yaml && echo "cfn-lint: ok"; fi
 
