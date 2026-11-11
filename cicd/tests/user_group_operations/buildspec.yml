@@ -26,7 +26,6 @@ env:
 phases:
   build:
     commands:
-      - python3 tests/user_group_operations/test_check_log.py
       - bash tests/user_group_operations/run.sh
 
 artifacts:

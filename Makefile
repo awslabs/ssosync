@@ -138,6 +138,18 @@ sar-readmes:
 test: generate-mock sar-readmes
 	$(Q)go test $(VERBOSE_TEST_FLAG) `go list ./internal/... | grep -v ./internal/mocks` -coverprofile=coverage.out
 
+# Unit tests of the cicd/tests Python helpers. One discover per directory:
+# each imports its modules from its own directory. Needs PyYAML. make's
+# wildcard has no **, so this looks up to three directories below cicd/tests;
+# add a level here for a test deeper than that.
+CICD_TEST_DIRS = $(sort $(dir $(wildcard cicd/tests/*/test_*.py cicd/tests/*/*/test_*.py cicd/tests/*/*/*/test_*.py)))
+.PHONY: test-cicd
+test-cicd:
+	$(Q)set -e; for d in $(CICD_TEST_DIRS); do \
+	  echo "test-cicd: $$d"; \
+	  python3 -B -m unittest discover $(VERBOSE_TEST_FLAG) -s $$d -p 'test_*.py'; \
+	done
+
 .PHONY: test-verbose
 test-verbose: generate-mock
 	$(Q)go test -v `go list ./internal/... | grep -v ./internal/mocks` -coverprofile=coverage.out
@@ -333,7 +345,7 @@ setup: install-deps config
 	@echo "Development environment setup complete"
 
 .PHONY: ci
-ci: vet test sar-variants
+ci: vet test sar-variants test-cicd
 	@echo "CI pipeline completed successfully"
 
 .PHONY: help
@@ -347,6 +359,7 @@ help:
 	@echo "  test            - Run tests with coverage"
 	@echo "  sar-readmes     - Check SAR.md and SAR-next-gen.md use only basic Markdown (run by test)"
 	@echo "  sar-variants    - Build and check the four SAR templates in dist/sar/ (run by ci)"
+	@echo "  test-cicd       - Run the cicd/tests Python helper unit tests (run by ci)"
 	@echo "  test-verbose    - Run tests with verbose output"
 	@echo "  test-coverage   - Generate HTML coverage report"
 	@echo "  vet/lint        - Run linters"
@@ -356,7 +369,7 @@ help:
 	@echo "  dry-run         - Test release without publishing"
 	@echo "  clean           - Clean build artifacts"
 	@echo "  clean-all       - Clean everything including development tools (.bin/)"
-	@echo "  ci              - Run CI pipeline (vet, test, sar-variants)"
+	@echo "  ci              - Run CI pipeline (vet, test, sar-variants, test-cicd)"
 	@echo "  dev             - Run development build (auto-detects $(OS)/$(ARCH))"
 	@echo "  dev-help        - Show help for development build"
 	@echo "  help            - Show this help message"

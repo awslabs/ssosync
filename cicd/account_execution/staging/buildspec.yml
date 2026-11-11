@@ -2,11 +2,6 @@ version: 0.2
 
 phases:
 
-  install:
-    commands:
-      # tests/quick_start/test_rewrite.py
-      - pip3 install --quiet pyyaml
-
   build:
     commands:
       # Create parameters
@@ -109,7 +104,6 @@ phases:
             "./deploy/wif-${AccountId}.json" > "./deploy/attributemap-${AccountId}.json"
           jq .audience "wif-config-lambda-${AccountId}.json" "./tests/wif_account_execution/cli/wif-config-${AccountId}.json"
         done
-        python3 cicd/tests/quick_start/test_rewrite.py
         GoogleCustomerIdArn="$GoogleCustomerIdArn" SecretWIFServiceAccountEmail="$SecretWIFServiceAccountEmail" \
           python3 cicd/tests/quick_start/build.py --quick-start-dir quick-start \
             --out ./deploy/quick-start-tests --wif-config-dir . --accounts "$Accounts"
