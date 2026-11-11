@@ -144,7 +144,8 @@ def main():
     a = ap.parse_args()
 
     env = {k: os.environ.get(k, "") for k in ["AppArn", "NextGenAppArn", "AppVersion", *set(ARN_SOURCES.values())]}
-    empty = [k for k, v in env.items() if not v or v == '""']
+    # The staging buildspec normalises unset ("") SecretsConfig entries.
+    empty = [k for k, v in env.items() if not v]
     if empty:
         sys.exit(f"build.py: not set: {', '.join(sorted(empty))}")
     with open(a.wif_config) as f:
