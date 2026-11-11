@@ -157,12 +157,21 @@ go-build-lambda: install-goreleaser
 	$(Q)$(GORELEASER_BIN) build --snapshot --clean --id ssosync $(VERBOSE_BUILD_FLAG) $(GOREL_ARGS)
 
 # The two SAR applications (issue #399), each with a staging and a release
-# variant, are template.yaml with patches from cicd/build/package/, applied in
-# the same order as cicd/build/package/buildspec.yml:
-#   legacy-staging    legacy.patch, then legacy-staging.patch       SSOSync-Staging
-#   legacy-release    legacy.patch, then legacy-release.patch       SSOSync
-#   next-gen-staging  next-gen.patch, then next-gen-staging.patch   ssosync-staging
-#   next-gen-release  next-gen.patch only (template.yaml's name)    ssosync
+# variant, are template.yaml with patches from cicd/build/package/. Each patch
+# is unique and atomic:
+#   legacy.patch            removes the next-gen features only; never touches Name
+#   next-gen.patch          removes the legacy features only; never touches Name
+#   legacy-release.patch    renames ssosync to SSOSync; Name line only
+#   legacy-staging.patch    renames ssosync to SSOSync-Staging; Name line only
+#   next-gen-staging.patch  renames ssosync to ssosync-staging; Name line only
+# There is no next-gen-release.patch: template.yaml's default Name, ssosync, is
+# already the next-gen release name. Both legacy name patches apply to
+# legacy.yaml (never one after the other). The four combinations, as in
+# cicd/build/package/buildspec.yml:
+#   legacy.patch + legacy-release.patch      => SSOSync          (release.yaml)
+#   legacy.patch + legacy-staging.patch      => SSOSync-Staging  (staging.yaml)
+#   next-gen.patch                           => ssosync          (ng-release.yaml)
+#   next-gen.patch + next-gen-staging.patch  => ssosync-staging  (ng-staging.yaml)
 # Every patch is applied with no fuzz (patch -N -F 0), so a patch whose context
 # no longer matches exactly fails here, as it does in the build. Writes the
 # variants to dist/sar/ (and lints the feature variants when cfn-lint is
