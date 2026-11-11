@@ -182,6 +182,9 @@ go-build-lambda: install-goreleaser
 #     3. diff -u --label <app>.yaml --label <app>-<stage>.yaml dist/sar/<app>.yaml dist/sar/<app>-<stage>.yaml > cicd/build/package/<app>-<stage>.patch
 #   Then rerun make sar-variants. A feature-patch change to the lines around
 #   Name also needs that app's name patches regenerated.
+#   A name patch must change only the Name line: a staging template and its
+#   release template may differ in nothing else. sar-variants and the
+#   packaging buildspec both check this and fail otherwise.
 .PHONY: sar-variants
 sar-variants: sar-readmes
 	@mkdir -p dist/sar && rm -f dist/sar/*.orig dist/sar/*.rej
@@ -192,6 +195,16 @@ sar-variants: sar-readmes
 	  cp dist/sar/$${v%-*}.yaml dist/sar/$$v.yaml; patch -N -F 0 dist/sar/$$v.yaml $$p/$$v.patch; done; \
 	cp dist/sar/next-gen.yaml dist/sar/next-gen-release.yaml
 	@grep -H -E '^    Name:' dist/sar/*-staging.yaml dist/sar/*-release.yaml
+	@# Staging and release must differ only in the SAR Name line: the diff is
+	@# exactly one "NcN" hunk whose two sides are both "    Name:" lines.
+	@set -e; for v in legacy next-gen; do \
+	  d=dist/sar/$$v-names.diff; \
+	  diff dist/sar/$$v-staging.yaml dist/sar/$$v-release.yaml > $$d || true; \
+	  if [ "$$(grep -c '' $$d)" != 4 ] || grep -v -E '^([0-9]+c[0-9]+|---|[<>]     Name: .+)$$' $$d >/dev/null; then \
+	    cat $$d >&2; \
+	    echo "error: dist/sar/$$v-staging.yaml and dist/sar/$$v-release.yaml must differ only in their Name line; a name patch may change only that line" >&2; \
+	    exit 1; fi; \
+	done; echo "staging vs release, Name only: ok"
 	@if command -v cfn-lint >/dev/null 2>&1; then cfn-lint -i W1030,W1031 -- dist/sar/legacy.yaml dist/sar/next-gen.yaml && echo "cfn-lint: ok"; fi
 
 .PHONY: clean
