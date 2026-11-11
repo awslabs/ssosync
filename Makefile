@@ -121,8 +121,21 @@ install-upx:
 generate-mock: install-mockery
 	$(MOCKERY)
 
+# The Serverless Application Repository renders the application READMEs
+# (ReadmeUrl: SAR.md, and SAR-next-gen.md via next-gen.patch) as basic
+# Markdown only: no tables and no GitHub alerts (> [!NOTE] and so on; a plain
+# > blockquote with a bold label works). Fails if either README uses them (#406).
+SAR_READMES = SAR.md SAR-next-gen.md
+.PHONY: sar-readmes
+sar-readmes:
+	@ls $(SAR_READMES) >/dev/null
+	@if grep -n -H -i -E '^[[:space:]]*\||\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]' $(SAR_READMES); then \
+	  echo "error: SAR READMEs must be basic Markdown: replace table rows (lines starting with |) with lists, and GitHub alerts with '> **Note:** ...' blockquotes (#406)"; \
+	  exit 1; \
+	fi
+	@echo "sar-readmes: ok"
 .PHONY: test
-test: generate-mock
+test: generate-mock sar-readmes
 	$(Q)go test $(VERBOSE_TEST_FLAG) `go list ./internal/... | grep -v ./internal/mocks` -coverprofile=coverage.out
 
 .PHONY: test-verbose
@@ -150,7 +163,7 @@ go-build-lambda: install-goreleaser
 # is installed). To change a variant: edit its dist/sar/ file and regenerate the
 # feature patch, e.g. diff -u template.yaml dist/sar/next-gen.yaml > cicd/build/package/next-gen.patch
 .PHONY: sar-variants
-sar-variants:
+sar-variants: sar-readmes
 	@mkdir -p dist/sar
 	@set -e; for v in legacy next-gen; do \
 	  cp template.yaml dist/sar/$$v.yaml; patch -s dist/sar/$$v.yaml cicd/build/package/$$v.patch; done; \
@@ -285,6 +298,7 @@ help:
 	@echo "  fmt             - Format code and tidy modules"
 	@echo "  generate-mock   - Generate mocks using mockery"
 	@echo "  test            - Run tests with coverage"
+	@echo "  sar-readmes     - Check SAR.md and SAR-next-gen.md use only basic Markdown (run by test)"
 	@echo "  test-verbose    - Run tests with verbose output"
 	@echo "  test-coverage   - Generate HTML coverage report"
 	@echo "  vet/lint        - Run linters"
