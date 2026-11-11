@@ -49,7 +49,7 @@ Sensitive values can be provided inline or as the ARN of a secret in [AWS Secret
 - `SCIMEndpointUrl` (environment variable `SCIM_ENDPOINT`; required): AWS IAM Identity Center SCIM endpoint URL, or the ARN of a secret containing it. The AWS region is derived from this URL.
 - `SCIMEndpointAccessToken` (environment variable `SCIM_ACCESS_TOKEN`; required): AWS IAM Identity Center SCIM access token, or the ARN of a secret containing it.
 
-> **Note:** **Region** and **IdentityStoreID** are no longer configurable. Region is extracted from the SCIM endpoint URL and the Identity Store ID is resolved automatically via the IAM Identity Center `ListInstances` API. The deprecated `Region` and `IdentityStoreID` parameters remain in the template only for backward compatibility and will be removed in v3.x.
+> **Note:** **Region** and **IdentityStoreID** are no longer configurable. Region is extracted from the SCIM endpoint URL and the Identity Store ID is resolved automatically via the IAM Identity Center `ListInstances` API. This application has no `Region` or `IdentityStoreID` parameters.
 
 ### Sync Configuration
 

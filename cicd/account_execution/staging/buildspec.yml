@@ -20,7 +20,9 @@ phases:
 
       # Copy in the stack and params templates
       - mkdir deploy
-      - cp cicd/account_execution/staging/stack.yml ./deploy/
+      # stack.yml deploys the legacy (SSOSync-Staging) app, stack-ng.yml the
+      # next-gen (ssosync-staging) one; each passes only its app's parameters.
+      - cp cicd/account_execution/staging/stack.yml cicd/account_execution/staging/stack-ng.yml ./deploy/
 
       # The customer id secret is not in SecretsConfig, so it is looked up by
       # name. Every param set below passes its Arn (stack.yml has no
@@ -52,8 +54,8 @@ phases:
       #   <AccountId>-cli     trusts SSOSync_CLIExecutionRole (the CLI test)
       # For each account (ShareWith in the release pipeline, this account in the
       # developer pipeline), named by account id so each pipeline picks up its own:
-      #   deploy/wif-<AccountId>.json: the stack params for the next-gen (ssosync)
-      #     staging application (issue #399), with the -lambda
+      #   deploy/wif-<AccountId>.json: the stack-ng.yml params for the next-gen
+      #     (ssosync) staging application (issue #399), with the -lambda
       #     configuration inline (the app stores it as SSOSyncGoogleWIFConfig).
       #     Every test except LegacyAuth deploys it.
       #   deploy/attributemap-<AccountId>.json: the same plus maps/rich.json
@@ -87,7 +89,6 @@ phases:
               --arg GoogleCustomerIdArn "$GoogleCustomerIdArn" \
               --arg SCIMEndpointUrlArn "$SecretSCIMEndpoint" \
               --arg SCIMAccessTokenArn "$SecretSCIMAccessToken" \
-              --arg RegionArn "$SecretRegion" \
               '{Parameters: ($ARGS.named + {RoleName: "SSOSync_ExecutionRole", GroupMatch: "name:AWS*,name=NestedGroups"}),
                 StackPolicy: {Statement: [{Effect: "Allow", NotAction: "Update:Delete", Principal: "*", Resource: "*"}]}}' \
               > "./deploy/wif-${AccountId}.json"
