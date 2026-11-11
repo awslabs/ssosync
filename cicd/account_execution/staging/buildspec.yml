@@ -86,13 +86,18 @@ phases:
         else
           Accounts=$(echo "$ShareWith" | tr ',' ' ')
         fi
+        # Only the provider at the end of "audience" differs per role and
+        # account ($p); this is the one place it is rewritten (build.py reads
+        # the -lambda files).
+        audience='if .audience | test("/providers/[^/]+$") then .audience |= sub("/providers/[^/]+$"; "/providers/" + $p) else error("unexpected audience: \(.audience)") end'
         for AccountId in $Accounts; do
-          sed -E "s#(/providers/)[^\"]*\"#\1${AccountId}-lambda\"#" wif-config.json > wif-config-lambda.json
+          jq --arg p "${AccountId}-lambda" "$audience" wif-config.json > "wif-config-lambda-${AccountId}.json"
+          jq --arg p "${AccountId}-cli" "$audience" wif-config.json > "./tests/wif_account_execution/cli/wif-config-${AccountId}.json"
           jq -n \
             --arg AppArn "$NextGenAppArn" \
             --arg AppVersion "$AppVersion" \
             --arg GoogleImpersonateServiceAccountArn "$SecretWIFServiceAccountEmail" \
-            --arg GoogleWIFConfig "$(jq -c . wif-config-lambda.json)" \
+            --arg GoogleWIFConfig "$(jq -c . "wif-config-lambda-${AccountId}.json")" \
             --arg GoogleCustomerIdArn "$GoogleCustomerIdArn" \
             --arg SCIMEndpointUrlArn "$SecretSCIMEndpoint" \
             --arg SCIMAccessTokenArn "$SecretSCIMAccessToken" \
@@ -102,14 +107,13 @@ phases:
           jq --arg AttributeMap "$(jq -c . cicd/tests/attribute_map/maps/rich.json)" \
             '.Parameters.AttributeMap = $AttributeMap' \
             "./deploy/wif-${AccountId}.json" > "./deploy/attributemap-${AccountId}.json"
-          sed -E "s#(/providers/)[^\"]*\"#\1${AccountId}-cli\"#" wif-config.json > "./tests/wif_account_execution/cli/wif-config-${AccountId}.json"
-          jq .audience wif-config-lambda.json "./tests/wif_account_execution/cli/wif-config-${AccountId}.json"
+          jq .audience "wif-config-lambda-${AccountId}.json" "./tests/wif_account_execution/cli/wif-config-${AccountId}.json"
         done
         python3 cicd/tests/quick_start/test_rewrite.py
         GoogleCustomerIdArn="$GoogleCustomerIdArn" SecretWIFServiceAccountEmail="$SecretWIFServiceAccountEmail" \
           python3 cicd/tests/quick_start/build.py --quick-start-dir quick-start \
-            --out ./deploy/quick-start-tests --wif-config wif-config.json --accounts "$Accounts"
-        rm -f wif-config.json wif-config-lambda.json
+            --out ./deploy/quick-start-tests --wif-config-dir . --accounts "$Accounts"
+        rm -f wif-config.json wif-config-lambda-*.json
 
 
 artifacts:
