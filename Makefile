@@ -159,40 +159,30 @@ go-build-lambda: install-goreleaser
 # The two SAR applications (issue #399), each with a staging and a release
 # variant, are template.yaml with patches from cicd/build/package/, applied in
 # the same order as cicd/build/package/buildspec.yml:
-#   legacy-release    legacy.patch                                  SSOSync
 #   legacy-staging    legacy.patch, then legacy-staging.patch       SSOSync-Staging
-#   next-gen-release  next-gen.patch                                ssosync
+#   legacy-release    legacy.patch, then legacy-release.patch       SSOSync
 #   next-gen-staging  next-gen.patch, then next-gen-staging.patch   ssosync-staging
-# There are four patches, of two kinds:
-#   - A feature patch (legacy.patch, next-gen.patch) removes the other
-#     application's parameters and features, and sets the application's base
-#     (release) name. Only legacy.patch changes it, ssosync -> SSOSync;
-#     next-gen keeps template.yaml's name, ssosync.
-#   - A staging patch (<app>-staging.patch) changes only the Name line, to the
-#     staging name.
-#   There are no release patches: a release variant is its feature variant.
+#   next-gen-release  next-gen.patch only (template.yaml's name)    ssosync
 # Every patch is applied with no fuzz (patch -N -F 0), so a patch whose context
 # no longer matches exactly fails here, as it does in the build. Writes the
-# variants to dist/sar/ (<app>.yaml is the feature variant, copied to
-# <app>-release.yaml), and lints the feature variants when cfn-lint is
-# installed; a failed patch leaves its .rej there.
+# variants to dist/sar/ (and lints the feature variants when cfn-lint is
+# installed); a failed patch leaves its .rej there.
 #
 # The patches are not regenerated automatically. To change one (<app> is legacy
-# or next-gen):
+# or next-gen, <stage> is staging or release):
 #   Feature patch <app>.patch, against template.yaml:
 #     1. make sar-variants (if it fails on <app>.patch itself, build
 #        dist/sar/<app>.yaml by hand from template.yaml instead)
-#     2. edit dist/sar/<app>.yaml; keep its Name as the release name
-#        (SSOSync for legacy, ssosync for next-gen)
+#     2. edit dist/sar/<app>.yaml; leave its Name as ssosync
 #     3. diff -u --label template.yaml --label <app>.yaml template.yaml dist/sar/<app>.yaml > cicd/build/package/<app>.patch
-#   Staging patch <app>-staging.patch, against the feature variant <app>.yaml:
+#   Name patch <app>-<stage>.patch, against the feature variant <app>.yaml:
 #     1. make sar-variants (the feature variants are written first)
-#     2. cp dist/sar/<app>.yaml dist/sar/<app>-staging.yaml, and set the Name
-#        line of its AWS::ServerlessRepo::Application block to the staging name
-#     3. diff -u --label <app>.yaml --label <app>-staging.yaml dist/sar/<app>.yaml dist/sar/<app>-staging.yaml > cicd/build/package/<app>-staging.patch
+#     2. cp dist/sar/<app>.yaml dist/sar/<app>-<stage>.yaml, and set the Name
+#        line of its AWS::ServerlessRepo::Application block
+#     3. diff -u --label <app>.yaml --label <app>-<stage>.yaml dist/sar/<app>.yaml dist/sar/<app>-<stage>.yaml > cicd/build/package/<app>-<stage>.patch
 #   Then rerun make sar-variants. A feature-patch change to the lines around
-#   Name also needs that app's staging patch regenerated.
-#   A staging patch must change only the Name line: a staging template and its
+#   Name also needs that app's name patches regenerated.
+#   A name patch must change only the Name line: a staging template and its
 #   release template may differ in nothing else. sar-variants and the
 #   packaging buildspec both check this and fail otherwise.
 .PHONY: sar-variants
@@ -200,10 +190,10 @@ sar-variants: sar-readmes
 	@mkdir -p dist/sar && rm -f dist/sar/*.orig dist/sar/*.rej
 	@set -e; p=cicd/build/package; \
 	for v in legacy next-gen; do \
-	  cp template.yaml dist/sar/$$v.yaml; patch -N -F 0 dist/sar/$$v.yaml $$p/$$v.patch; \
-	  cp dist/sar/$$v.yaml dist/sar/$$v-release.yaml; \
-	  cp dist/sar/$$v.yaml dist/sar/$$v-staging.yaml; patch -N -F 0 dist/sar/$$v-staging.yaml $$p/$$v-staging.patch; \
-	done
+	  cp template.yaml dist/sar/$$v.yaml; patch -N -F 0 dist/sar/$$v.yaml $$p/$$v.patch; done; \
+	for v in legacy-staging legacy-release next-gen-staging; do \
+	  cp dist/sar/$${v%-*}.yaml dist/sar/$$v.yaml; patch -N -F 0 dist/sar/$$v.yaml $$p/$$v.patch; done; \
+	cp dist/sar/next-gen.yaml dist/sar/next-gen-release.yaml
 	@grep -H -E '^    Name:' dist/sar/*-staging.yaml dist/sar/*-release.yaml
 	@# Staging and release must differ only in the SAR Name line: the diff is
 	@# exactly one "NcN" hunk whose two sides are both "    Name:" lines.
@@ -212,7 +202,7 @@ sar-variants: sar-readmes
 	  diff dist/sar/$$v-staging.yaml dist/sar/$$v-release.yaml > $$d || true; \
 	  if [ "$$(grep -c '' $$d)" != 4 ] || grep -v -E '^([0-9]+c[0-9]+|---|[<>]     Name: .+)$$' $$d >/dev/null; then \
 	    cat $$d >&2; \
-	    echo "error: dist/sar/$$v-staging.yaml and dist/sar/$$v-release.yaml must differ only in their Name line; a staging patch may change only that line" >&2; \
+	    echo "error: dist/sar/$$v-staging.yaml and dist/sar/$$v-release.yaml must differ only in their Name line; a name patch may change only that line" >&2; \
 	    exit 1; fi; \
 	done; echo "staging vs release, Name only: ok"
 	@if command -v cfn-lint >/dev/null 2>&1; then cfn-lint -i W1030,W1031 -- dist/sar/legacy.yaml dist/sar/next-gen.yaml && echo "cfn-lint: ok"; fi

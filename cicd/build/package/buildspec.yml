@@ -1,31 +1,24 @@
 version: 0.2
 # Package the two SAR applications from template.yaml (issue #399), each with a
 # staging and a release variant. template.yaml holds every feature; a feature
-# patch selects what an application exposes and sets its release name, then a
-# staging patch sets its staging name:
+# patch selects what an application exposes, then a name patch sets its
+# Serverless Application Repository name:
 #
 #   legacy   (SSOSync): legacy.patch, the 2.10.0 parameters, patterns widened
 #            to accept apostrophes (#401) (key + admin
-#            authentication, both sync methods), Name ssosync -> SSOSync;
-#            README SAR.md
-#            release: legacy.patch only -> SSOSync
-#            staging: then legacy-staging.patch -> SSOSync-Staging
+#            authentication, both sync methods); README SAR.md
+#            legacy-staging.patch -> SSOSync-Staging,
+#            legacy-release.patch -> SSOSync
 #   next-gen (ssosync): next-gen.patch, keyless (Workload Identity Federation)
-#            only, groups sync only, required customer id; keeps
-#            template.yaml's name; README SAR-next-gen.md
-#            release: next-gen.patch only -> ssosync
-#            staging: then next-gen-staging.patch -> ssosync-staging
-#
-# A feature patch (legacy.patch, next-gen.patch) removes the other
-# application's parameters and features and sets the release name (only
-# legacy.patch changes it). A staging patch changes only the Name line. There
-# are no release patches.
+#            only, groups sync only, required customer id; README SAR-next-gen.md
+#            next-gen-staging.patch -> ssosync-staging; release: no name patch
+#            (template.yaml's name, ssosync)
 #
 # Every patch is applied with no fuzz (patch -F 0), so a hunk whose context no
 # longer matches exactly fails the build here. `make sar-variants` applies the
 # same patches in the same order. The patches are not regenerated
 # automatically: how to regenerate each kind is in the Makefile, above
-# sar-variants. A staging patch must change only the Name line: before
+# sar-variants. A name patch must change only the Name line: before
 # `sam package`, each staging template is checked to differ from its release
 # template in that line alone, as `make sar-variants` also checks.
 env:
@@ -46,7 +39,7 @@ phases:
     commands:
       - |
         set -euo pipefail
-        variant() { # <output> <feature patch> [<staging patch>]
+        variant() { # <output> <feature patch> [<name patch>]
           cp template.yaml "$1"
           for p in "$2" ${3:+"$3"}; do
             # -F 0: no fuzz; -N: never offer to reverse a patch.
@@ -60,7 +53,7 @@ phases:
           grep -E '^    (Name|ReadmeUrl):' "$1"
         }
         variant staging.yaml    legacy.patch   legacy-staging.patch
-        variant release.yaml    legacy.patch
+        variant release.yaml    legacy.patch   legacy-release.patch
         variant ng-staging.yaml next-gen.patch next-gen-staging.patch
         variant ng-release.yaml next-gen.patch
         # Staging and release must differ only in the SAR Name line: the diff
@@ -69,7 +62,7 @@ phases:
           diff "$1" "$2" > names.diff || true
           if [ "$(grep -c '' names.diff)" != 4 ] || grep -v -E '^([0-9]+c[0-9]+|---|[<>]     Name: .+)$' names.diff >/dev/null; then
             cat names.diff >&2
-            echo "error: $1 and $2 must differ only in their Name line; a staging patch may change only that line (see the Makefile, above sar-variants)" >&2
+            echo "error: $1 and $2 must differ only in their Name line; a name patch may change only that line (see the Makefile, above sar-variants)" >&2
             return 1
           fi
           rm -f names.diff

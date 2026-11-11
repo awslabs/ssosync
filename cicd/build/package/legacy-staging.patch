@@ -4,7 +4,7 @@
  
  
    AWS::ServerlessRepo::Application:
--    Name: SSOSync
+-    Name: ssosync
 +    Name: SSOSync-Staging
      Description: Helping you populate AWS SSO directly with your Google Apps users.
      Author: Sebastian Doell
