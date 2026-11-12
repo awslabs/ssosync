@@ -561,25 +561,12 @@ Resources:
                 OutputArtifacts:
                   - Name: AttrMapLambdaInlineMap
               - !Ref AWS::NoValue
-            # Remove TestAccountExecution, so the next block starts from a fresh deployment.
-            - !If
-              - DeployDelegated
-              - Name: CleanUp-AttributeMap
-                ActionTypeId:
-                  Category: Deploy
-                  Owner: AWS
-                  Version: 1
-                  Provider: CloudFormation
-                Configuration:
-                  ActionMode: DELETE_ONLY
-                  StackName: TestAccountExecution
-                  RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
-                InputArtifacts:
-                  - Name: Tests
-                RunOrder: 23
-              - !Ref AWS::NoValue
             # Functional tests against the live tenant.
             # Keyless deployment (deploy/wif-<AccountId>.json): ssosync runs keyless with its SSOSync* secrets.
+            # Updates the AttributeMap block's stack in place, back to the default
+            # attribute map (AttributeMap unset). Deleting and recreating it reused
+            # the fixed RoleName SSOSync_ExecutionRole within seconds, before IAM
+            # had propagated it, and Lambda could not assume the role (#409).
             - !If
               - DeployDelegated
               - Name: Deploy-Functional
@@ -597,7 +584,7 @@ Resources:
                   TemplatePath: !Sub 'Tests::deploy/stack-ng.yml'
                 InputArtifacts:
                   - Name: Tests
-                RunOrder: 24
+                RunOrder: 23
               - !Ref AWS::NoValue
             # Live proof of getUserOperations/getGroupOperations (issue #383):
             # expected IssuerArn == the real ExternalId Issuer, managed records
@@ -612,7 +599,7 @@ Resources:
                   Owner: AWS
                   Version: 1
                   Provider: CodeBuild
-                RunOrder: 25
+                RunOrder: 24
                 Configuration:
                   ProjectName: !Ref CodeBuildUserGroupOperations
                   PrimarySource: Tests
@@ -649,7 +636,7 @@ Resources:
                   RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
                 InputArtifacts:
                   - Name: Tests
-                RunOrder: 26
+                RunOrder: 25
               - !Ref AWS::NoValue
             - !If
               - DeployDelegated
@@ -659,7 +646,7 @@ Resources:
                   Owner: AWS
                   Version: 1
                   Provider: CodeBuild
-                RunOrder: 27
+                RunOrder: 26
                 Configuration:
                   ProjectName: !Ref CodeBuildQuickStartPackage
                   PrimarySource: Tests
@@ -686,7 +673,7 @@ Resources:
                 InputArtifacts:
                   - Name: Tests
                   - Name: QuickStarts
-                RunOrder: 28
+                RunOrder: 27
               - !Ref AWS::NoValue
             - !If
               - DeployDelegated
@@ -696,7 +683,7 @@ Resources:
                   Owner: AWS
                   Version: 1
                   Provider: Lambda
-                RunOrder: 29
+                RunOrder: 28
                 Configuration:
                   FunctionName: SSOSync
                 InputArtifacts:
@@ -720,7 +707,7 @@ Resources:
                 InputArtifacts:
                   - Name: Tests
                   - Name: QuickStarts
-                RunOrder: 30
+                RunOrder: 29
               - !Ref AWS::NoValue
             - !If
               - DeployDelegated
@@ -730,7 +717,7 @@ Resources:
                   Owner: AWS
                   Version: 1
                   Provider: Lambda
-                RunOrder: 31
+                RunOrder: 30
                 Configuration:
                   FunctionName: SSOSync
                 InputArtifacts:
@@ -754,7 +741,7 @@ Resources:
                 InputArtifacts:
                   - Name: Tests
                   - Name: QuickStarts
-                RunOrder: 32
+                RunOrder: 31
               - !Ref AWS::NoValue
             - !If
               - DeployDelegated
@@ -764,7 +751,7 @@ Resources:
                   Owner: AWS
                   Version: 1
                   Provider: Lambda
-                RunOrder: 33
+                RunOrder: 32
                 Configuration:
                   FunctionName: SSOSyncNG
                 InputArtifacts:
@@ -788,7 +775,7 @@ Resources:
                 InputArtifacts:
                   - Name: Tests
                   - Name: QuickStarts
-                RunOrder: 34
+                RunOrder: 33
               - !Ref AWS::NoValue
             - !If
               - DeployDelegated
@@ -798,7 +785,7 @@ Resources:
                   Owner: AWS
                   Version: 1
                   Provider: Lambda
-                RunOrder: 35
+                RunOrder: 34
                 Configuration:
                   FunctionName: SSOSyncNG
                 InputArtifacts:
@@ -818,7 +805,7 @@ Resources:
                   RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
                 InputArtifacts:
                   - Name: Tests
-                RunOrder: 36
+                RunOrder: 35
               - !Ref AWS::NoValue
 
   CodePipelineDeployCrossAccountSecrets:

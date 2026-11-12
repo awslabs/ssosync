@@ -1,3 +1,7 @@
+## Unreleased
+
+- The developer and release test pipelines no longer delete `TestAccountExecution` between the attribute-map and functional tests (`CleanUp-AttributeMap` is gone): `Deploy-Functional` updates the stack in place, back to the default attribute map (#409). Deleting and recreating it reused the role name `SSOSync_ExecutionRole` within seconds, and Lambda could fail to assume the not-yet-propagated role ("The role defined for the function cannot be assumed by Lambda").
+
 ## v2.11.0
 
 ### Highlights
