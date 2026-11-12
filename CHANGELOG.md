@@ -1,6 +1,7 @@
 ## Unreleased
 
 - The developer and release test pipelines no longer delete `TestAccountExecution` between the attribute-map and functional tests (`CleanUp-AttributeMap` is gone): `Deploy-Functional` updates the stack in place, back to the default attribute map (#409). Deleting and recreating it reused the role name `SSOSync_ExecutionRole` within seconds, and Lambda could fail to assume the not-yet-propagated role ("The role defined for the function cannot be assumed by Lambda").
+- The developer and release test pipelines deploy `TestAccountExecution` and `QuickStartTests` with `REPLACE_ON_FAILURE` instead of `CREATE_UPDATE` (#409). A stack that a failed run left in a failed state (such as `ROLLBACK_COMPLETE`) is now deleted and recreated, so a retry no longer needs it deleted by hand first; a healthy stack is still updated in place, so the in-place updates (attribute-map to functional, classic to next-gen quick-starts) are unchanged.
 
 ## v2.11.0
 

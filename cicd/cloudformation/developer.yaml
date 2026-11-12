@@ -288,6 +288,10 @@ Resources:
         # so they run in one stage: with QUEUED only one execution can be in a
         # stage, so runs no longer overlap. Actions are prefixed with the block
         # they belong to and run strictly in sequence (RunOrder).
+        # The TestAccountExecution and QuickStartTests deploys use
+        # REPLACE_ON_FAILURE: a stack a failed run left in a failed state (e.g.
+        # ROLLBACK_COMPLETE) is deleted and recreated, and a healthy one is
+        # updated in place, as with CREATE_UPDATE (#409).
         - Name: Tests
           Actions:
             # A cancelled run can leave QuickStartTests behind; its classic Secrets
@@ -319,7 +323,7 @@ Resources:
                 Version: '1'
                 Provider: CloudFormation
               Configuration:
-                ActionMode: CREATE_UPDATE
+                ActionMode: REPLACE_ON_FAILURE
                 Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND,CAPABILITY_NAMED_IAM
                 StackName: TestAccountExecution
                 RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
@@ -390,7 +394,7 @@ Resources:
                 Version: '1'
                 Provider: CloudFormation
               Configuration:
-                ActionMode: CREATE_UPDATE
+                ActionMode: REPLACE_ON_FAILURE
                 Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND,CAPABILITY_NAMED_IAM
                 StackName: TestAccountExecution
                 RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
@@ -465,7 +469,7 @@ Resources:
                 Version: '1'
                 Provider: CloudFormation
               Configuration:
-                ActionMode: CREATE_UPDATE
+                ActionMode: REPLACE_ON_FAILURE
                 Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND,CAPABILITY_NAMED_IAM
                 StackName: TestAccountExecution
                 RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
@@ -586,7 +590,7 @@ Resources:
                 Version: '1'
                 Provider: CloudFormation
               Configuration:
-                ActionMode: CREATE_UPDATE
+                ActionMode: REPLACE_ON_FAILURE
                 Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND,CAPABILITY_NAMED_IAM
                 StackName: TestAccountExecution
                 RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
@@ -621,7 +625,7 @@ Resources:
                 Version: '1'
                 Provider: CloudFormation
               Configuration:
-                ActionMode: CREATE_UPDATE
+                ActionMode: REPLACE_ON_FAILURE
                 Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND,CAPABILITY_NAMED_IAM
                 StackName: TestAccountExecution
                 RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
@@ -695,7 +699,7 @@ Resources:
                 Version: '1'
                 Provider: CloudFormation
               Configuration:
-                ActionMode: CREATE_UPDATE
+                ActionMode: REPLACE_ON_FAILURE
                 Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND,CAPABILITY_NAMED_IAM
                 StackName: QuickStartTests
                 RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
@@ -723,7 +727,7 @@ Resources:
                 Version: '1'
                 Provider: CloudFormation
               Configuration:
-                ActionMode: CREATE_UPDATE
+                ActionMode: REPLACE_ON_FAILURE
                 Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND,CAPABILITY_NAMED_IAM
                 StackName: QuickStartTests
                 RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
@@ -751,7 +755,7 @@ Resources:
                 Version: '1'
                 Provider: CloudFormation
               Configuration:
-                ActionMode: CREATE_UPDATE
+                ActionMode: REPLACE_ON_FAILURE
                 Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND,CAPABILITY_NAMED_IAM
                 StackName: QuickStartTests
                 RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
@@ -779,7 +783,7 @@ Resources:
                 Version: '1'
                 Provider: CloudFormation
               Configuration:
-                ActionMode: CREATE_UPDATE
+                ActionMode: REPLACE_ON_FAILURE
                 Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND,CAPABILITY_NAMED_IAM
                 StackName: QuickStartTests
                 RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
