@@ -1,5 +1,12 @@
 # Git Workflow
 
+## Where development happens
+- Development happens in the workspace itself (the main checkout the user has open), on the feature branch. Do not create git worktrees, or other separate checkouts, for feature work unless the user explicitly asks.
+- `master` is only used by the release pipeline. All development work happens on a feature branch until it is merged.
+- Each feature or bugfix gets its own branch, named after its principal issue (see Branch naming), and linked to that issue in GitHub: create it with `gh issue develop <n> --name <branch> --base master --checkout`, and reference the issue in the PR (`Closes #<n>`).
+- When a different feature branch is needed, switch the workspace to it, after checking the tree is clean (`git status --porcelain`). If there are uncommitted changes, ask the user.
+- Give file paths relative to the workspace, so what the user sees matches what the agent works on.
+
 ## Branch naming
 - Always name a feature or bugfix branch with GitHub's issue-branch convention: the issue number, then the issue title slugified (lower case, every run of non-alphanumerics becomes one `-`), e.g. `322-least-privilege-drop-group-member-readonly-scope`. This is the name GitHub's "Create a branch" (or `gh issue develop <n>`) gives for that issue.
 - If the work has no issue, raise one first (or ask the user).
