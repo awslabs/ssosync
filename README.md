@@ -695,6 +695,8 @@ The validator's allow-lists are the single source of truth for what is valid. Ta
 | `Enterprise.Department` | defaulted | `organizations[primary].department` |
 | `Enterprise.Organization` | defaulted | `organizations[primary].name` |
 | `Enterprise.CostCenter` | defaulted | `organizations[primary].costCenter` |
+| `NickName` | opt-in | — (e.g. `name.givenName` or a custom-schema field) |
+| `Name.Formatted` | opt-in | — (e.g. `name.fullName`) |
 | `Enterprise.Manager` | opt-in | — (you choose, e.g. `relations[type=manager].value`) |
 | `Enterprise.Division` | opt-in | — |
 | `Enterprise.EmployeeNumber` | opt-in | — |
@@ -703,11 +705,18 @@ The validator's allow-lists are the single source of truth for what is valid. Ta
 | `Addresses` | opt-in | — |
 | `PhoneNumbers` | opt-in | — |
 
+To populate nicknames and formatted names, copy the default map above and add
+`"NickName": "name.givenName"` and `"Name.Formatted": "name.fullName"` to its `user`
+block. These fields remain empty unless mapped; supplying a `user` block replaces
+the entire default user map. `name.fullName` uses Google's returned full name
+without synthesizing one when it is missing. User `DisplayName` remains derived
+from the mapped given and family names.
+
 **Supported Google source grammar**
 
 A user source value is one of three shapes:
 
-- **Scalar** — matched exactly. The supported scalar sources are: `name.givenName`, `name.familyName`, `primaryEmail`, `suspended`.
+- **Scalar** — matched exactly. The supported scalar sources are: `name.givenName`, `name.familyName`, `name.fullName`, `primaryEmail`, `suspended`.
 - **Multi-valued** — `<field>[<selector>].<subfield>`, where `<selector>` is `primary` or `type=<value>` (see [Selection rule](#selection-rule-for-multi-valued-google-fields)). The supported base fields and their sub-fields are:
 
   | Base field | Supported sub-fields |

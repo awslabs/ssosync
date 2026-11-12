@@ -14,6 +14,19 @@ import (
 
 // --- Type-qualified selector (type=X) coverage ---
 
+func TestMapFromGoogleUser_OptInNamesFromCustomSchema(t *testing.T) {
+	u := &admin.User{CustomSchemas: map[string]googleapi.RawMessage{
+		"Profile": googleapi.RawMessage(`{"nickname":"JJ","formatted":"Dr. Jane Doe"}`),
+	}}
+	got, err := MapFromGoogleUser(u, config.AttributeMap{
+		"NickName":       "customSchemas.Profile.nickname",
+		"Name.Formatted": "customSchemas.Profile.formatted",
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, "JJ", got.NickName)
+	assert.Equal(t, "Dr. Jane Doe", got.Name.Formatted)
+}
+
 func TestMapFromGoogleUser_TypeSelectorMatch(t *testing.T) {
 	u := &admin.User{
 		Id:           "T1",
