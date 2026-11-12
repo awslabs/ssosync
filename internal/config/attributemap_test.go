@@ -133,8 +133,8 @@ func TestParseAttributeMaps_UnsupportedTargetField(t *testing.T) {
 	// The valid-set listing names the supported user target fields, sorted.
 	assert.Contains(msg, "Active, Addresses, Emails, Enterprise.CostCenter, "+
 		"Enterprise.Department, Enterprise.Division, Enterprise.EmployeeNumber, "+
-		"Enterprise.Manager, Enterprise.Organization, Name.FamilyName, "+
-		"Name.GivenName, PhoneNumbers, ProfileURL, Title, Username")
+		"Enterprise.Manager, Enterprise.Organization, Name.FamilyName, Name.Formatted, "+
+		"Name.GivenName, NickName, PhoneNumbers, ProfileURL, Title, Username")
 }
 
 func TestParseAttributeMaps_SafeSetTokensAccepted(t *testing.T) {
@@ -158,6 +158,8 @@ func TestParseAttributeMaps_OptInTokensAccepted(t *testing.T) {
 	assert := assert.New(t)
 
 	content := `{"user":{
+		"NickName":"name.givenName",
+		"Name.Formatted":"name.fullName",
 		"Enterprise.Manager":"relations[type=manager].value",
 		"Enterprise.Division":"organizations[primary].domain",
 		"Enterprise.EmployeeNumber":"organizations[primary].costCenter",
@@ -168,6 +170,8 @@ func TestParseAttributeMaps_OptInTokensAccepted(t *testing.T) {
 	}}`
 	am, err := ParseAttributeMaps([]byte(content))
 	assert.NoError(err)
+	assert.Equal("name.givenName", am.User["NickName"])
+	assert.Equal("name.fullName", am.User["Name.Formatted"])
 	assert.Equal("relations[type=manager].value", am.User["Enterprise.Manager"])
 	assert.Equal("websites[primary].value", am.User["ProfileURL"])
 	assert.Equal("emails[primary].address", am.User["Emails"])

@@ -631,6 +631,21 @@ func mapFromGoogleUser(u *admin.User, attrMap config.AttributeMap) (interfaces.U
 
 	for targetField, sourceAttr := range attrMap {
 		switch targetField {
+		case "NickName", "Name.Formatted":
+			v, found, err := resolveGoogleUserSource(u, sourceAttr)
+			if err != nil {
+				return interfaces.User{}, err
+			}
+			warnCustomSource(u, targetField, sourceAttr, found)
+			value, ok := v.(string)
+			if !ok {
+				return interfaces.User{}, fmt.Errorf("mapFromGoogleUser: target %q requires a string source, got %q", targetField, sourceAttr)
+			}
+			if targetField == "NickName" {
+				user.NickName = value
+			} else {
+				user.Name.Formatted = value
+			}
 		case "Name.GivenName":
 			v, found, err := resolveGoogleUserSource(u, sourceAttr)
 			if err != nil {
@@ -1131,6 +1146,11 @@ func resolveGoogleUserSource(u *admin.User, sourceAttr string) (value interface{
 			return "", true, nil
 		}
 		return strings.ReplaceAll(u.Name.FamilyName, string('\u200B'), " "), true, nil
+	case "name.fullName":
+		if u.Name == nil {
+			return "", true, nil
+		}
+		return strings.ReplaceAll(u.Name.FullName, string('\u200B'), " "), true, nil
 	case "primaryEmail":
 		return u.PrimaryEmail, true, nil
 	case "suspended":

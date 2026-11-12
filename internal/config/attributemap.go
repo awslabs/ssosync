@@ -36,6 +36,8 @@ var (
 		"Enterprise.Organization": {}, // safe set
 		"Enterprise.CostCenter":   {}, // safe set
 		// Opt-in only (supported, NOT defaulted).
+		"NickName":                  {},
+		"Name.Formatted":            {},
 		"Enterprise.Manager":        {}, // opt-in (design §5.7)
 		"Enterprise.Division":       {}, // opt-in (design §5.2)
 		"Enterprise.EmployeeNumber": {}, // opt-in (design §5.3)
@@ -50,6 +52,7 @@ var (
 	supportedUserSourceScalars = map[string]struct{}{
 		"name.givenName":  {},
 		"name.familyName": {},
+		"name.fullName":   {},
 		"primaryEmail":    {},
 		"suspended":       {},
 	}
