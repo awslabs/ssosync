@@ -81,15 +81,11 @@ def parameter_names(template):
     return set(re.findall(r"^  (\w+):\s*$", m.group(1), re.M))
 
 
-def per_account_wif_config(config, account):
-    """The credential configuration for this account's -lambda provider: only
-    the provider at the end of "audience" differs per role and account."""
-    cfg = dict(config)
-    audience, n = re.subn(r"/providers/[^/]+$", f"/providers/{account}-lambda", cfg["audience"])
-    if n != 1:
-        raise ValueError(f"unexpected audience {cfg['audience']!r}")
-    cfg["audience"] = audience
-    return json.dumps(cfg, separators=(",", ":"))
+def per_account_wif_config(wif_config_dir, account):
+    """The credential configuration for this account's -lambda provider, as
+    the staging buildspec wrote it (it rewrites the audience, with jq)."""
+    with open(os.path.join(wif_config_dir, f"wif-config-lambda-{account}.json")) as f:
+        return json.dumps(json.load(f), separators=(",", ":"))
 
 
 def wrapper(name, path, method, qs_params):
@@ -139,16 +135,16 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--quick-start-dir", required=True, help="the repository's quick-start/")
     ap.add_argument("--out", required=True)
-    ap.add_argument("--wif-config", required=True, help="the PipelineGoogleWIFConfig credential configuration")
+    ap.add_argument("--wif-config-dir", required=True,
+                    help="where the staging buildspec wrote wif-config-lambda-<AccountId>.json")
     ap.add_argument("--accounts", required=True, help="space or comma separated account ids")
     a = ap.parse_args()
 
     env = {k: os.environ.get(k, "") for k in ["AppArn", "NextGenAppArn", "AppVersion", *set(ARN_SOURCES.values())]}
-    empty = [k for k, v in env.items() if not v or v == '""']
+    # The staging buildspec normalises unset ("") SecretsConfig entries.
+    empty = [k for k, v in env.items() if not v]
     if empty:
         sys.exit(f"build.py: not set: {', '.join(sorted(empty))}")
-    with open(a.wif_config) as f:
-        wif_config = json.load(f)
     with open(ATTRIBUTE_MAP) as f:
         attribute_map = json.dumps(json.load(f), separators=(",", ":"))
     accounts = [x for x in re.split(r"[\s,]+", a.accounts) if x]
@@ -170,7 +166,7 @@ def main():
                 if wp in ARN_SOURCES:
                     values[wp] = env[ARN_SOURCES[wp]]
             if "GoogleWIFConfig" in wparams:
-                values["GoogleWIFConfig"] = per_account_wif_config(wif_config, account)
+                values["GoogleWIFConfig"] = per_account_wif_config(a.wif_config_dir, account)
             if "AttributeMap" in wparams:
                 values["AttributeMap"] = attribute_map
             assert all(v.startswith("arn:") for k, v in values.items() if k.endswith("Arn"))

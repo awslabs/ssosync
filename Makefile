@@ -121,9 +121,34 @@ install-upx:
 generate-mock: install-mockery
 	$(MOCKERY)
 
+# The Serverless Application Repository renders the application READMEs
+# (ReadmeUrl: SAR.md, and SAR-next-gen.md via next-gen.patch) as basic
+# Markdown only: no tables and no GitHub alerts (> [!NOTE] and so on; a plain
+# > blockquote with a bold label works). Fails if either README uses them (#406).
+SAR_READMES = SAR.md SAR-next-gen.md
+.PHONY: sar-readmes
+sar-readmes:
+	@ls $(SAR_READMES) >/dev/null
+	@if grep -n -H -i -E '^[[:space:]]*\||\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]' $(SAR_READMES); then \
+	  echo "error: SAR READMEs must be basic Markdown: replace table rows (lines starting with |) with lists, and GitHub alerts with '> **Note:** ...' blockquotes (#406)"; \
+	  exit 1; \
+	fi
+	@echo "sar-readmes: ok"
 .PHONY: test
-test: generate-mock
+test: generate-mock sar-readmes
 	$(Q)go test $(VERBOSE_TEST_FLAG) `go list ./internal/... | grep -v ./internal/mocks` -coverprofile=coverage.out
+
+# Unit tests of the cicd/tests Python helpers. One discover per directory:
+# each imports its modules from its own directory. Needs PyYAML. make's
+# wildcard has no **, so this looks up to three directories below cicd/tests;
+# add a level here for a test deeper than that.
+CICD_TEST_DIRS = $(sort $(dir $(wildcard cicd/tests/*/test_*.py cicd/tests/*/*/test_*.py cicd/tests/*/*/*/test_*.py)))
+.PHONY: test-cicd
+test-cicd:
+	$(Q)set -e; for d in $(CICD_TEST_DIRS); do \
+	  echo "test-cicd: $$d"; \
+	  python3 -B -m unittest discover $(VERBOSE_TEST_FLAG) -s $$d -p 'test_*.py'; \
+	done
 
 .PHONY: test-verbose
 test-verbose: generate-mock
@@ -143,22 +168,69 @@ go-build: install-goreleaser install-upx
 go-build-lambda: install-goreleaser
 	$(Q)$(GORELEASER_BIN) build --snapshot --clean --id ssosync $(VERBOSE_BUILD_FLAG) $(GOREL_ARGS)
 
-# The two SAR applications (issue #399) are template.yaml with a feature patch
-# (legacy.patch or next-gen.patch) and a name patch, as in
-# cicd/build/package/buildspec.yml. Writes them to dist/sar/ to check that the
-# patches still apply after a template.yaml change (and lints them when cfn-lint
-# is installed). To change a variant: edit its dist/sar/ file and regenerate the
-# feature patch, e.g. diff -u template.yaml dist/sar/next-gen.yaml > cicd/build/package/next-gen.patch
+# The two SAR applications (issue #399), each with a staging and a release
+# variant, are template.yaml with patches from cicd/build/package/. Each patch
+# is unique and atomic:
+#   legacy.patch            removes the next-gen features only; never touches Name
+#   next-gen.patch          removes the legacy features only; never touches Name
+#   legacy-release.patch    renames ssosync to SSOSync; Name line only
+#   legacy-staging.patch    renames ssosync to SSOSync-Staging; Name line only
+#   next-gen-staging.patch  renames ssosync to ssosync-staging; Name line only
+# There is no next-gen-release.patch: template.yaml's default Name, ssosync, is
+# already the next-gen release name. Both legacy name patches apply to
+# legacy.yaml (never one after the other). The four combinations, with the
+# names cicd/build/package/buildspec.yml (which runs this target) packages
+# them as:
+#   legacy.patch + legacy-release.patch      => SSOSync          (release.yaml)
+#   legacy.patch + legacy-staging.patch      => SSOSync-Staging  (staging.yaml)
+#   next-gen.patch                           => ssosync          (ng-release.yaml)
+#   next-gen.patch + next-gen-staging.patch  => ssosync-staging  (ng-staging.yaml)
+# Every patch is applied with no fuzz (patch -N -F 0), so a patch whose context
+# no longer matches exactly fails here (and so fails the build). Writes the
+# variants to dist/sar/ (and lints the feature variants when cfn-lint is
+# installed; it is skipped otherwise, as on CodeBuild); a failed patch prints
+# its rejects and leaves its .rej there.
+#
+# The patches are not regenerated automatically. To change one (<app> is legacy
+# or next-gen, <stage> is staging or release):
+#   Feature patch <app>.patch, against template.yaml:
+#     1. make sar-variants (if it fails on <app>.patch itself, build
+#        dist/sar/<app>.yaml by hand from template.yaml instead)
+#     2. edit dist/sar/<app>.yaml; leave its Name as ssosync
+#     3. diff -u --label template.yaml --label <app>.yaml template.yaml dist/sar/<app>.yaml > cicd/build/package/<app>.patch
+#   Name patch <app>-<stage>.patch, against the feature variant <app>.yaml:
+#     1. make sar-variants (the feature variants are written first)
+#     2. cp dist/sar/<app>.yaml dist/sar/<app>-<stage>.yaml, and set the Name
+#        line of its AWS::ServerlessRepo::Application block
+#     3. diff -u --label <app>.yaml --label <app>-<stage>.yaml dist/sar/<app>.yaml dist/sar/<app>-<stage>.yaml > cicd/build/package/<app>-<stage>.patch
+#   Then rerun make sar-variants. A feature-patch change to the lines around
+#   Name also needs that app's name patches regenerated.
+#   A name patch must change only the Name line: a staging template and its
+#   release template may differ in nothing else. sar-variants checks this
+#   and fails otherwise.
 .PHONY: sar-variants
-sar-variants:
-	@mkdir -p dist/sar
-	@set -e; for v in legacy next-gen; do \
-	  cp template.yaml dist/sar/$$v.yaml; patch -s dist/sar/$$v.yaml cicd/build/package/$$v.patch; done; \
-	cp dist/sar/legacy.yaml dist/sar/legacy-staging.yaml;   patch -s dist/sar/legacy-staging.yaml cicd/build/package/staging.patch; \
-	cp dist/sar/legacy.yaml dist/sar/legacy-release.yaml;   patch -s dist/sar/legacy-release.yaml cicd/build/package/release.patch; \
-	cp dist/sar/next-gen.yaml dist/sar/next-gen-staging.yaml; patch -s dist/sar/next-gen-staging.yaml cicd/build/package/next-gen-staging.patch; \
+sar-variants: sar-readmes
+	@mkdir -p dist/sar && rm -f dist/sar/*.orig dist/sar/*.rej
+	@set -e; p=cicd/build/package; \
+	apply() { patch -N -F 0 dist/sar/$$1.yaml $$p/$$2.patch || { \
+	  cat dist/sar/$$1.yaml.rej >&2 || true; \
+	  echo "error: $$p/$$2.patch does not apply to dist/sar/$$1.yaml with no fuzz; regenerate it (see above sar-variants in the Makefile)" >&2; \
+	  exit 1; }; }; \
+	for v in legacy next-gen; do \
+	  cp template.yaml dist/sar/$$v.yaml; apply $$v $$v; done; \
+	for v in legacy-staging legacy-release next-gen-staging; do \
+	  cp dist/sar/$${v%-*}.yaml dist/sar/$$v.yaml; apply $$v $$v; done; \
 	cp dist/sar/next-gen.yaml dist/sar/next-gen-release.yaml
-	@grep -H -E '^    Name:' dist/sar/*-staging.yaml dist/sar/*-release.yaml
+	@grep -H -E '^    (Name|ReadmeUrl):' dist/sar/*-staging.yaml dist/sar/*-release.yaml
+	@# Staging and release must differ only in the SAR Name line: each has
+	@# exactly one "    Name:" line, and diff -I ignores only that line.
+	@set -e; for v in legacy next-gen; do \
+	  for f in dist/sar/$$v-staging.yaml dist/sar/$$v-release.yaml; do \
+	    [ "$$(grep -c '^    Name:' $$f)" = 1 ] || { echo "error: $$f must have exactly one '    Name:' line" >&2; exit 1; }; done; \
+	  diff -I '^    Name:' dist/sar/$$v-staging.yaml dist/sar/$$v-release.yaml || { \
+	    echo "error: dist/sar/$$v-staging.yaml and dist/sar/$$v-release.yaml must differ only in their Name line; a name patch may change only that line" >&2; \
+	    exit 1; }; \
+	done; echo "staging vs release, Name only: ok"
 	@if command -v cfn-lint >/dev/null 2>&1; then cfn-lint -i W1030,W1031 -- dist/sar/legacy.yaml dist/sar/next-gen.yaml && echo "cfn-lint: ok"; fi
 
 .PHONY: clean
@@ -273,7 +345,7 @@ setup: install-deps config
 	@echo "Development environment setup complete"
 
 .PHONY: ci
-ci: vet test
+ci: vet test sar-variants test-cicd
 	@echo "CI pipeline completed successfully"
 
 .PHONY: help
@@ -285,6 +357,9 @@ help:
 	@echo "  fmt             - Format code and tidy modules"
 	@echo "  generate-mock   - Generate mocks using mockery"
 	@echo "  test            - Run tests with coverage"
+	@echo "  sar-readmes     - Check SAR.md and SAR-next-gen.md use only basic Markdown (run by test)"
+	@echo "  sar-variants    - Build and check the four SAR templates in dist/sar/ (run by ci)"
+	@echo "  test-cicd       - Run the cicd/tests Python helper unit tests (run by ci)"
 	@echo "  test-verbose    - Run tests with verbose output"
 	@echo "  test-coverage   - Generate HTML coverage report"
 	@echo "  vet/lint        - Run linters"
@@ -294,7 +369,7 @@ help:
 	@echo "  dry-run         - Test release without publishing"
 	@echo "  clean           - Clean build artifacts"
 	@echo "  clean-all       - Clean everything including development tools (.bin/)"
-	@echo "  ci              - Run CI pipeline (fmt, vet, test)"
+	@echo "  ci              - Run CI pipeline (vet, test, sar-variants, test-cicd)"
 	@echo "  dev             - Run development build (auto-detects $(OS)/$(ARCH))"
 	@echo "  dev-help        - Show help for development build"
 	@echo "  help            - Show this help message"

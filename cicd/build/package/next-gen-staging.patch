@@ -1,7 +1,7 @@
 --- next-gen.yaml
 +++ next-gen-staging.yaml
-@@ -56,7 +56,7 @@
-           - Region
+@@ -51,7 +51,7 @@
+           - KMSKey
  
    AWS::ServerlessRepo::Application:
 -    Name: ssosync

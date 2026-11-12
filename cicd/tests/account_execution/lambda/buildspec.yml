@@ -12,8 +12,9 @@ phases:
 
   build:
     commands:
-      # Execute the lambda
-      - FunctionError=$(aws lambda invoke --function-name "SSOSyncFunction" response.json | jq 'has("FunctionError")') 
+      # Execute the lambda once: no CLI retries, and a read timeout longer than
+      # the function's, so a slow sync is not invoked a second time.
+      - FunctionError=$(AWS_MAX_ATTEMPTS=1 aws lambda invoke --cli-read-timeout 900 --cli-connect-timeout 30 --function-name "SSOSyncFunction" response.json | jq 'has("FunctionError")')
       - echo "FunctionError= ${FunctionError}"
       - echo "ExpectedResponse= ${ExpectedResponse}"
       - |

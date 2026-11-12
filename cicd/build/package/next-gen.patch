@@ -9,19 +9,20 @@
            - GoogleImpersonateServiceAccount
            - GoogleWIFConfig
        - Label:
-@@ -52,25 +50,19 @@
+@@ -51,26 +49,15 @@
+           - DeployPattern
            - AppAccount
            - KMSKey
-       - Label:
+-      - Label:
 -          default: "Configuration options for users_groups Mode only, to be deprecated in version 3.x"
 -        Parameters:
 -          - SyncMethod
 -          - IncludeGroups
 -      - Label:
-           default: "Deprecated Parameters, to be deprecated in version 3.x"
-         Parameters:
-           - IdentityStoreID
-           - Region
+-          default: "Deprecated Parameters, to be deprecated in version 3.x"
+-        Parameters:
+-          - IdentityStoreID
+-          - Region
  
 -
    AWS::ServerlessRepo::Application:
@@ -37,26 +38,24 @@
      Labels: [serverless, sso, lambda, scim]
      HomePageUrl: https://github.com/awslabs/ssosync
      # Update the semantic version and run sam publish to publish a new version of your app
-@@ -245,44 +237,25 @@
- 
- # Secrets
+@@ -247,42 +234,23 @@
    GoogleCustomerId:
--    Type: String
--    Description: |
+     Type: String
+     Description: |
 -      Google CustomerId, retrieve from https://admin.google.com/ac/accountsettings/profile, [Required from v3.x] or the Arn of a secret that contains it. The actual customer ID (not my_customer) is required for keyless authentication and when GoogleAdminEmail is empty.
 -    Default: "my_customer"
 -    AllowedPattern: '(my_customer)|(?:arn:aws:secretsmanager:(?:(?:us(?:-gov)?|ap|ca|cn|eu|sa)-(?:central|(?:north|south)?(?:east|west)?)-\d):[0-9]{8,12}:secret:[a-zA-Z0-9\/_+=.@-]{1,512})|(?:C[0-9a-zA-Z]{8})'
--
++      Google CustomerId (Cxxxxxxxx), retrieve from https://admin.google.com/ac/accountsettings/profile, or the Arn of a secret that contains it. Required: the service account acts as itself, so the my_customer alias is not accepted.
++    AllowedPattern: '(?:arn:aws:secretsmanager:(?:(?:us(?:-gov)?|ap|ca|cn|eu|sa)-(?:central|(?:north|south)?(?:east|west)?)-\d):[0-9]{8,12}:secret:[a-zA-Z0-9\/_+=.@-]{1,512})|(?:C[0-9a-zA-Z]{8})'
+ 
 -  GoogleCredentials:
-     Type: String
-     Description: |
+-    Type: String
+-    Description: |
 -      Service-account key authentication (the default): the service account key to log into Google (content of credentials.json) or the Arn of a secret that contains it. Leave empty only when using keyless authentication (GoogleImpersonateServiceAccount).
 -    Default: ""
 -    AllowedPattern: '(?!.*\s)|(?:arn:aws:secretsmanager:(?:(?:us(?:-gov)?|ap|ca|cn|eu|sa)-(?:central|(?:north|south)?(?:east|west)?)-\d):[0-9]{8,12}:secret:[a-zA-Z0-9\/_+=.@-]{1,512})|(\{(\s)*(".*")(\s)*:(\s)*(".*")(\s)*\})'
 -    NoEcho: true
-+      Google CustomerId (Cxxxxxxxx), retrieve from https://admin.google.com/ac/accountsettings/profile, or the Arn of a secret that contains it. Required: the service account acts as itself, so the my_customer alias is not accepted.
-+    AllowedPattern: '(?:arn:aws:secretsmanager:(?:(?:us(?:-gov)?|ap|ca|cn|eu|sa)-(?:central|(?:north|south)?(?:east|west)?)-\d):[0-9]{8,12}:secret:[a-zA-Z0-9\/_+=.@-]{1,512})|(?:C[0-9a-zA-Z]{8})'
- 
+-
    GoogleImpersonateServiceAccount:
      Type: String
      Description: |
@@ -90,7 +89,29 @@
    SCIMEndpointUrl:
      Type: String
      Description: |
-@@ -340,21 +313,7 @@
+@@ -296,21 +264,6 @@
+     AllowedPattern: '(?:arn:aws:secretsmanager:(?:(?:us(?:-gov)?|ap|ca|cn|eu|sa)-(?:central|(?:north|south)?(?:east|west)?)-\d):[0-9]{8,12}:secret:[a-zA-Z0-9\/_+=.@-]{1,512})|([0-9a-zA-Z/=+-\\]{500,620})'
+     NoEcho: true
+ 
+-# Depreciated Secrets
+-  Region:
+-    Type: String
+-    Description: |
+-      AWS Region where AWS IAM Identity Center is enabled, NO LONGER USED only present for backward compatability.
+-    Default: ""
+-    AllowedPattern: '(?!.*\s)|(us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-\d'
+-
+-  IdentityStoreID:
+-    Type: String
+-    Description: |
+-      Identifier of Identity Store in AWS IAM Identity Center, NO LONGER USED only present for backward compatability.
+-    Default: ""
+-    AllowedPattern: '(?!.*\s)|d-[1-z0-9]{10}'
+-
+ # Environment Variables
+   GoogleUserMatch:
+     Type: String
+@@ -340,21 +293,7 @@
      Default: ""
      AllowedPattern: '(?!.*\s)|((([a-zA-Z0-9.\-_'']{1,64})@([a-zA-Z0-9.\-]{5,260}))(,(([a-zA-Z0-9.\-_'']{1,64})@([a-zA-Z0-9.\-]{5,260})))*)'
  
@@ -112,7 +133,7 @@
    AttributeMap:
      Type: String
      Description: |
-@@ -368,25 +327,14 @@
+@@ -368,25 +307,14 @@
      - !Equals [!Ref FunctionName, "" ]
    SetRoleName: !Not
      - !Equals [!Ref RoleName, ""]
@@ -142,7 +163,7 @@
    SetLogRetention: !And
      - !Condition CreateFunction
      - !Not
-@@ -421,19 +369,9 @@
+@@ -421,19 +349,9 @@
    ShareAttributeMapSecret: !And
      - !Condition CreateKey
      - !Condition CreateAttributeMapSecret
@@ -165,7 +186,7 @@
    GoogleKeyless: !Not
      - !Equals [!Ref GoogleImpersonateServiceAccount, ""]
    GoogleImpersonateIsSecretArn: !And
-@@ -462,16 +400,6 @@
+@@ -462,16 +380,6 @@
    ShareGoogleWIFConfigSecret: !And
      - !Condition CreateKey
      - !Condition CreateGoogleWIFConfigSecret
@@ -182,7 +203,7 @@
    OnSchedule: !And
      - !Condition CreateFunction
      - !Not
-@@ -490,49 +418,13 @@
+@@ -490,49 +398,13 @@
      - !Equals [!Ref DeployPattern, "App only"]
  
  Rules:
@@ -233,7 +254,7 @@
    SecretValues:
      RuleCondition: !Equals [!Ref DeployPattern, "App for cross-account"]
      Assertions:
-@@ -594,10 +486,6 @@
+@@ -594,10 +466,6 @@
                  Resource:
                    - !If [CreateSecrets, !Ref SecretGoogleCustomerId, !Ref GoogleCustomerId]
                    - !If
@@ -244,7 +265,7 @@
                      - CreateGoogleImpersonateSecret
                      - !Ref SecretGoogleImpersonateServiceAccount
                      - !If [GoogleImpersonateIsSecretArn, !Ref GoogleImpersonateServiceAccount, !Ref AWS::NoValue]
-@@ -605,10 +493,6 @@
+@@ -605,10 +473,6 @@
                      - CreateGoogleWIFConfigSecret
                      - !Ref SecretGoogleWIFConfig
                      - !If [GoogleWIFConfigIsSecretArn, !Ref GoogleWIFConfig, !Ref AWS::NoValue]
@@ -255,7 +276,7 @@
                    - !If [CreateSecrets, !Ref SecretSCIMEndpoint, !Ref SCIMEndpointUrl]
                    - !If [CreateSecrets, !Ref SecretSCIMAccessToken, !Ref SCIMEndpointAccessToken]
                    - !If
-@@ -692,10 +576,8 @@
+@@ -692,10 +556,8 @@
                    - "secretsmanager:DescribeSecret"
                  Resource:
                    - !Ref GoogleCustomerId # GoogleCustomerId
@@ -266,7 +287,7 @@
                    - !Ref SCIMEndpointUrl # SCIMEndpointUrl
                    - !Ref SCIMEndpointAccessToken # SCIMEndpointAccessToken
                    - !If [AttributeMapIsSecretArn, !Ref AttributeMap, !Ref AWS::NoValue] # AttributeMap
-@@ -772,10 +654,6 @@
+@@ -772,10 +634,6 @@
            LOG_LEVEL: !Ref LogLevel
            LOG_FORMAT: !Ref LogFormat
            CUSTOMER_ID: !If [CreateSecrets, !Ref SecretGoogleCustomerId, !Ref GoogleCustomerId]
@@ -277,7 +298,7 @@
            GOOGLE_IMPERSONATE_SERVICE_ACCOUNT: !If
              - CreateGoogleImpersonateSecret
              - !Ref SecretGoogleImpersonateServiceAccount
-@@ -784,18 +662,12 @@
+@@ -784,18 +642,12 @@
              - CreateGoogleWIFConfigSecret
              - !Ref SecretGoogleWIFConfig
              - !If [SetGoogleWIFConfig, !Ref GoogleWIFConfig, !Ref AWS::NoValue]
@@ -296,7 +317,7 @@
            DRY_RUN: !If [SetDryRun, 'True', !Ref AWS::NoValue]
            SYNC_SUSPENDED: !If [SetSyncSuspended, 'True', !Ref AWS::NoValue]
            PRECACHE_ORG_UNITS: !If [DisablePrecaching, !Ref AWS::NoValue, !Ref PrecacheOrgUnits]
-@@ -819,7 +691,7 @@
+@@ -819,7 +671,7 @@
      Type: AWS::Events::Rule
      Condition: OnSchedule
      Properties:
@@ -305,7 +326,7 @@
        ScheduleExpression: !Ref ScheduleExpression
        Targets:
          - Id: SSOSync
-@@ -836,7 +708,7 @@
+@@ -836,7 +688,7 @@
      Type: AWS::KMS::Alias
      Condition: CreateKey
      Properties:
@@ -314,7 +335,7 @@
        TargetKeyId: !Ref KeyForSecrets
    KeyForSecrets:
      Type: AWS::KMS::Key
-@@ -871,7 +743,7 @@
+@@ -871,7 +723,7 @@
      Type: "AWS::SecretsManager::Secret"
      Condition: CreateSecrets
      Properties:
@@ -323,7 +344,7 @@
        SecretString: !Ref GoogleCustomerId
        KmsKeyId: !If [CreateKey, !Ref KeyAlias, alias/aws/secretsmanager]
    SecretGoogleCustomerIdPolicy:
-@@ -879,28 +751,6 @@
+@@ -879,28 +731,6 @@
      Condition: CreateKey
      Properties:
        SecretId: !Ref SecretGoogleCustomerId
@@ -352,7 +373,7 @@
        ResourcePolicy:
          Version: 2012-10-17
          Statement:
-@@ -916,7 +766,7 @@
+@@ -916,7 +746,7 @@
      Type: "AWS::SecretsManager::Secret"
      Condition: CreateGoogleImpersonateSecret
      Properties:
@@ -361,7 +382,7 @@
        SecretString: !Ref GoogleImpersonateServiceAccount
        KmsKeyId: !If [CreateKey, !Ref KeyAlias, alias/aws/secretsmanager]
    SecretGoogleImpersonateServiceAccountPolicy:
-@@ -938,7 +788,7 @@
+@@ -938,7 +768,7 @@
      Type: "AWS::SecretsManager::Secret"
      Condition: CreateGoogleWIFConfigSecret
      Properties:
@@ -370,7 +391,7 @@
        SecretString: !Ref GoogleWIFConfig
        KmsKeyId: !If [CreateKey, !Ref KeyAlias, alias/aws/secretsmanager]
    SecretGoogleWIFConfigPolicy:
-@@ -956,33 +806,11 @@
+@@ -956,33 +786,11 @@
              - secretsmanager:GetSecretValue
            Resource: '*'
  
@@ -405,7 +426,7 @@
        SecretString: !Ref SCIMEndpointUrl
        KmsKeyId: !If [CreateKey, !Ref KeyAlias, alias/aws/secretsmanager]
    SecretSCIMEndpointPolicy:
-@@ -1004,7 +832,7 @@
+@@ -1004,7 +812,7 @@
      Type: "AWS::SecretsManager::Secret"
      Condition: CreateSecrets
      Properties:
@@ -414,7 +435,7 @@
        SecretString: !Ref SCIMEndpointAccessToken
        KmsKeyId: !If [CreateKey, !Ref KeyAlias, alias/aws/secretsmanager]
    SecretSCIMAccessTokenPolicy:
-@@ -1026,7 +854,7 @@
+@@ -1026,7 +834,7 @@
      Type: "AWS::SecretsManager::Secret"
      Condition: CreateAttributeMapSecret
      Properties:
@@ -423,7 +444,7 @@
        SecretString: !Ref AttributeMap
        KmsKeyId: !If [CreateKey, !Ref KeyAlias, alias/aws/secretsmanager]
    SecretAttributeMapPolicy:
-@@ -1050,64 +878,52 @@
+@@ -1050,64 +858,52 @@
      Description: "The Arn of the deployed lambda function"
      Value: !GetAtt SSOSyncFunction.Arn
      Export:
@@ -498,4 +519,3 @@
 -      Name: KeyAlias
 \ No newline at end of file
 +      Name: SSOSyncNGKeyAlias
-\ No newline at end of file

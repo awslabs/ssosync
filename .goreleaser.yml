@@ -7,7 +7,7 @@ before:
     - go mod download
 gomod:
   env:
-    - GOPROXY=direct
+    - GOPROXY=https://proxy.golang.org,direct
 builds:
   - id: ssosync
     env:

@@ -2,11 +2,6 @@ version: 0.2
 
 phases:
 
-  install:
-    commands:
-      # tests/quick_start/test_rewrite.py
-      - pip3 install --quiet pyyaml
-
   build:
     commands:
       # Create parameters
@@ -20,7 +15,9 @@ phases:
 
       # Copy in the stack and params templates
       - mkdir deploy
-      - cp cicd/account_execution/staging/stack.yml ./deploy/
+      # stack.yml deploys the legacy (SSOSync-Staging) app, stack-ng.yml the
+      # next-gen (ssosync-staging) one; each passes only its app's parameters.
+      - cp cicd/account_execution/staging/stack.yml cicd/account_execution/staging/stack-ng.yml ./deploy/
 
       # The customer id secret is not in SecretsConfig, so it is looked up by
       # name. Every param set below passes its Arn (stack.yml has no
@@ -52,8 +49,8 @@ phases:
       #   <AccountId>-cli     trusts SSOSync_CLIExecutionRole (the CLI test)
       # For each account (ShareWith in the release pipeline, this account in the
       # developer pipeline), named by account id so each pipeline picks up its own:
-      #   deploy/wif-<AccountId>.json: the stack params for the next-gen (ssosync)
-      #     staging application (issue #399), with the -lambda
+      #   deploy/wif-<AccountId>.json: the stack-ng.yml params for the next-gen
+      #     (ssosync) staging application (issue #399), with the -lambda
       #     configuration inline (the app stores it as SSOSyncGoogleWIFConfig).
       #     Every test except LegacyAuth deploys it.
       #   deploy/attributemap-<AccountId>.json: the same plus maps/rich.json
@@ -65,44 +62,52 @@ phases:
       #     test that passes the secrets as dynamic references, and
       #     <Test>-<AccountId>.json parameter files (secret Arns only).
       - |
-        # Unset SecretsConfig entries are the literal "".
+        # Any failure below (a secret that cannot be read, a jq or build.py
+        # error) fails the build. Not -u: ShareWith may be unset.
+        set -eo pipefail
+        # Unset SecretsConfig entries are the literal "" (secrets.yaml; only the
+        # two WIF entries can be unset). Normalised here, once: build.py gets
+        # these values.
         if [ "$SecretWIFClientLibraryConfig" = '""' ]; then SecretWIFClientLibraryConfig=""; fi
         if [ "$SecretWIFServiceAccountEmail" = '""' ]; then SecretWIFServiceAccountEmail=""; fi
+        # Every test except LegacyAuth needs the files written below.
         if [ -z "$SecretWIFClientLibraryConfig" ] || [ -z "$SecretWIFServiceAccountEmail" ] || [ -z "$GoogleCustomerIdArn" ]; then
-          echo "WARNING: SecretsConfig has no WIF configuration or service account, or PipelineGoogleCustomerId was not found; no WIFAuth params written, the WIFAuth stage will fail"
-        else
-          aws secretsmanager get-secret-value --secret-id "$SecretWIFClientLibraryConfig" --query SecretString --output text > wif-config.json
-          if [ -z "$ShareWith" ] || [ "$ShareWith" = "NOT-SHARED" ]; then
-            Accounts=$(aws sts get-caller-identity --query Account --output text)
-          else
-            Accounts=$(echo "$ShareWith" | tr ',' ' ')
-          fi
-          for AccountId in $Accounts; do
-            sed -E "s#(/providers/)[^\"]*\"#\1${AccountId}-lambda\"#" wif-config.json > wif-config-lambda.json
-            jq -n \
-              --arg AppArn "$NextGenAppArn" \
-              --arg AppVersion "$AppVersion" \
-              --arg GoogleImpersonateServiceAccountArn "$SecretWIFServiceAccountEmail" \
-              --arg GoogleWIFConfig "$(jq -c . wif-config-lambda.json)" \
-              --arg GoogleCustomerIdArn "$GoogleCustomerIdArn" \
-              --arg SCIMEndpointUrlArn "$SecretSCIMEndpoint" \
-              --arg SCIMAccessTokenArn "$SecretSCIMAccessToken" \
-              --arg RegionArn "$SecretRegion" \
-              '{Parameters: ($ARGS.named + {RoleName: "SSOSync_ExecutionRole", GroupMatch: "name:AWS*,name=NestedGroups"}),
-                StackPolicy: {Statement: [{Effect: "Allow", NotAction: "Update:Delete", Principal: "*", Resource: "*"}]}}' \
-              > "./deploy/wif-${AccountId}.json"
-            jq --arg AttributeMap "$(jq -c . cicd/tests/attribute_map/maps/rich.json)" \
-              '.Parameters.AttributeMap = $AttributeMap' \
-              "./deploy/wif-${AccountId}.json" > "./deploy/attributemap-${AccountId}.json"
-            sed -E "s#(/providers/)[^\"]*\"#\1${AccountId}-cli\"#" wif-config.json > "./tests/wif_account_execution/cli/wif-config-${AccountId}.json"
-            jq .audience wif-config-lambda.json "./tests/wif_account_execution/cli/wif-config-${AccountId}.json"
-          done
-          python3 cicd/tests/quick_start/test_rewrite.py
-          GoogleCustomerIdArn="$GoogleCustomerIdArn" SecretWIFServiceAccountEmail="$SecretWIFServiceAccountEmail" \
-            python3 cicd/tests/quick_start/build.py --quick-start-dir quick-start \
-              --out ./deploy/quick-start-tests --wif-config wif-config.json --accounts "$Accounts"
-          rm -f wif-config.json wif-config-lambda.json
+          echo "ERROR: no keyless (WIF) test configuration: SecretsConfig has no WIF credential configuration or service account to impersonate (set GoogleWIFConfig and GoogleImpersonateServiceAccount in the secrets stack, then SecretsConfig), or PipelineGoogleCustomerId was not found"
+          exit 1
         fi
+        aws secretsmanager get-secret-value --secret-id "$SecretWIFClientLibraryConfig" --query SecretString --output text > wif-config.json
+        if [ -z "$ShareWith" ] || [ "$ShareWith" = "NOT-SHARED" ]; then
+          Accounts=$(aws sts get-caller-identity --query Account --output text)
+        else
+          Accounts=$(echo "$ShareWith" | tr ',' ' ')
+        fi
+        # Only the provider at the end of "audience" differs per role and
+        # account ($p); this is the one place it is rewritten (build.py reads
+        # the -lambda files).
+        audience='if .audience | test("/providers/[^/]+$") then .audience |= sub("/providers/[^/]+$"; "/providers/" + $p) else error("unexpected audience: \(.audience)") end'
+        for AccountId in $Accounts; do
+          jq --arg p "${AccountId}-lambda" "$audience" wif-config.json > "wif-config-lambda-${AccountId}.json"
+          jq --arg p "${AccountId}-cli" "$audience" wif-config.json > "./tests/wif_account_execution/cli/wif-config-${AccountId}.json"
+          jq -n \
+            --arg AppArn "$NextGenAppArn" \
+            --arg AppVersion "$AppVersion" \
+            --arg GoogleImpersonateServiceAccountArn "$SecretWIFServiceAccountEmail" \
+            --arg GoogleWIFConfig "$(jq -c . "wif-config-lambda-${AccountId}.json")" \
+            --arg GoogleCustomerIdArn "$GoogleCustomerIdArn" \
+            --arg SCIMEndpointUrlArn "$SecretSCIMEndpoint" \
+            --arg SCIMAccessTokenArn "$SecretSCIMAccessToken" \
+            '{Parameters: ($ARGS.named + {RoleName: "SSOSync_ExecutionRole", GroupMatch: "name:AWS*,name=NestedGroups"}),
+              StackPolicy: {Statement: [{Effect: "Allow", NotAction: "Update:Delete", Principal: "*", Resource: "*"}]}}' \
+            > "./deploy/wif-${AccountId}.json"
+          jq --arg AttributeMap "$(jq -c . cicd/tests/attribute_map/maps/rich.json)" \
+            '.Parameters.AttributeMap = $AttributeMap' \
+            "./deploy/wif-${AccountId}.json" > "./deploy/attributemap-${AccountId}.json"
+          jq .audience "wif-config-lambda-${AccountId}.json" "./tests/wif_account_execution/cli/wif-config-${AccountId}.json"
+        done
+        GoogleCustomerIdArn="$GoogleCustomerIdArn" SecretWIFServiceAccountEmail="$SecretWIFServiceAccountEmail" \
+          python3 cicd/tests/quick_start/build.py --quick-start-dir quick-start \
+            --out ./deploy/quick-start-tests --wif-config-dir . --accounts "$Accounts"
+        rm -f wif-config.json wif-config-lambda-*.json
 
 
 artifacts:

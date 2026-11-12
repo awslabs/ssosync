@@ -324,7 +324,7 @@ Resources:
                 StackName: TestAccountExecution
                 RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
                 TemplateConfiguration: !Sub 'Tests::deploy/wif-${AWS::AccountId}.json'
-                TemplatePath: 'Tests::deploy/stack.yml'
+                TemplatePath: 'Tests::deploy/stack-ng.yml'
               InputArtifacts:
                 - Name: Tests
               RunOrder: 2
@@ -470,7 +470,7 @@ Resources:
                 StackName: TestAccountExecution
                 RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
                 TemplateConfiguration: !Sub 'Tests::deploy/wif-${AWS::AccountId}.json'
-                TemplatePath: !Sub 'Tests::deploy/stack.yml'
+                TemplatePath: !Sub 'Tests::deploy/stack-ng.yml'
               InputArtifacts:
                 - Name: Tests
               RunOrder: 12
@@ -591,7 +591,7 @@ Resources:
                 StackName: TestAccountExecution
                 RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
                 TemplateConfiguration: !Sub 'Tests::deploy/attributemap-${AWS::AccountId}.json'
-                TemplatePath: 'Tests::deploy/stack.yml'
+                TemplatePath: 'Tests::deploy/stack-ng.yml'
               InputArtifacts:
                 - Name: Tests
               RunOrder: 21
@@ -636,7 +636,7 @@ Resources:
                 StackName: TestAccountExecution
                 RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
                 TemplateConfiguration: !Sub 'Tests::deploy/wif-${AWS::AccountId}.json'
-                TemplatePath: !Sub 'Tests::deploy/stack.yml'
+                TemplatePath: !Sub 'Tests::deploy/stack-ng.yml'
               InputArtifacts:
                 - Name: Tests
               RunOrder: 24

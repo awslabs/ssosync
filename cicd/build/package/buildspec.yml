@@ -7,15 +7,19 @@ version: 0.2
 #   legacy   (SSOSync): legacy.patch, the 2.10.0 parameters, patterns widened
 #            to accept apostrophes (#401) (key + admin
 #            authentication, both sync methods); README SAR.md
-#            staging.patch -> SSOSync-Staging,   release.patch -> SSOSync
+#            legacy-staging.patch -> SSOSync-Staging,
+#            legacy-release.patch -> SSOSync
 #   next-gen (ssosync): next-gen.patch, keyless (Workload Identity Federation)
 #            only, groups sync only, required customer id; README SAR-next-gen.md
 #            next-gen-staging.patch -> ssosync-staging; release: no name patch
 #            (template.yaml's name, ssosync)
 #
-# `patch` fails the build if a hunk no longer applies, so a template.yaml
-# change that conflicts with a feature patch is caught here; regenerate the
-# patches with `make sar-variants` (see the Makefile).
+# The variants are built by `make sar-variants`, the same target developers and
+# `make ci` run: every patch is applied with no fuzz (patch -N -F 0), so a hunk
+# whose context no longer matches exactly fails the build, and each staging
+# template is checked to differ from its release template in the Name line
+# alone. The patches are not regenerated automatically: how to regenerate each
+# kind is in the Makefile, above sar-variants.
 env:
   variables:
     ShareWith: "NOT-SHARED"
@@ -32,18 +36,20 @@ phases:
       - cp ${CODEBUILD_SRC_DIR_Built}/dist/ssosync_linux_arm64_v8.0/ssosync bootstrap
   build:
     commands:
+      # Builds and checks the four variants in dist/sar/ (cfn-lint is skipped,
+      # as it is not installed on this image).
+      - make sar-variants
+      # sam package resolves ReadmeUrl, LicenseUrl and the function code
+      # relative to the template, so package each variant from the root.
+      - cp dist/sar/legacy-staging.yaml   staging.yaml
+      - cp dist/sar/legacy-release.yaml   release.yaml
+      - cp dist/sar/next-gen-staging.yaml ng-staging.yaml
+      - cp dist/sar/next-gen-release.yaml ng-release.yaml
+      # The function has no CodeUri, so its code package is this directory:
+      # remove dist/ (only dist/sar/ is in it) so the package is unchanged.
+      - rm -r dist
       - |
         set -euo pipefail
-        variant() { # <output> <feature patch> [<name patch>]
-          cp template.yaml "$1"
-          patch "$1" "cicd/build/package/$2"
-          if [ -n "${3:-}" ]; then patch "$1" "cicd/build/package/$3"; fi
-          grep -E '^    (Name|ReadmeUrl):' "$1"
-        }
-        variant staging.yaml    legacy.patch   staging.patch
-        variant release.yaml    legacy.patch   release.patch
-        variant ng-staging.yaml next-gen.patch next-gen-staging.patch
-        variant ng-release.yaml next-gen.patch
         for t in staging release ng-staging ng-release; do
           sam package --force-upload --no-progressbar --template-file "$t.yaml" --s3-bucket ${S3Bucket} --output-template-file "packaged-$t.yaml"
           ls "packaged-$t.yaml"

@@ -54,7 +54,7 @@ require_env() {
 
 # Python dependencies for import.py / export.py / lambda_logs.py.
 setup_python() {
-  pip3 install --quiet boto3
+  pip3 install --quiet boto3==1.44.0
 }
 
 # Everything a CLI test needs: python deps, SCIM credentials, keyless Google

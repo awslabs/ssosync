@@ -38,7 +38,7 @@ From 2.11.0 ssosync is published to the AWS Serverless Application Repository as
 
 | | [`SSOSync`](https://serverlessrepo.aws.amazon.com/applications/us-east-2/004480582608/SSOSync) (classic) | [`ssosync`](https://serverlessrepo.aws.amazon.com/applications/us-east-2/004480582608/ssosync) (next generation) |
 |---|---|---|
-| Parameters | Those of 2.10.0, with the email, name and OU patterns widened to accept apostrophes (#401) | Keyless only: `GoogleImpersonateServiceAccount`, `GoogleWIFConfig` and `RoleName`; no `GoogleCredentials`, `GoogleAdminEmail`, `SyncMethod` or `IncludeGroups` |
+| Parameters | Those of 2.10.0, with the email, name and OU patterns widened to accept apostrophes (#401) | Keyless only: `GoogleImpersonateServiceAccount`, `GoogleWIFConfig` and `RoleName`; no `GoogleCredentials`, `GoogleAdminEmail`, `SyncMethod`, `IncludeGroups`, or the deprecated `Region` and `IdentityStoreID` |
 | Google authentication | [Legacy auth](#legacy-auth-stored-credentials) (key + admin) | [Workload Identity Federation](#workload-identity-federation-keyless) |
 | Sync method | `groups` or `users_groups` | `groups` only |
 | `GoogleCustomerId` | Optional (`my_customer` by default) | Required, the actual customer ID (`my_customer` is rejected) |

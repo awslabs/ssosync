@@ -18,11 +18,7 @@ env:
     ExpectedExitState: 0
 
 phases:
-  pre_build:
-    commands:
-      # Print all environment variables (handy for AWS CodeBuild logs)
-      - env
-
+  # No `env` dump: this project holds the SCIM token.
   build:
     commands:
       - ./ssosync --version

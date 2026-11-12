@@ -6,7 +6,7 @@ env:
     git-credential-helper: yes            
     GOROOT:
     GOPATH:
-    GOPROXY: direct
+    GOPROXY: https://proxy.golang.org,direct
     git-credential-helper: yes
     #GOVERSION: go1.26.9
     #MOCKERY_VERSION: v3.5.2
