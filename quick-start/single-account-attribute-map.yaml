@@ -54,8 +54,9 @@ Parameters:
     Description: |
       Select the release to deploy. The AttributeMap parameter needs 2.10.0 or later, so earlier releases are not offered (use single-account.yaml for those).
     #SemanticVersion 
-    Default: 2.11.0
+    Default: 2.11.1
     AllowedValues:
+      - 2.11.1
       - 2.11.0
       - 2.10.0
 

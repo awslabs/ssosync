@@ -58,8 +58,9 @@ Parameters:
     Description: |
       Select the release to deploy. Keyless authentication needs 2.11.0 or later, so earlier releases are not offered (use quick-start/single-account.yaml for those).
     #SemanticVersion 
-    Default: 2.11.0
+    Default: 2.11.1
     AllowedValues:
+      - 2.11.1
       - 2.11.0
 
   ScheduleExpression:
