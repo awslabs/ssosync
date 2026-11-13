@@ -1147,23 +1147,25 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 				continue
 			}
 
-			if _, found := gUniqUsers[u.PrimaryEmail]; !found {
+			// --user-match bulk-fills the cache, as --precache-ous does (#417):
+			// a new user is a precache; a user already cached (precached, or
+			// listed twice) keeps its cached entry and is a hit.
+			if cached, found := gUserDetailCache[u.PrimaryEmail]; found {
+				log.WithFields(log.Fields{
+					"func":    funcName,
+					"user.Id": u.Id,
+				}).Debug("already existing")
+				u = cached
+				s.recordCacheOp(u.OrgUnitPath, CacheHit)
+			} else {
 				log.WithFields(log.Fields{
 					"func":    funcName,
 					"user.Id": u.Id,
 				}).Debug("adding user")
 				gUserDetailCache[u.PrimaryEmail] = u
-				s.recordCacheOp(u.OrgUnitPath, CacheMiss)
-				gUniqUsers[u.PrimaryEmail] = gUserDetailCache[u.PrimaryEmail]
-				continue
-			} else {
-				log.WithFields(log.Fields{
-					"func":    funcName,
-					"user.Id": u.Id,
-				}).Debug("already existing")
-				s.recordCacheOp(u.OrgUnitPath, CacheHit)
-				continue
+				s.recordCacheOp(u.OrgUnitPath, PreCache)
 			}
+			gUniqUsers[u.PrimaryEmail] = u
 		}
 	}
 
