@@ -2437,9 +2437,10 @@ func (s *syncGSuite) GetUsers() ([]*interfaces.User, error) {
 //
 // Known limitations: Enterprise.Manager is compared verbatim; AWS documents
 // manager.value as an Identity Store user id while ssosync sends the mapped
-// Google value, so the opt-in Manager mapping may not round-trip. Name.Formatted
-// is never set by the mapper; if AWS derives it on write it will read back
-// non-empty and the live convergence tests will show it.
+// Google value, so the opt-in Manager mapping may not round-trip. NickName and
+// Name.Formatted are set by the mapper only when the attribute map opts in to
+// them (#421) and are otherwise "", so a value AWS derived on write would read
+// back non-empty and show as drift; the live rich_map read-back checks both.
 func ConvertSdkUserObjToNative(user identitystore_types.User) *interfaces.User {
 	log.Debug("ConvertSdkUserObjToNative()")
 	// Convert emails into native Email object

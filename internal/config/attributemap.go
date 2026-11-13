@@ -36,8 +36,8 @@ var (
 		"Enterprise.Organization": {}, // safe set
 		"Enterprise.CostCenter":   {}, // safe set
 		// Opt-in only (supported, NOT defaulted).
-		"NickName":                  {},
-		"Name.Formatted":            {},
+		"NickName":                  {}, // opt-in (#421)
+		"Name.Formatted":            {}, // opt-in (#421)
 		"Enterprise.Manager":        {}, // opt-in (design §5.7)
 		"Enterprise.Division":       {}, // opt-in (design §5.2)
 		"Enterprise.EmployeeNumber": {}, // opt-in (design §5.3)

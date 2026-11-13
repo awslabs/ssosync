@@ -585,8 +585,8 @@ func (c *client) getGroups(query string) ([]*admin.Group, error) {
 // field.
 //
 // Resolvable source paths this phase:
-//   - Scalar admin.User fields: name.givenName, name.familyName, primaryEmail,
-//     suspended (inverted to Active).
+//   - Scalar admin.User fields: name.givenName, name.familyName, name.fullName,
+//     primaryEmail, suspended (inverted to Active).
 //   - Multi-valued interface{} fields (organizations, relations, websites,
 //     emails, phones, addresses), resolved by a JSON round-trip into the SDK
 //     typed struct and a TYPE-QUALIFIED selector (see resolveGoogleUserSource):
