@@ -21,6 +21,13 @@
     "  ignored. Google stores each entry as {type, value}; the type is ignored.",
     "- SSOSync-Test.LongValue is SINGLE-VALUED, set ONLY on AceHole, and longer",
     "  than 128 characters (the SCIM userName maxLength).",
+  "- SSOSync-Test.NickName is SINGLE-VALUED and set ONLY on dave2 (rich_map maps",
+  "  NickName to it; every other user has none: warned, cleared). It must differ",
+  "  from his givenName (#421).",
+  "- name.fullName is read-only: Google forms it as givenName + ' ' + familyName.",
+  "  rich_map maps Name.Formatted to it and expects that for every user",
+  "  (AceHole: '  Rimmer'; the tenant holds U+200B as his given name, which",
+  "  ssosync turns into a space) (#421).",
     "- AceHole's givenName is a single space: Google requires a non-empty given",
     "  name, and ssosync treats it as blank (requiredField warning).",
     "- No user has websites (the tenant's user schema has no websites field).",
@@ -131,6 +138,7 @@
         "SSOSync-Test": {
           "AWSUsername": "dave.lister.aws@nothing2see.info",
           "CostCodes": "WORK-300",
+          "NickName": "Listy",
           "ProjectCodes": [
             { "type": "work", "value": "PRJ-CURRY" }
           ]

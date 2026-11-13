@@ -10,6 +10,7 @@ Run from anywhere:
 import json
 import os
 import re
+import shlex
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -70,6 +71,24 @@ def resolve(user, source):
         if type_value is not None and entry.get("type", "").lower() == type_value.lower():
             return entry.get(field, "")
     return ""
+
+
+def full_name(user):
+    """Google's read-only name.fullName: given and family name joined by a space."""
+    return f"{user['name']['givenName']} {user['name']['familyName']}"
+
+
+def readback_expectations(script, var):
+    """{(username, jq-path): value} that a run.sh asserts with assert_user_field
+    on the read-back file in $var, from single lines and `for user in` loops."""
+    out = {}
+    for user, path, value in re.findall(rf'assert_user_field "\${var}" "([^"$]+)" (\.\S+) "([^"]*)"', script):
+        out[(user, path)] = value
+    for loop, body in re.findall(r"^for user in ([^\n]+); do\n(.*?)^done", script, re.S | re.M):
+        for user in shlex.split(loop):
+            for path, value in re.findall(rf'assert_user_field "\${var}" "\$user" (\.\S+) "([^"]*)"', body):
+                out[(user, path)] = value
+    return out
 
 
 class DataRules(unittest.TestCase):
@@ -329,6 +348,71 @@ class SuiteExpectations(unittest.TestCase):
         self.assertEqual({u["primaryEmail"].lower() for u in users()}, set(baseline))
         for u in users():
             self.assertEqual(u["id"], baseline[u["primaryEmail"].lower()]["ExternalIds"][0]["Id"])
+
+    # #421: Release optional NickName and Name.Formatted mappings (PR #412)
+
+    def test_rich_map_maps_opt_in_names(self):
+        with open(os.path.join(AM_DIR, "maps", "rich.json")) as f:
+            rich = json.load(f)["user"]
+        self.assertEqual("customSchemas.SSOSync-Test.NickName", rich["NickName"])
+        self.assertEqual("name.fullName", rich["Name.Formatted"])
+
+    def test_nickname_holders(self):
+        # NickName is a single-valued custom field: its holders' values are
+        # exactly what rich_map expects resolved, each differs from the
+        # holder's given name (else the suite can't tell the targets apart),
+        # every other user gets the absent-field warning, and lambda_inline_map
+        # expects a holder's value.
+        holders = [u for u in users() if "NickName" in schema(u)]
+        self.assertGreaterEqual(len(holders), 1)
+        for u in holders:
+            value = schema(u)["NickName"]
+            self.assertIsInstance(value, str, f"{u['primaryEmail']}: NickName is single-valued")
+            self.assertTrue(value.strip())
+            self.assertNotEqual(value, u["name"]["givenName"], f"{u['primaryEmail']}: NickName must differ from givenName")
+        script = read("rich_map", "run.sh")
+        source = "customSchemas.SSOSync-Test.NickName"
+        resolved = set(re.findall(rf'^resolved "{re.escape(source)}" "([^"]+)"', script, re.M))
+        self.assertEqual({schema(u)["NickName"] for u in holders}, resolved)
+        m = re.search(r"field=NickName --min (\d+)", script)
+        self.assertIsNotNone(m)
+        self.assertEqual(len(users()) - len(holders), int(m.group(1)))
+        m = re.search(rf'source={re.escape(source)}" --field "resolved=([^"]+)"', read("lambda_inline_map", "run.sh"))
+        self.assertIsNotNone(m, "lambda_inline_map must assert a resolved NickName")
+        self.assertIn(m.group(1), {schema(u)["NickName"] for u in holders})
+
+    def test_rich_map_formatted_names(self):
+        # Name.Formatted <- name.fullName resolves for every user (AceHole's
+        # blank given name gives "  Rimmer"); lambda_inline_map expects one.
+        expected = {full_name(u) for u in users()}
+        self.assertIn("  Rimmer", expected)
+        resolved = set(re.findall(r'^resolved "name\.fullName" "([^"]+)"', read("rich_map", "run.sh"), re.M))
+        self.assertEqual(expected, resolved)
+        m = re.search(r'source=name\.fullName" --field "resolved=([^"]+)"', read("lambda_inline_map", "run.sh"))
+        self.assertIsNotNone(m, "lambda_inline_map must assert a resolved name.fullName")
+        self.assertIn(m.group(1), expected)
+
+    def test_rich_map_update_counts(self):
+        # Every user has a full name, so the rich run (which sets
+        # Name.Formatted) and the default-map run (which clears it) each
+        # update every user.
+        counts = re.findall(r"--users update=(\d+)", read("rich_map", "run.sh"))
+        self.assertEqual(2, len(counts))
+        for c in counts:
+            self.assertEqual(len(users()), int(c))
+
+    def test_rich_map_readback_expectations(self):
+        # The read-back after the rich run expects every user's derived full
+        # name and the holder's NickName ("" for the others); after the
+        # default-map run both are "" for every user.
+        script = read("rich_map", "run.sh")
+        want = {}
+        for u in users():
+            want[(u["primaryEmail"], ".Name.Formatted")] = full_name(u)
+            want[(u["primaryEmail"], ".NickName")] = schema(u).get("NickName", "")
+        self.assertEqual(want, readback_expectations(script, "USERS"))
+        cleared = {key: "" for key in want}
+        self.assertEqual(cleared, readback_expectations(script, "CLEARED"))
 
 
 if __name__ == "__main__":

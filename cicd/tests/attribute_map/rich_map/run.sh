@@ -4,7 +4,10 @@
 # custom-schema scalar sources (the schema allows a single cost center per user),
 # opt-in multi-valued targets, warn-and-clear for missing custom
 # schemas/fields, and warn-and-ignore for a multi-valued custom field
-# (unsupported). Then checks the result converges.
+# (unsupported). Then checks the result converges. Also the opt-in NickName
+# (custom-schema source) and Name.Formatted (name.fullName) targets (#421):
+# stored verbatim by IAM Identity Center (read back), round-tripping, and
+# cleared when a later run no longer maps them.
 #
 # Google test data relied on (see google_test_users.json):
 #   crpates - work org "Jupiter Mining Corporation" / "Science Officer" (primary);
@@ -16,9 +19,12 @@
 #             work "Jupiter Mining Corporation" / "Technician, Third Class" /
 #             dept "Maintenance"; two phones, neither primary;
 #             work address "Cargo Bay, Red Dwarf"; SSOSync-Test.CostCodes: "WORK-300";
-#             SSOSync-Test.ProjectCodes (multi-valued): one value
+#             SSOSync-Test.ProjectCodes (multi-valued): one value;
+#             SSOSync-Test.NickName (single-valued): "Listy"
 #   AceHole, olaf - SSOSync-Test schema present, no CostCodes, no ProjectCodes;
 #             olaf's primary email has an apostrophe (#401)
+#   crpates, AceHole, olaf - no SSOSync-Test.NickName
+#   everyone - name.fullName is "<given> <family>" (AceHole: "  Rimmer")
 source "$(dirname "$0")/../lib/common.sh"
 setup_cli
 
@@ -27,7 +33,8 @@ reset_and_adopt
 LOG="$LOG_DIR/rich.log"
 run_ssosync live "$MAPS/rich.json" "$LOG"
 
-check assert_log summary "$LOG" --users create=0 delete=0 recreate=0 updateForced=0
+# Every user gains a Name.Formatted (#421), so every user is updated.
+check assert_log summary "$LOG" --users update=4 create=0 delete=0 recreate=0 updateForced=0
 # #401: no precache here, so olaf's apostrophe email goes through the member lookup.
 check assert_log absent "$LOG" --msg "Fetching group member from Google failed, aborting sync"
 
@@ -47,6 +54,13 @@ resolved "customSchemas.SSOSync-Test.CostCodes" "WORK-300"
 resolved "phones[primary].value" "+44 20 7946 0001"
 resolved "addresses[type=work].formatted" "Deck 16, Red Dwarf"
 resolved "addresses[type=work].formatted" "Cargo Bay, Red Dwarf"
+# Opt-in name targets (#421): NickName from a custom field, Name.Formatted from
+# Google's derived full name (the mononym keeps its leading spaces).
+resolved "customSchemas.SSOSync-Test.NickName" "Listy"
+resolved "name.fullName" "Chris Pates"
+resolved "name.fullName" "  Rimmer"
+resolved "name.fullName" "Dave Lister"
+resolved "name.fullName" "Olaf Petersen"
 
 # No primary phone (dave2): resolves to nothing, never falls back to the first entry.
 check assert_log count "$LOG" --msg "attribute map: entry resolved" \
@@ -60,6 +74,8 @@ check assert_log count "$LOG" --msg "$MISSING" \
   --field reason=customFieldAbsent --field schema=SSOSync-Test --field field=DoesNotExist --min 4
 check assert_log count "$LOG" --msg "$MISSING" \
   --field reason=customFieldAbsent --field field=CostCodes --min 2
+check assert_log count "$LOG" --msg "$MISSING" \
+  --field reason=customFieldAbsent --field field=NickName --min 3
 
 # Multi-valued custom field (ProfileURL <- SSOSync-Test.ProjectCodes): not
 # supported, so for every user that has it the mapping is warned about and
@@ -82,5 +98,30 @@ check assert_log count "$LOG" --msg "$MISSING" \
   --field reason=customFieldAbsent --field field=ProjectCodes --min 2
 
 check assert_converged "$MAPS/rich.json" "$LOG_DIR/converge.log"
+
+# #421: IAM Identity Center stores the opt-in names verbatim (read back).
+readback_users "$LOG_DIR/readback"
+USERS="$LOG_DIR/readback/users.json"
+check assert_user_field "$USERS" "crpates@nothing2see.info" .Name.Formatted "Chris Pates"
+check assert_user_field "$USERS" "acehole@nothing2see.info" .Name.Formatted "  Rimmer"
+check assert_user_field "$USERS" "dave2@nothing2see.info" .Name.Formatted "Dave Lister"
+check assert_user_field "$USERS" "olaf.o'petersen@nothing2see.info" .Name.Formatted "Olaf Petersen"
+check assert_user_field "$USERS" "dave2@nothing2see.info" .NickName "Listy"
+for user in crpates@nothing2see.info acehole@nothing2see.info "olaf.o'petersen@nothing2see.info"; do
+  check assert_user_field "$USERS" "$user" .NickName ""
+done
+
+# #421: a run with the default map, which maps neither, clears both
+# (clear-to-consistent), and the cleared state converges.
+CLEAR="$LOG_DIR/clear.log"
+run_ssosync live "" "$CLEAR"
+check assert_log summary "$CLEAR" --users update=4 create=0 delete=0 recreate=0 updateForced=0
+readback_users "$LOG_DIR/readback-cleared"
+CLEARED="$LOG_DIR/readback-cleared/users.json"
+for user in crpates@nothing2see.info acehole@nothing2see.info dave2@nothing2see.info "olaf.o'petersen@nothing2see.info"; do
+  check assert_user_field "$CLEARED" "$user" .NickName ""
+  check assert_user_field "$CLEARED" "$user" .Name.Formatted ""
+done
+check assert_converged "" "$LOG_DIR/converge-default.log"
 
 finish
