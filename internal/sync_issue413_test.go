@@ -137,6 +137,29 @@ func TestRollUpCacheMetrics_Issue413_TestUsers(t *testing.T) {
 	}, rollUpCacheMetrics(own))
 }
 
+// A member that had to be looked up counts as a CacheMiss only; a member found
+// in the user cache counts as a CacheHit.
+func TestGetGoogleUsersInGroup_Issue413_LookedUpMemberIsMissOnly(t *testing.T) {
+	a, b := issue404Users()
+	googleClient := mocks.NewMockGoogleClient(t)
+	s := issue413Sync(googleClient)
+	googleClient.EXPECT().GetGroupMembers(issue404Group).Return([]*admin.Member{
+		{Email: "a@example.com", Type: "USER", Status: "ACTIVE"},
+		{Email: "b@example.com", Type: "USER", Status: "ACTIVE"},
+	}, nil).Once()
+	googleClient.EXPECT().GetUsers(`email='a@example.com'`, s.cfg.UserFilter).Return([]*admin.User{a}, nil).Once()
+	userCache := map[string]*admin.User{b.PrimaryEmail: b}
+
+	members, err := s.getGoogleUsersInGroup(issue404Group, userCache, map[string]*admin.Group{})
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []*admin.User{a, b}, members)
+
+	assert.Equal(t, map[string]*CacheMetrics{
+		"/A": {Misses: 1},
+		"/B": {Hits: 1},
+	}, s.cacheMetrics)
+}
+
 // The Cache Stats log field carries the rolled-up counts with each OU's
 // TotalUsers; s.cacheMetrics keeps the own counts.
 func TestOutputCacheMetrics_Issue413_LogsRolledUpCounts(t *testing.T) {

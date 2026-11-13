@@ -2814,8 +2814,10 @@ func (s *syncGSuite) getGoogleUsersInGroup(group *admin.Group, userCache map[str
 			"Member#": memberIndex,
 		}).Debug("valid member")
 		var memberEmail string
-		// Find the group member in the cache of UserDetails
-		if _, found := userCache[m.Email]; !found {
+		// Find the group member in the cache of UserDetails; only a member
+		// found there is a CacheHit, a looked-up one is a CacheMiss only (#413)
+		_, cacheHit := userCache[m.Email]
+		if !cacheHit {
 			log.WithFields(log.Fields{
 				"func":    funcName,
 				"GroupId": group.Id,
@@ -2879,7 +2881,9 @@ func (s *syncGSuite) getGoogleUsersInGroup(group *admin.Group, userCache map[str
 				"Member#": memberIndex,
 			}).Debug("Add member")
 		}
-		s.recordCacheOp(userCache[memberEmail].OrgUnitPath, CacheHit)
+		if cacheHit {
+			s.recordCacheOp(userCache[memberEmail].OrgUnitPath, CacheHit)
+		}
 		membersUsers = append(membersUsers, userCache[memberEmail])
 
 	}
