@@ -176,15 +176,18 @@ func TestSync_Issue401_MemberLookupErrorFailsRunAndLogsContext(t *testing.T) {
 }
 
 // TestGetGoogleGroupsAndUsers_Issue401_PrecacheOrgUnitQueriesQuoted checks the
-// PrecacheOrgUnits query: every OU path is single-quoted with ' escaped.
+// PrecacheOrgUnits queries: every OU path is single-quoted with ' escaped, and
+// each OU gets its own query (#404), so no query starts with a comma (the
+// strict mock fails any call not listed here).
 func TestGetGoogleGroupsAndUsers_Issue401_PrecacheOrgUnitQueriesQuoted(t *testing.T) {
 	cfg := issue401Config()
 	cfg.PrecacheOrgUnits = []string{"/", " /O'Brien Team/ ", "/Sales"}
 
 	googleClient := mocks.NewMockGoogleClient(t)
 	googleClient.EXPECT().GetGroups("*").Return(nil, nil)
-	googleClient.EXPECT().GetUsers(`,OrgUnitPath='/',OrgUnitPath='/O\'Brien Team',OrgUnitPath='/Sales'`, cfg.UserFilter).
-		Return(nil, nil).Once()
+	googleClient.EXPECT().GetUsers(`OrgUnitPath='/'`, cfg.UserFilter).Return(nil, nil).Once()
+	googleClient.EXPECT().GetUsers(`OrgUnitPath='/O\'Brien Team'`, cfg.UserFilter).Return(nil, nil).Once()
+	googleClient.EXPECT().GetUsers(`OrgUnitPath='/Sales'`, cfg.UserFilter).Return(nil, nil).Once()
 	googleClient.EXPECT().GetGroups("group-q").Return(nil, nil)
 
 	s := &syncGSuite{

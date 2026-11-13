@@ -978,35 +978,68 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 			"OrgUnitPaths": s.cfg.PrecacheOrgUnits,
 		}).Info("Precaching DISABLED, caching users on the fly")
 	} else {
-		precacheQueries := ""
 		log.WithFields(log.Fields{
 			"func":         funcName,
 			"OrgUnitPaths": s.cfg.PrecacheOrgUnits,
 		}).Info("Precache users from these paths")
 
+		// Normalise the OU paths; skip empty entries (they name no OU) and
+		// duplicates, so each OU is queried once (#404).
+		orgUnitPaths := make([]string, 0, len(s.cfg.PrecacheOrgUnits))
+		seenOrgUnitPaths := make(map[string]bool)
 		for _, orgUnitPath := range s.cfg.PrecacheOrgUnits {
-			log.WithFields(log.Fields{
-				"func":        funcName,
-				"orgUnitPath": orgUnitPath,
-			}).Debug("format into query string")
-
 			orgUnitPath = strings.TrimSpace(orgUnitPath)
 			if orgUnitPath != "/" {
 				orgUnitPath = strings.TrimSuffix(orgUnitPath, "/")
 			}
-			precacheQueries = precacheQueries + ",OrgUnitPath=" + quoteGoogleQueryValue(orgUnitPath)
+			if orgUnitPath == "" || seenOrgUnitPaths[orgUnitPath] {
+				continue
+			}
+			seenOrgUnitPaths[orgUnitPath] = true
+			orgUnitPaths = append(orgUnitPaths, orgUnitPath)
 		}
 		log.WithFields(log.Fields{
-			"func":            funcName,
-			"precacheQueries": precacheQueries,
-			"queryFilters":    s.cfg.UserFilter,
+			"func":         funcName,
+			"OrgUnitPaths": orgUnitPaths,
+			"queryFilters": s.cfg.UserFilter,
 		}).Info("Precaching users")
 
-		googleUsers, err := s.google.GetUsers(precacheQueries, s.cfg.UserFilter)
-		if err != nil {
+		// One query per OU (#404): a single term has no comma for getUsers to
+		// split, and an OU that fails or is empty is skipped with a warning
+		// while the others are still precached.
+		googleUsers := make([]*admin.User, 0)
+		failedOrgUnitPaths := 0
+		for _, orgUnitPath := range orgUnitPaths {
+			ouUsers, err := s.google.GetUsers("OrgUnitPath="+quoteGoogleQueryValue(orgUnitPath), s.cfg.UserFilter)
+			if err != nil {
+				failedOrgUnitPaths++
+				log.WithFields(log.Fields{
+					"func":        funcName,
+					"orgUnitPath": orgUnitPath,
+					"error":       err,
+				}).Warn("PrecacheOrgUnits: OrgUnitPath could not be queried and is skipped; it may not exist")
+				continue
+			}
+			if len(ouUsers) == 0 {
+				log.WithFields(log.Fields{
+					"func":         funcName,
+					"orgUnitPath":  orgUnitPath,
+					"queryFilters": s.cfg.UserFilter,
+				}).Warn("PrecacheOrgUnits: no users found in OrgUnitPath; it may not exist or have no users matching the filter")
+				continue
+			}
 			log.WithFields(log.Fields{
-				"func":  funcName,
-				"error": err,
+				"func":        funcName,
+				"orgUnitPath": orgUnitPath,
+				"users":       len(ouUsers),
+			}).Debug("precached users from OrgUnitPath")
+			googleUsers = append(googleUsers, ouUsers...)
+		}
+
+		if len(orgUnitPaths) > 0 && failedOrgUnitPaths == len(orgUnitPaths) {
+			log.WithFields(log.Fields{
+				"func":         funcName,
+				"OrgUnitPaths": orgUnitPaths,
 			}).Error("Precaching failed, caching on the fly")
 
 		} else if len(googleUsers) == 0 {

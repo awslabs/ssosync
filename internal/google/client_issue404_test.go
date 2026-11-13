@@ -14,16 +14,13 @@ import (
 	"google.golang.org/api/option"
 )
 
-// TestGetUsers_Issue404_PrecacheLeadingCommaSendsEmptySubQuery reproduces
-// awslabs/ssosync#404. getGoogleGroupsAndUsers builds the PrecacheOrgUnits query
-// with a leading comma (pinned by
-// TestGetGoogleGroupsAndUsers_Issue401_PrecacheOrgUnitQueriesQuoted); getUsers
-// splits it on "," and sends one Users.list call per element, so the first call
-// carries only the UserFilter and would match every user in the directory.
-//
-// This test asserts TODAY's (buggy) behaviour and passes now; the #404 fix
-// flips it to expect exactly one Users.list call per configured OU.
-func TestGetUsers_Issue404_PrecacheLeadingCommaSendsEmptySubQuery(t *testing.T) {
+// TestGetUsers_Issue404_SingleOrgUnitQuery covers awslabs/ssosync#404.
+// getGoogleGroupsAndUsers used to build the PrecacheOrgUnits query with a
+// leading comma, which getUsers split into an empty first element and sent as a
+// filter-only (whole directory) Users.list call. It now sends one single-term
+// query per OU; this pins that getUsers turns such a query into exactly one
+// Users.list call carrying that term plus the filter.
+func TestGetUsers_Issue404_SingleOrgUnitQuery(t *testing.T) {
 	var (
 		mu      sync.Mutex
 		queries []string
@@ -51,21 +48,13 @@ func TestGetUsers_Issue404_PrecacheLeadingCommaSendsEmptySubQuery(t *testing.T) 
 	require.NoError(t, err)
 	c := &client{ctx: ctx, service: svc, customerID: "my_customer"}
 
-	// The exact string sync.go hands to GetUsers for
-	// PrecacheOrgUnits = ["/Engineering", "/Sales Team"].
-	precacheQuery := `,OrgUnitPath='/Engineering',OrgUnitPath='/Sales Team'`
+	// The exact string sync.go hands to GetUsers for the OU "/Sales Team".
+	query := `OrgUnitPath='/Sales Team'`
 	filter := " isSuspended=false isArchived=false"
 
-	users, err := c.GetUsers(precacheQuery, filter)
+	users, err := c.GetUsers(query, filter)
 	require.NoError(t, err)
 
-	// Today: three Users.list calls for two OUs; the first has an empty OU part,
-	// so its query is just the filter (the whole directory, narrowed only by
-	// UserFilter).
-	assert.Equal(t, []string{
-		filter,
-		`OrgUnitPath='/Engineering'` + filter,
-		`OrgUnitPath='/Sales Team'` + filter,
-	}, queries)
-	assert.Len(t, users, 3, "the empty sub-query adds an extra page of users")
+	assert.Equal(t, []string{query + filter}, queries, "exactly one Users.list call, with no filter-only call")
+	assert.Len(t, users, 1)
 }
