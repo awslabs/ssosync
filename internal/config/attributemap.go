@@ -50,11 +50,12 @@ var (
 	// supportedUserSourceScalars are the scalar admin.User SOURCE paths the
 	// validator accepts as-is (exact string match) for the user block.
 	supportedUserSourceScalars = map[string]struct{}{
-		"name.givenName":  {},
-		"name.familyName": {},
-		"name.fullName":   {},
-		"primaryEmail":    {},
-		"suspended":       {},
+		"name.givenName":   {},
+		"name.familyName":  {},
+		"name.fullName":    {},
+		"name.displayName": {},
+		"primaryEmail":     {},
+		"suspended":        {},
 	}
 
 	// supportedUserMultiValuedSubfields is the CLOSED (field -> {subfield}) table

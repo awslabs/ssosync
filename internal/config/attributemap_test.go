@@ -402,3 +402,16 @@ func TestParseAttributeMaps_MultipleViolationsAggregated(t *testing.T) {
 	assert.Contains(msg, `unsupported target field "Bogus"`)
 	assert.Contains(msg, `unsupported source attribute "notAnAttr"`)
 }
+
+// #421: Release optional NickName and Name.Formatted mappings (PR #412)
+
+func TestParseAttributeMaps_DisplayNameSourceAccepted(t *testing.T) {
+	assert := assert.New(t)
+	am, err := ParseAttributeMaps([]byte(`{"user":{"NickName":"name.displayName"}}`))
+	assert.NoError(err)
+	assert.Equal("name.displayName", am.User["NickName"])
+
+	// The unsupported-source message lists it among the scalars.
+	_, err = ParseAttributeMaps([]byte(`{"user":{"NickName":"name.nickName"}}`))
+	assert.ErrorContains(err, "name.displayName")
+}
