@@ -10,24 +10,48 @@
 #   crpates  - primary organization, title "Science Officer"
 #   AceHole  - primary (school) organization with no title; blank given name
 #   olaf     - suspended; no organizations; apostrophe in his primary email
-#              and in his OU (#401), which this suite precaches
+#              and in his OU (#401), which this suite precaches; the other
+#              users are outside his OU tree, so they are not precached (#404)
 source "$(dirname "$0")/../lib/common.sh"
 setup_cli
 
 # #401: precache an OU path with an apostrophe and report cache metrics, so both
 # OrgUnitPath queries (precache and the per-OU usercache count) carry a quote.
-SSOSYNC_EXTRA_ARGS=(--precache-ous "/Red Dwarf/Petersen's Locker" --cache-metrics)
+# #404: a second OU that does not exist must be skipped with a warning, and
+# only the first OU's users may be precached. Keep Olaf's OU as the first
+# --precache-ous: lib/test_google_test_data.py reads both values.
+PRECACHE_OU="/Red Dwarf/Petersen's Locker"
+MISSING_OU="/SSOSync 404 No Such OU"
+SSOSYNC_EXTRA_ARGS=(--precache-ous "/Red Dwarf/Petersen's Locker" --precache-ous "/SSOSync 404 No Such OU" --cache-metrics)
 
 reset_baseline
 
 ADOPT="$LOG_DIR/adopt.log"
 run_ssosync live "" "$ADOPT"
 
-# The OU queries were sent and none of them failed (these errors don't fail a run).
+# One query per OU (#404): the missing OU is warned about (as an error or as
+# zero users, whichever Google returns for it) and skipped; Olaf's OU is not,
+# and precaching as a whole neither failed nor came back empty (none of these
+# fail a run).
 check assert_log count "$ADOPT" --msg "Precaching users" --min 1
+check assert_log count "$ADOPT" --msg "PrecacheOrgUnits: " --field "orgUnitPath=$MISSING_OU" --min 1
+check assert_log absent "$ADOPT" --msg "PrecacheOrgUnits: " --field "orgUnitPath=$PRECACHE_OU"
 check assert_log absent "$ADOPT" --msg "Precaching failed, caching on the fly"
 check assert_log absent "$ADOPT" --msg "Precaching return no users? Switching to caching on the fly"
 check assert_log count "$ADOPT" --msg "Caching Performance" --min 1
+
+# Only Olaf's OU tree was precached, and the other test users (outside it) were
+# looked up on the fly. Counts are only compared with 0: recordCacheOp counts
+# each op more than once (#413).
+STATS="$LOG_DIR/cache_stats.json"
+check assert_log field "$ADOPT" --key "Cache Stats" \
+  --msg "Caching Performance, orgPaths with a high Miss rate compared with the TotalUsers consider precaching" > "$STATS"
+echo "Cache Stats: $(cat "$STATS")"
+check jq -e --arg ou "$PRECACHE_OU" '
+  def in_tree: . == $ou or startswith($ou + "/");
+  [to_entries[] | select(.value.Precaches > 0) | .key] as $precached
+  | ($precached | length > 0) and all($precached[]; in_tree)
+    and any(to_entries[]; (.key | in_tree | not) and .value.Misses > 0)' "$STATS"
 check assert_log absent "$ADOPT" --msg "Failed retrieving usercache count"
 check assert_log absent "$ADOPT" --msg "Fetching group member from Google failed, aborting sync"
 

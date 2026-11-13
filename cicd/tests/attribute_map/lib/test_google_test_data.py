@@ -32,6 +32,27 @@ def schema(user):
     return user.get("customSchemas", {}).get("SSOSync-Test", {})
 
 
+def in_ou_tree(user_ou, ou):
+    """Google's orgUnitPath query matches the OU and every OU under it."""
+    return ou == "/" or user_ou == ou or user_ou.startswith(ou + "/")
+
+
+def staging_precache_ous(stack):
+    """The PrecacheOrgUnits of a staging stack, normalised as ssosync does
+    (trim; strip a trailing / unless the path is /)."""
+    path = os.path.join(AM_DIR, "..", "..", "account_execution", "staging", stack)
+    with open(path) as f:
+        value = re.search(r"^\s*PrecacheOrgUnits: '((?:[^']|'')*)'", f.read(), re.M).group(1)
+    ous = []
+    for ou in value.replace("''", "'").split(","):
+        ou = ou.strip()
+        if ou != "/" and ou.endswith("/"):
+            ou = ou[:-1]
+        if ou and ou not in ous:
+            ous.append(ou)
+    return ous
+
+
 SELECTOR = re.compile(r"^(\w+)\[(primary|type=([^\]]+))\]\.(\w+)$")
 
 
@@ -245,6 +266,43 @@ class SuiteExpectations(unittest.TestCase):
         holders = [u for u in users() if u.get("orgUnitPath") == ou]
         self.assertEqual(1, len(holders), f"exactly one test user must be in {ou}")
         self.assertIn("'", holders[0]["primaryEmail"])
+
+    def test_every_user_has_an_org_unit(self):
+        for u in users():
+            self.assertTrue(u.get("orgUnitPath", "").startswith("/"), f"{u['primaryEmail']}: orgUnitPath")
+
+    def test_default_map_missing_ou_holds_no_test_user(self):
+        # #404: default_map's second --precache-ous is an OU that does not
+        # exist, so the per-OU warning is expected for it; and only the first
+        # OU's user may be precached, so no other user is in its tree.
+        ous = re.findall(r"--precache-ous \"([^\"]+)\"", read("default_map", "run.sh"))
+        self.assertEqual(2, len(ous), "default_map passes two --precache-ous")
+        first, missing = ous
+        self.assertNotIn(",", missing, "getUsers splits queries on commas")
+        self.assertEqual([], [u["primaryEmail"] for u in users() if in_ou_tree(u["orgUnitPath"], missing)])
+        self.assertEqual(1, sum(1 for u in users() if in_ou_tree(u["orgUnitPath"], first)),
+                         f"only one test user may be in the tree of {first}")
+        script = read("default_map", "run.sh")
+        self.assertIn(f'PRECACHE_OU="{first}"', script)
+        self.assertIn(f'MISSING_OU="{missing}"', script)
+
+    def test_lambda_default_precache_expectations(self):
+        # #404: the staging stacks' PrecacheOrgUnits, normalised as ssosync
+        # does, are exactly the OUs lambda_default asserts on: the zero-users
+        # OU holds no test user, the others each hold at least one.
+        lists = {name: staging_precache_ous(name) for name in ("stack.yml", "stack-ng.yml")}
+        self.assertEqual(lists["stack.yml"], lists["stack-ng.yml"], "both staging stacks precache the same OUs")
+        configured = lists["stack.yml"]
+        script = read("lambda_default", "run.sh")
+        empty = re.findall(r'"PrecacheOrgUnits: no users found in OrgUnitPath" \\\n\s+--field "orgUnitPath=([^"]+)"', script)
+        loop = script.split("for ou in", 1)[1].split("; do", 1)[0]
+        with_users = re.findall(r'"([^"]+)"', loop)
+        self.assertEqual(["/Catering"], empty)
+        self.assertEqual(sorted(configured), sorted(empty + with_users))
+        for ou in empty:
+            self.assertEqual([], [u["primaryEmail"] for u in users() if in_ou_tree(u["orgUnitPath"], ou)])
+        for ou in with_users:
+            self.assertTrue(any(in_ou_tree(u["orgUnitPath"], ou) for u in users()), f"no test user in {ou}")
 
     def test_baseline_matches_google_users(self):
         with open(os.path.join(AM_DIR, "baseline", "users.json")) as f:

@@ -26,7 +26,12 @@
     "- No user has websites (the tenant's user schema has no websites field).",
     "- Olaf's primaryEmail and orgUnitPath contain an apostrophe (#401): the",
     "  member lookup and the OrgUnitPath queries must quote and escape them.",
-    "  default_map precaches his OU with --precache-ous; no comma in the path."
+    "  default_map precaches his OU with --precache-ous; no comma in the path.",
+    "- orgUnitPath is recorded for every user (#404): default_map precaches only",
+    "  Olaf's OU tree, so no other user may be in it, and its second, missing",
+    "  --precache-ous must hold no user. The staging stacks precache /Catering",
+    "  (exists, no users: lambda_default expects the zero-users warning),",
+    "  /Maintenance/Vending Machines (dave2) and Olaf's OU."
   ],
   "users": [
     {
@@ -34,6 +39,7 @@
       "id": "114073192003346788358",
       "name": { "givenName": "Chris", "familyName": "Pates" },
       "suspended": false,
+      "orgUnitPath": "/",
       "organizations": [
         {
           "name": "Jupiter Mining Corporation",
@@ -70,6 +76,7 @@
       "id": "101090649517008403940",
       "name": { "givenName": " ", "familyName": "Rimmer" },
       "suspended": false,
+      "orgUnitPath": "/Maintenance",
       "organizations": [
         {
           "name": "Red Dwarf Hologram Society",
@@ -92,6 +99,7 @@
       "id": "104127319331459468079",
       "name": { "givenName": "Dave", "familyName": "Lister" },
       "suspended": false,
+      "orgUnitPath": "/Maintenance/Vending Machines",
       "organizations": [
         {
           "name": "Red Dwarf Academy",
