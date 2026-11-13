@@ -40,18 +40,32 @@ check assert_log absent "$ADOPT" --msg "Precaching failed, caching on the fly"
 check assert_log absent "$ADOPT" --msg "Precaching return no users? Switching to caching on the fly"
 check assert_log count "$ADOPT" --msg "Caching Performance" --min 1
 
-# Only Olaf's OU tree was precached, and the other test users (outside it) were
-# looked up on the fly. Counts are only compared with 0: recordCacheOp counts
-# each op more than once (#413).
+# Every test user is seen (as a member of an AWS* group, which
+# lib/test_google_test_data.py checks against baseline/groups.json), so the
+# keys are exactly their OUs. Each OU reports itself plus its sub-OUs (#413):
+# Precaches are the users in Olaf's OU tree, Misses the others (lookups, one
+# per non-precached user, #418), from
+# google_test_users.json. TotalUsers is exactly the fixture's users in the
+# tree (#416: with --suspended the tenant holds just the 4 fixture users):
+# Olaf's OU reuses its precache count, and the others are counted with an
+# ids-only query, so / 4, /Maintenance 2, Vending Machines 1, Olaf 1. Hits
+# depend on Google's membership expansion, so they are only a lower bound:
+# each precached user is found in the cache at least once.
 STATS="$LOG_DIR/cache_stats.json"
 check assert_log field "$ADOPT" --key "Cache Stats" \
   --msg "Caching Performance, orgPaths with a high Miss rate compared with the TotalUsers consider precaching" > "$STATS"
 echo "Cache Stats: $(cat "$STATS")"
-check jq -e --arg ou "$PRECACHE_OU" '
-  def in_tree: . == $ou or startswith($ou + "/");
-  [to_entries[] | select(.value.Precaches > 0) | .key] as $precached
-  | ($precached | length > 0) and all($precached[]; in_tree)
-    and any(to_entries[]; (.key | in_tree | not) and .value.Misses > 0)' "$STATS"
+check jq -e --arg ou "$PRECACHE_OU" --slurpfile f "$AM_DIR/google_test_users.json" '
+  def in_tree($t): . == $t or startswith(($t | rtrimstr("/")) + "/");
+  [$f[0].users[].orgUnitPath] as $ous
+  | (keys == ($ous | unique))
+    and .[$ou].Hits >= 1 and .[$ou].TotalUsers == 1
+    and all(to_entries[]; .key as $k | .value as $v
+      | [$ous[] | select(in_tree($k))] as $tree
+      | $v.Precaches == ([$tree[] | select(in_tree($ou))] | length)
+        and $v.Misses == ([$tree[] | select(in_tree($ou) | not)] | length)
+        and $v.Hits >= $v.Precaches
+        and $v.TotalUsers == ($tree | length))' "$STATS"
 check assert_log absent "$ADOPT" --msg "Failed retrieving usercache count"
 check assert_log absent "$ADOPT" --msg "Fetching group member from Google failed, aborting sync"
 

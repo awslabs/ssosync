@@ -31,7 +31,9 @@
     "  Olaf's OU tree, so no other user may be in it, and its second, missing",
     "  --precache-ous must hold no user. The staging stacks precache /Catering",
     "  (exists, no users: lambda_default expects the zero-users warning),",
-    "  /Maintenance/Vending Machines (dave2) and Olaf's OU."
+    "  /Maintenance/Vending Machines (dave2) and Olaf's OU.",
+    "- Email addresses are lower case, as Google stores them; ssosync matches",
+    "  them case-insensitively (#418)."
   ],
   "users": [
     {
@@ -72,7 +74,7 @@
       }
     },
     {
-      "primaryEmail": "AceHole@nothing2see.info",
+      "primaryEmail": "acehole@nothing2see.info",
       "id": "101090649517008403940",
       "name": { "givenName": " ", "familyName": "Rimmer" },
       "suspended": false,

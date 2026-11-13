@@ -231,6 +231,12 @@ func initConfig() {
 		logVersion()
 	}
 
+	// Google treats the whole email address as case-insensitive, and the Admin
+	// UI stores addresses lower-cased, so a mixed-case --ignore-users entry
+	// (flag, SSOSYNC_IGNORE_USERS or Lambda's IGNORE_USERS) would otherwise
+	// silently stop matching; ignoreUser compares lower-cased addresses (#418).
+	cfg.IgnoreUsers = config.LowerCaseAll(cfg.IgnoreUsers)
+
 	if cfg.SyncSuspended {
 		cfg.UserFilter = " isArchived=false"
 	} else {

@@ -207,8 +207,8 @@ func TestOutputCacheMetrics_Issue401_OrgUnitQueryQuoted(t *testing.T) {
 	cfg.CacheMetrics = true
 
 	googleClient := mocks.NewMockGoogleClient(t)
-	googleClient.EXPECT().GetUsers(`OrgUnitPath='/O\'Brien Team'`, cfg.UserFilter).
-		Return([]*admin.User{{}, {}}, nil).Once()
+	googleClient.EXPECT().CountUsers(`OrgUnitPath='/O\'Brien Team'`, cfg.UserFilter).
+		Return(2, nil).Once()
 
 	entry := &CacheMetrics{}
 	s := &syncGSuite{

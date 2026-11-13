@@ -59,21 +59,26 @@ type syncGSuite struct {
 	ignoreGroupsSet  map[string]struct{}
 	includeGroupsSet map[string]struct{}
 	cacheMetrics     map[string]*CacheMetrics
+	// orgUnitUserCounts holds, with --cache-metrics, the number of users each
+	// precached OU returned, so outputCacheMetrics reuses it as TotalUsers (#416)
+	orgUnitUserCounts map[string]int
 }
 
-// OperationType handle patch operations for add/remove
+// CacheOperationType is a user-cache operation counted by --cache-metrics
 type CacheOperationType string
 
 const (
 	// PreCache is adding a user/group as part of the precaching
 	PreCache CacheOperationType = "precache"
-	// CacheHit means a user was successfully found in the cache and prepresents an api called avoided
+	// CacheHit means a user was successfully found in the cache and represents an api call avoided
 	CacheHit CacheOperationType = "hit"
 	// CacheMiss means a user was not found in the cache so an api call was required
 	CacheMiss CacheOperationType = "miss"
 )
 
-// User represents a User in AWS SSO
+// CacheMetrics counts user-cache operations for one OU. recordCacheOp keeps
+// each OU's own counts; outputCacheMetrics reports each OU with its sub-OUs
+// rolled up, as TotalUsers and --precache-ous include sub-OUs (#413).
 type CacheMetrics struct {
 	Precaches  int
 	Hits       int
@@ -132,40 +137,51 @@ func (s *syncGSuite) recordCacheOp(orgPath string, operation CacheOperationType)
 		s.cacheMetrics = make(map[string]*CacheMetrics, 0)
 	}
 	// have we seen this orgPath before, if not create an stats for it
-	if _, exists := s.cacheMetrics[orgPath]; !exists {
-		s.cacheMetrics[orgPath] = &CacheMetrics{}
+	entry, exists := s.cacheMetrics[orgPath]
+	if !exists {
+		entry = &CacheMetrics{}
+		s.cacheMetrics[orgPath] = entry
 	}
-	// update the stat for the operation
-	if entry, exists := s.cacheMetrics[orgPath]; exists {
-		switch operation {
-		case PreCache:
-			entry.Precaches++
-		case CacheHit:
-			entry.Hits++
-		case CacheMiss:
-			entry.Misses++
-		default:
-			log.WithFields(
-				log.Fields{
-					"orgPath":   orgPath,
-					"operation": operation}).Error("unknown operation")
-		}
+	// update the OU's own stat for the operation, once; sub-OUs are rolled up
+	// into their parents by outputCacheMetrics (#413)
+	switch operation {
+	case PreCache:
+		entry.Precaches++
+	case CacheHit:
+		entry.Hits++
+	case CacheMiss:
+		entry.Misses++
+	default:
+		log.WithFields(
+			log.Fields{
+				"orgPath":   orgPath,
+				"operation": operation}).Error("unknown operation")
 	}
+}
 
-	// If existing paths are parent or orgPath, update their stats
-	for path, entry := range s.cacheMetrics {
-		if !strings.Contains(orgPath, path) {
-			continue
+// orgUnitInTree reports whether orgPath is ou or below it, by whole path
+// segments: /Sales holds /Sales/EMEA but not /Sales Team or /Presales (#413).
+func orgUnitInTree(ou, orgPath string) bool {
+	return orgPath == ou || strings.HasPrefix(orgPath, strings.TrimSuffix(ou, "/")+"/")
+}
+
+// rollUpCacheMetrics returns a copy of own in which each OU's counts include
+// its sub-OUs' (#413). TotalUsers is copied, not summed: it already covers the tree.
+func rollUpCacheMetrics(own map[string]*CacheMetrics) map[string]*CacheMetrics {
+	rolled := make(map[string]*CacheMetrics, len(own))
+	for ou, entry := range own {
+		sum := &CacheMetrics{TotalUsers: entry.TotalUsers}
+		for orgPath, sub := range own {
+			if !orgUnitInTree(ou, orgPath) {
+				continue
+			}
+			sum.Precaches += sub.Precaches
+			sum.Hits += sub.Hits
+			sum.Misses += sub.Misses
 		}
-		switch operation {
-		case PreCache:
-			entry.Precaches++
-		case CacheHit:
-			entry.Hits++
-		case CacheMiss:
-			entry.Misses++
-		}
+		rolled[ou] = sum
 	}
+	return rolled
 }
 
 // quoteGoogleQueryValue renders a runtime value (an email address, an OU path)
@@ -179,23 +195,48 @@ func quoteGoogleQueryValue(value string) string {
 	return "'" + strings.ReplaceAll(value, "'", `\'`) + "'"
 }
 
+// userCacheKey is the user-cache key for a Google email address: Google
+// treats addresses case-insensitively, local part and domain (#418).
+func userCacheKey(email string) string {
+	return strings.ToLower(email)
+}
+
+// cacheUser caches u under its primary email and every alias, so a group
+// member listed by any of them is found without a lookup (#418).
+func cacheUser(cache map[string]*admin.User, u *admin.User) {
+	cache[userCacheKey(u.PrimaryEmail)] = u
+	for _, a := range u.Aliases {
+		cache[userCacheKey(a)] = u
+	}
+	for _, a := range u.NonEditableAliases {
+		cache[userCacheKey(a)] = u
+	}
+}
+
 func (s *syncGSuite) outputCacheMetrics() {
 	if !s.cfg.CacheMetrics {
 		return
 	}
 
 	for orgUnitPath, entry := range s.cacheMetrics {
+		// An OU the precache already listed reuses that count; any other is
+		// counted with an ids-only query, not a full listing (#416)
+		if count, found := s.orgUnitUserCounts[orgUnitPath]; found {
+			entry.TotalUsers = count
+			continue
+		}
 		query := "OrgUnitPath=" + quoteGoogleQueryValue(orgUnitPath)
-		googleUsers, err := s.google.GetUsers(query, s.cfg.UserFilter)
+		count, err := s.google.CountUsers(query, s.cfg.UserFilter)
 		if err != nil {
 			log.WithFields(log.Fields{
 				"error": err,
 			}).Error("Failed retrieving usercache count")
 		} else {
-			entry.TotalUsers = len(googleUsers)
+			entry.TotalUsers = count
 		}
 	}
-	log.WithFields(log.Fields{"Cache Stats": s.cacheMetrics}).Info("Caching Performance, orgPaths with a high Miss rate compared with the TotalUsers consider precaching")
+	// Each OU is reported with its sub-OUs, the same tree TotalUsers counts (#413)
+	log.WithFields(log.Fields{"Cache Stats": rollUpCacheMetrics(s.cacheMetrics)}).Info("Caching Performance, orgPaths with a high Miss rate compared with the TotalUsers consider precaching")
 }
 
 // LegacySyncUsers will Sync Google Users to AWS SSO SCIM
@@ -1020,6 +1061,13 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 				}).Warn("PrecacheOrgUnits: OrgUnitPath could not be queried and is skipped; it may not exist")
 				continue
 			}
+			// The same query and filter outputCacheMetrics counts with (#416)
+			if s.cfg.CacheMetrics {
+				if s.orgUnitUserCounts == nil {
+					s.orgUnitUserCounts = make(map[string]int)
+				}
+				s.orgUnitUserCounts[orgUnitPath] = len(ouUsers)
+			}
 			if len(ouUsers) == 0 {
 				log.WithFields(log.Fields{
 					"func":         funcName,
@@ -1056,14 +1104,14 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 
 				// Check the cache being filled: overlapping OUs (e.g. / and
 				// /Sales) return the same user more than once.
-				if _, found := gUserDetailCache[u.PrimaryEmail]; !found {
+				if _, found := gUserDetailCache[userCacheKey(u.PrimaryEmail)]; !found {
 					log.WithFields(log.Fields{
 						"func":    funcName,
 						"user.Id": u.Id,
 					}).Debug("Cache user")
 					s.recordCacheOp(u.OrgUnitPath, PreCache)
 
-					gUserDetailCache[u.PrimaryEmail] = u
+					cacheUser(gUserDetailCache, u)
 					continue
 				} else {
 					log.WithFields(log.Fields{
@@ -1117,23 +1165,25 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 				continue
 			}
 
-			if _, found := gUniqUsers[u.PrimaryEmail]; !found {
-				log.WithFields(log.Fields{
-					"func":    funcName,
-					"user.Id": u.Id,
-				}).Debug("adding user")
-				gUserDetailCache[u.PrimaryEmail] = u
-				s.recordCacheOp(u.OrgUnitPath, CacheMiss)
-				gUniqUsers[u.PrimaryEmail] = gUserDetailCache[u.PrimaryEmail]
-				continue
-			} else {
+			// --user-match bulk-fills the cache, as --precache-ous does (#417):
+			// a new user is a precache; a user already cached (precached, or
+			// listed twice) keeps its cached entry and is a hit.
+			if cached, found := gUserDetailCache[userCacheKey(u.PrimaryEmail)]; found {
 				log.WithFields(log.Fields{
 					"func":    funcName,
 					"user.Id": u.Id,
 				}).Debug("already existing")
+				u = cached
 				s.recordCacheOp(u.OrgUnitPath, CacheHit)
-				continue
+			} else {
+				log.WithFields(log.Fields{
+					"func":    funcName,
+					"user.Id": u.Id,
+				}).Debug("adding user")
+				cacheUser(gUserDetailCache, u)
+				s.recordCacheOp(u.OrgUnitPath, PreCache)
 			}
+			gUniqUsers[u.PrimaryEmail] = u
 		}
 	}
 
@@ -1230,7 +1280,7 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 						"group.Id": g.Id,
 						"member":   m.Id,
 					}).Debug("adding user to UniqueUsers")
-					gUniqUsers[m.PrimaryEmail] = gUserDetailCache[m.PrimaryEmail]
+					gUniqUsers[m.PrimaryEmail] = m
 				}
 
 				if _, found := gUniqMembers[m.PrimaryEmail]; !found {
@@ -1239,7 +1289,7 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 						"group.Id": g.Id,
 						"member":   m.Id,
 					}).Debug("adding user to group")
-					gUniqMembers[m.PrimaryEmail] = gUserDetailCache[m.PrimaryEmail]
+					gUniqMembers[m.PrimaryEmail] = m
 				}
 			}
 
@@ -2266,7 +2316,8 @@ func (s *syncGSuite) ignoreUser(name string) bool {
 			s.ignoreUsersSet[u] = struct{}{}
 		}
 	}
-	_, exists := s.ignoreUsersSet[name]
+	// cfg.IgnoreUsers is lower-cased when the config loads (#418)
+	_, exists := s.ignoreUsersSet[userCacheKey(name)]
 	return exists
 }
 
@@ -2799,9 +2850,11 @@ func (s *syncGSuite) getGoogleUsersInGroup(group *admin.Group, userCache map[str
 			"GroupId": group.Id,
 			"Member#": memberIndex,
 		}).Debug("valid member")
-		var memberEmail string
-		// Find the group member in the cache of UserDetails
-		if _, found := userCache[m.Email]; !found {
+		// Find the group member in the cache of UserDetails, by the address
+		// lower-cased, as Google matches addresses (#418); only a member
+		// found there is a CacheHit, a looked-up one is a CacheMiss only (#413)
+		member, cacheHit := userCache[userCacheKey(m.Email)]
+		if !cacheHit {
 			log.WithFields(log.Fields{
 				"func":    funcName,
 				"GroupId": group.Id,
@@ -2827,35 +2880,36 @@ func (s *syncGSuite) getGoogleUsersInGroup(group *admin.Group, userCache map[str
 			}
 			// Add user to the cache
 			for _, u := range googleUsers {
-				if _, found := userCache[u.PrimaryEmail]; !found {
+				if cached, found := userCache[userCacheKey(u.PrimaryEmail)]; found {
+					// keep the cached entry
+					u = cached
+				} else {
 					log.WithFields(log.Fields{
 						"func":    funcName,
 						"GroupId": group.Id,
 						"Member#": memberIndex,
 					}).Debug("Cache user")
-					userCache[u.PrimaryEmail] = u
-					s.recordCacheOp(u.OrgUnitPath, CacheMiss)
+					cacheUser(userCache, u)
 				}
-				memberEmail = u.PrimaryEmail
+				// the member's address now finds u without another lookup (#418)
+				userCache[userCacheKey(m.Email)] = u
+				member = u
 			}
 			// Check whether the member was based on an alias
-			if memberEmail != m.Email {
+			if member != nil && !strings.EqualFold(member.PrimaryEmail, m.Email) {
 				log.WithFields(log.Fields{
 					"func":    funcName,
 					"GroupId": group.Id,
 					"Member#": memberIndex,
 				}).Debug("Member listed using an alias")
 			}
-		} else {
-			// member (email address) found in user cache
-			memberEmail = m.Email
 		}
 
 		// Add user based on user cache
-		if userCache[memberEmail] == nil {
+		if member == nil {
 			log.WithFields(log.Fields{
 				"func":        funcName,
-				"memberEmail": memberEmail,
+				"memberEmail": m.Email,
 			}).Error("Can't retrieve user")
 			continue
 		} else {
@@ -2865,8 +2919,14 @@ func (s *syncGSuite) getGoogleUsersInGroup(group *admin.Group, userCache map[str
 				"Member#": memberIndex,
 			}).Debug("Add member")
 		}
-		s.recordCacheOp(userCache[memberEmail].OrgUnitPath, CacheHit)
-		membersUsers = append(membersUsers, userCache[memberEmail])
+		// Exactly one op per membership (#418): a hit if the lower-cased
+		// address was cached, else one miss for the lookup; never both
+		if cacheHit {
+			s.recordCacheOp(member.OrgUnitPath, CacheHit)
+		} else {
+			s.recordCacheOp(member.OrgUnitPath, CacheMiss)
+		}
+		membersUsers = append(membersUsers, member)
 
 	}
 	log.WithFields(log.Fields{

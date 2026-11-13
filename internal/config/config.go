@@ -1,7 +1,10 @@
 // Package config ...
 package config
 
-import "errors"
+import (
+	"errors"
+	"strings"
+)
 
 // Config ...
 type Config struct {
@@ -226,6 +229,19 @@ var (
 		Group: DefaultGroupAttributeMap,
 	}
 )
+
+// LowerCaseAll returns a copy of values with each value lower-cased; nil stays
+// nil. Used for --ignore-users, as Google email addresses are case-insensitive (#418).
+func LowerCaseAll(values []string) []string {
+	if values == nil {
+		return nil
+	}
+	lowered := make([]string, len(values))
+	for i, v := range values {
+		lowered[i] = strings.ToLower(v)
+	}
+	return lowered
+}
 
 // New returns a new Config
 func New() *Config {

@@ -304,6 +304,25 @@ class SuiteExpectations(unittest.TestCase):
         for ou in with_users:
             self.assertTrue(any(in_ou_tree(u["orgUnitPath"], ou) for u in users()), f"no test user in {ou}")
 
+    def test_default_map_sees_every_test_user(self):
+        # #413: default_map's exact Cache Stats check expects one key per test
+        # user's OU, so every test user must be a member of a group the suites
+        # sync (GROUP_MATCH name:AWS*). Members are compared case-insensitively,
+        # as the baseline lists some in lower case. The converse holds too: the
+        # AWS* groups hold no user outside the fixture, so the jq key set
+        # (keys == the fixture's OUs) has no OU the fixture doesn't know. The
+        # baseline is the AWS-side seed, so this guards fixture drift, not the
+        # live Google membership.
+        self.assertIn('GROUP_MATCH="${GROUP_MATCH:-name:AWS*}"', read("lib", "common.sh"))
+        self.assertIn('GROUP_MATCH: "name:AWS*"', read("default_map", "buildspec.yml"))
+        self.assertIn("google_test_users.json", read("default_map", "run.sh"))
+        with open(os.path.join(AM_DIR, "baseline", "groups.json")) as f:
+            members = {m.lower() for g in json.load(f) if g["DisplayName"].startswith("AWS") for m in g["Members"]}
+        for u in users():
+            self.assertIn(u["primaryEmail"].lower(), members, f"{u['primaryEmail']} is in no AWS* group")
+        extra = members - {u["primaryEmail"].lower() for u in users()}
+        self.assertEqual(set(), extra, "AWS* groups in baseline/groups.json hold users missing from google_test_users.json")
+
     def test_baseline_matches_google_users(self):
         with open(os.path.join(AM_DIR, "baseline", "users.json")) as f:
             baseline = {b["UserName"].lower(): b for b in json.load(f)}

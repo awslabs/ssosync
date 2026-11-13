@@ -215,8 +215,7 @@ func TestGetGoogleGroupsAndUsers_Issue404_AllOrgUnitsFail(t *testing.T) {
 }
 
 // Overlapping OUs return the same user twice: the first is recorded as a
-// PreCache and the repeat as a CacheHit. Counts are only checked for > 0 / == 0
-// because recordCacheOp counts every op more than once (#413).
+// PreCache and the repeat as a CacheHit, each counted once (#413).
 func TestGetGoogleGroupsAndUsers_Issue404_OverlappingOrgUnitsRepeatIsCacheHit(t *testing.T) {
 	a, _ := issue404Users()
 	googleClient := mocks.NewMockGoogleClient(t)
@@ -230,9 +229,7 @@ func TestGetGoogleGroupsAndUsers_Issue404_OverlappingOrgUnitsRepeatIsCacheHit(t 
 	require.NoError(t, err)
 
 	require.Contains(t, s.cacheMetrics, "/A")
-	assert.Greater(t, s.cacheMetrics["/A"].Precaches, 0)
-	assert.Greater(t, s.cacheMetrics["/A"].Hits, 0)
-	assert.Equal(t, 0, s.cacheMetrics["/A"].Misses)
+	assert.Equal(t, CacheMetrics{Precaches: 1, Hits: 1}, *s.cacheMetrics["/A"])
 }
 
 // Empty entries are skipped and an OU listed twice (after normalising) is

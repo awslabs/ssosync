@@ -39,6 +39,7 @@ import (
 // Client is the Interface for the Client
 type Client interface {
 	GetUsers(string, string) ([]*admin.User, error)
+	CountUsers(string, string) (int, error)
 	GetDeletedUsers() ([]*admin.User, error)
 	GetGroups(string) ([]*admin.Group, error)
 	GetGroupMembers(*admin.Group) ([]*admin.Member, error)
@@ -326,6 +327,9 @@ func (c *client) GetUsers(query string, filter string) ([]*admin.User, error) {
 	var err error
 	var users []*admin.User
 
+	if query, err = dropEmptyQueryElements(query, "users"); err != nil {
+		return nil, err
+	}
 	for iteration := 1; iteration < MaxRetries; iteration++ {
 		users, err = c.getUsers(query, filter)
 		if err == nil {
@@ -333,6 +337,80 @@ func (c *client) GetUsers(query string, filter string) ([]*admin.User, error) {
 		}
 	}
 	return nil, err
+}
+
+// EmptyQueryElementMsg is the Warn logged when a comma-separated users or
+// groups query has an empty element, which is ignored (#414).
+const EmptyQueryElementMsg = "query has an empty comma-separated element, which is ignored"
+
+// ErrAllEmptyQuery is returned, wrapped with the query, by GetUsers and
+// GetGroups for a query made only of empty comma-separated elements, such as
+// "," or " " (#414).
+var ErrAllEmptyQuery = errors.New("query has only empty comma-separated elements; fix the match, or use \"\" for none or \"*\" for all")
+
+// dropEmptyQueryElements returns query without its empty (blank after
+// TrimSpace) comma-separated elements, warning once, naming the original
+// query, if it had any (#414). Sent to Google, an empty element is a
+// filter-only list call that returns the whole directory. "" and "*" are
+// unchanged.
+//
+// A query made only of empty elements is an error, so the run fails closed:
+// treated as "" it would list nothing, and a groups sync would then delete
+// every AWS group (and its users) not found in Google.
+func dropEmptyQueryElements(query, kind string) (string, error) {
+	if query == "" || query == "*" {
+		return query, nil
+	}
+	elements := strings.Split(query, ",")
+	kept := make([]string, 0, len(elements))
+	for _, e := range elements {
+		if strings.TrimSpace(e) != "" {
+			kept = append(kept, e)
+		}
+	}
+	if len(kept) == len(elements) {
+		return query, nil
+	}
+	if len(kept) == 0 {
+		return "", fmt.Errorf("%s %w: %q", kind, ErrAllEmptyQuery, query)
+	}
+	log.WithFields(log.Fields{
+		"query": query,
+		"kind":  kind,
+	}).Warn(EmptyQueryElementMsg)
+	return strings.Join(kept, ","), nil
+}
+
+// CountUsers returns how many users match the query plus filter, asking Google
+// for user ids only, 500 per page, rather than listing full user objects (#416).
+// query is one term: unlike GetUsers it is not split on commas.
+func (c *client) CountUsers(query string, filter string) (int, error) {
+	var err error
+	var count int
+
+	for iteration := 1; iteration < MaxRetries; iteration++ {
+		count, err = c.countUsers(query, filter)
+		if err == nil {
+			return count, nil
+		}
+	}
+	return 0, err
+}
+
+func (c *client) countUsers(query string, filter string) (int, error) {
+	// If we have an empty query, count nothing, as getUsers returns nothing.
+	if query == "" {
+		return 0, nil
+	}
+
+	count := 0
+	if err := c.service.Users.List().Query(query+filter).Customer(c.customerID).MaxResults(500).Fields("nextPageToken", "users(id)").Pages(c.ctx, func(users *admin.Users) error {
+		count += len(users.Users)
+		return nil
+	}); err != nil {
+		return 0, err
+	}
+	return count, nil
 }
 
 func (c *client) getUsers(query string, filter string) ([]*admin.User, error) {
@@ -413,6 +491,9 @@ func (c *client) GetGroups(query string) ([]*admin.Group, error) {
 	var err error
 	var groups []*admin.Group
 
+	if query, err = dropEmptyQueryElements(query, "groups"); err != nil {
+		return nil, err
+	}
 	for iteration := 1; iteration < MaxRetries; iteration++ {
 		groups, err = c.getGroups(query)
 		if err == nil {
