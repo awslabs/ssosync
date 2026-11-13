@@ -59,6 +59,9 @@ type syncGSuite struct {
 	ignoreGroupsSet  map[string]struct{}
 	includeGroupsSet map[string]struct{}
 	cacheMetrics     map[string]*CacheMetrics
+	// orgUnitUserCounts holds, with --cache-metrics, the number of users each
+	// precached OU returned, so outputCacheMetrics reuses it as TotalUsers (#416)
+	orgUnitUserCounts map[string]int
 }
 
 // CacheOperationType is a user-cache operation counted by --cache-metrics
@@ -198,14 +201,20 @@ func (s *syncGSuite) outputCacheMetrics() {
 	}
 
 	for orgUnitPath, entry := range s.cacheMetrics {
+		// An OU the precache already listed reuses that count; any other is
+		// counted with an ids-only query, not a full listing (#416)
+		if count, found := s.orgUnitUserCounts[orgUnitPath]; found {
+			entry.TotalUsers = count
+			continue
+		}
 		query := "OrgUnitPath=" + quoteGoogleQueryValue(orgUnitPath)
-		googleUsers, err := s.google.GetUsers(query, s.cfg.UserFilter)
+		count, err := s.google.CountUsers(query, s.cfg.UserFilter)
 		if err != nil {
 			log.WithFields(log.Fields{
 				"error": err,
 			}).Error("Failed retrieving usercache count")
 		} else {
-			entry.TotalUsers = len(googleUsers)
+			entry.TotalUsers = count
 		}
 	}
 	// Each OU is reported with its sub-OUs, the same tree TotalUsers counts (#413)
@@ -1033,6 +1042,13 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 					"error":       err,
 				}).Warn("PrecacheOrgUnits: OrgUnitPath could not be queried and is skipped; it may not exist")
 				continue
+			}
+			// The same query and filter outputCacheMetrics counts with (#416)
+			if s.cfg.CacheMetrics {
+				if s.orgUnitUserCounts == nil {
+					s.orgUnitUserCounts = make(map[string]int)
+				}
+				s.orgUnitUserCounts[orgUnitPath] = len(ouUsers)
 			}
 			if len(ouUsers) == 0 {
 				log.WithFields(log.Fields{

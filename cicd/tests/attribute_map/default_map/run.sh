@@ -44,8 +44,10 @@ check assert_log count "$ADOPT" --msg "Caching Performance" --min 1
 # lib/test_google_test_data.py checks against baseline/groups.json), so the
 # keys are exactly their OUs. Each OU reports itself plus its sub-OUs (#413):
 # Precaches are the users in Olaf's OU tree, Misses the others, from
-# google_test_users.json. TotalUsers is at least the fixture's users in the
-# tree (/ also has any other tenant user), and exactly 1 in Olaf's OU. Hits
+# google_test_users.json. TotalUsers is exactly the fixture's users in the
+# tree (#416: with --suspended the tenant holds just the 4 fixture users):
+# Olaf's OU reuses its precache count, and the others are counted with an
+# ids-only query, so / 4, /Maintenance 2, Vending Machines 1, Olaf 1. Hits
 # depend on Google's membership expansion, so they are only a lower bound:
 # each precached user is found in the cache at least once.
 STATS="$LOG_DIR/cache_stats.json"
@@ -62,7 +64,7 @@ check jq -e --arg ou "$PRECACHE_OU" --slurpfile f "$AM_DIR/google_test_users.jso
       | $v.Precaches == ([$tree[] | select(in_tree($ou))] | length)
         and $v.Misses == ([$tree[] | select(in_tree($ou) | not)] | length)
         and $v.Hits >= $v.Precaches
-        and $v.TotalUsers >= ($tree | length))' "$STATS"
+        and $v.TotalUsers == ($tree | length))' "$STATS"
 check assert_log absent "$ADOPT" --msg "Failed retrieving usercache count"
 check assert_log absent "$ADOPT" --msg "Fetching group member from Google failed, aborting sync"
 

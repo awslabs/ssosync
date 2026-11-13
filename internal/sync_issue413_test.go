@@ -169,10 +169,10 @@ func TestOutputCacheMetrics_Issue413_LogsRolledUpCounts(t *testing.T) {
 	googleClient := mocks.NewMockGoogleClient(t)
 	s := issue413Sync(googleClient)
 	s.cacheMetrics = map[string]*CacheMetrics{"/": {Hits: 1}, "/A": {Misses: 1}}
-	googleClient.EXPECT().GetUsers(`OrgUnitPath='/'`, s.cfg.UserFilter).
-		Return([]*admin.User{{}, {}, {}}, nil).Once()
-	googleClient.EXPECT().GetUsers(`OrgUnitPath='/A'`, s.cfg.UserFilter).
-		Return([]*admin.User{{}}, nil).Once()
+	googleClient.EXPECT().CountUsers(`OrgUnitPath='/'`, s.cfg.UserFilter).
+		Return(3, nil).Once()
+	googleClient.EXPECT().CountUsers(`OrgUnitPath='/A'`, s.cfg.UserFilter).
+		Return(1, nil).Once()
 
 	s.outputCacheMetrics()
 

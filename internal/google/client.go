@@ -39,6 +39,7 @@ import (
 // Client is the Interface for the Client
 type Client interface {
 	GetUsers(string, string) ([]*admin.User, error)
+	CountUsers(string, string) (int, error)
 	GetDeletedUsers() ([]*admin.User, error)
 	GetGroups(string) ([]*admin.Group, error)
 	GetGroupMembers(*admin.Group) ([]*admin.Member, error)
@@ -333,6 +334,38 @@ func (c *client) GetUsers(query string, filter string) ([]*admin.User, error) {
 		}
 	}
 	return nil, err
+}
+
+// CountUsers returns how many users match the query plus filter, asking Google
+// for user ids only, 500 per page, rather than listing full user objects (#416).
+// query is one term: unlike GetUsers it is not split on commas.
+func (c *client) CountUsers(query string, filter string) (int, error) {
+	var err error
+	var count int
+
+	for iteration := 1; iteration < MaxRetries; iteration++ {
+		count, err = c.countUsers(query, filter)
+		if err == nil {
+			return count, nil
+		}
+	}
+	return 0, err
+}
+
+func (c *client) countUsers(query string, filter string) (int, error) {
+	// If we have an empty query, count nothing, as getUsers returns nothing.
+	if query == "" {
+		return 0, nil
+	}
+
+	count := 0
+	if err := c.service.Users.List().Query(query+filter).Customer(c.customerID).MaxResults(500).Fields("nextPageToken", "users(id)").Pages(c.ctx, func(users *admin.Users) error {
+		count += len(users.Users)
+		return nil
+	}); err != nil {
+		return 0, err
+	}
+	return count, nil
 }
 
 func (c *client) getUsers(query string, filter string) ([]*admin.User, error) {
