@@ -1054,7 +1054,9 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 					"user": u,
 				}).Debug("process user")
 
-				if _, found := gUniqUsers[u.PrimaryEmail]; !found {
+				// Check the cache being filled: overlapping OUs (e.g. / and
+				// /Sales) return the same user more than once.
+				if _, found := gUserDetailCache[u.PrimaryEmail]; !found {
 					log.WithFields(log.Fields{
 						"func":    funcName,
 						"user.Id": u.Id,

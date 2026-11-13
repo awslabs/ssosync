@@ -214,6 +214,27 @@ func TestGetGoogleGroupsAndUsers_Issue404_AllOrgUnitsFail(t *testing.T) {
 	assert.Empty(t, issue404Entries(hook, log.WarnLevel, msg404NoUsers))
 }
 
+// Overlapping OUs return the same user twice: the first is recorded as a
+// PreCache and the repeat as a CacheHit. Counts are only checked for > 0 / == 0
+// because recordCacheOp counts every op more than once (#413).
+func TestGetGoogleGroupsAndUsers_Issue404_OverlappingOrgUnitsRepeatIsCacheHit(t *testing.T) {
+	a, _ := issue404Users()
+	googleClient := mocks.NewMockGoogleClient(t)
+	googleClient.EXPECT().GetGroups("*").Return(nil, nil).Once()
+	s := issue404Sync(googleClient, []string{"/", "/A"})
+	s.cfg.CacheMetrics = true
+	googleClient.EXPECT().GetUsers(`OrgUnitPath='/'`, s.cfg.UserFilter).Return([]*admin.User{a}, nil).Once()
+	googleClient.EXPECT().GetUsers(`OrgUnitPath='/A'`, s.cfg.UserFilter).Return([]*admin.User{a}, nil).Once()
+
+	_, _, _, err := s.getGoogleGroupsAndUsers("", "")
+	require.NoError(t, err)
+
+	require.Contains(t, s.cacheMetrics, "/A")
+	assert.Greater(t, s.cacheMetrics["/A"].Precaches, 0)
+	assert.Greater(t, s.cacheMetrics["/A"].Hits, 0)
+	assert.Equal(t, 0, s.cacheMetrics["/A"].Misses)
+}
+
 // Empty entries are skipped and an OU listed twice (after normalising) is
 // queried once.
 func TestGetGoogleGroupsAndUsers_Issue404_EmptyAndDuplicateOrgUnitsSkipped(t *testing.T) {
