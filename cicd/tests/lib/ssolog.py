@@ -133,6 +133,9 @@ def load(path):
 def as_str(v):
     if isinstance(v, bool):
         return "true" if v else "false"
+    if isinstance(v, (dict, list)):
+        # JSON, so `field` output can be read by jq (e.g. "Cache Stats").
+        return json.dumps(v, sort_keys=True)
     return str(v)
 
 

@@ -14,10 +14,19 @@ FIRST="$LOG_DIR/lambda_default.log"
 invoke_lambda "$FIRST"
 check assert_log summary "$FIRST" --users "adoptLocal>=4" delete=0 recreate=0 updateForced=0
 check assert_log count "$FIRST" --msg "attribute map: mapping Google user" --min 4
-# #401: the stack precaches "/Red Dwarf/Petersen's Locker"; the quoted OU query
-# was sent and Google did not reject it (this error doesn't fail a run). The
-# stack can't enable CacheMetrics, so there is no usercache count to check.
+# The stack precaches "/Catering/,/Maintenance/Vending Machines,/Red Dwarf/Petersen's Locker"
+# (stack.yml, stack-ng.yml), one query per OU (#404). /Catering exists and has
+# no users, so it gets the zero-users warning (logged with the trailing / stripped);
+# the other two hold test users (google_test_users.json), and Olaf's OU query
+# carries a quoted apostrophe (#401). None of these fail a run. The stack can't
+# enable CacheMetrics, so there is no usercache count to check.
 check assert_log count "$FIRST" --msg "Precaching users" --min 1
+check assert_log count "$FIRST" --msg "PrecacheOrgUnits: no users found in OrgUnitPath" \
+  --field "orgUnitPath=/Catering" --min 1
+check assert_log absent "$FIRST" --msg "PrecacheOrgUnits: OrgUnitPath could not be queried" --field "orgUnitPath=/Catering"
+for ou in "/Maintenance/Vending Machines" "/Red Dwarf/Petersen's Locker"; do
+  check assert_log absent "$FIRST" --msg "PrecacheOrgUnits: " --field "orgUnitPath=$ou"
+done
 check assert_log absent "$FIRST" --msg "Precaching failed, caching on the fly"
 
 SECOND="$LOG_DIR/lambda_default_2.log"

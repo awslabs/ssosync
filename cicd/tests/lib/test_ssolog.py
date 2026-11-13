@@ -86,6 +86,15 @@ class CheckLogTest(_LogFiles):
         self.assertEqual(out.strip(), ISSUER)
         self.assertEqual(run("field", self.good_log(), "--msg", "getIssuerArn()", "--key", "Nope")[0], 1)
 
+    def test_field_prints_objects_as_json(self):
+        # #404: default_map reads "Cache Stats" with jq.
+        stats = {"/Red Dwarf/Petersen's Locker": {"Precaches": 2, "Misses": 0}, "/": {"Precaches": 0}}
+        p = self.write([{"msg": "Caching Performance", "Cache Stats": stats, "list": [1, "a"]}])
+        rc, out = run("field", p, "--msg", "Caching Performance", "--key", "Cache Stats")
+        self.assertEqual(rc, 0)
+        self.assertEqual(json.loads(out), stats)
+        self.assertEqual(json.loads(run("field", p, "--msg", "Caching Performance", "--key", "list")[1]), [1, "a"])
+
     def test_summary_and_converged(self):
         p = self.good_log()
         self.assertEqual(run("summary", p, "--users", "equal=2", "adoptForeign=0")[0], 0)
