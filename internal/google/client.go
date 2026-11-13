@@ -586,7 +586,7 @@ func (c *client) getGroups(query string) ([]*admin.Group, error) {
 //
 // Resolvable source paths this phase:
 //   - Scalar admin.User fields: name.givenName, name.familyName, name.fullName,
-//     primaryEmail, suspended (inverted to Active).
+//     name.displayName, primaryEmail, suspended (inverted to Active).
 //   - Multi-valued interface{} fields (organizations, relations, websites,
 //     emails, phones, addresses), resolved by a JSON round-trip into the SDK
 //     typed struct and a TYPE-QUALIFIED selector (see resolveGoogleUserSource):
@@ -1151,6 +1151,12 @@ func resolveGoogleUserSource(u *admin.User, sourceAttr string) (value interface{
 			return "", true, nil
 		}
 		return strings.ReplaceAll(u.Name.FullName, string('\u200B'), " "), true, nil
+	case "name.displayName":
+		// Google's settable display name; "" when the directory sets none.
+		if u.Name == nil {
+			return "", true, nil
+		}
+		return strings.ReplaceAll(u.Name.DisplayName, string('\u200B'), " "), true, nil
 	case "primaryEmail":
 		return u.PrimaryEmail, true, nil
 	case "suspended":

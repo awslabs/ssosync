@@ -850,3 +850,24 @@ func TestMapFromGoogleGroup_ZeroWidthSpaceNormalized(t *testing.T) {
 
 	assert.Equal(t, " ", got.DisplayName)
 }
+
+// #421: Release optional NickName and Name.Formatted mappings (PR #412)
+
+func TestMapFromGoogleUser_DisplayNameSource(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		googleName *admin.UserName
+		want       string
+	}{
+		{"set", &admin.UserName{GivenName: "Dave", FamilyName: "Lister", FullName: "Dave Lister", DisplayName: "Listy"}, "Listy"},
+		{"not set", &admin.UserName{GivenName: "Dave", FamilyName: "Lister", FullName: "Dave Lister"}, ""},
+		{"nil name", nil, ""},
+		{"zero width space", &admin.UserName{DisplayName: "\u200B"}, " "},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := MapFromGoogleUser(&admin.User{Name: tc.googleName}, config.AttributeMap{"NickName": "name.displayName"})
+			assert.NoError(t, err)
+			assert.Equal(t, tc.want, got.NickName)
+		})
+	}
+}
