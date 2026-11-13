@@ -616,7 +616,7 @@ The `--user-match` parameter supports the following query fields and operators:
 
 #### Quoting values in queries
 
-ssosync passes the `--group-match` and `--user-match` values to Google verbatim; it does not quote or escape them. A value containing spaces or an apostrophe must be single-quoted, with the apostrophe escaped as `\'`, for example `name='Valentine\'s Day'`. Commas still separate queries, so a value cannot contain a comma.
+ssosync passes the `--group-match` and `--user-match` values to Google verbatim; it does not quote or escape them. A value containing spaces or an apostrophe must be single-quoted, with the apostrophe escaped as `\'`, for example `name='Valentine\'s Day'`. Commas still separate queries, so a value cannot contain a comma. An empty query between commas (for example a trailing comma) is ignored with a warning; it no longer matches the whole directory. A match made only of empty queries (such as `,` or a value of only spaces) fails the run with an error, before any group or user is synced for it.
 
 ```bash
 # Sync the group named "Valentine's Day"

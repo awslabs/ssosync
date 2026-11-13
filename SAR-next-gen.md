@@ -107,7 +107,7 @@ ssosync then selects every group that has the marker group as a member, no matte
 
 ### Quoting values in queries
 
-`GoogleGroupMatch` and `GoogleUserMatch` are passed to Google verbatim; ssosync does not quote or escape them. A value containing spaces or an apostrophe must be single-quoted, with the apostrophe escaped as `\'`, for example `name='Valentine\'s Day'`. Commas still separate queries, so a value cannot contain a comma.
+`GoogleGroupMatch` and `GoogleUserMatch` are passed to Google verbatim; ssosync does not quote or escape them. A value containing spaces or an apostrophe must be single-quoted, with the apostrophe escaped as `\'`, for example `name='Valentine\'s Day'`. Commas still separate queries, so a value cannot contain a comma. An empty query between commas (for example a trailing comma) is ignored with a warning; it no longer matches the whole directory. A match made only of empty queries (such as `,` or a value of only spaces) fails the run with an error, before any group or user is synced for it.
 
 For the complete query syntax see [Google Groups Search](https://developers.google.com/admin-sdk/directory/v1/guides/search-groups) and [Google Users Search](https://developers.google.com/admin-sdk/directory/v1/guides/search-users).
 
