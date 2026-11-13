@@ -7,3 +7,6 @@
 - The Google Admin console **silently rejects adding a suspended user to a group** (no error). To add one: unsuspend, add to the group, re-suspend. A rename or OU move of a suspended user can drop their memberships the same way.
 - After renaming or moving a test user, check every group membership the fixtures expect (`cicd/tests/attribute_map/baseline/groups.json`) in Google Admin, with the member filter showing suspended members, before starting a pipeline run.
 - Tenant changes are made by the user in Google Admin, never by an agent. Every pipeline sees them at once, so a change that breaks old expectations must land in a window: branch rebased with the matching fixtures, no other pipeline running, tenant changed, dev run, then merge.
+
+## Test files
+- Don't create per-issue test files (e.g. `sync_issue<N>_test.go`). Add tests to the package's existing test file (e.g. `internal/sync_test.go`), with a comment above each test block naming the issue number and title.
