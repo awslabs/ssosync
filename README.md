@@ -430,7 +430,7 @@ export SSOSYNC_DRY_RUN="true"
 | `--ignore-groups` | `SSOSYNC_IGNORE_GROUPS` | Comma-separated list of groups to ignore | `[]` |
 | `--include-groups` | `SSOSYNC_INCLUDE_GROUPS` | Include only these groups (users_groups method only) | `[]` |
 | `--precache-ous` | `SSOSYNC_PRECACHE_ORG_UNITS` | Comma-separated list of Google OrgUnit paths to precache users from (e.g. `/OU1,/OU2/OU3`); each path includes its sub-OUs, and `/` is the whole directory. A path that cannot be queried (it may not exist), or has no users matching the filter, is skipped with a warning naming it; the other paths are still precached | `[]` |
-| `--cache-metrics` | `SSOSYNC_CACHE_METRICS` | Gather cache hit/miss metrics and output them at the end of the run to help refine `--precache-ous` | `false` |
+| `--cache-metrics` | `SSOSYNC_CACHE_METRICS` | Gather cache hit/miss metrics and output them at the end of the run, per OU including its sub-OUs, to help refine `--precache-ous` | `false` |
 | `--dry-run` / `-n` | `SSOSYNC_DRY_RUN` | Enable dry-run mode | `false` |
 | `--suspended` | `SSOSYNC_SYNC_SUSPENDED` | Include suspended users when syncing | `false` |
 | `--force-externalid-update` | `SSOSYNC_FORCE_EXTERNAL_ID_UPDATE` | When a Google user shares the same primary email as an existing Identity Store user but has a different ID, update the existing user's `ExternalId` in place instead of deleting and recreating it. Enabling this option carrys the risk of silent permission inheritance, is an email address is re-assigned to a different user in the Google Workspace Directory. See [Preserving assignments when migrating IdPs](#preserving-assignments-when-migrating-idps). | `false` |

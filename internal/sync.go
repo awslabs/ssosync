@@ -61,19 +61,21 @@ type syncGSuite struct {
 	cacheMetrics     map[string]*CacheMetrics
 }
 
-// OperationType handle patch operations for add/remove
+// CacheOperationType is a user-cache operation counted by --cache-metrics
 type CacheOperationType string
 
 const (
 	// PreCache is adding a user/group as part of the precaching
 	PreCache CacheOperationType = "precache"
-	// CacheHit means a user was successfully found in the cache and prepresents an api called avoided
+	// CacheHit means a user was successfully found in the cache and represents an api call avoided
 	CacheHit CacheOperationType = "hit"
 	// CacheMiss means a user was not found in the cache so an api call was required
 	CacheMiss CacheOperationType = "miss"
 )
 
-// User represents a User in AWS SSO
+// CacheMetrics counts user-cache operations for one OU. recordCacheOp keeps
+// each OU's own counts; outputCacheMetrics reports each OU with its sub-OUs
+// rolled up, as TotalUsers and --precache-ous include sub-OUs (#413).
 type CacheMetrics struct {
 	Precaches  int
 	Hits       int
@@ -132,40 +134,51 @@ func (s *syncGSuite) recordCacheOp(orgPath string, operation CacheOperationType)
 		s.cacheMetrics = make(map[string]*CacheMetrics, 0)
 	}
 	// have we seen this orgPath before, if not create an stats for it
-	if _, exists := s.cacheMetrics[orgPath]; !exists {
-		s.cacheMetrics[orgPath] = &CacheMetrics{}
+	entry, exists := s.cacheMetrics[orgPath]
+	if !exists {
+		entry = &CacheMetrics{}
+		s.cacheMetrics[orgPath] = entry
 	}
-	// update the stat for the operation
-	if entry, exists := s.cacheMetrics[orgPath]; exists {
-		switch operation {
-		case PreCache:
-			entry.Precaches++
-		case CacheHit:
-			entry.Hits++
-		case CacheMiss:
-			entry.Misses++
-		default:
-			log.WithFields(
-				log.Fields{
-					"orgPath":   orgPath,
-					"operation": operation}).Error("unknown operation")
-		}
+	// update the OU's own stat for the operation, once; sub-OUs are rolled up
+	// into their parents by outputCacheMetrics (#413)
+	switch operation {
+	case PreCache:
+		entry.Precaches++
+	case CacheHit:
+		entry.Hits++
+	case CacheMiss:
+		entry.Misses++
+	default:
+		log.WithFields(
+			log.Fields{
+				"orgPath":   orgPath,
+				"operation": operation}).Error("unknown operation")
 	}
+}
 
-	// If existing paths are parent or orgPath, update their stats
-	for path, entry := range s.cacheMetrics {
-		if !strings.Contains(orgPath, path) {
-			continue
+// orgUnitInTree reports whether orgPath is ou or below it, by whole path
+// segments: /Sales holds /Sales/EMEA but not /Sales Team or /Presales (#413).
+func orgUnitInTree(ou, orgPath string) bool {
+	return orgPath == ou || strings.HasPrefix(orgPath, strings.TrimSuffix(ou, "/")+"/")
+}
+
+// rollUpCacheMetrics returns a copy of own in which each OU's counts include
+// its sub-OUs' (#413). TotalUsers is copied, not summed: it already covers the tree.
+func rollUpCacheMetrics(own map[string]*CacheMetrics) map[string]*CacheMetrics {
+	rolled := make(map[string]*CacheMetrics, len(own))
+	for ou, entry := range own {
+		sum := &CacheMetrics{TotalUsers: entry.TotalUsers}
+		for orgPath, sub := range own {
+			if !orgUnitInTree(ou, orgPath) {
+				continue
+			}
+			sum.Precaches += sub.Precaches
+			sum.Hits += sub.Hits
+			sum.Misses += sub.Misses
 		}
-		switch operation {
-		case PreCache:
-			entry.Precaches++
-		case CacheHit:
-			entry.Hits++
-		case CacheMiss:
-			entry.Misses++
-		}
+		rolled[ou] = sum
 	}
+	return rolled
 }
 
 // quoteGoogleQueryValue renders a runtime value (an email address, an OU path)
@@ -195,7 +208,8 @@ func (s *syncGSuite) outputCacheMetrics() {
 			entry.TotalUsers = len(googleUsers)
 		}
 	}
-	log.WithFields(log.Fields{"Cache Stats": s.cacheMetrics}).Info("Caching Performance, orgPaths with a high Miss rate compared with the TotalUsers consider precaching")
+	// Each OU is reported with its sub-OUs, the same tree TotalUsers counts (#413)
+	log.WithFields(log.Fields{"Cache Stats": rollUpCacheMetrics(s.cacheMetrics)}).Info("Caching Performance, orgPaths with a high Miss rate compared with the TotalUsers consider precaching")
 }
 
 // LegacySyncUsers will Sync Google Users to AWS SSO SCIM
