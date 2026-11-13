@@ -198,3 +198,13 @@ func TestConstants(t *testing.T) {
 	assert.Equal(t, "", DefaultAttributeMapFile)
 	assert.Equal(t, "groups", DefaultSyncMethod)
 }
+
+// #418: --ignore-users values are lower-cased; nil stays nil and the input
+// is left as it was.
+func TestLowerCaseAll_Issue418(t *testing.T) {
+	assert := assert.New(t)
+	assert.Nil(LowerCaseAll(nil))
+	in := []string{"AceHole@Example.com", "plain@example.com"}
+	assert.Equal([]string{"acehole@example.com", "plain@example.com"}, LowerCaseAll(in))
+	assert.Equal([]string{"AceHole@Example.com", "plain@example.com"}, in)
+}

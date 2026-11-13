@@ -43,7 +43,8 @@ check assert_log count "$ADOPT" --msg "Caching Performance" --min 1
 # Every test user is seen (as a member of an AWS* group, which
 # lib/test_google_test_data.py checks against baseline/groups.json), so the
 # keys are exactly their OUs. Each OU reports itself plus its sub-OUs (#413):
-# Precaches are the users in Olaf's OU tree, Misses the others, from
+# Precaches are the users in Olaf's OU tree, Misses the others (lookups, one
+# per non-precached user, #418), from
 # google_test_users.json. TotalUsers is exactly the fixture's users in the
 # tree (#416: with --suspended the tenant holds just the 4 fixture users):
 # Olaf's OU reuses its precache count, and the others are counted with an

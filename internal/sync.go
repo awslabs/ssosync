@@ -195,6 +195,24 @@ func quoteGoogleQueryValue(value string) string {
 	return "'" + strings.ReplaceAll(value, "'", `\'`) + "'"
 }
 
+// userCacheKey is the user-cache key for a Google email address: Google
+// treats addresses case-insensitively, local part and domain (#418).
+func userCacheKey(email string) string {
+	return strings.ToLower(email)
+}
+
+// cacheUser caches u under its primary email and every alias, so a group
+// member listed by any of them is found without a lookup (#418).
+func cacheUser(cache map[string]*admin.User, u *admin.User) {
+	cache[userCacheKey(u.PrimaryEmail)] = u
+	for _, a := range u.Aliases {
+		cache[userCacheKey(a)] = u
+	}
+	for _, a := range u.NonEditableAliases {
+		cache[userCacheKey(a)] = u
+	}
+}
+
 func (s *syncGSuite) outputCacheMetrics() {
 	if !s.cfg.CacheMetrics {
 		return
@@ -1086,14 +1104,14 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 
 				// Check the cache being filled: overlapping OUs (e.g. / and
 				// /Sales) return the same user more than once.
-				if _, found := gUserDetailCache[u.PrimaryEmail]; !found {
+				if _, found := gUserDetailCache[userCacheKey(u.PrimaryEmail)]; !found {
 					log.WithFields(log.Fields{
 						"func":    funcName,
 						"user.Id": u.Id,
 					}).Debug("Cache user")
 					s.recordCacheOp(u.OrgUnitPath, PreCache)
 
-					gUserDetailCache[u.PrimaryEmail] = u
+					cacheUser(gUserDetailCache, u)
 					continue
 				} else {
 					log.WithFields(log.Fields{
@@ -1150,7 +1168,7 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 			// --user-match bulk-fills the cache, as --precache-ous does (#417):
 			// a new user is a precache; a user already cached (precached, or
 			// listed twice) keeps its cached entry and is a hit.
-			if cached, found := gUserDetailCache[u.PrimaryEmail]; found {
+			if cached, found := gUserDetailCache[userCacheKey(u.PrimaryEmail)]; found {
 				log.WithFields(log.Fields{
 					"func":    funcName,
 					"user.Id": u.Id,
@@ -1162,7 +1180,7 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 					"func":    funcName,
 					"user.Id": u.Id,
 				}).Debug("adding user")
-				gUserDetailCache[u.PrimaryEmail] = u
+				cacheUser(gUserDetailCache, u)
 				s.recordCacheOp(u.OrgUnitPath, PreCache)
 			}
 			gUniqUsers[u.PrimaryEmail] = u
@@ -1262,7 +1280,7 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 						"group.Id": g.Id,
 						"member":   m.Id,
 					}).Debug("adding user to UniqueUsers")
-					gUniqUsers[m.PrimaryEmail] = gUserDetailCache[m.PrimaryEmail]
+					gUniqUsers[m.PrimaryEmail] = m
 				}
 
 				if _, found := gUniqMembers[m.PrimaryEmail]; !found {
@@ -1271,7 +1289,7 @@ func (s *syncGSuite) getGoogleGroupsAndUsers(queryGroups string, queryUsers stri
 						"group.Id": g.Id,
 						"member":   m.Id,
 					}).Debug("adding user to group")
-					gUniqMembers[m.PrimaryEmail] = gUserDetailCache[m.PrimaryEmail]
+					gUniqMembers[m.PrimaryEmail] = m
 				}
 			}
 
@@ -2298,7 +2316,8 @@ func (s *syncGSuite) ignoreUser(name string) bool {
 			s.ignoreUsersSet[u] = struct{}{}
 		}
 	}
-	_, exists := s.ignoreUsersSet[name]
+	// cfg.IgnoreUsers is lower-cased when the config loads (#418)
+	_, exists := s.ignoreUsersSet[userCacheKey(name)]
 	return exists
 }
 
@@ -2831,10 +2850,10 @@ func (s *syncGSuite) getGoogleUsersInGroup(group *admin.Group, userCache map[str
 			"GroupId": group.Id,
 			"Member#": memberIndex,
 		}).Debug("valid member")
-		var memberEmail string
-		// Find the group member in the cache of UserDetails; only a member
+		// Find the group member in the cache of UserDetails, by the address
+		// lower-cased, as Google matches addresses (#418); only a member
 		// found there is a CacheHit, a looked-up one is a CacheMiss only (#413)
-		_, cacheHit := userCache[m.Email]
+		member, cacheHit := userCache[userCacheKey(m.Email)]
 		if !cacheHit {
 			log.WithFields(log.Fields{
 				"func":    funcName,
@@ -2861,35 +2880,36 @@ func (s *syncGSuite) getGoogleUsersInGroup(group *admin.Group, userCache map[str
 			}
 			// Add user to the cache
 			for _, u := range googleUsers {
-				if _, found := userCache[u.PrimaryEmail]; !found {
+				if cached, found := userCache[userCacheKey(u.PrimaryEmail)]; found {
+					// keep the cached entry
+					u = cached
+				} else {
 					log.WithFields(log.Fields{
 						"func":    funcName,
 						"GroupId": group.Id,
 						"Member#": memberIndex,
 					}).Debug("Cache user")
-					userCache[u.PrimaryEmail] = u
-					s.recordCacheOp(u.OrgUnitPath, CacheMiss)
+					cacheUser(userCache, u)
 				}
-				memberEmail = u.PrimaryEmail
+				// the member's address now finds u without another lookup (#418)
+				userCache[userCacheKey(m.Email)] = u
+				member = u
 			}
 			// Check whether the member was based on an alias
-			if memberEmail != m.Email {
+			if member != nil && !strings.EqualFold(member.PrimaryEmail, m.Email) {
 				log.WithFields(log.Fields{
 					"func":    funcName,
 					"GroupId": group.Id,
 					"Member#": memberIndex,
 				}).Debug("Member listed using an alias")
 			}
-		} else {
-			// member (email address) found in user cache
-			memberEmail = m.Email
 		}
 
 		// Add user based on user cache
-		if userCache[memberEmail] == nil {
+		if member == nil {
 			log.WithFields(log.Fields{
 				"func":        funcName,
-				"memberEmail": memberEmail,
+				"memberEmail": m.Email,
 			}).Error("Can't retrieve user")
 			continue
 		} else {
@@ -2899,10 +2919,14 @@ func (s *syncGSuite) getGoogleUsersInGroup(group *admin.Group, userCache map[str
 				"Member#": memberIndex,
 			}).Debug("Add member")
 		}
+		// Exactly one op per membership (#418): a hit if the lower-cased
+		// address was cached, else one miss for the lookup; never both
 		if cacheHit {
-			s.recordCacheOp(userCache[memberEmail].OrgUnitPath, CacheHit)
+			s.recordCacheOp(member.OrgUnitPath, CacheHit)
+		} else {
+			s.recordCacheOp(member.OrgUnitPath, CacheMiss)
 		}
-		membersUsers = append(membersUsers, userCache[memberEmail])
+		membersUsers = append(membersUsers, member)
 
 	}
 	log.WithFields(log.Fields{

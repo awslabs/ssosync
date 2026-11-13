@@ -306,7 +306,7 @@ def import_identitystore(identity_store_id: str, input_dir: str, region: str, dr
 
     # Map lowercased username -> user_id for group membership resolution.
     # Identity Store usernames are case-insensitive, and exports can list a
-    # member in a different case from the user record (e.g. AceHole@ vs acehole@).
+    # member in a different case from the user record (e.g. User@ vs user@).
     username_to_id = {}
 
     for user in desired_users:
