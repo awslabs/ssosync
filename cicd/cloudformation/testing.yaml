@@ -193,6 +193,10 @@ Resources:
         # the delegated administrator account also runs AttributeMap,
         # Functional and QuickStart (they reset and use its dedicated test
         # Identity Store).
+        # The TestAccountExecution and QuickStartTests deploys use
+        # REPLACE_ON_FAILURE: a stack a failed run left in a failed state (e.g.
+        # ROLLBACK_COMPLETE) is deleted and recreated, and a healthy one is
+        # updated in place, as with CREATE_UPDATE (#409).
         - Name: Tests
           Actions:
             # A cancelled run can leave QuickStartTests behind; its classic Secrets
@@ -227,7 +231,7 @@ Resources:
                 Version: '1'
                 Provider: CloudFormation
               Configuration:
-                ActionMode: CREATE_UPDATE
+                ActionMode: REPLACE_ON_FAILURE
                 Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND,CAPABILITY_NAMED_IAM
                 StackName: TestAccountExecution
                 RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
@@ -300,7 +304,7 @@ Resources:
                 Version: '1'
                 Provider: CloudFormation
               Configuration:
-                ActionMode: CREATE_UPDATE
+                ActionMode: REPLACE_ON_FAILURE
                 Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND,CAPABILITY_NAMED_IAM
                 StackName: TestAccountExecution
                 RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
@@ -378,7 +382,7 @@ Resources:
                   Version: '1'
                   Provider: CloudFormation
                 Configuration:
-                  ActionMode: CREATE_UPDATE
+                  ActionMode: REPLACE_ON_FAILURE
                   Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND,CAPABILITY_NAMED_IAM
                   StackName: TestAccountExecution
                   RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
@@ -534,7 +538,7 @@ Resources:
                   Version: '1'
                   Provider: CloudFormation
                 Configuration:
-                  ActionMode: CREATE_UPDATE
+                  ActionMode: REPLACE_ON_FAILURE
                   Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND,CAPABILITY_NAMED_IAM
                   StackName: TestAccountExecution
                   RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
@@ -561,25 +565,12 @@ Resources:
                 OutputArtifacts:
                   - Name: AttrMapLambdaInlineMap
               - !Ref AWS::NoValue
-            # Remove TestAccountExecution, so the next block starts from a fresh deployment.
-            - !If
-              - DeployDelegated
-              - Name: CleanUp-AttributeMap
-                ActionTypeId:
-                  Category: Deploy
-                  Owner: AWS
-                  Version: 1
-                  Provider: CloudFormation
-                Configuration:
-                  ActionMode: DELETE_ONLY
-                  StackName: TestAccountExecution
-                  RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
-                InputArtifacts:
-                  - Name: Tests
-                RunOrder: 23
-              - !Ref AWS::NoValue
             # Functional tests against the live tenant.
             # Keyless deployment (deploy/wif-<AccountId>.json): ssosync runs keyless with its SSOSync* secrets.
+            # Updates the AttributeMap block's stack in place, back to the default
+            # attribute map (AttributeMap unset). Deleting and recreating it reused
+            # the fixed RoleName SSOSync_ExecutionRole within seconds, before IAM
+            # had propagated it, and Lambda could not assume the role (#409).
             - !If
               - DeployDelegated
               - Name: Deploy-Functional
@@ -589,7 +580,7 @@ Resources:
                   Version: '1'
                   Provider: CloudFormation
                 Configuration:
-                  ActionMode: CREATE_UPDATE
+                  ActionMode: REPLACE_ON_FAILURE
                   Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND,CAPABILITY_NAMED_IAM
                   StackName: TestAccountExecution
                   RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
@@ -597,7 +588,7 @@ Resources:
                   TemplatePath: !Sub 'Tests::deploy/stack-ng.yml'
                 InputArtifacts:
                   - Name: Tests
-                RunOrder: 24
+                RunOrder: 23
               - !Ref AWS::NoValue
             # Live proof of getUserOperations/getGroupOperations (issue #383):
             # expected IssuerArn == the real ExternalId Issuer, managed records
@@ -612,7 +603,7 @@ Resources:
                   Owner: AWS
                   Version: 1
                   Provider: CodeBuild
-                RunOrder: 25
+                RunOrder: 24
                 Configuration:
                   ProjectName: !Ref CodeBuildUserGroupOperations
                   PrimarySource: Tests
@@ -649,7 +640,7 @@ Resources:
                   RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
                 InputArtifacts:
                   - Name: Tests
-                RunOrder: 26
+                RunOrder: 25
               - !Ref AWS::NoValue
             - !If
               - DeployDelegated
@@ -659,7 +650,7 @@ Resources:
                   Owner: AWS
                   Version: 1
                   Provider: CodeBuild
-                RunOrder: 27
+                RunOrder: 26
                 Configuration:
                   ProjectName: !Ref CodeBuildQuickStartPackage
                   PrimarySource: Tests
@@ -677,7 +668,7 @@ Resources:
                   Version: '1'
                   Provider: CloudFormation
                 Configuration:
-                  ActionMode: CREATE_UPDATE
+                  ActionMode: REPLACE_ON_FAILURE
                   Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND,CAPABILITY_NAMED_IAM
                   StackName: QuickStartTests
                   RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
@@ -686,7 +677,7 @@ Resources:
                 InputArtifacts:
                   - Name: Tests
                   - Name: QuickStarts
-                RunOrder: 28
+                RunOrder: 27
               - !Ref AWS::NoValue
             - !If
               - DeployDelegated
@@ -696,7 +687,7 @@ Resources:
                   Owner: AWS
                   Version: 1
                   Provider: Lambda
-                RunOrder: 29
+                RunOrder: 28
                 Configuration:
                   FunctionName: SSOSync
                 InputArtifacts:
@@ -711,7 +702,7 @@ Resources:
                   Version: '1'
                   Provider: CloudFormation
                 Configuration:
-                  ActionMode: CREATE_UPDATE
+                  ActionMode: REPLACE_ON_FAILURE
                   Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND,CAPABILITY_NAMED_IAM
                   StackName: QuickStartTests
                   RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
@@ -720,7 +711,7 @@ Resources:
                 InputArtifacts:
                   - Name: Tests
                   - Name: QuickStarts
-                RunOrder: 30
+                RunOrder: 29
               - !Ref AWS::NoValue
             - !If
               - DeployDelegated
@@ -730,7 +721,7 @@ Resources:
                   Owner: AWS
                   Version: 1
                   Provider: Lambda
-                RunOrder: 31
+                RunOrder: 30
                 Configuration:
                   FunctionName: SSOSync
                 InputArtifacts:
@@ -745,7 +736,7 @@ Resources:
                   Version: '1'
                   Provider: CloudFormation
                 Configuration:
-                  ActionMode: CREATE_UPDATE
+                  ActionMode: REPLACE_ON_FAILURE
                   Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND,CAPABILITY_NAMED_IAM
                   StackName: QuickStartTests
                   RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
@@ -754,7 +745,7 @@ Resources:
                 InputArtifacts:
                   - Name: Tests
                   - Name: QuickStarts
-                RunOrder: 32
+                RunOrder: 31
               - !Ref AWS::NoValue
             - !If
               - DeployDelegated
@@ -764,7 +755,7 @@ Resources:
                   Owner: AWS
                   Version: 1
                   Provider: Lambda
-                RunOrder: 33
+                RunOrder: 32
                 Configuration:
                   FunctionName: SSOSyncNG
                 InputArtifacts:
@@ -779,7 +770,7 @@ Resources:
                   Version: '1'
                   Provider: CloudFormation
                 Configuration:
-                  ActionMode: CREATE_UPDATE
+                  ActionMode: REPLACE_ON_FAILURE
                   Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND,CAPABILITY_NAMED_IAM
                   StackName: QuickStartTests
                   RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
@@ -788,7 +779,7 @@ Resources:
                 InputArtifacts:
                   - Name: Tests
                   - Name: QuickStarts
-                RunOrder: 34
+                RunOrder: 33
               - !Ref AWS::NoValue
             - !If
               - DeployDelegated
@@ -798,7 +789,7 @@ Resources:
                   Owner: AWS
                   Version: 1
                   Provider: Lambda
-                RunOrder: 35
+                RunOrder: 34
                 Configuration:
                   FunctionName: SSOSyncNG
                 InputArtifacts:
@@ -818,7 +809,7 @@ Resources:
                   RoleArn: !GetAtt [CloudFormationDeployerRole, Arn]
                 InputArtifacts:
                   - Name: Tests
-                RunOrder: 36
+                RunOrder: 35
               - !Ref AWS::NoValue
 
   CodePipelineDeployCrossAccountSecrets:
@@ -1777,6 +1768,7 @@ Resources:
               - 'cloudformation:DeleteChangeSet'
               - 'cloudformation:DescribeChangeSet'
               - 'cloudformation:SetStackPolicy'
+              - 'cloudformation:DescribeStackEvents'
               Resource:
               - '*'
               Effect: Allow
