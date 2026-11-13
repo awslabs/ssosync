@@ -161,3 +161,30 @@ invoke_lambda() {
     --start "$start" --request-id "$request_id" --out "$log"
   cat "$log"
 }
+
+# readback_users <dir>
+# Exports the Identity Store, every field as ListUsers returns it, to
+# <dir>/users.json (and <dir>/groups.json), so a test can check what IAM
+# Identity Center actually stored.
+readback_users() {
+  python3 "$AM_DIR/export.py" --all-fields --output-dir "$1" --region "$(identity_store_region)"
+}
+
+# assert_user_field <users.json> <username> <jq-path> <expected>
+# The user whose UserName is <username> (compared in lower case; pass it lower
+# case) has <expected> at <jq-path>, such as .NickName or .Name.Formatted. An
+# absent field reads as "". Fails if the user is missing or the value differs.
+assert_user_field() {
+  local file=$1 user=$2 path=$3 want=$4 got
+  if ! got=$(jq -er --arg u "$user" \
+      "[.[] | select(.UserName | ascii_downcase == \$u)] | if length == 1 then .[0] | (($path) // \"\") else error(\"user not found\") end" \
+      "$file"); then
+    echo "FAIL: $user not found once in $file"
+    return 1
+  fi
+  if [ "$got" != "$want" ]; then
+    echo "FAIL: $user $path: want '$want' got '$got'"
+    return 1
+  fi
+  echo "ok: $user $path = '$got'"
+}

@@ -36,6 +36,8 @@ var (
 		"Enterprise.Organization": {}, // safe set
 		"Enterprise.CostCenter":   {}, // safe set
 		// Opt-in only (supported, NOT defaulted).
+		"NickName":                  {}, // opt-in (#421)
+		"Name.Formatted":            {}, // opt-in (#421)
 		"Enterprise.Manager":        {}, // opt-in (design §5.7)
 		"Enterprise.Division":       {}, // opt-in (design §5.2)
 		"Enterprise.EmployeeNumber": {}, // opt-in (design §5.3)
@@ -48,10 +50,12 @@ var (
 	// supportedUserSourceScalars are the scalar admin.User SOURCE paths the
 	// validator accepts as-is (exact string match) for the user block.
 	supportedUserSourceScalars = map[string]struct{}{
-		"name.givenName":  {},
-		"name.familyName": {},
-		"primaryEmail":    {},
-		"suspended":       {},
+		"name.givenName":   {},
+		"name.familyName":  {},
+		"name.fullName":    {},
+		"name.displayName": {},
+		"primaryEmail":     {},
+		"suspended":        {},
 	}
 
 	// supportedUserMultiValuedSubfields is the CLOSED (field -> {subfield}) table

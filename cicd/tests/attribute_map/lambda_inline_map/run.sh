@@ -4,7 +4,9 @@
 # deploy/attributemap.json, which passes maps/rich.json inline as the
 # AttributeMap parameter.
 #  1. Invoke: the debug trace proves the inline map is the one in effect (a
-#     value only reachable through a custom-schema source in rich.json).
+#     value only reachable through a custom-schema source in rich.json), and
+#     that the opt-in NickName and Name.Formatted targets resolve on the
+#     Lambda path too (#421).
 #  2. Invoke again: the second run must find nothing to change (convergence).
 source "$(dirname "$0")/../lib/common.sh"
 setup_python
@@ -13,6 +15,10 @@ FIRST="$LOG_DIR/lambda_inline.log"
 invoke_lambda "$FIRST"
 check assert_log count "$FIRST" --msg "attribute map: entry resolved" \
   --field "source=customSchemas.SSOSync-Test.CostCodes" --field "resolved=WORK-100" --min 1
+check assert_log count "$FIRST" --msg "attribute map: entry resolved" \
+  --field "source=customSchemas.SSOSync-Test.NickName" --field "resolved=Listy" --min 1
+check assert_log count "$FIRST" --msg "attribute map: entry resolved" \
+  --field "source=name.fullName" --field "resolved=Dave Lister" --min 1
 check assert_log summary "$FIRST" --users delete=0 recreate=0 updateForced=0
 
 SECOND="$LOG_DIR/lambda_inline_2.log"

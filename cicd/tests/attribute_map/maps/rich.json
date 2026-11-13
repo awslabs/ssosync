@@ -12,7 +12,9 @@
     "Enterprise.EmployeeNumber": "customSchemas.NoSuchSchema.EmployeeId",
     "ProfileURL": "customSchemas.SSOSync-Test.ProjectCodes",
     "PhoneNumbers": "phones[primary].value",
-    "Addresses": "addresses[type=work].formatted"
+    "Addresses": "addresses[type=work].formatted",
+    "NickName": "customSchemas.SSOSync-Test.NickName",
+    "Name.Formatted": "name.fullName"
   },
   "group": {
     "DisplayName": "name"
