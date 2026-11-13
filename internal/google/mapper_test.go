@@ -17,6 +17,7 @@ func TestMapFromGoogleUser_DefaultMap(t *testing.T) {
 		Name: &admin.UserName{
 			GivenName:  "John",
 			FamilyName: "Doe",
+			FullName:   "John Q. Doe",
 		},
 		Suspended: false,
 	}
@@ -34,6 +35,42 @@ func TestMapFromGoogleUser_DefaultMap(t *testing.T) {
 	assert.Equal(t, "G1", got.ExternalId.Id)
 	// DisplayName is derived as "GivenName FamilyName", matching aws.NewUser.
 	assert.Equal(t, "John Doe", got.DisplayName)
+	assert.Empty(t, got.NickName)
+	assert.Empty(t, got.Name.Formatted)
+}
+
+func TestMapFromGoogleUser_OptInNames(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		googleName *admin.UserName
+		nickname   string
+		formatted  string
+	}{
+		{"populated", &admin.UserName{GivenName: "Jane", FamilyName: "Doe", FullName: "Dr. Jane Q. Doe"}, "Jane", "Dr. Jane Q. Doe"},
+		{"nil name", nil, "", ""},
+		{"empty full name", &admin.UserName{GivenName: "Jane", FamilyName: "Doe"}, "Jane", ""},
+		{"zero width space", &admin.UserName{GivenName: "Jane", FullName: "Jane\u200BDoe"}, "Jane", "Jane Doe"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := MapFromGoogleUser(&admin.User{Name: tc.googleName}, config.AttributeMap{
+				"NickName": "name.givenName", "Name.Formatted": "name.fullName",
+			})
+			assert.NoError(t, err)
+			assert.Equal(t, tc.nickname, got.NickName)
+			assert.Equal(t, tc.formatted, got.Name.Formatted)
+		})
+	}
+}
+
+func TestMapFromGoogleUser_OptInNamesRejectBooleanSource(t *testing.T) {
+	for _, target := range []string{"NickName", "Name.Formatted"} {
+		t.Run(target, func(t *testing.T) {
+			assert.NotPanics(t, func() {
+				_, err := MapFromGoogleUser(&admin.User{}, config.AttributeMap{target: "suspended"})
+				assert.ErrorContains(t, err, "string")
+			})
+		})
+	}
 }
 
 func TestMapFromGoogleUser_SuspendedInvertsToInactive(t *testing.T) {
