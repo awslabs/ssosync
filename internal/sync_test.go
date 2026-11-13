@@ -17,16 +17,21 @@ package internal
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"testing"
 
 	awsinternal "ssosync/internal/aws"
 	"ssosync/internal/config"
+	"ssosync/internal/google"
 	"ssosync/internal/interfaces"
 	"ssosync/internal/mocks"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/identitystore"
 	"github.com/aws/aws-sdk-go-v2/service/identitystore/types"
+	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus/hooks/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -4024,4 +4029,878 @@ func TestGetUserOperations_OptInNames(t *testing.T) {
 	require.Len(t, changes, 1)
 	assert.Empty(t, changes[0].NickName)
 	assert.Empty(t, changes[0].Name.Formatted)
+}
+
+// #401: BUG: Sync fails for all users when a group member's email contains an apostrophe (`googleapi: Error 400: Invalid Input: query, invalid`)
+
+// issue401Config is the groups sync config used by the #401 tests, with the
+// UserFilter cmd/root.go sets when SyncSuspended is false.
+func issue401Config() *config.Config {
+	return &config.Config{
+		IdentityStoreID: "d-1",
+		SyncMethod:      "groups",
+		UserFilter:      " isSuspended=false isArchived=false",
+		AttributeMap: config.AttributeMaps{
+			User:  config.DefaultUserAttributeMap,
+			Group: config.DefaultGroupAttributeMap,
+		},
+	}
+}
+
+func TestQuoteGoogleQueryValue(t *testing.T) {
+	tests := []struct {
+		name  string
+		value string
+		want  string
+	}{
+		{"plain value", "jane@example.com", `'jane@example.com'`},
+		{"apostrophe", "jane.o'brien@example.com", `'jane.o\'brien@example.com'`},
+		{"space", "/Sales Team", `'/Sales Team'`},
+		{"space and apostrophe", "Valentine's Day", `'Valentine\'s Day'`},
+		{"several apostrophes", "a'b'c", `'a\'b\'c'`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, quoteGoogleQueryValue(tt.value))
+		})
+	}
+}
+
+// TestSync_Issue401_ApostropheEmailMemberSynced covers awslabs/ssosync#401: a
+// group member whose email contains an apostrophe is looked up with a quoted,
+// escaped users.list query (the filter is still appended server-side by
+// getUsers as subQuery+filter) and is synced like any other member.
+func TestSync_Issue401_ApostropheEmailMemberSynced(t *testing.T) {
+	cfg := issue401Config()
+
+	googleClient := mocks.NewMockGoogleClient(t)
+	group := &admin.Group{Id: "gg1", Name: "Group1", Email: "g1@example.com"}
+	googleClient.EXPECT().GetGroups("group-q").Return([]*admin.Group{group}, nil)
+	googleClient.EXPECT().GetGroupMembers(group).Return([]*admin.Member{
+		{Email: "jane.o'brien@example.com", Type: "USER", Status: "ACTIVE"},
+	}, nil)
+
+	// Capture the exact query string handed to the Google client.
+	var gotQuery, gotFilter string
+	googleClient.EXPECT().GetUsers(`email='jane.o\'brien@example.com'`, cfg.UserFilter).
+		Run(func(query string, filter string) {
+			gotQuery, gotFilter = query, filter
+		}).
+		Return([]*admin.User{gUser("gid-1", "jane.o'brien@example.com", "Jane", "O'Brien", false)}, nil).Once()
+
+	// Jane already exists in the Identity Store (matched by ExternalId); the
+	// group is new, so it is created and Jane is added to it.
+	identityStore := mocks.NewMockIdentityStoreAPI(t)
+	identityStore.EXPECT().ListGroups(mock.Anything, mock.Anything, mock.Anything).
+		Return(&identitystore.ListGroupsOutput{}, nil)
+	identityStore.EXPECT().ListUsers(mock.Anything, mock.Anything, mock.Anything).
+		Return(&identitystore.ListUsersOutput{Users: []types.User{
+			sdkUser("is-1", "jane.o'brien@example.com", "Jane", "O'Brien", "gid-1"),
+		}}, nil)
+
+	awsClient := mocks.NewMockAwsClient(t)
+	awsClient.EXPECT().FindUserByEmail("jane.o'brien@example.com").
+		Return(&interfaces.User{ID: "is-1", Username: "jane.o'brien@example.com", Active: true}, nil)
+	awsClient.EXPECT().CreateGroup(mock.MatchedBy(func(g *interfaces.Group) bool {
+		return g.DisplayName == "Group1"
+	})).Return(&interfaces.Group{ID: "grp-1", DisplayName: "Group1"}, nil)
+	awsClient.EXPECT().AddUserToGroup(
+		mock.MatchedBy(func(u *interfaces.User) bool { return u.ID == "is-1" }),
+		mock.MatchedBy(func(g *interfaces.Group) bool { return g.ID == "grp-1" }),
+	).Return(nil).Once()
+
+	s := &syncGSuite{
+		aws:           awsClient,
+		google:        googleClient,
+		identityStore: identityStore,
+		cfg:           cfg,
+		users:         make(map[string]*interfaces.User),
+	}
+
+	require.NoError(t, s.Sync("group-q", ""))
+
+	assert.Equal(t, `email='jane.o\'brien@example.com'`, gotQuery)
+	assert.Equal(t, `email='jane.o\'brien@example.com' isSuspended=false isArchived=false`, gotQuery+gotFilter)
+}
+
+// TestSync_Issue401_MemberLookupErrorFailsRunAndLogsContext pins the agreed
+// error handling: a failed member lookup still fails the run immediately (the
+// next member is never looked up and no AWS call is made), and the error log
+// names the member, the group and the exact query with the filter.
+func TestSync_Issue401_MemberLookupErrorFailsRunAndLogsContext(t *testing.T) {
+	hook := test.NewGlobal()
+	defer hook.Reset()
+
+	cfg := issue401Config()
+	googleErr := &googleapi.Error{Code: 400, Message: "Invalid Input: query, invalid"}
+
+	googleClient := mocks.NewMockGoogleClient(t)
+	group := &admin.Group{Id: "gg1", Name: "Group1", Email: "g1@example.com"}
+	googleClient.EXPECT().GetGroups("group-q").Return([]*admin.Group{group}, nil)
+	googleClient.EXPECT().GetGroupMembers(group).Return([]*admin.Member{
+		{Email: "jane.o'brien@example.com", Type: "USER", Status: "ACTIVE"},
+		{Email: "bob@example.com", Type: "USER", Status: "ACTIVE"},
+	}, nil)
+	googleClient.EXPECT().GetUsers(`email='jane.o\'brien@example.com'`, cfg.UserFilter).
+		Return(nil, googleErr).Once()
+	// No expectation for bob: the strict mock fails the test if he is looked up.
+	// No Identity Store or AWS expectations: Sync must abort before reaching them.
+
+	s := &syncGSuite{
+		aws:           mocks.NewMockAwsClient(t),
+		google:        googleClient,
+		identityStore: mocks.NewMockIdentityStoreAPI(t),
+		cfg:           cfg,
+		users:         make(map[string]*interfaces.User),
+	}
+
+	err := s.Sync("group-q", "")
+	require.Error(t, err)
+	var gerr *googleapi.Error
+	require.True(t, errors.As(err, &gerr))
+	assert.Equal(t, 400, gerr.Code)
+
+	var entry *log.Entry
+	for _, e := range hook.AllEntries() {
+		if e.Level == log.ErrorLevel && e.Data["func"] == "getGoogleUsersInGroup" {
+			entry = e
+			break
+		}
+	}
+	require.NotNil(t, entry, "expected an error log entry for the failed member lookup")
+	assert.Equal(t, "jane.o'brien@example.com", entry.Data["Member.Email"])
+	assert.Equal(t, "gg1", entry.Data["GroupId"])
+	assert.Equal(t, "g1@example.com", entry.Data["GroupEmail"])
+	assert.Equal(t, `email='jane.o\'brien@example.com' isSuspended=false isArchived=false`, entry.Data["query"])
+	assert.Equal(t, googleErr, entry.Data["error"])
+}
+
+// TestGetGoogleGroupsAndUsers_Issue401_PrecacheOrgUnitQueriesQuoted checks the
+// PrecacheOrgUnits queries: every OU path is single-quoted with ' escaped, and
+// each OU gets its own query (#404), so no query starts with a comma (the
+// strict mock fails any call not listed here).
+func TestGetGoogleGroupsAndUsers_Issue401_PrecacheOrgUnitQueriesQuoted(t *testing.T) {
+	cfg := issue401Config()
+	cfg.PrecacheOrgUnits = []string{"/", " /O'Brien Team/ ", "/Sales"}
+
+	googleClient := mocks.NewMockGoogleClient(t)
+	googleClient.EXPECT().GetGroups("*").Return(nil, nil)
+	googleClient.EXPECT().GetUsers(`OrgUnitPath='/'`, cfg.UserFilter).Return(nil, nil).Once()
+	googleClient.EXPECT().GetUsers(`OrgUnitPath='/O\'Brien Team'`, cfg.UserFilter).Return(nil, nil).Once()
+	googleClient.EXPECT().GetUsers(`OrgUnitPath='/Sales'`, cfg.UserFilter).Return(nil, nil).Once()
+	googleClient.EXPECT().GetGroups("group-q").Return(nil, nil)
+
+	s := &syncGSuite{
+		google: googleClient,
+		cfg:    cfg,
+		users:  make(map[string]*interfaces.User),
+	}
+
+	_, _, _, err := s.getGoogleGroupsAndUsers("group-q", "")
+	require.NoError(t, err)
+}
+
+// TestOutputCacheMetrics_Issue401_OrgUnitQueryQuoted checks the cache-metrics
+// OU query: the OU path is single-quoted with ' escaped.
+func TestOutputCacheMetrics_Issue401_OrgUnitQueryQuoted(t *testing.T) {
+	cfg := issue401Config()
+	cfg.CacheMetrics = true
+
+	googleClient := mocks.NewMockGoogleClient(t)
+	googleClient.EXPECT().CountUsers(`OrgUnitPath='/O\'Brien Team'`, cfg.UserFilter).
+		Return(2, nil).Once()
+
+	entry := &CacheMetrics{}
+	s := &syncGSuite{
+		google:       googleClient,
+		cfg:          cfg,
+		cacheMetrics: map[string]*CacheMetrics{"/O'Brien Team": entry},
+	}
+
+	s.outputCacheMetrics()
+	assert.Equal(t, 2, entry.TotalUsers)
+}
+
+// #404: PrecacheOrgUnits query starts with a comma, likely caching all users
+
+// Log messages of the PrecacheOrgUnits user precache (#404).
+const (
+	msg404OUQueryFailed = "PrecacheOrgUnits: OrgUnitPath could not be queried and is skipped; it may not exist"
+	msg404OUNoUsers     = "PrecacheOrgUnits: no users found in OrgUnitPath; it may not exist or have no users matching the filter"
+	msg404AllFailed     = "Precaching failed, caching on the fly"
+	msg404NoUsers       = "Precaching return no users? Switching to caching on the fly"
+)
+
+// issue404Users are two users in different OUs, members of issue404Group.
+func issue404Users() (a, b *admin.User) {
+	a = gUser("gid-a", "a@example.com", "Ann", "A", false)
+	a.OrgUnitPath = "/A"
+	b = gUser("gid-b", "b@example.com", "Bob", "B", false)
+	b.OrgUnitPath = "/B"
+	return a, b
+}
+
+var issue404Group = &admin.Group{Id: "gg1", Name: "Group1", Email: "g1@example.com"}
+
+// issue404Mock returns a strict Google mock that serves the group precache
+// and one group (group-q) with members a@ and b@. Each test adds the per-OU
+// GetUsers calls, plus any email= lookups of members that were not precached.
+func issue404Mock(t *testing.T) *mocks.MockGoogleClient {
+	googleClient := mocks.NewMockGoogleClient(t)
+	googleClient.EXPECT().GetGroups("*").Return(nil, nil).Once()
+	googleClient.EXPECT().GetGroups("group-q").Return([]*admin.Group{issue404Group}, nil).Once()
+	googleClient.EXPECT().GetGroupMembers(issue404Group).Return([]*admin.Member{
+		{Email: "a@example.com", Type: "USER", Status: "ACTIVE"},
+		{Email: "b@example.com", Type: "USER", Status: "ACTIVE"},
+	}, nil).Once()
+	return googleClient
+}
+
+func issue404Sync(googleClient *mocks.MockGoogleClient, orgUnits []string) *syncGSuite {
+	cfg := issue401Config()
+	cfg.PrecacheOrgUnits = orgUnits
+	return &syncGSuite{
+		google: googleClient,
+		cfg:    cfg,
+		users:  make(map[string]*interfaces.User),
+	}
+}
+
+// issue404Entries returns the log entries with the given level and message.
+func issue404Entries(hook *test.Hook, level log.Level, msg string) []*log.Entry {
+	var found []*log.Entry
+	for _, e := range hook.AllEntries() {
+		if e.Level == level && e.Message == msg {
+			found = append(found, e)
+		}
+	}
+	return found
+}
+
+func issue404OUs(entries []*log.Entry) []interface{} {
+	ous := make([]interface{}, 0, len(entries))
+	for _, e := range entries {
+		ous = append(ous, e.Data["orgUnitPath"])
+	}
+	return ous
+}
+
+// Only the listed OUs are queried, one call each, and their users are cached:
+// no member is looked up on the fly and nothing is warned.
+func TestGetGoogleGroupsAndUsers_Issue404_PrecachesOnlyListedOrgUnits(t *testing.T) {
+	hook := test.NewGlobal()
+	defer hook.Reset()
+
+	a, b := issue404Users()
+	googleClient := issue404Mock(t)
+	s := issue404Sync(googleClient, []string{"/A", "/B"})
+	googleClient.EXPECT().GetUsers(`OrgUnitPath='/A'`, s.cfg.UserFilter).Return([]*admin.User{a}, nil).Once()
+	googleClient.EXPECT().GetUsers(`OrgUnitPath='/B'`, s.cfg.UserFilter).Return([]*admin.User{b}, nil).Once()
+	// No email= expectations: the strict mock fails the test if a member is
+	// looked up on the fly.
+
+	_, users, _, err := s.getGoogleGroupsAndUsers("group-q", "")
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []*admin.User{a, b}, users)
+
+	for _, e := range hook.AllEntries() {
+		assert.NotEqual(t, log.WarnLevel, e.Level, "unexpected warning: %s", e.Message)
+		assert.NotEqual(t, log.ErrorLevel, e.Level, "unexpected error: %s", e.Message)
+	}
+}
+
+// An OU that cannot be queried is skipped with a warning naming it; the other
+// OU is still precached and the run carries on.
+func TestGetGoogleGroupsAndUsers_Issue404_OrgUnitErrorSkippedWithWarning(t *testing.T) {
+	hook := test.NewGlobal()
+	defer hook.Reset()
+
+	a, b := issue404Users()
+	googleErr := &googleapi.Error{Code: 400, Message: "Invalid Input: INVALID_OU_ID"}
+	googleClient := issue404Mock(t)
+	s := issue404Sync(googleClient, []string{"/A", "/B"})
+	googleClient.EXPECT().GetUsers(`OrgUnitPath='/A'`, s.cfg.UserFilter).Return(nil, googleErr).Once()
+	googleClient.EXPECT().GetUsers(`OrgUnitPath='/B'`, s.cfg.UserFilter).Return([]*admin.User{b}, nil).Once()
+	// a@ was not precached, so it is looked up on the fly; b@ was.
+	googleClient.EXPECT().GetUsers(`email='a@example.com'`, s.cfg.UserFilter).Return([]*admin.User{a}, nil).Once()
+
+	_, users, _, err := s.getGoogleGroupsAndUsers("group-q", "")
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []*admin.User{a, b}, users)
+
+	warns := issue404Entries(hook, log.WarnLevel, msg404OUQueryFailed)
+	require.Len(t, warns, 1)
+	assert.Equal(t, "/A", warns[0].Data["orgUnitPath"])
+	assert.Equal(t, googleErr, warns[0].Data["error"])
+	assert.Equal(t, "getGoogleGroupsAndUsers", warns[0].Data["func"])
+	assert.Empty(t, issue404Entries(hook, log.ErrorLevel, msg404AllFailed))
+	assert.Empty(t, issue404Entries(hook, log.WarnLevel, msg404NoUsers))
+}
+
+// An OU that returns no users is skipped with a warning naming it; the other
+// OU is still precached.
+func TestGetGoogleGroupsAndUsers_Issue404_OrgUnitNoUsersSkippedWithWarning(t *testing.T) {
+	hook := test.NewGlobal()
+	defer hook.Reset()
+
+	a, b := issue404Users()
+	googleClient := issue404Mock(t)
+	s := issue404Sync(googleClient, []string{"/A", "/B"})
+	googleClient.EXPECT().GetUsers(`OrgUnitPath='/A'`, s.cfg.UserFilter).Return([]*admin.User{}, nil).Once()
+	googleClient.EXPECT().GetUsers(`OrgUnitPath='/B'`, s.cfg.UserFilter).Return([]*admin.User{b}, nil).Once()
+	googleClient.EXPECT().GetUsers(`email='a@example.com'`, s.cfg.UserFilter).Return([]*admin.User{a}, nil).Once()
+
+	_, users, _, err := s.getGoogleGroupsAndUsers("group-q", "")
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []*admin.User{a, b}, users)
+
+	warns := issue404Entries(hook, log.WarnLevel, msg404OUNoUsers)
+	require.Len(t, warns, 1)
+	assert.Equal(t, "/A", warns[0].Data["orgUnitPath"])
+	assert.Equal(t, s.cfg.UserFilter, warns[0].Data["queryFilters"])
+	assert.Equal(t, "getGoogleGroupsAndUsers", warns[0].Data["func"])
+	assert.Empty(t, issue404Entries(hook, log.WarnLevel, msg404OUQueryFailed))
+	assert.Empty(t, issue404Entries(hook, log.WarnLevel, msg404NoUsers))
+}
+
+// When every OU returns no users, each is warned about and the existing
+// "no users" warning is logged, but not "Precaching failed".
+func TestGetGoogleGroupsAndUsers_Issue404_AllOrgUnitsEmpty(t *testing.T) {
+	hook := test.NewGlobal()
+	defer hook.Reset()
+
+	a, b := issue404Users()
+	googleClient := issue404Mock(t)
+	s := issue404Sync(googleClient, []string{"/A", "/B"})
+	googleClient.EXPECT().GetUsers(`OrgUnitPath='/A'`, s.cfg.UserFilter).Return(nil, nil).Once()
+	googleClient.EXPECT().GetUsers(`OrgUnitPath='/B'`, s.cfg.UserFilter).Return(nil, nil).Once()
+	googleClient.EXPECT().GetUsers(`email='a@example.com'`, s.cfg.UserFilter).Return([]*admin.User{a}, nil).Once()
+	googleClient.EXPECT().GetUsers(`email='b@example.com'`, s.cfg.UserFilter).Return([]*admin.User{b}, nil).Once()
+
+	_, _, _, err := s.getGoogleGroupsAndUsers("group-q", "")
+	require.NoError(t, err)
+
+	assert.ElementsMatch(t, []interface{}{"/A", "/B"}, issue404OUs(issue404Entries(hook, log.WarnLevel, msg404OUNoUsers)))
+	assert.Len(t, issue404Entries(hook, log.WarnLevel, msg404NoUsers), 1)
+	assert.Empty(t, issue404Entries(hook, log.ErrorLevel, msg404AllFailed))
+}
+
+// When every OU fails, each is warned about and "Precaching failed, caching on
+// the fly" is logged; members are looked up on the fly and the run carries on.
+func TestGetGoogleGroupsAndUsers_Issue404_AllOrgUnitsFail(t *testing.T) {
+	hook := test.NewGlobal()
+	defer hook.Reset()
+
+	a, b := issue404Users()
+	googleErr := &googleapi.Error{Code: 400, Message: "Invalid Input: INVALID_OU_ID"}
+	googleClient := issue404Mock(t)
+	s := issue404Sync(googleClient, []string{"/A", "/B"})
+	googleClient.EXPECT().GetUsers(`OrgUnitPath='/A'`, s.cfg.UserFilter).Return(nil, googleErr).Once()
+	googleClient.EXPECT().GetUsers(`OrgUnitPath='/B'`, s.cfg.UserFilter).Return(nil, googleErr).Once()
+	googleClient.EXPECT().GetUsers(`email='a@example.com'`, s.cfg.UserFilter).Return([]*admin.User{a}, nil).Once()
+	googleClient.EXPECT().GetUsers(`email='b@example.com'`, s.cfg.UserFilter).Return([]*admin.User{b}, nil).Once()
+
+	_, users, _, err := s.getGoogleGroupsAndUsers("group-q", "")
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []*admin.User{a, b}, users)
+
+	assert.ElementsMatch(t, []interface{}{"/A", "/B"}, issue404OUs(issue404Entries(hook, log.WarnLevel, msg404OUQueryFailed)))
+	assert.Len(t, issue404Entries(hook, log.ErrorLevel, msg404AllFailed), 1)
+	assert.Empty(t, issue404Entries(hook, log.WarnLevel, msg404NoUsers))
+}
+
+// Overlapping OUs return the same user twice: the first is recorded as a
+// PreCache and the repeat as a CacheHit, each counted once (#413).
+func TestGetGoogleGroupsAndUsers_Issue404_OverlappingOrgUnitsRepeatIsCacheHit(t *testing.T) {
+	a, _ := issue404Users()
+	googleClient := mocks.NewMockGoogleClient(t)
+	googleClient.EXPECT().GetGroups("*").Return(nil, nil).Once()
+	s := issue404Sync(googleClient, []string{"/", "/A"})
+	s.cfg.CacheMetrics = true
+	googleClient.EXPECT().GetUsers(`OrgUnitPath='/'`, s.cfg.UserFilter).Return([]*admin.User{a}, nil).Once()
+	googleClient.EXPECT().GetUsers(`OrgUnitPath='/A'`, s.cfg.UserFilter).Return([]*admin.User{a}, nil).Once()
+
+	_, _, _, err := s.getGoogleGroupsAndUsers("", "")
+	require.NoError(t, err)
+
+	require.Contains(t, s.cacheMetrics, "/A")
+	assert.Equal(t, CacheMetrics{Precaches: 1, Hits: 1}, *s.cacheMetrics["/A"])
+}
+
+// Empty entries are skipped and an OU listed twice (after normalising) is
+// queried once.
+func TestGetGoogleGroupsAndUsers_Issue404_EmptyAndDuplicateOrgUnitsSkipped(t *testing.T) {
+	a, _ := issue404Users()
+	googleClient := mocks.NewMockGoogleClient(t)
+	googleClient.EXPECT().GetGroups("*").Return(nil, nil).Once()
+	s := issue404Sync(googleClient, []string{"/A", "", "  ", " /A/ "})
+	googleClient.EXPECT().GetUsers(`OrgUnitPath='/A'`, s.cfg.UserFilter).Return([]*admin.User{a}, nil).Once()
+
+	_, _, _, err := s.getGoogleGroupsAndUsers("", "")
+	require.NoError(t, err)
+}
+
+// Without PrecacheOrgUnits nothing is precached: no GetGroups("*") and no
+// GetUsers call.
+func TestGetGoogleGroupsAndUsers_Issue404_NilPrecacheOrgUnitsDisabled(t *testing.T) {
+	googleClient := mocks.NewMockGoogleClient(t)
+	s := issue404Sync(googleClient, nil)
+
+	_, _, _, err := s.getGoogleGroupsAndUsers("", "")
+	require.NoError(t, err)
+}
+
+// #413: CacheMetrics: recordCacheOp double-counts every op and matches parent OUs by substring
+
+const msg413CacheStats = "Caching Performance, orgPaths with a high Miss rate compared with the TotalUsers consider precaching"
+
+// issue413Sync is a syncGSuite with --cache-metrics set.
+func issue413Sync(googleClient *mocks.MockGoogleClient) *syncGSuite {
+	cfg := issue401Config()
+	cfg.CacheMetrics = true
+	return &syncGSuite{google: googleClient, cfg: cfg}
+}
+
+// Each op is counted once on its own OU; without --cache-metrics nothing is kept.
+func TestRecordCacheOp_Issue413_CountsOncePerOp(t *testing.T) {
+	s := issue413Sync(nil)
+	s.recordCacheOp("/Sales", PreCache)
+	s.recordCacheOp("/Sales", CacheHit)
+	s.recordCacheOp("/Sales", CacheHit)
+	s.recordCacheOp("/Sales", CacheMiss)
+	require.Contains(t, s.cacheMetrics, "/Sales")
+	assert.Equal(t, CacheMetrics{Precaches: 1, Hits: 2, Misses: 1}, *s.cacheMetrics["/Sales"])
+
+	off := &syncGSuite{cfg: issue401Config()}
+	off.recordCacheOp("/Sales", CacheHit)
+	assert.Nil(t, off.cacheMetrics)
+}
+
+// Only the user's own OU is updated: no credit to /Sales from /Sales/EMEA or
+// /Sales Team, whatever the order the OUs are first seen in.
+func TestRecordCacheOp_Issue413_StoresOwnCounts(t *testing.T) {
+	s := issue413Sync(nil)
+	s.recordCacheOp("/Sales", CacheHit)
+	s.recordCacheOp("/Sales/EMEA", CacheMiss)
+	s.recordCacheOp("/Sales Team", CacheMiss)
+
+	assert.Equal(t, map[string]*CacheMetrics{
+		"/Sales":      {Hits: 1},
+		"/Sales/EMEA": {Misses: 1},
+		"/Sales Team": {Misses: 1},
+	}, s.cacheMetrics)
+}
+
+func TestOrgUnitInTree_Issue413(t *testing.T) {
+	tests := []struct {
+		ou, orgPath string
+		want        bool
+	}{
+		{"/", "/", true},
+		{"/", "/X", true},
+		{"/Sales", "/Sales", true},
+		{"/Sales", "/Sales/EMEA", true},
+		{"/Sales/", "/Sales/EMEA", true},
+		{"/Sales", "/Sales Team", false},
+		{"/Sales", "/Presales", false},
+		{"/Sales", "/B/Sales", false},
+		{"/Sales/EMEA", "/Sales", false},
+		{"/A", "/AB", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.ou+" holds "+tt.orgPath, func(t *testing.T) {
+			assert.Equal(t, tt.want, orgUnitInTree(tt.ou, tt.orgPath))
+		})
+	}
+}
+
+// Each OU's counts are its own plus its sub-OUs' (by path, not by substring);
+// TotalUsers is copied, not summed; the input is left as it was.
+func TestRollUpCacheMetrics_Issue413(t *testing.T) {
+	own := map[string]*CacheMetrics{
+		"/":           {Hits: 1},
+		"/Sales":      {Misses: 1, TotalUsers: 7},
+		"/Sales/EMEA": {Precaches: 1, Hits: 2},
+		"/Sales Team": {Misses: 4},
+		"/Presales":   {Hits: 8},
+		"/B/Sales":    {Misses: 16},
+	}
+	ownBefore := map[string]CacheMetrics{}
+	for k, v := range own {
+		ownBefore[k] = *v
+	}
+
+	assert.Equal(t, map[string]*CacheMetrics{
+		"/":           {Precaches: 1, Hits: 11, Misses: 21},
+		"/Sales":      {Precaches: 1, Hits: 2, Misses: 1, TotalUsers: 7},
+		"/Sales/EMEA": {Precaches: 1, Hits: 2},
+		"/Sales Team": {Misses: 4},
+		"/Presales":   {Hits: 8},
+		"/B/Sales":    {Misses: 16},
+	}, rollUpCacheMetrics(own))
+
+	for k, v := range own {
+		assert.Equal(t, ownBefore[k], *v, k)
+	}
+}
+
+// The default_map run (see the plan's worked example): Chris in /, Rimmer in
+// /Maintenance, Dave in /Maintenance/Vending Machines, Olaf precached in
+// /Red Dwarf/Petersen's Locker; /Catering is empty, so never a key, and
+// /Red Dwarf has no users of its own, so it is not reported.
+func TestRollUpCacheMetrics_Issue413_TestUsers(t *testing.T) {
+	own := map[string]*CacheMetrics{
+		"/":                             {Hits: 4, Misses: 1},
+		"/Maintenance":                  {Hits: 4, Misses: 1},
+		"/Maintenance/Vending Machines": {Hits: 2, Misses: 1},
+		"/Red Dwarf/Petersen's Locker":  {Precaches: 1, Hits: 1},
+	}
+	assert.Equal(t, map[string]*CacheMetrics{
+		"/":                             {Precaches: 1, Hits: 11, Misses: 3},
+		"/Maintenance":                  {Hits: 6, Misses: 2},
+		"/Maintenance/Vending Machines": {Hits: 2, Misses: 1},
+		"/Red Dwarf/Petersen's Locker":  {Precaches: 1, Hits: 1},
+	}, rollUpCacheMetrics(own))
+}
+
+// A member that had to be looked up counts as a CacheMiss only; a member found
+// in the user cache counts as a CacheHit.
+func TestGetGoogleUsersInGroup_Issue413_LookedUpMemberIsMissOnly(t *testing.T) {
+	a, b := issue404Users()
+	googleClient := mocks.NewMockGoogleClient(t)
+	s := issue413Sync(googleClient)
+	googleClient.EXPECT().GetGroupMembers(issue404Group).Return([]*admin.Member{
+		{Email: "a@example.com", Type: "USER", Status: "ACTIVE"},
+		{Email: "b@example.com", Type: "USER", Status: "ACTIVE"},
+	}, nil).Once()
+	googleClient.EXPECT().GetUsers(`email='a@example.com'`, s.cfg.UserFilter).Return([]*admin.User{a}, nil).Once()
+	userCache := map[string]*admin.User{b.PrimaryEmail: b}
+
+	members, err := s.getGoogleUsersInGroup(issue404Group, userCache, map[string]*admin.Group{})
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []*admin.User{a, b}, members)
+
+	assert.Equal(t, map[string]*CacheMetrics{
+		"/A": {Misses: 1},
+		"/B": {Hits: 1},
+	}, s.cacheMetrics)
+}
+
+// The Cache Stats log field carries the rolled-up counts with each OU's
+// TotalUsers; s.cacheMetrics keeps the own counts.
+func TestOutputCacheMetrics_Issue413_LogsRolledUpCounts(t *testing.T) {
+	hook := test.NewGlobal()
+	defer hook.Reset()
+
+	googleClient := mocks.NewMockGoogleClient(t)
+	s := issue413Sync(googleClient)
+	s.cacheMetrics = map[string]*CacheMetrics{"/": {Hits: 1}, "/A": {Misses: 1}}
+	googleClient.EXPECT().CountUsers(`OrgUnitPath='/'`, s.cfg.UserFilter).
+		Return(3, nil).Once()
+	googleClient.EXPECT().CountUsers(`OrgUnitPath='/A'`, s.cfg.UserFilter).
+		Return(1, nil).Once()
+
+	s.outputCacheMetrics()
+
+	var stats []*log.Entry
+	for _, e := range hook.AllEntries() {
+		if e.Level == log.InfoLevel && e.Message == msg413CacheStats {
+			stats = append(stats, e)
+		}
+	}
+	require.Len(t, stats, 1)
+	assert.Equal(t, map[string]*CacheMetrics{
+		"/":  {Hits: 1, Misses: 1, TotalUsers: 3},
+		"/A": {Misses: 1, TotalUsers: 1},
+	}, stats[0].Data["Cache Stats"])
+	assert.Equal(t, 1, s.cacheMetrics["/"].Hits)
+	assert.Equal(t, 0, s.cacheMetrics["/"].Misses)
+}
+
+// #414: Empty element in a comma-separated UserMatch/GroupMatch queries the whole directory
+
+// An all-blank GroupMatch or UserMatch fails the run before ssosync reads or
+// changes anything in AWS (#414): GetGroups/GetUsers return ErrAllEmptyQuery
+// (pinned in internal/google), and Sync returns it. Treated as "" it would list
+// no groups, and the groups sync would delete every unmatched AWS group. The
+// AWS and Identity Store mocks are strict with no expectations, so any call,
+// and in particular any delete, fails the test.
+func TestSync_Issue414_AllBlankMatchAbortsBeforeAWS(t *testing.T) {
+	tests := []struct {
+		name, groups, users string
+		blankUsers          bool
+	}{
+		{name: "group match", groups: " , "},
+		{name: "user match", groups: "group-q", users: ",", blankUsers: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			googleClient := mocks.NewMockGoogleClient(t)
+			s := issue404Sync(googleClient, nil)
+			s.aws = mocks.NewMockAwsClient(t)
+			s.identityStore = mocks.NewMockIdentityStoreAPI(t)
+
+			if tt.blankUsers {
+				googleClient.EXPECT().GetUsers(tt.users, s.cfg.UserFilter).
+					Return(nil, fmt.Errorf("users %w: %q", google.ErrAllEmptyQuery, tt.users)).Once()
+			} else {
+				googleClient.EXPECT().GetGroups(tt.groups).
+					Return(nil, fmt.Errorf("groups %w: %q", google.ErrAllEmptyQuery, tt.groups)).Once()
+			}
+
+			err := s.Sync(tt.groups, tt.users)
+			require.ErrorIs(t, err, google.ErrAllEmptyQuery)
+		})
+	}
+}
+
+// #416: CacheMetrics: TotalUsers lookup for / lists the whole directory
+
+const msg416CountFailed = "Failed retrieving usercache count"
+
+// An OU that --precache-ous listed reuses that count as TotalUsers: no
+// CountUsers (or second GetUsers) call, which the strict mock would fail.
+func TestOutputCacheMetrics_Issue416_ReusesPrecacheCount(t *testing.T) {
+	a, b := issue404Users()
+	a.OrgUnitPath, b.OrgUnitPath = "/", "/"
+	googleClient := mocks.NewMockGoogleClient(t)
+	googleClient.EXPECT().GetGroups("*").Return(nil, nil).Once()
+	s := issue404Sync(googleClient, []string{"/"})
+	s.cfg.CacheMetrics = true
+	googleClient.EXPECT().GetUsers(`OrgUnitPath='/'`, s.cfg.UserFilter).Return([]*admin.User{a, b}, nil).Once()
+
+	_, _, _, err := s.getGoogleGroupsAndUsers("", "")
+	require.NoError(t, err)
+	s.outputCacheMetrics()
+
+	require.Contains(t, s.cacheMetrics, "/")
+	assert.Equal(t, 2, s.cacheMetrics["/"].TotalUsers)
+}
+
+// An OU that was not precached is counted with CountUsers, never GetUsers.
+func TestOutputCacheMetrics_Issue416_CountsOtherOUs(t *testing.T) {
+	googleClient := mocks.NewMockGoogleClient(t)
+	s := issue413Sync(googleClient)
+	s.cacheMetrics = map[string]*CacheMetrics{"/A": {Misses: 1}}
+	googleClient.EXPECT().CountUsers(`OrgUnitPath='/A'`, s.cfg.UserFilter).Return(5, nil).Once()
+
+	s.outputCacheMetrics()
+
+	assert.Equal(t, 5, s.cacheMetrics["/A"].TotalUsers)
+}
+
+// A failed count is logged and leaves TotalUsers at 0.
+func TestOutputCacheMetrics_Issue416_CountErrorLogged(t *testing.T) {
+	hook := test.NewGlobal()
+	defer hook.Reset()
+
+	googleClient := mocks.NewMockGoogleClient(t)
+	s := issue413Sync(googleClient)
+	s.cacheMetrics = map[string]*CacheMetrics{"/A": {Misses: 1}}
+	googleErr := errors.New("boom")
+	googleClient.EXPECT().CountUsers(`OrgUnitPath='/A'`, s.cfg.UserFilter).Return(0, googleErr).Once()
+
+	s.outputCacheMetrics()
+
+	errs := issue404Entries(hook, log.ErrorLevel, msg416CountFailed)
+	require.Len(t, errs, 1)
+	assert.Equal(t, googleErr, errs[0].Data["error"])
+	assert.Equal(t, 0, s.cacheMetrics["/A"].TotalUsers)
+}
+
+// #417: CacheMetrics: userMatch path records bulk-listed users as Misses and overwrites precached users
+
+// --user-match fills the cache like --precache-ous (#417): a new user is a
+// precache; a user already precached, or listed twice, keeps the cached entry
+// and is a hit.
+func TestGetGoogleGroupsAndUsers_Issue417_UserMatchIsPrecache(t *testing.T) {
+	a, b := issue404Users()
+	aCopy := *a
+	googleClient := mocks.NewMockGoogleClient(t)
+	googleClient.EXPECT().GetGroups("*").Return(nil, nil).Once()
+	s := issue404Sync(googleClient, []string{"/A"})
+	s.cfg.CacheMetrics = true
+	googleClient.EXPECT().GetUsers(`OrgUnitPath='/A'`, s.cfg.UserFilter).Return([]*admin.User{a}, nil).Once()
+	googleClient.EXPECT().GetUsers("name:x", s.cfg.UserFilter).Return([]*admin.User{&aCopy, b, b}, nil).Once()
+
+	_, users, _, err := s.getGoogleGroupsAndUsers("", "name:x")
+	require.NoError(t, err)
+	require.Len(t, users, 2)
+	assert.ElementsMatch(t, []*admin.User{a, b}, users)
+	for _, u := range users {
+		assert.NotSame(t, &aCopy, u, "the precached entry is kept")
+	}
+
+	assert.Equal(t, map[string]*CacheMetrics{
+		"/A": {Precaches: 1, Hits: 1},
+		"/B": {Precaches: 1, Hits: 1},
+	}, s.cacheMetrics)
+}
+
+// A group member that --user-match already listed is found in the cache (a
+// hit, no lookup); a member it did not list is looked up (a miss).
+func TestGetGoogleGroupsAndUsers_Issue417_UserMatchMemberIsHit(t *testing.T) {
+	a, b := issue404Users()
+	googleClient := mocks.NewMockGoogleClient(t)
+	s := issue404Sync(googleClient, nil)
+	s.cfg.CacheMetrics = true
+	googleClient.EXPECT().GetUsers("name:x", s.cfg.UserFilter).Return([]*admin.User{a}, nil).Once()
+	googleClient.EXPECT().GetGroups("group-q").Return([]*admin.Group{issue404Group}, nil).Once()
+	googleClient.EXPECT().GetGroupMembers(issue404Group).Return([]*admin.Member{
+		{Email: "a@example.com", Type: "USER", Status: "ACTIVE"},
+		{Email: "b@example.com", Type: "USER", Status: "ACTIVE"},
+	}, nil).Once()
+	// No email='a@example.com' expectation: the strict mock fails on a lookup.
+	googleClient.EXPECT().GetUsers(`email='b@example.com'`, s.cfg.UserFilter).Return([]*admin.User{b}, nil).Once()
+
+	_, users, _, err := s.getGoogleGroupsAndUsers("group-q", "name:x")
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []*admin.User{a, b}, users)
+
+	assert.Equal(t, map[string]*CacheMetrics{
+		"/A": {Precaches: 1, Hits: 1},
+		"/B": {Misses: 1},
+	}, s.cacheMetrics)
+}
+
+// #418: Group member cache misses on case-different or alias member emails
+
+var issue418Group2 = &admin.Group{Id: "gg2", Name: "Group2", Email: "g2@example.com"}
+
+func issue418Members(emails ...string) []*admin.Member {
+	members := make([]*admin.Member, 0, len(emails))
+	for _, e := range emails {
+		members = append(members, &admin.Member{Email: e, Type: "USER", Status: "ACTIVE"})
+	}
+	return members
+}
+
+func issue418User(email, orgUnitPath string) *admin.User {
+	u := gUser("gid-"+email, email, "Given", "Family", false)
+	u.OrgUnitPath = orgUnitPath
+	return u
+}
+
+func TestUserCacheKey_Issue418(t *testing.T) {
+	assert.Equal(t, "acehole@example.com", userCacheKey("AceHole@Example.COM"))
+}
+
+// A member listed in a different case from the primary email is found in the
+// cache: no lookup (the strict mock has no GetUsers), one Hit.
+func TestGetGoogleUsersInGroup_Issue418_CaseDifferentMemberHitsCache(t *testing.T) {
+	u := issue418User("AceHole@example.com", "/M")
+	googleClient := mocks.NewMockGoogleClient(t)
+	s := issue413Sync(googleClient)
+	googleClient.EXPECT().GetGroupMembers(issue404Group).Return(issue418Members("acehole@example.com"), nil).Once()
+	userCache := map[string]*admin.User{}
+	cacheUser(userCache, u)
+
+	members, err := s.getGoogleUsersInGroup(issue404Group, userCache, map[string]*admin.Group{})
+	require.NoError(t, err)
+	assert.Equal(t, []*admin.User{u}, members)
+	assert.Equal(t, map[string]*CacheMetrics{"/M": {Hits: 1}}, s.cacheMetrics)
+}
+
+// Members listed by an alias or a non-editable alias, in any case, are found
+// in the cache without a lookup.
+func TestGetGoogleUsersInGroup_Issue418_AliasMemberHitsCache(t *testing.T) {
+	u := issue418User("acehole@example.com", "/M")
+	u.Aliases = []string{"rimmer@example.com"}
+	u.NonEditableAliases = []string{"acehole@alias.example.com"}
+	googleClient := mocks.NewMockGoogleClient(t)
+	s := issue413Sync(googleClient)
+	googleClient.EXPECT().GetGroupMembers(issue404Group).Return(issue418Members("Rimmer@example.com"), nil).Once()
+	googleClient.EXPECT().GetGroupMembers(issue418Group2).Return(issue418Members("acehole@alias.example.com"), nil).Once()
+	userCache := map[string]*admin.User{}
+	cacheUser(userCache, u)
+
+	for _, g := range []*admin.Group{issue404Group, issue418Group2} {
+		members, err := s.getGoogleUsersInGroup(g, userCache, map[string]*admin.Group{})
+		require.NoError(t, err)
+		assert.Equal(t, []*admin.User{u}, members, g.Name)
+	}
+	assert.Equal(t, map[string]*CacheMetrics{"/M": {Hits: 2}}, s.cacheMetrics)
+}
+
+// A cached user listed by an address Google does not report as an alias is
+// looked up once (one Miss), and the cached entry is kept; the address is then
+// keyed, so the next membership is a Hit with no lookup.
+func TestGetGoogleUsersInGroup_Issue418_LookupRecordedOnceAsMiss(t *testing.T) {
+	a := issue418User("a@example.com", "/A")
+	aAgain := issue418User("a@example.com", "/A")
+	googleClient := mocks.NewMockGoogleClient(t)
+	s := issue413Sync(googleClient)
+	googleClient.EXPECT().GetGroupMembers(issue404Group).Return(issue418Members("old@example.com"), nil).Once()
+	googleClient.EXPECT().GetGroupMembers(issue418Group2).Return(issue418Members("old@example.com"), nil).Once()
+	googleClient.EXPECT().GetUsers(`email='old@example.com'`, s.cfg.UserFilter).Return([]*admin.User{aAgain}, nil).Once()
+	userCache := map[string]*admin.User{}
+	cacheUser(userCache, a)
+
+	for _, g := range []*admin.Group{issue404Group, issue418Group2} {
+		members, err := s.getGoogleUsersInGroup(g, userCache, map[string]*admin.Group{})
+		require.NoError(t, err)
+		require.Len(t, members, 1, g.Name)
+		assert.Same(t, a, members[0], g.Name)
+	}
+	assert.Equal(t, map[string]*CacheMetrics{"/A": {Misses: 1, Hits: 1}}, s.cacheMetrics)
+}
+
+// A mixed-case member that is not cached is looked up once: exactly one Miss
+// and no Hit; its next membership is exactly one Hit.
+func TestGetGoogleUsersInGroup_Issue418_OneOpPerMembership(t *testing.T) {
+	u := issue418User("acehole@example.com", "/M")
+	googleClient := mocks.NewMockGoogleClient(t)
+	s := issue413Sync(googleClient)
+	googleClient.EXPECT().GetGroupMembers(issue404Group).Return(issue418Members("AceHole@example.com"), nil).Once()
+	googleClient.EXPECT().GetGroupMembers(issue418Group2).Return(issue418Members("ACEHOLE@example.com"), nil).Once()
+	googleClient.EXPECT().GetUsers(`email='AceHole@example.com'`, s.cfg.UserFilter).Return([]*admin.User{u}, nil).Once()
+	userCache := map[string]*admin.User{}
+
+	members, err := s.getGoogleUsersInGroup(issue404Group, userCache, map[string]*admin.Group{})
+	require.NoError(t, err)
+	assert.Equal(t, []*admin.User{u}, members)
+	assert.Equal(t, map[string]*CacheMetrics{"/M": {Misses: 1}}, s.cacheMetrics)
+
+	members, err = s.getGoogleUsersInGroup(issue418Group2, userCache, map[string]*admin.Group{})
+	require.NoError(t, err)
+	assert.Equal(t, []*admin.User{u}, members)
+	assert.Equal(t, map[string]*CacheMetrics{"/M": {Misses: 1, Hits: 1}}, s.cacheMetrics)
+}
+
+// A precached mixed-case primary email is found for a lower-case member: no
+// email= lookup, and the user is returned once.
+func TestGetGoogleGroupsAndUsers_Issue418_PrecachedMixedCaseNoLookup(t *testing.T) {
+	u := issue418User("AceHole@example.com", "/M")
+	googleClient := mocks.NewMockGoogleClient(t)
+	googleClient.EXPECT().GetGroups("*").Return(nil, nil).Once()
+	googleClient.EXPECT().GetGroups("group-q").Return([]*admin.Group{issue404Group}, nil).Once()
+	googleClient.EXPECT().GetGroupMembers(issue404Group).Return(issue418Members("acehole@example.com"), nil).Once()
+	s := issue404Sync(googleClient, []string{"/M"})
+	s.cfg.CacheMetrics = true
+	googleClient.EXPECT().GetUsers(`OrgUnitPath='/M'`, s.cfg.UserFilter).Return([]*admin.User{u}, nil).Once()
+
+	_, users, groupsUsers, err := s.getGoogleGroupsAndUsers("group-q", "")
+	require.NoError(t, err)
+	require.Len(t, users, 1)
+	assert.Same(t, u, users[0])
+	assert.Equal(t, []*admin.User{u}, groupsUsers[issue404Group.Name])
+	assert.Equal(t, map[string]*CacheMetrics{"/M": {Precaches: 1, Hits: 1}}, s.cacheMetrics)
+}
+
+// A mixed-case --ignore-users entry (lower-cased when the config loads) still
+// ignores the member, whatever case the group lists it in, with no lookup.
+func TestIgnoreUser_Issue418_MixedCaseEntry(t *testing.T) {
+	hook := test.NewGlobal()
+	defer hook.Reset()
+
+	googleClient := mocks.NewMockGoogleClient(t)
+	s := issue413Sync(googleClient)
+	s.cfg.IgnoreUsers = config.LowerCaseAll([]string{"AceHole@Example.com"})
+	googleClient.EXPECT().GetGroupMembers(issue404Group).
+		Return(issue418Members("acehole@example.com", "ACEHOLE@example.com"), nil).Once()
+
+	members, err := s.getGoogleUsersInGroup(issue404Group, map[string]*admin.User{}, map[string]*admin.Group{})
+	require.NoError(t, err)
+	assert.Empty(t, members)
+	assert.Len(t, issue404Entries(hook, log.InfoLevel, "skip: ignore list"), 2)
 }
