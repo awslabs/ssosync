@@ -2682,6 +2682,7 @@ func CreateUserIDtoUserObjMap(awsUsers []*interfaces.User) map[string]*interface
 // Handler for Paginated Group Membership List
 func (s *syncGSuite) GetGroupMembershipsLists(awsGroups []*interfaces.Group, awsUsersMap map[string]*interfaces.User) (map[string][]*interfaces.User, error) {
 	log.Debug("GetGroupMembershipsLists()")
+	start := time.Now()
 	awsGroupsUsers := make(map[string][]*interfaces.User)
 	curGroup := &interfaces.Group{}
 
@@ -2721,7 +2722,8 @@ func (s *syncGSuite) GetGroupMembershipsLists(awsGroups []*interfaces.Group, aws
 		}
 
 	}
-	log.Debug("GetGroupMembershipsLists() Return")
+	log.WithFields(log.Fields{"groups": len(awsGroups), "elapsedMs": time.Since(start).Milliseconds()}).
+		Debug("GetGroupMembershipsLists() Return")
 	return awsGroupsUsers, nil
 }
 
