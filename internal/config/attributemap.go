@@ -25,37 +25,42 @@ var (
 	// (defaulted in DefaultUserAttributeMap) and the OPT-IN-ONLY targets
 	// (supported here but deliberately not defaulted, see attrmap-design §5) are
 	// both listed; see the inline markers.
-	supportedUserTargetFields = map[string]struct{}{
+	//
+	// Each target maps to the type of source it accepts (#420).
+	supportedUserTargetFields = map[string]attrType{
 		// Existing / safe set.
-		"Name.GivenName":          {},
-		"Name.FamilyName":         {},
-		"Username":                {},
-		"Active":                  {},
-		"Title":                   {}, // safe set
-		"Enterprise.Department":   {}, // safe set
-		"Enterprise.Organization": {}, // safe set
-		"Enterprise.CostCenter":   {}, // safe set
+		"Name.GivenName":          attrString,
+		"Name.FamilyName":         attrString,
+		"Username":                attrString,
+		"Active":                  attrBool,
+		"Title":                   attrString, // safe set
+		"Enterprise.Department":   attrString, // safe set
+		"Enterprise.Organization": attrString, // safe set
+		"Enterprise.CostCenter":   attrString, // safe set
 		// Opt-in only (supported, NOT defaulted).
-		"NickName":                  {}, // opt-in (#421)
-		"Name.Formatted":            {}, // opt-in (#421)
-		"Enterprise.Manager":        {}, // opt-in (design §5.7)
-		"Enterprise.Division":       {}, // opt-in (design §5.2)
-		"Enterprise.EmployeeNumber": {}, // opt-in (design §5.3)
-		"ProfileURL":                {}, // opt-in (design §5.4)
-		"Emails":                    {}, // opt-in (design §5.5)
-		"Addresses":                 {}, // opt-in (design §5.5)
-		"PhoneNumbers":              {}, // opt-in (design §5.5)
+		"NickName":                  attrString, // opt-in (#421)
+		"Name.Formatted":            attrString, // opt-in (#421)
+		"Enterprise.Manager":        attrString, // opt-in (design §5.7)
+		"Enterprise.Division":       attrString, // opt-in (design §5.2)
+		"Enterprise.EmployeeNumber": attrString, // opt-in (design §5.3)
+		"ProfileURL":                attrString, // opt-in (design §5.4)
+		"Emails":                    attrString, // opt-in (design §5.5)
+		"Addresses":                 attrString, // opt-in (design §5.5)
+		"PhoneNumbers":              attrString, // opt-in (design §5.5)
 	}
 
 	// supportedUserSourceScalars are the scalar admin.User SOURCE paths the
-	// validator accepts as-is (exact string match) for the user block.
-	supportedUserSourceScalars = map[string]struct{}{
-		"name.givenName":   {},
-		"name.familyName":  {},
-		"name.fullName":    {},
-		"name.displayName": {},
-		"primaryEmail":     {},
-		"suspended":        {},
+	// validator accepts as-is (exact string match) for the user block, each
+	// with the type it resolves to (#420). The other user sources, multi-valued
+	// sub-fields and custom-schema fields, always resolve to a string (the
+	// resolver stringifies a custom number or boolean).
+	supportedUserSourceScalars = map[string]attrType{
+		"name.givenName":   attrString,
+		"name.familyName":  attrString,
+		"name.fullName":    attrString,
+		"name.displayName": attrString,
+		"primaryEmail":     attrString,
+		"suspended":        attrBool,
 	}
 
 	// supportedUserMultiValuedSubfields is the CLOSED (field -> {subfield}) table
@@ -97,6 +102,21 @@ var (
 		"name": {},
 	}
 )
+
+// attrType is the type a user source resolves to, or a user target accepts.
+type attrType int
+
+const (
+	attrString attrType = iota
+	attrBool
+)
+
+func (t attrType) String() string {
+	if t == attrBool {
+		return "boolean"
+	}
+	return "string"
+}
 
 // ParseAttributeMaps is the single source of truth for the attribute map wire
 // format. Both the CLI file loader and the Lambda env/secret loader delegate to
@@ -208,7 +228,8 @@ func LoadAttributeMapsFromFile(path string) (AttributeMaps, error) {
 //     block uses an exact closed set (exactSourceValidator); the user block uses
 //     the structural classifier (validateUserSource) that accepts scalars, any
 //     well-formed customSchemas.<schema>.<field> path, and type-qualified
-//     multi-valued paths with any non-empty type= selector.
+//     multi-valued paths with any non-empty type= selector, and requires the
+//     source's type to match the target's (#420).
 //
 // ALL violations across the block are collected and reported in a single error
 // so a user fixing a map sees every problem at once instead of one per run. Each
@@ -216,7 +237,7 @@ func LoadAttributeMapsFromFile(path string) (AttributeMaps, error) {
 // the sorted list of currently-supported values for that block, e.g.:
 //
 //	attribute map (user block): unsupported target field "Name.Givenname" - valid user target fields are: Active, Name.FamilyName, Name.GivenName, Username
-func validateAttributeMap(name string, m AttributeMap, supportedTargets map[string]struct{}, validateSource func(name, source string) string) error {
+func validateAttributeMap[V any](name string, m AttributeMap, supportedTargets map[string]V, validateSource func(name, target, source string) string) error {
 	var violations []string
 
 	for k, v := range m {
@@ -241,7 +262,7 @@ func validateAttributeMap(name string, m AttributeMap, supportedTargets map[stri
 				violations = append(violations,
 					fmt.Sprintf("empty source attribute for target field %q - a %s attribute map value must not be empty", k, name))
 			}
-		} else if msg := validateSource(name, v); msg != "" {
+		} else if msg := validateSource(name, k, v); msg != "" {
 			violations = append(violations, msg)
 		}
 	}
@@ -260,8 +281,8 @@ func validateAttributeMap(name string, m AttributeMap, supportedTargets map[stri
 // strings in the given set (used by the group block, whose sources are a fixed
 // closed list). It returns "" for an accepted source, else a Step-A error
 // fragment naming the offending token and the sorted accepted set.
-func exactSourceValidator(supportedSources map[string]struct{}) func(name, source string) string {
-	return func(name, source string) string {
+func exactSourceValidator(supportedSources map[string]struct{}) func(name, target, source string) string {
+	return func(name, _, source string) string {
 		if _, ok := supportedSources[source]; ok {
 			return ""
 		}
@@ -270,13 +291,36 @@ func exactSourceValidator(supportedSources map[string]struct{}) func(name, sourc
 	}
 }
 
-// validateUserSource validates a user-block SOURCE value per the design §5.2/§5.3
+// validateUserSource validates a user-block SOURCE value: its path
+// (validateUserSourcePath), then that its type matches the type the target
+// accepts (#420), so a boolean source such as suspended mapped to a string
+// target such as Title fails the load instead of the sync.
+func validateUserSource(name, target, source string) string {
+	if msg := validateUserSourcePath(name, source); msg != "" {
+		return msg
+	}
+	targetType, ok := supportedUserTargetFields[target]
+	if !ok {
+		return "" // the unsupported target is reported on its own
+	}
+	sourceType := attrString // multi-valued sub-fields and custom-schema fields
+	if t, ok := supportedUserSourceScalars[source]; ok {
+		sourceType = t
+	}
+	if sourceType != targetType {
+		return fmt.Sprintf("target field %q requires a %s source, but source attribute %q is a %s",
+			target, targetType, source, sourceType)
+	}
+	return ""
+}
+
+// validateUserSourcePath validates a user-block SOURCE path per the design §5.2/§5.3
 // classifier: scalar (exact set), custom (customSchemas. prefix, structural
 // only), or multi-valued (<field>[<selector>].<subfield>, structural base-path +
 // sub-field closed table with any non-empty type= selector or primary). It
 // returns "" when accepted, else a Step-A error fragment naming the offending
 // token, WHY it is invalid, and the accepted forms.
-func validateUserSource(name, source string) string {
+func validateUserSourcePath(name, source string) string {
 	// Scalar fast-path.
 	if _, ok := supportedUserSourceScalars[source]; ok {
 		return ""
@@ -409,7 +453,7 @@ func mapKeysAsSet(m map[string]map[string]struct{}) map[string]struct{} {
 
 // sortedKeys returns the keys of a string-set in ascending order, for stable,
 // human-readable error messages.
-func sortedKeys(set map[string]struct{}) string {
+func sortedKeys[V any](set map[string]V) string {
 	keys := make([]string, 0, len(set))
 	for k := range set {
 		keys = append(keys, k)

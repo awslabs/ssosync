@@ -415,3 +415,41 @@ func TestParseAttributeMaps_DisplayNameSourceAccepted(t *testing.T) {
 	_, err = ParseAttributeMaps([]byte(`{"user":{"NickName":"name.nickName"}}`))
 	assert.ErrorContains(err, "name.displayName")
 }
+
+// #420: Attribute map panics when a string target uses a boolean source
+func TestParseAttributeMaps_SourceTypeMustMatchTarget(t *testing.T) {
+	tests := []struct {
+		name    string
+		user    string
+		wantErr string // "" means the map is valid
+	}{
+		{"boolean source on Title", `{"Title":"suspended"}`,
+			`target field "Title" requires a string source, but source attribute "suspended" is a boolean`},
+		{"boolean source on Name.GivenName", `{"Name.GivenName":"suspended"}`,
+			`target field "Name.GivenName" requires a string source, but source attribute "suspended" is a boolean`},
+		{"boolean source on NickName", `{"NickName":"suspended"}`,
+			`target field "NickName" requires a string source, but source attribute "suspended" is a boolean`},
+		{"boolean source on Enterprise.Department", `{"Enterprise.Department":"suspended"}`,
+			`target field "Enterprise.Department" requires a string source, but source attribute "suspended" is a boolean`},
+		{"string source on Active", `{"Active":"primaryEmail"}`,
+			`target field "Active" requires a boolean source, but source attribute "primaryEmail" is a string`},
+		{"multi-valued source on Active", `{"Active":"organizations[primary].title"}`,
+			`target field "Active" requires a boolean source, but source attribute "organizations[primary].title" is a string`},
+		{"custom-schema source on Active", `{"Active":"customSchemas.Employment.remote"}`,
+			`target field "Active" requires a boolean source, but source attribute "customSchemas.Employment.remote" is a string`},
+		{"default map", `{"Name.GivenName":"name.givenName","Name.FamilyName":"name.familyName","Username":"primaryEmail","Active":"suspended"}`, ""},
+		{"custom-schema source on Title", `{"Title":"customSchemas.Employment.remote"}`, ""},
+		{"multi-valued source on Title", `{"Title":"organizations[primary].title"}`, ""},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := ParseAttributeMaps([]byte(`{"user":` + tc.user + `}`))
+			if tc.wantErr == "" {
+				assert.NoError(t, err)
+				return
+			}
+			assert.ErrorContains(t, err, "attribute map (user block)")
+			assert.ErrorContains(t, err, tc.wantErr)
+		})
+	}
+}
