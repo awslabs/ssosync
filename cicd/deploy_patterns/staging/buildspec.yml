@@ -19,7 +19,8 @@ phases:
   build:
     commands:
       # Create parameters
-      - export AppVersion="${GitTag#v}-${GitVersionHash}"
+      # "g" prefix: a numeric SemVer pre-release identifier can't have a leading zero, so an all-digit hash like 0002915 is rejected (#430)
+      - export AppVersion="${GitTag#v}-g${GitVersionHash}"
       - aws ssm put-parameter --name "/SSOSync/Staging/Version" --value ${AppVersion} --type String --overwrite
 
       # remove the previous builds
