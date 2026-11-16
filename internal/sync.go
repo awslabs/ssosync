@@ -554,6 +554,15 @@ func (s *syncGSuite) LegacySyncGroups(query string) error {
 
 	correlatedGroups := make(map[string]*interfaces.Group)
 
+	// Each synced group with its Google members, whose AWS memberships are
+	// reconciled once every group is correlated (#433).
+	type groupSync struct {
+		group      *interfaces.Group
+		memberList map[string]*admin.Member
+		log        *log.Entry
+	}
+	var synced []groupSync
+
 	for _, g := range googleGroups {
 		if s.ignoreGroup(g.Email) || !s.includeGroup(g.Email) {
 			continue
@@ -619,39 +628,58 @@ func (s *syncGSuite) LegacySyncGroups(query string) error {
 
 		memberList := make(map[string]*admin.Member)
 
-		log.Info("Start group user sync")
-
 		for _, m := range groupMembers {
 			if _, ok := s.users[m.Email]; ok {
 				memberList[m.Email] = m
 			}
 		}
 
+		synced = append(synced, groupSync{group: group, memberList: memberList, log: log})
+	}
+
+	// #433: one IsMemberInGroups call per user for each 100 groups, instead of
+	// one per user and group. Dry-run groups and users have no ID; the
+	// Identity Store rejects an empty ID, and one that does not exist yet has
+	// no memberships, so they are left out.
+	groupIDs := make([]string, 0, len(synced))
+	seenGroupIDs := make(map[string]struct{}, len(synced))
+	for _, gm := range synced {
+		if _, seen := seenGroupIDs[gm.group.ID]; gm.group.ID != "" && !seen {
+			seenGroupIDs[gm.group.ID] = struct{}{}
+			groupIDs = append(groupIDs, gm.group.ID)
+		}
+	}
+	memberships := make(map[string]map[string]bool, len(s.users))
+	if len(groupIDs) > 0 {
+		for _, u := range s.users {
+			if u.ID == "" {
+				continue
+			}
+			m, err := identitystore.GroupMemberships(context.Background(), s.identityStore, &s.cfg.IdentityStoreID, groupIDs, &u.ID)
+			if err != nil {
+				log.WithField("user", u.Username).
+					WithField("userId", u.ID).
+					WithField("groups", len(groupIDs)).
+					WithField("error", err).
+					Error("error checking group membership in AWS, aborting sync")
+				return err
+			}
+			memberships[u.ID] = m
+		}
+	}
+
+	for _, gm := range synced {
+		group, memberList, log := gm.group, gm.memberList, gm.log
+
+		log.Info("Start group user sync")
+
 		for _, u := range s.users {
 			log.WithField("user", u.Username).Debug("Checking user is in group already")
 
-			// Dry-run users have no ID; the Identity Store rejects an empty
-			// memberId.userId, and a user that does not exist is not a member.
-			var b *bool
-			if u.ID == "" {
-				notAMember := false
-				b = &notAMember
-			} else {
-				var err error
-				b, err = identitystore.IsMemberInGroups(context.Background(), s.identityStore, &s.cfg.IdentityStoreID, []string{group.ID}, &u.ID)
-				if err != nil {
-					// log already carries the group email.
-					log.WithField("user", u.Username).
-						WithField("userId", u.ID).
-						WithField("groupId", group.ID).
-						WithField("error", err).
-						Error("error checking group membership in AWS, aborting sync")
-					return err
-				}
-			}
+			isMember := u.ID != "" && group.ID != "" && memberships[u.ID][group.ID]
 
 			if _, ok := memberList[u.Username]; ok {
-				if !*b {
+				if !isMember {
 					log.WithField("user", u.Username).Info("Adding user to group")
 					err := s.aws.AddUserToGroup(u, group)
 					if err != nil {
@@ -659,7 +687,7 @@ func (s *syncGSuite) LegacySyncGroups(query string) error {
 					}
 				}
 			} else {
-				if *b {
+				if isMember {
 					log.WithField("user", u.Username).Warn("Removing user from group")
 					err := s.aws.RemoveUserFromGroup(u, group)
 					if err != nil {
