@@ -733,6 +733,8 @@ A user source value is one of three shapes:
 
 - **Custom schema** — `customSchemas.<SchemaName>.<fieldName>`, single-valued custom fields only; multi-valued custom attributes are ignored with a warning (see [User-defined (custom) schema sources](#user-defined-custom-schema-sources)).
 
+The source's type must match its target. `suspended` is the only boolean source, and `Active` is the only boolean target. Every other source, custom-schema fields included (ssosync converts their values to text), is a string and can map only to a string target. A map that breaks this rule, such as `"Title": "suspended"` or `"Active": "primaryEmail"`, is rejected when it is loaded, with an error naming the target and the source, before any sync.
+
 **Group target fields / sources:** `DisplayName` ← `name` (the only supported group mapping). Groups have no custom-schema sources.
 
 `Enterprise.Manager` (opt-in, not defaulted) maps from a relation value such as `relations[type=manager].value`, which Google stores as the manager's **email address** (a proxy key, not a SCIM user-id reference). This **works** where your deployment's manager relation holds an email that the Identity Store can resolve. It is opt-in rather than defaulted because it depends on your directory populating that relation; add it to your map when you want manager data synced.
