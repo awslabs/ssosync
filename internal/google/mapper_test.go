@@ -871,3 +871,41 @@ func TestMapFromGoogleUser_DisplayNameSource(t *testing.T) {
 		})
 	}
 }
+
+// #420: Attribute map panics when a string target uses a boolean source
+func TestMapFromGoogleUser_SourceTypeMismatchReturnsError(t *testing.T) {
+	u := &admin.User{
+		PrimaryEmail: "mismatch@example.com",
+		Organizations: []interface{}{
+			map[string]interface{}{"primary": true, "title": "Engineer"},
+		},
+		CustomSchemas: cs(map[string]string{
+			"Employment": `{"remote":true}`,
+		}),
+	}
+	for _, tc := range []struct {
+		target, source, wantErr string
+	}{
+		{"Title", "suspended", `target "Title" requires a string source, but source "suspended" resolved to bool`},
+		{"ProfileURL", "suspended", `target "ProfileURL" requires a string source, but source "suspended" resolved to bool`},
+		{"Name.GivenName", "suspended", `target "Name.GivenName" requires a string source, but source "suspended" resolved to bool`},
+		{"Name.FamilyName", "suspended", `target "Name.FamilyName" requires a string source, but source "suspended" resolved to bool`},
+		{"Username", "suspended", `target "Username" requires a string source, but source "suspended" resolved to bool`},
+		{"NickName", "suspended", `target "NickName" requires a string source, but source "suspended" resolved to bool`},
+		{"Enterprise.Department", "suspended", `target "Enterprise.Department" requires a string source, but source "suspended" resolved to bool`},
+		{"Enterprise.Manager", "suspended", `target "Enterprise.Manager" requires a string source, but source "suspended" resolved to bool`},
+		{"Emails", "suspended", `target "Emails" requires a string source, but source "suspended" resolved to bool`},
+		// Custom-schema values resolve to strings (a custom boolean is "true"), so
+		// the mismatch a custom source can cause is on the boolean target Active.
+		{"Active", "customSchemas.Employment.remote", `target "Active" requires a boolean source, but source "customSchemas.Employment.remote" resolved to string`},
+		{"Active", "organizations[primary].title", `target "Active" requires a boolean source, but source "organizations[primary].title" resolved to string`},
+		{"Active", "primaryEmail", `target "Active" requires a boolean source, but source "primaryEmail" resolved to string`},
+	} {
+		t.Run(tc.target+"<-"+tc.source, func(t *testing.T) {
+			assert.NotPanics(t, func() {
+				_, err := mapFromGoogleUser(u, config.AttributeMap{tc.target: tc.source})
+				assert.ErrorContains(t, err, tc.wantErr)
+			})
+		})
+	}
+}

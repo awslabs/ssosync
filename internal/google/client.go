@@ -582,7 +582,9 @@ func (c *client) getGroups(query string) ([]*admin.Group, error) {
 // the time it reaches here every entry is a known target<-source pair. A
 // genuinely-unexpected unresolved entry is therefore an internal invariant
 // breach, reported via the returned error rather than silently dropping the
-// field.
+// field. Likewise a resolved value whose type does not match the target (a
+// boolean for a string target, or a string for Active) is returned as an error
+// naming the target, the source and the actual type, never a panic (#420).
 //
 // Resolvable source paths this phase:
 //   - Scalar admin.User fields: name.givenName, name.familyName, name.fullName,
@@ -637,9 +639,9 @@ func mapFromGoogleUser(u *admin.User, attrMap config.AttributeMap) (interfaces.U
 				return interfaces.User{}, err
 			}
 			warnCustomSource(u, targetField, sourceAttr, found)
-			value, ok := v.(string)
-			if !ok {
-				return interfaces.User{}, fmt.Errorf("mapFromGoogleUser: target %q requires a string source, got %q", targetField, sourceAttr)
+			value, err := stringValue(targetField, sourceAttr, v)
+			if err != nil {
+				return interfaces.User{}, err
 			}
 			if targetField == "NickName" {
 				user.NickName = value
@@ -652,49 +654,77 @@ func mapFromGoogleUser(u *admin.User, attrMap config.AttributeMap) (interfaces.U
 				return interfaces.User{}, err
 			}
 			warnCustomSource(u, targetField, sourceAttr, found)
-			user.Name.GivenName = v.(string)
+			s, err := stringValue(targetField, sourceAttr, v)
+			if err != nil {
+				return interfaces.User{}, err
+			}
+			user.Name.GivenName = s
 		case "Name.FamilyName":
 			v, found, err := resolveGoogleUserSource(u, sourceAttr)
 			if err != nil {
 				return interfaces.User{}, err
 			}
 			warnCustomSource(u, targetField, sourceAttr, found)
-			user.Name.FamilyName = v.(string)
+			s, err := stringValue(targetField, sourceAttr, v)
+			if err != nil {
+				return interfaces.User{}, err
+			}
+			user.Name.FamilyName = s
 		case "Username":
 			v, found, err := resolveGoogleUserSource(u, sourceAttr)
 			if err != nil {
 				return interfaces.User{}, err
 			}
 			warnCustomSource(u, targetField, sourceAttr, found)
-			user.Username = v.(string)
+			s, err := stringValue(targetField, sourceAttr, v)
+			if err != nil {
+				return interfaces.User{}, err
+			}
+			user.Username = s
 		case "Active":
 			v, found, err := resolveGoogleUserSource(u, sourceAttr)
 			if err != nil {
 				return interfaces.User{}, err
 			}
 			warnCustomSource(u, targetField, sourceAttr, found)
-			user.Active = v.(bool)
+			b, err := boolValue(targetField, sourceAttr, v)
+			if err != nil {
+				return interfaces.User{}, err
+			}
+			user.Active = b
 		case "Title":
 			v, found, err := resolveGoogleUserSource(u, sourceAttr)
 			if err != nil {
 				return interfaces.User{}, err
 			}
 			warnCustomSource(u, targetField, sourceAttr, found)
-			user.Title = v.(string)
+			s, err := stringValue(targetField, sourceAttr, v)
+			if err != nil {
+				return interfaces.User{}, err
+			}
+			user.Title = s
 		case "ProfileURL":
 			v, found, err := resolveGoogleUserSource(u, sourceAttr)
 			if err != nil {
 				return interfaces.User{}, err
 			}
 			warnCustomSource(u, targetField, sourceAttr, found)
-			user.ProfileURL = v.(string)
+			s, err := stringValue(targetField, sourceAttr, v)
+			if err != nil {
+				return interfaces.User{}, err
+			}
+			user.ProfileURL = s
 		case "Enterprise.Department":
 			v, found, err := resolveGoogleUserSource(u, sourceAttr)
 			if err != nil {
 				return interfaces.User{}, err
 			}
 			warnCustomSource(u, targetField, sourceAttr, found)
-			if s := v.(string); s != "" {
+			s, err := stringValue(targetField, sourceAttr, v)
+			if err != nil {
+				return interfaces.User{}, err
+			}
+			if s != "" {
 				ensureEnterprise(&user).Department = s
 			}
 		case "Enterprise.Organization":
@@ -703,7 +733,11 @@ func mapFromGoogleUser(u *admin.User, attrMap config.AttributeMap) (interfaces.U
 				return interfaces.User{}, err
 			}
 			warnCustomSource(u, targetField, sourceAttr, found)
-			if s := v.(string); s != "" {
+			s, err := stringValue(targetField, sourceAttr, v)
+			if err != nil {
+				return interfaces.User{}, err
+			}
+			if s != "" {
 				ensureEnterprise(&user).Organization = s
 			}
 		case "Enterprise.CostCenter":
@@ -712,7 +746,11 @@ func mapFromGoogleUser(u *admin.User, attrMap config.AttributeMap) (interfaces.U
 				return interfaces.User{}, err
 			}
 			warnCustomSource(u, targetField, sourceAttr, found)
-			if s := v.(string); s != "" {
+			s, err := stringValue(targetField, sourceAttr, v)
+			if err != nil {
+				return interfaces.User{}, err
+			}
+			if s != "" {
 				ensureEnterprise(&user).CostCenter = s
 			}
 		case "Enterprise.Division":
@@ -721,7 +759,11 @@ func mapFromGoogleUser(u *admin.User, attrMap config.AttributeMap) (interfaces.U
 				return interfaces.User{}, err
 			}
 			warnCustomSource(u, targetField, sourceAttr, found)
-			if s := v.(string); s != "" {
+			s, err := stringValue(targetField, sourceAttr, v)
+			if err != nil {
+				return interfaces.User{}, err
+			}
+			if s != "" {
 				ensureEnterprise(&user).Division = s
 			}
 		case "Enterprise.EmployeeNumber":
@@ -730,7 +772,11 @@ func mapFromGoogleUser(u *admin.User, attrMap config.AttributeMap) (interfaces.U
 				return interfaces.User{}, err
 			}
 			warnCustomSource(u, targetField, sourceAttr, found)
-			if s := v.(string); s != "" {
+			s, err := stringValue(targetField, sourceAttr, v)
+			if err != nil {
+				return interfaces.User{}, err
+			}
+			if s != "" {
 				ensureEnterprise(&user).EmployeeNumber = s
 			}
 		case "Enterprise.Manager":
@@ -739,7 +785,11 @@ func mapFromGoogleUser(u *admin.User, attrMap config.AttributeMap) (interfaces.U
 				return interfaces.User{}, err
 			}
 			warnCustomSource(u, targetField, sourceAttr, found)
-			if s := v.(string); s != "" {
+			s, err := stringValue(targetField, sourceAttr, v)
+			if err != nil {
+				return interfaces.User{}, err
+			}
+			if s != "" {
 				ensureEnterprise(&user).Manager = &interfaces.EnterpriseManager{Value: s}
 			}
 		case "Emails":
@@ -748,7 +798,11 @@ func mapFromGoogleUser(u *admin.User, attrMap config.AttributeMap) (interfaces.U
 				return interfaces.User{}, err
 			}
 			warnCustomSource(u, targetField, sourceAttr, found)
-			if s := v.(string); s != "" {
+			s, err := stringValue(targetField, sourceAttr, v)
+			if err != nil {
+				return interfaces.User{}, err
+			}
+			if s != "" {
 				user.Emails = []interfaces.UserEmail{{
 					Value:   s,
 					Type:    scimTypeOrWork(googleEntryType(u, sourceAttr)),
@@ -761,7 +815,11 @@ func mapFromGoogleUser(u *admin.User, attrMap config.AttributeMap) (interfaces.U
 				return interfaces.User{}, err
 			}
 			warnCustomSource(u, targetField, sourceAttr, found)
-			if s := v.(string); s != "" {
+			s, err := stringValue(targetField, sourceAttr, v)
+			if err != nil {
+				return interfaces.User{}, err
+			}
+			if s != "" {
 				user.Addresses = []interfaces.UserAddress{{
 					Formatted: s,
 					Type:      scimTypeOrWork(googleEntryType(u, sourceAttr)),
@@ -774,7 +832,11 @@ func mapFromGoogleUser(u *admin.User, attrMap config.AttributeMap) (interfaces.U
 				return interfaces.User{}, err
 			}
 			warnCustomSource(u, targetField, sourceAttr, found)
-			if s := v.(string); s != "" {
+			s, err := stringValue(targetField, sourceAttr, v)
+			if err != nil {
+				return interfaces.User{}, err
+			}
+			if s != "" {
 				user.PhoneNumbers = []interfaces.UserPhoneNumber{{
 					Value:   s,
 					Type:    scimTypeOrWork(googleEntryType(u, sourceAttr)),
@@ -804,6 +866,27 @@ func ensureEnterprise(u *interfaces.User) *interfaces.EnterpriseUser {
 		u.Enterprise = &interfaces.EnterpriseUser{}
 	}
 	return u.Enterprise
+}
+
+// stringValue returns a resolved source value for a string target, or an error
+// naming the target, the source and the value's actual type when it is not a
+// string (#420). The load-time validator rejects the mismatches it can see, so
+// this catches the rest instead of panicking.
+func stringValue(target, source string, v interface{}) (string, error) {
+	s, ok := v.(string)
+	if !ok {
+		return "", fmt.Errorf("mapFromGoogleUser: target %q requires a string source, but source %q resolved to %T", target, source, v)
+	}
+	return s, nil
+}
+
+// boolValue is stringValue for the boolean target Active (#420).
+func boolValue(target, source string, v interface{}) (bool, error) {
+	b, ok := v.(bool)
+	if !ok {
+		return false, fmt.Errorf("mapFromGoogleUser: target %q requires a boolean source, but source %q resolved to %T", target, source, v)
+	}
+	return b, nil
 }
 
 // scimTypeOrWork returns the Google entry's own type, defaulting to "work" when
