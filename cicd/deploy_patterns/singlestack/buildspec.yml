@@ -17,7 +17,8 @@ phases:
   build:
     commands:
       # Create parameters
-      - export AppVersion="${GitTag#v}-${GitVersionHash}"
+      # "g" prefix: a numeric SemVer pre-release identifier can't have a leading zero, so an all-digit hash like 0002915 is rejected (#430)
+      - export AppVersion="${GitTag#v}-g${GitVersionHash}"
 
       # Copy in the tests
       - cp -r cicd/tests ./
