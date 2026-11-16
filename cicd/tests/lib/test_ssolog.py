@@ -348,6 +348,22 @@ class AssertLogTest(unittest.TestCase):
         self.assertEqual(run_am("absent", p, "--msg", "Change Summary")[0], 1)
         self.assertEqual(run_am("absent", p, "--msg", "nothing like this")[0], 0)
 
+    # #429: user/group operations S9 counts the RateTest groups by name prefix.
+    def test_count_prefix(self):
+        p = self.log([
+            {"msg": "Change Summary: Group Members", "group": "ratetest_00@example.com", "unchanged": 3},
+            {"msg": "Change Summary: Group Members", "group": "RateTest_01@example.com", "unchanged": 2},
+            {"msg": "Change Summary: Group Members", "group": "awsadmins@example.com", "unchanged": 3},
+            {"msg": "Change Summary: Group Members", "unchanged": 3},
+        ])
+        base = ["count", p, "--msg", "Change Summary: Group Members", "--prefix", "group=RateTest"]
+        # case-insensitive; a line without the field never matches
+        self.assertEqual(run_am(*base, "--eq", "2")[0], 0)
+        self.assertEqual(run_am(*base, "--field", "unchanged=3", "--eq", "1")[0], 0)
+        self.assertEqual(run_am(*base, "--field", "unchanged=3", "--eq", "2")[0], 1)
+        self.assertEqual(run_am("absent", p, "--msg", "Change Summary", "--prefix", "group=nope")[0], 0)
+        self.assertEqual(run_am("absent", p, "--msg", "Change Summary", "--prefix", "group=aws")[0], 1)
+
     # text-format and non-JSON lines
     def test_logrus_text_fatal_line(self):
         p = self.log([

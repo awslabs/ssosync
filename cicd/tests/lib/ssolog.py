@@ -26,10 +26,12 @@ Subcommands (exit 0 = pass, 1 = fail, with the reason printed):
       The run proposed no change: every user/group action counter is 0, no
       group member is added or removed, and no "DRY RUN: Would ..." line.
 
-  count     LOG --msg TEXT [--field k=v ...] (--eq N | --min N)
-      Count lines whose msg contains TEXT and whose fields equal every k=v.
+  count     LOG --msg TEXT [--field k=v ...] [--prefix k=v ...] (--eq N | --min N)
+      Count lines whose msg contains TEXT, whose fields equal every --field
+      k=v, and whose fields start with every --prefix k=v (ignoring letter
+      case, e.g. --prefix group=RateTest for ratetest_00@example.com).
 
-  absent    LOG --msg TEXT [--field k=v ...]
+  absent    LOG --msg TEXT [--field k=v ...] [--prefix k=v ...]
       Shorthand for count --eq 0.
 
   field     LOG --msg MSG --key KEY
@@ -258,8 +260,11 @@ def cmd_converged(a):
 
 # --- line matching ------------------------------------------------------------
 
-def matches(rec, text, fields):
+def matches(rec, text, fields, prefixes=None):
     if text not in str(rec.get("msg", "")):
+        return False
+    if not all(k in rec and as_str(rec[k]).lower().startswith(v.lower())
+               for k, v in (prefixes or {}).items()):
         return False
     return all(as_str(rec.get(k, "<missing>")) == v for k, v in fields.items())
 
@@ -267,9 +272,14 @@ def matches(rec, text, fields):
 def cmd_count(a, eq=None):
     records = load(a.log)
     fields = parse_kv(a.field)
-    n = sum(1 for r in records if matches(r, a.msg, fields))
+    prefixes = parse_kv(a.prefix)
+    n = sum(1 for r in records if matches(r, a.msg, fields, prefixes))
     want_eq = eq if eq is not None else a.eq
-    desc = f"msg~{a.msg!r} {fields}" if fields else f"msg~{a.msg!r}"
+    desc = f"msg~{a.msg!r}"
+    if prefixes:
+        desc += " " + " ".join(f"{k}^={v!r}" for k, v in prefixes.items())
+    if fields:
+        desc += f" {fields}"
     if want_eq is not None:
         if n != want_eq:
             fail(f"{desc}: count={n}, expected {want_eq}")
@@ -529,6 +539,7 @@ def main(argv=None):
     for name in ("count", "absent"):
         s = sub.add_parser(name); s.add_argument("log")
         s.add_argument("--msg", required=True); s.add_argument("--field", action="append")
+        s.add_argument("--prefix", action="append")
         if name == "count":
             g = s.add_mutually_exclusive_group(required=True)
             g.add_argument("--eq", type=int); g.add_argument("--min", type=int)
