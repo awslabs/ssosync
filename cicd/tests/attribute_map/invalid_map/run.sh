@@ -20,6 +20,8 @@ fi
 check assert_log count "$LOG" --msg "cannot load attribute map file" --min 1
 check assert_log count "$LOG" --msg 'unsupported target field "Name.Givenname"' --min 1
 check assert_log count "$LOG" --msg 'unsupported source attribute "organizations[type=work].nosuchsubfield"' --min 1
+# #420: a boolean source on a string target fails the load, not the sync.
+check assert_log count "$LOG" --msg 'target field "NickName" requires a string source, but source attribute "suspended" is a boolean' --min 1
 check assert_log absent "$LOG" --msg "Change Summary"
 
 finish
