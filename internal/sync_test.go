@@ -2515,7 +2515,7 @@ func TestLegacySyncGroups_MemberAdded(t *testing.T) {
 	s.identityStore.(*mocks.MockIdentityStoreAPI).EXPECT().
 		IsMemberInGroups(mock.Anything, mock.Anything, mock.Anything).
 		Return(&identitystore.IsMemberInGroupsOutput{
-			Results: []types.GroupMembershipExistenceResult{{MembershipExists: false}},
+			Results: []types.GroupMembershipExistenceResult{{GroupId: aws.String("aws-1"), MembershipExists: false}},
 		}, nil)
 	awsClient.EXPECT().AddUserToGroup(user, mock.MatchedBy(func(g *interfaces.Group) bool {
 		return g.ID == "aws-1"
@@ -2543,7 +2543,7 @@ func TestLegacySyncGroups_MemberRemoved(t *testing.T) {
 	s.identityStore.(*mocks.MockIdentityStoreAPI).EXPECT().
 		IsMemberInGroups(mock.Anything, mock.Anything, mock.Anything).
 		Return(&identitystore.IsMemberInGroupsOutput{
-			Results: []types.GroupMembershipExistenceResult{{MembershipExists: true}},
+			Results: []types.GroupMembershipExistenceResult{{GroupId: aws.String("aws-1"), MembershipExists: true}},
 		}, nil)
 	awsClient.EXPECT().RemoveUserFromGroup(user, mock.MatchedBy(func(g *interfaces.Group) bool {
 		return g.ID == "aws-1"
@@ -4903,4 +4903,111 @@ func TestIgnoreUser_Issue418_MixedCaseEntry(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, members)
 	assert.Len(t, issue404Entries(hook, log.InfoLevel, "skip: ignore list"), 2)
+}
+
+// #433: users_groups: batch IsMemberInGroups calls (up to 100 groups per call)
+
+// issue433Suite builds a LegacySyncGroups suite with n Google groups, each
+// matched by ExternalId to AWS group aws-NNN and listing members a@example.com
+// and c@example.com. Users a and b have IDs; c is a dry-run user with none. IsMemberInGroups
+// reports a as a member of every group but aws-000, and b of aws-<n-1> only.
+// It returns the per-user GroupIds batch sizes seen.
+func issue433Suite(t *testing.T, n int) (*syncGSuite, *mocks.MockAwsClient, map[string][]int) {
+	t.Helper()
+	cfg := &config.Config{IdentityStoreID: "d-1"}
+	var googleGroups []*admin.Group
+	var awsSdk []types.Group
+	for i := 0; i < n; i++ {
+		email := fmt.Sprintf("group%03d@example.com", i)
+		cfg.IncludeGroups = append(cfg.IncludeGroups, email)
+		googleGroups = append(googleGroups, &admin.Group{Email: email, Id: fmt.Sprintf("gid-%03d", i)})
+		awsSdk = append(awsSdk, sdkGroup(fmt.Sprintf("aws-%03d", i), email, fmt.Sprintf("gid-%03d", i)))
+	}
+	s, awsClient, googleClient := newLegacySyncGroupsSuite(t, cfg, googleGroups, awsSdk)
+	s.users["a@example.com"] = &interfaces.User{ID: "user-a", Username: "a@example.com"}
+	s.users["b@example.com"] = &interfaces.User{ID: "user-b", Username: "b@example.com"}
+	s.users["c@example.com"] = &interfaces.User{ID: "", Username: "c@example.com"}
+	googleClient.EXPECT().GetGroupMembers(mock.Anything).
+		Return([]*admin.Member{{Email: "a@example.com"}, {Email: "c@example.com"}}, nil).Times(n)
+
+	last := fmt.Sprintf("aws-%03d", n-1)
+	batches := make(map[string][]int)
+	s.identityStore.(*mocks.MockIdentityStoreAPI).EXPECT().
+		IsMemberInGroups(mock.Anything, mock.Anything, mock.Anything).
+		RunAndReturn(func(_ context.Context, in *identitystore.IsMemberInGroupsInput, _ ...func(*identitystore.Options)) (*identitystore.IsMemberInGroupsOutput, error) {
+			user := in.MemberId.(*types.MemberIdMemberUserId).Value
+			batches[user] = append(batches[user], len(in.GroupIds))
+			out := &identitystore.IsMemberInGroupsOutput{}
+			for _, id := range in.GroupIds {
+				exists := (user == "user-a" && id != "aws-000") || (user == "user-b" && id == last)
+				out.Results = append(out.Results, types.GroupMembershipExistenceResult{GroupId: aws.String(id), MembershipExists: exists})
+			}
+			return out, nil
+		})
+	return s, awsClient, batches
+}
+
+func TestLegacySyncGroups_Issue433_BatchesIsMemberInGroups(t *testing.T) {
+	for _, tc := range []struct {
+		groups  int
+		batches []int // per user with an ID
+	}{
+		{groups: 1, batches: []int{1}},
+		{groups: 100, batches: []int{100}},
+		{groups: 101, batches: []int{100, 1}},
+		{groups: 250, batches: []int{100, 100, 50}},
+	} {
+		t.Run(fmt.Sprintf("%d groups", tc.groups), func(t *testing.T) {
+			s, awsClient, batches := issue433Suite(t, tc.groups)
+			last := fmt.Sprintf("aws-%03d", tc.groups-1)
+			// a is a Google member of every group but an AWS member of all
+			// but aws-000; b is an AWS member of the last group only, and a
+			// Google member of none.
+			awsClient.EXPECT().AddUserToGroup(s.users["a@example.com"], mock.MatchedBy(func(g *interfaces.Group) bool {
+				return g.ID == "aws-000"
+			})).Return(nil).Once()
+			awsClient.EXPECT().RemoveUserFromGroup(s.users["b@example.com"], mock.MatchedBy(func(g *interfaces.Group) bool {
+				return g.ID == last
+			})).Return(nil).Once()
+			// c has no ID (dry run): no IsMemberInGroups call, added everywhere.
+			awsClient.EXPECT().AddUserToGroup(s.users["c@example.com"], mock.Anything).Return(nil).Times(tc.groups)
+
+			require.NoError(t, s.LegacySyncGroups(""))
+			// users x ceil(groups / 100) calls, instead of users x groups.
+			assert.Equal(t, map[string][]int{"user-a": tc.batches, "user-b": tc.batches}, batches)
+		})
+	}
+}
+
+// A group a dry run would create has no ID: it is left out of the batch and
+// its Google members are treated as non-members, so they are added.
+func TestLegacySyncGroups_Issue433_DryRunNewGroupNotQueried(t *testing.T) {
+	cfg := &config.Config{IdentityStoreID: "d-1", DryRun: true, IncludeGroups: []string{"new@example.com"}}
+	google := []*admin.Group{{Email: "new@example.com", Id: "gid-new"}}
+	s, awsClient, googleClient := newLegacySyncGroupsSuite(t, cfg, google, []types.Group{})
+	user := &interfaces.User{ID: "user-a", Username: "a@example.com"}
+	s.users["a@example.com"] = user
+	awsClient.EXPECT().CreateGroup(mock.Anything).
+		Return(&interfaces.Group{DisplayName: "new@example.com", ExternalId: interfaces.ExternalId{Id: "gid-new"}}, nil)
+	googleClient.EXPECT().GetGroupMembers(google[0]).Return([]*admin.Member{{Email: "a@example.com"}}, nil)
+	// No IsMemberInGroups EXPECT: mockery fails the test on any call.
+	awsClient.EXPECT().AddUserToGroup(user, mock.MatchedBy(func(g *interfaces.Group) bool {
+		return g.DisplayName == "new@example.com"
+	})).Return(nil).Once()
+
+	require.NoError(t, s.LegacySyncGroups(""))
+}
+
+// An IsMemberInGroups error aborts the sync before any membership change.
+func TestLegacySyncGroups_Issue433_ErrorAborts(t *testing.T) {
+	cfg := &config.Config{IdentityStoreID: "d-1", IncludeGroups: []string{"group@example.com"}}
+	google := []*admin.Group{{Email: "group@example.com", Id: "gid-1"}}
+	s, _, googleClient := newLegacySyncGroupsSuite(t, cfg, google, []types.Group{sdkGroup("aws-1", "group@example.com", "gid-1")})
+	s.users["a@example.com"] = &interfaces.User{ID: "user-a", Username: "a@example.com"}
+	googleClient.EXPECT().GetGroupMembers(google[0]).Return([]*admin.Member{{Email: "a@example.com"}}, nil)
+	s.identityStore.(*mocks.MockIdentityStoreAPI).EXPECT().
+		IsMemberInGroups(mock.Anything, mock.Anything, mock.Anything).
+		Return(nil, assert.AnError).Once()
+
+	assert.ErrorIs(t, s.LegacySyncGroups(""), assert.AnError)
 }

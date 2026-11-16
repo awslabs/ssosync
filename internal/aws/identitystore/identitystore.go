@@ -123,6 +123,36 @@ func IsMemberInGroups(ctx context.Context, client interfaces.IdentityStoreAPI, i
 	return aws.Bool(false), nil
 }
 
+// MaxIsMemberInGroupsGroupIds is the most GroupIds one IsMemberInGroups call
+// accepts (https://docs.aws.amazon.com/singlesignon/latest/IdentityStoreAPIReference/API_IsMemberInGroups.html).
+const MaxIsMemberInGroupsGroupIds = 100
+
+// GroupMemberships reports, for each of groupIDs, whether userID is a member.
+// It calls IsMemberInGroups once per chunk of up to MaxIsMemberInGroupsGroupIds
+// group IDs (#433). A group missing from the results is reported as false.
+func GroupMemberships(ctx context.Context, client interfaces.IdentityStoreAPI, identityStoreID *string, groupIDs []string, userID *string) (map[string]bool, error) {
+	memberships := make(map[string]bool, len(groupIDs))
+	for start := 0; start < len(groupIDs); start += MaxIsMemberInGroupsGroupIds {
+		end := min(start+MaxIsMemberInGroupsGroupIds, len(groupIDs))
+		result, err := client.IsMemberInGroups(ctx, &identitystore.IsMemberInGroupsInput{
+			IdentityStoreId: identityStoreID,
+			MemberId: &types.MemberIdMemberUserId{
+				Value: *userID,
+			},
+			GroupIds: groupIDs[start:end],
+		})
+		if err != nil {
+			return nil, err
+		}
+		for _, r := range result.Results {
+			if r.GroupId != nil {
+				memberships[*r.GroupId] = r.MembershipExists
+			}
+		}
+	}
+	return memberships, nil
+}
+
 // ListGroups lists all groups with pagination support
 func ListGroups(ctx context.Context, client interfaces.IdentityStoreAPI, identityStoreID *string, converter func(types.Group) *interfaces.Group) ([]*interfaces.Group, error) {
 	var groups []*interfaces.Group
