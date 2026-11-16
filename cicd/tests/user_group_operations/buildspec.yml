@@ -22,6 +22,11 @@ env:
     # "true": fail (instead of skip) the foreign-issuer scenarios when the
     # Identity Store API cannot write ExternalIds.
     UGO_FOREIGN_REQUIRED: "false"
+    # S9 (#429): the Google groups RateTest_00..RateTest_29, each with members
+    # crpates@, acehole@ and dave2@nothing2see.info (never Olaf). S9 syncs them
+    # alongside GROUP_MATCH and deletes them again; it is skipped if unset.
+    UGO_RATE_GROUP_MATCH: "name:RateTest*"
+    UGO_RATE_GROUPS: "30"
 
 phases:
   build:

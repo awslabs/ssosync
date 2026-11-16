@@ -17,6 +17,12 @@
 #   S8a AdoptForeign       managed record given a foreign-issuer ExternalId
 #   S8b Delete / Retain    foreign record not in Google; Retain with -r
 #   S8c Multi-ExternalId   record with a foreign AND this tenant's ExternalId is Equal
+#   S9  Pacing (#429)      UGO_RATE_GROUPS Google groups matched by UGO_RATE_GROUP_MATCH
+#                          (RateTest_00..RateTest_29; members crpates, acehole and
+#                          dave2, never Olaf) are synced, their memberships read at
+#                          no more than 18 Identity Store calls a second, never
+#                          throttled, then deleted again. Runs last, so the groups
+#                          never exist while S6/S7 re-create UGO_TEST_USER.
 #
 # S8 needs the Identity Store API to write ExternalIds; a probe checks that first
 # and the S8 scenarios are SKIPPED (with the API error) if it cannot, unless
@@ -340,6 +346,54 @@ s8b_foreign_unmatched() {
   converge "$LOG_DIR/S8b_converge.log"
 }
 
+# S9 (#429): every Identity Store attempt is paced to 18 a second. Each run
+# here matches the RateTest groups as well as the default groups; an
+# assignment before a function call lasts only for that call.
+s9_rate_limit() {
+  local match="$GROUP_MATCH,$UGO_RATE_GROUP_MATCH" want="$UGO_RATE_GROUPS"
+  # Display names are the group emails, ratetest_NN@..., so match by prefix.
+  local prefix="${UGO_RATE_GROUP_MATCH#name:}"; prefix="${prefix%\*}"
+  local create="$LOG_DIR/S9_create.log" paced="$LOG_DIR/S9_paced.log" cleanup="$LOG_DIR/S9_cleanup.log"
+  # A live run under the default match alone deletes the RateTest groups.
+  undo groups run_ssosync "$LOG_DIR/S9_undo.log"
+
+  # A: create the groups and their memberships. A count other than $want means
+  # the tenant is not ready, or Google's search index has not caught up.
+  GROUP_MATCH="$match" run_ssosync "$create" || return 1
+  expect check summary "$create" --groups "create=$want" recreate=0 delete=0 --users create=0 delete=0 recreate=0
+  expect check absent "$create" --msg "Identity Store request throttled"
+
+  # B: the measured run. Memberships are read with one ListGroupMemberships
+  # call per Identity Store group (each RateTest group is one page).
+  GROUP_MATCH="$match" run_ssosync "$paced" --dry-run || return 1
+  expect check converged "$paced"
+  expect check count "$paced" --msg "Change Summary: Group Members" --prefix "group=$prefix" --eq "$want"
+  expect check count "$paced" --msg "Change Summary: Group Members" --prefix "group=$prefix" \
+    --field unchanged=3 --field add=0 --field remove=0 --eq "$want"
+  expect check absent "$paced" --msg "Identity Store request throttled"
+  local groups elapsed bound
+  groups=$(check field "$paced" --msg "GetGroupMembershipsLists() Return" --key groups) || return 1
+  elapsed=$(check field "$paced" --msg "GetGroupMembershipsLists() Return" --key elapsedMs) || return 1
+  # N paced calls take at least (N - 1) / 18 s: 1,611 ms for 30 calls.
+  bound=$(( (groups - 1) * 1000 / 18 ))
+  note "memberships: $groups calls in ${elapsed} ms (at least ${bound} ms at 18/s);" \
+    "$(awk -v g="$groups" -v e="$elapsed" 'BEGIN { printf "%.1f", (g - 1) * 1000 / (e > 0 ? e : 1) }') calls/s"
+  if [ "$groups" -lt "$want" ]; then
+    echo "FAIL: memberships read for $groups groups, expected at least $want"; S_FAIL=1
+  fi
+  if [ "$elapsed" -lt "$bound" ]; then
+    echo "FAIL: $groups membership calls took ${elapsed} ms, under the ${bound} ms 18/s pacing allows"; S_FAIL=1
+  fi
+
+  # C: clean up with a live run under the default match alone.
+  if run_ssosync "$cleanup"; then
+    expect check summary "$cleanup" --groups "delete=$want" create=0 --users create=0 delete=0
+    expect check absent "$cleanup" --msg "Identity Store request throttled"
+  else S_FAIL=1; fi
+  converge "$LOG_DIR/S9_converge.log"
+  passed_since 0 && done_undo groups
+}
+
 # =============================================================================
 scenario S1 "Baseline: IssuerArn and Equal" s1_baseline
 if grep -q '^S1|FAIL' "$RESULTS"; then
@@ -391,3 +445,9 @@ if [ -n "$FOREIGN_SKIP" ] && [ "${UGO_FOREIGN_REQUIRED:-false}" = true ]; then F
 scenario S8c "Equal with multiple ExternalIds (this tenant's entry not first)" s8c_multi_external_id "$FOREIGN_SKIP"
 scenario S8a "AdoptForeign (foreign issuer, in Google)" s8a_adopt_foreign "$FOREIGN_SKIP"
 scenario S8b "Delete / Retain (foreign issuer, not in Google)" s8b_foreign_unmatched "$FOREIGN_SKIP"
+
+RATE_SKIP=""
+if [ -z "${UGO_RATE_GROUP_MATCH:-}" ] || [ -z "${UGO_RATE_GROUPS:-}" ]; then
+  RATE_SKIP="UGO_RATE_GROUP_MATCH and UGO_RATE_GROUPS are not set"
+fi
+scenario S9 "Identity Store pacing (#429)" s9_rate_limit "$RATE_SKIP"
