@@ -2244,10 +2244,9 @@ func DoSync(ctx context.Context, cfg *config.Config) error {
 		return err
 	}
 
-	// Initialize AWS Identity Store Public API Client with session
-	identityStoreClient := aws_identitystore.NewFromConfig(aws_cfg, func(o *aws_identitystore.Options) {
-		o.Region = cfg.Region
-	})
+	// Initialize AWS Identity Store Public API Client: adaptive retries, 10
+	// attempts, paced to 18 requests per second (#429)
+	identityStoreClient := identitystore.NewClient(aws_cfg, cfg.Region)
 
 	// Wrap with dry run client if in dry run mode
 	var finalIdentityStoreClient interfaces.IdentityStoreAPI = identityStoreClient

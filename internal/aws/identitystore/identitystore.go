@@ -6,9 +6,65 @@ import (
 	"ssosync/internal/interfaces"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
+	"github.com/aws/aws-sdk-go-v2/aws/retry"
 	"github.com/aws/aws-sdk-go-v2/service/identitystore"
 	"github.com/aws/aws-sdk-go-v2/service/identitystore/types"
+	"github.com/aws/smithy-go/middleware"
+	log "github.com/sirupsen/logrus"
+	"golang.org/x/time/rate"
 )
+
+// #429: the Identity Store APIs are limited to 20 TPS per API per Identity
+// Store instance (https://docs.aws.amazon.com/singlesignon/latest/userguide/limits.html).
+const (
+	// MaxAttempts is the default number of attempts per Identity Store request
+	// (SDK default 3). AWS_MAX_ATTEMPTS or shared-config max_attempts win.
+	MaxAttempts = 10
+	// RequestsPerSecond caps every Identity Store attempt, retries included.
+	// It is below the 20 TPS limit to leave headroom for other callers.
+	RequestsPerSecond = 18
+)
+
+// NewClient returns the Identity Store client ssosync uses: adaptive retry
+// mode and MaxAttempts unless AWS_RETRY_MODE / AWS_MAX_ATTEMPTS (or shared
+// config) set them, and every attempt paced to RequestsPerSecond.
+func NewClient(cfg aws.Config, region string, optFns ...func(*identitystore.Options)) *identitystore.Client {
+	if cfg.RetryMode == "" {
+		cfg.RetryMode = aws.RetryModeAdaptive
+	}
+	if cfg.RetryMaxAttempts == 0 {
+		cfg.RetryMaxAttempts = MaxAttempts
+	}
+	opts := []func(*identitystore.Options){
+		func(o *identitystore.Options) { o.Region = region },
+		WithRateLimit(rate.NewLimiter(rate.Limit(RequestsPerSecond), 1)),
+	}
+	return identitystore.NewFromConfig(cfg, append(opts, optFns...)...)
+}
+
+// WithRateLimit waits on l before every attempt of every operation (it runs
+// after the SDK's "Retry" middleware), and logs each throttled attempt.
+func WithRateLimit(l *rate.Limiter) func(*identitystore.Options) {
+	throttle := retry.IsErrorThrottles(retry.DefaultThrottles)
+	return func(o *identitystore.Options) {
+		o.APIOptions = append(o.APIOptions, func(s *middleware.Stack) error {
+			return s.Finalize.Insert(middleware.FinalizeMiddlewareFunc("ssosyncIdentityStoreRateLimit",
+				func(ctx context.Context, in middleware.FinalizeInput, next middleware.FinalizeHandler) (
+					middleware.FinalizeOutput, middleware.Metadata, error) {
+					if err := l.Wait(ctx); err != nil {
+						return middleware.FinalizeOutput{}, middleware.Metadata{}, err
+					}
+					out, md, err := next.HandleFinalize(ctx, in)
+					if err != nil && throttle.IsErrorThrottle(err) == aws.TrueTernary {
+						log.WithFields(log.Fields{"operation": awsmiddleware.GetOperationName(ctx), "error": err}).
+							Warn("Identity Store request throttled")
+					}
+					return out, md, err
+				}), "Retry", middleware.After)
+		})
+	}
+}
 
 // CreateGroup creates a group in the identity store
 func CreateGroup(ctx context.Context, client interfaces.IdentityStoreAPI, identityStoreID *string, displayName *string) (*identitystore.CreateGroupOutput, error) {
