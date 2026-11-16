@@ -14,6 +14,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ssoadmin v1.41.0
 	github.com/aws/aws-sdk-go-v2/service/sts v1.44.0
 	github.com/aws/aws-secretsmanager-caching-go/v2 v2.2.0
+	github.com/aws/smithy-go v1.27.3
 	github.com/hashicorp/go-retryablehttp v0.7.8
 	github.com/pkg/errors v0.9.1
 	github.com/sirupsen/logrus v1.9.4
@@ -21,6 +22,7 @@ require (
 	github.com/spf13/viper v1.21.0
 	github.com/stretchr/testify v1.12.1
 	golang.org/x/oauth2 v0.36.0
+	golang.org/x/time v0.15.0
 	google.golang.org/api v0.287.0
 )
 
@@ -38,7 +40,6 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/signin v1.3.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sso v1.32.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.37.0 // indirect
-	github.com/aws/smithy-go v1.27.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/felixge/httpsnoop v1.1.0 // indirect
 	github.com/fsnotify/fsnotify v1.10.1 // indirect
