@@ -1,51 +1,23 @@
-## v2.12.0 - 2026-11-17
-
-### Changelog
-
-* d122dad1b69f58282283241946db9fb30f42eb60 Update CHANGELOG and Quick Start templates
-* b43a1e025b4a8bc33f258b2350bea40d187ab9bc build(deps): bump go.opentelemetry.io/otel/trace from 1.44.0 to 1.47.0
-* 9a5603d172ae7a6a3e65455c24b2efd2ef661d15 docs(steering): test-file rule and versioning/release procedure (#421)
-* 2c9147ef50cfca9d041dae9ef742086687cafac3 feat: support Google name.displayName as an attribute-map source (#421)
-* ce51d643208894340dda19b1b086972eb8d81884 feat: support optional nickname and formatted-name mappings
-* 32a92a994b3bc5629b99237cb85a634c01e9459e fix(cicd): prefix the staging SAR version hash with g (#430)
-* 9597e3d42f1d1cf1be92624999c55552df65055d fix: reject an attribute-map source whose type does not match the target (#420)
-* 68ee6ef4dca96e4d316cdb593842389eed3b8885 fix: return an error instead of panicking on a mistyped mapped value (#420)
-* 0634ccfc6e434111ecaf76d5b348240d650dd2d3 test(cicd): invalid_map asserts the source type mismatch error (#420)
-* 6ee6301830227f74f23b0e54158b13f1e61a39e0 test(cicd): live tests for the NickName and Name.Formatted mappings (#421)
-
-## Unreleased
-
+## v2.12.0
 - The attribute map can populate the user's SCIM `nickName` and `name.formatted`, with the opt-in user targets `NickName` and `Name.Formatted`, and Google's `name.fullName` (the given and family names joined by a space) is a supported source (#421, from #412 by @dSmithShmog). Neither target is in the default map, so with the default map nothing changes. Mapping a target to a boolean source such as `suspended` fails the run with an error.
 - Google's `name.displayName`, the display name an administrator can set on a user, is a supported attribute-map source, for example `"NickName": "name.displayName"` (#421). A user with no display name set resolves to an empty value.
 - An attribute map that maps a target to a source of the wrong type, such as the boolean `suspended` to the string target `Title`, or a string source such as `primaryEmail` to `Active`, now fails at startup with an error naming the target and the source (`target field "Title" requires a string source, but source attribute "suspended" is a boolean`), before any sync (#420). Before, ssosync panicked during the sync.
 - If a mapped Google value still reaches a user target with the wrong type during a sync, ssosync stops the run with an error naming the target, the source and the value's type (`target "Title" requires a string source, but source "suspended" resolved to bool`) instead of panicking (#420). Every target now checks the type, as `NickName` and `Name.Formatted` already did.
 - CI/CD only: the pipelines publish the staging SAR applications at `<tag>-g<short hash>` instead of `<tag>-<short hash>` (#430). A short hash made only of digits with a leading zero, such as `0002915`, gave an invalid SemVer version (`2.11.1-0002915`), so `sam publish` failed. Public release versions are unchanged.
 - Dependency updates, no behaviour change (#428, from #427 by Dependabot): `go.opentelemetry.io/otel`, `otel/metric` and `otel/trace` 1.44.0 to 1.47.0 (adding the indirect `otel/log` API), `go-logr/logr` 1.4.4, `go.yaml.in/yaml/v3` 3.0.5, and the test-only `stretchr/testify` 1.11.1 to 1.12.1, which drops `davecgh/go-spew`, `pmezard/go-difflib` and `gopkg.in/yaml.v3` from the module graph.
-
 ## v2.11.1
-
 - `PrecacheOrgUnits` (`--precache-ous`) now precaches only the users in the listed OUs and their sub-OUs (#404). The combined query started with a comma, so ssosync also fetched the whole directory on every run, whatever OUs were listed (the default `/` fetched it twice). Each OU is now queried on its own: an OU that cannot be queried, or has no users matching the filter, is skipped with a warning naming it (`PrecacheOrgUnits: OrgUnitPath could not be queried …` / `PrecacheOrgUnits: no users found in OrgUnitPath …`), and the other OUs are still precached; before, one failing OU disabled user precaching entirely. `Precaching failed, caching on the fly` is logged only when every OU fails. Deployments that list OUs to narrow the precache now precache fewer users, and look up members outside those OUs one at a time; with `--cache-metrics` the end-of-run counts cover only OUs of users the run saw.
-  
 - With `--cache-metrics`, a user that overlapping `PrecacheOrgUnits` entries (such as `/` and `/Sales`) return more than once is counted once as a precache and then as a cache hit, instead of a precache every time (#404). The duplicate check looked at a map that is still empty during precaching. Only the metrics change; the user was already cached once.
-  
 - With `--cache-metrics`, the end-of-run `Cache Stats` count each precache, hit and miss once (#413). Each was counted at least twice, and also credited to any OU whose path merely appeared as text in the user's OU path (`/Sales` for a user in `/Sales Team` or `/Presales`), but only to OUs already seen at that point, so totals depended on order. Each OU now reports itself and its sub-OUs, matched by path, the same tree that `TotalUsers` and `--precache-ous` cover. Sync results are unchanged.
-  
 - With `--cache-metrics`, a group member that has to be looked up in Google counts as a miss only, no longer as both a miss and a hit (#413); a hit now always means a lookup the cache avoided.
-  
 - With `--cache-metrics`, the end-of-run `TotalUsers` counts no longer download every user in each OU (#416). An OU that `--precache-ous` already listed reuses that count, and any other OU is counted with a query that returns only user ids, 500 per page; for `/` this was a full download of the directory, made twice when `/` was also precached. The counts are unchanged.
-  
 - With `--cache-metrics` and `--user-match`, the users the match lists count as precaches, as `--precache-ous` users do, instead of misses (#417). A user already cached (by `--precache-ous`, or listed twice) keeps its cached entry and counts as a hit, instead of being replaced and counted as a miss. Sync results are unchanged.
-  
 - Group members listed in a different letter case from the user's primary email, or by one of the user's aliases, are found in the user cache instead of being looked up in Google on every membership (#418). Google email addresses are now matched case-insensitively, as Google does. With `--cache-metrics`, each lookup that is still needed counts as one miss and later memberships as hits; in 2.11.0 the repeated lookups counted as hits. `--ignore-users` entries are matched case-insensitively too, so a mixed-case entry still ignores the user. Sync results are otherwise unchanged.
-  
-- An empty element in a comma-separated `--user-match` or `--group-match` (`GoogleUserMatch` / `GoogleGroupMatch`), such as a trailing comma (`email:a*,`), a leading comma or `,,`, is now ignored with a warning naming the query (`query has an empty comma-separated element, which is ignored`) (#414). Google received it as a query with only the user filter, or no query for groups, so a narrow match listed the whole directory. A match made only of empty elements (such as `,`, ` ` or `,`) now fails the run with an error naming the query (`query has only empty comma-separated elements`), before any group or user is synced for it; treated as an empty match it would have listed no groups, and a `groups` sync would then have deleted every unmatched AWS group. `""` and `*` are unchanged. `--precache-ous` sends one term per OU (#404) and is unaffected.
-  
+- An empty element in a comma-separated `--user-match` or `--group-match` (`GoogleUserMatch` / `GoogleGroupMatch`), such as a trailing comma (`email:a*,`), a leading comma or `,,`, is now ignored with a warning naming the query (`query has an empty comma-separated element, which is ignored`) (#414). Google received it as a query with only the user filter, or no query for groups, so a narrow match listed the whole directory. A match made only of empty elements (such as `,`, ` ` or ` , `) now fails the run with an error naming the query (`query has only empty comma-separated elements`), before any group or user is synced for it; treated as an empty match it would have listed no groups, and a `groups` sync would then have deleted every unmatched AWS group. `""` and `*` are unchanged. `--precache-ous` sends one term per OU (#404) and is unaffected.
+
 - The developer and release test pipelines no longer delete `TestAccountExecution` between the attribute-map and functional tests (`CleanUp-AttributeMap` is gone): `Deploy-Functional` updates the stack in place, back to the default attribute map (#409). Deleting and recreating it reused the role name `SSOSync_ExecutionRole` within seconds, and Lambda could fail to assume the not-yet-propagated role ("The role defined for the function cannot be assumed by Lambda").
-  
 - The developer and release test pipelines deploy `TestAccountExecution` and `QuickStartTests` with `REPLACE_ON_FAILURE` instead of `CREATE_UPDATE` (#409). A stack that a failed run left in a failed state (such as `ROLLBACK_COMPLETE`) is now deleted and recreated, so a retry no longer needs it deleted by hand first; a healthy stack is still updated in place, so the in-place updates (attribute-map to functional, classic to next-gen quick-starts) are unchanged.
-  
 - The release test pipelines' CodePipeline role has `cloudformation:DescribeStackEvents`, as the developer pipeline's already does, so a failed CloudFormation action shows CloudFormation's reason in CodePipeline instead of "Status reason is not available" (#409).
-  
 
 ## v2.11.0
 
@@ -58,7 +30,6 @@
   - **`SSOSync` (classic)** keeps the 2.10.0 parameters (stored key, Google admin, both sync methods), with their patterns widened to accept apostrophes (#401), so existing deployments, and **Sync from Git** deployments of `quick-start/single-account.yaml` and `single-account-attribute-map.yaml`, upgrade to 2.11.0 with no change. It gains the 2.11.0 code (for example the #322 scopes) but not keyless authentication.
   - **`ssosync` (next generation)** is keyless only (`GoogleImpersonateServiceAccount`, `GoogleWIFConfig`) and `groups` only, requires the actual `GoogleCustomerId`, and drops `GoogleCredentials`, `GoogleAdminEmail`, `SyncMethod` and `IncludeGroups`, as well as the deprecated, unused `Region` and `IdentityStoreID` (and their "Deprecated Parameters" group); the classic app and `template.yaml` keep them until v3.x (#406). Its fixed resource names are prefixed `SSOSyncNG` (secrets, the `SSOSyncNGSchedule` rule, `alias/SSOSyncNG`, exports such as `SSOSyncNGFunctionARN`), so a stack can switch from the classic app in place. New features are added here.
   - Both are generated from `template.yaml` by patches in `cicd/build/package/` (`make sar-variants` writes them to `dist/sar/`); `SAR.md` and `SAR-next-gen.md` are their descriptions. The CLI is unchanged.
-  
 - **`RoleName` parameter and output (next-gen app).** The function's IAM role can be given a fixed name (for example `SSOSync_ExecutionRole`) so a Google workload identity provider can trust it across redeployments; the `RoleName` output shows the role's name, generated or not.
 - **Next-gen quick-start templates.** `quick-start/next-gen/single-account.yaml` and `quick-start/next-gen/single-account-attribute-map.yaml` (release 2.11.0 or later) deploy the `ssosync` app (function `SSOSyncNG`) with keyless authentication and no admin; their `RoleName` defaults to `SSOSync_ExecutionRole`. To move a classic quick-start deployment over, set up Workload Identity Federation, then update the stack with the matching next-gen template. The classic templates in `quick-start/` keep their 2.10.0 parameters, with the same widened patterns.
 
@@ -74,13 +45,13 @@
 ### Breaking / behavioural changes
 
 > [!IMPORTANT]
-**A customer ID is required for keyless authentication, and whenever no Google admin is given.** The `my_customer` alias only resolves against the admin being acted on behalf of, so with `--google-impersonate-service-account`, or with `--google-admin` empty, ssosync and the next-gen `ssosync` app now require the actual customer ID (`--customer-id` / `CUSTOMER_ID` / `GoogleCustomerId`, for example `C01abcd23`) and reject `my_customer`. Legacy deployments with an admin, including the classic `SSOSync` app, are unaffected.
+> **A customer ID is required for keyless authentication, and whenever no Google admin is given.** The `my_customer` alias only resolves against the admin being acted on behalf of, so with `--google-impersonate-service-account`, or with `--google-admin` empty, ssosync and the next-gen `ssosync` app now require the actual customer ID (`--customer-id` / `CUSTOMER_ID` / `GoogleCustomerId`, for example `C01abcd23`) and reject `my_customer`. Legacy deployments with an admin, including the classic `SSOSync` app, are unaffected.
 
 > [!NOTE]
-**The `quick-start/wif-auth/` and `quick-start/legacy-auth/` templates and the `AuthMethod` quick-start parameter, which were on `master` during 2.11.0 development but never released, are removed.** Use `quick-start/next-gen/` for keyless authentication and the classic `quick-start/` templates for a stored key.
+> **The `quick-start/wif-auth/` and `quick-start/legacy-auth/` templates and the `AuthMethod` quick-start parameter, which were on `master` during 2.11.0 development but never released, are removed.** Use `quick-start/next-gen/` for keyless authentication and the classic `quick-start/` templates for a stored key.
 
 > [!NOTE]
-Deleting and recreating the Google service account removes both its Workload Identity User grant and its Workspace admin role assignment, even when the email is unchanged; redo both. Admin role assignments can take a while to take effect.
+> Deleting and recreating the Google service account removes both its Workload Identity User grant and its Workspace admin role assignment, even when the email is unchanged; redo both. Admin role assignments can take a while to take effect.
 
 ### Pipelines and tests
 
@@ -117,13 +88,13 @@ Deleting and recreating the Google service account removes both its Workload Ide
 ### Breaking / behavioural changes
 
 > [!IMPORTANT]
-**Clear-to-consistent user sync.** The `groups` sync method now makes the IAM Identity Store user fully consistent with the mapped Google user. Any supported SCIM attribute that the attribute map does **not** populate is **cleared** on the Identity Store user. On the first run after upgrading, user attributes that were previously left untouched (for example Title, phone numbers, addresses, or locale set outside of ssosync) may be cleared unless they are covered by your attribute map. **Run with `--dry-run` first** to review the changes before a live sync.
+> **Clear-to-consistent user sync.** The `groups` sync method now makes the IAM Identity Store user fully consistent with the mapped Google user. Any supported SCIM attribute that the attribute map does **not** populate is **cleared** on the Identity Store user. On the first run after upgrading, user attributes that were previously left untouched (for example Title, phone numbers, addresses, or locale set outside of ssosync) may be cleared unless they are covered by your attribute map. **Run with `--dry-run` first** to review the changes before a live sync.
 
 > [!IMPORTANT]
-**Validate attribute maps with `--dry-run` first.** Because of clear-to-consistent behaviour, an error in a custom attribute map (a typo, a `[type=X]` selector that matches nothing, a missing custom field, or an ignored multi-valued custom field) can **clear** real attributes on a live run. Always test a new or changed attribute map with `--dry-run` — together with debug logging and the pre-SCIM validation warnings — before running it live.
+> **Validate attribute maps with `--dry-run` first.** Because of clear-to-consistent behaviour, an error in a custom attribute map (a typo, a `[type=X]` selector that matches nothing, a missing custom field, or an ignored multi-valued custom field) can **clear** real attributes on a live run. Always test a new or changed attribute map with `--dry-run` — together with debug logging and the pre-SCIM validation warnings — before running it live.
 
 > [!NOTE]
-The default attribute map reads organization-derived fields (Title, Organization, Department, Cost Center) from the user's **primary** organization (`organizations[primary]`). A user with no organization marked primary will have these fields left empty (and therefore cleared). Confirm with a `--dry-run` against your directory that these fields resolve as expected before a live run.
+> The default attribute map reads organization-derived fields (Title, Organization, Department, Cost Center) from the user's **primary** organization (`organizations[primary]`). A user with no organization marked primary will have these fields left empty (and therefore cleared). Confirm with a `--dry-run` against your directory that these fields resolve as expected before a live run.
 
 ## v2.9.5 - 2026-10-28
 
