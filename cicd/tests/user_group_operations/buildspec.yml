@@ -6,9 +6,11 @@ version: 0.2
 env:
   shell: bash
   secrets-manager:
-    GoogleAdminEmail: SSOSyncGoogleAdminEmail
-    SCIMEndpointUrl: SSOSyncSCIMEndpointUrl
-    SCIMAccessToken: SSOSyncSCIMAccessToken
+    # Keyless Google authentication (tests/wif_account_execution/lib/keyless.sh).
+    GoogleCustomerId: SSOSyncNGGoogleCustomerId
+    GoogleImpersonateServiceAccount: SSOSyncNGGoogleImpersonateServiceAccount
+    SCIMEndpointUrl: SSOSyncNGSCIMEndpointUrl
+    SCIMAccessToken: SSOSyncNGSCIMAccessToken
   variables:
     GROUP_MATCH: "name:AWS*"
     # A dedicated Google test user (primary email) and group (name), both in
@@ -24,7 +26,6 @@ env:
 phases:
   build:
     commands:
-      - python3 tests/user_group_operations/test_check_log.py
       - bash tests/user_group_operations/run.sh
 
 artifacts:

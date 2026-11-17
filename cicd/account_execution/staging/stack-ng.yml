@@ -1,0 +1,86 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: 'AWS::Serverless-2016-10-31'
+
+Description: 
+  This CloudFormation template will deploy an instance of the ssosync-staging
+  (next-gen) candidate releases (via privately shared app in the AWS Serverless
+  Application Repository (SAR) within the Staging Account. The legacy
+  (SSOSync-Staging) app is deployed with stack.yml.
+
+# Only parameters the next-gen app accepts (issue #406): keyless Google
+# authentication (Workload Identity Federation) with no admin, and no Region or
+# IdentityStoreID. The *Arn parameters are the Arn of a secret whose value is
+# passed to the app.
+Parameters:
+  AppArn:
+    Description: The candidate release in the SAR
+    Default: 'arn:aws:serverlessrepo:<AWS::Region>:<AccountId>:applications/ssosync-staging'
+    Type: String
+  AppVersion:
+    Description: The version of this build in SAR
+    Default: 'v1.0.0-rc.10'
+    Type: String
+  GoogleImpersonateServiceAccountArn:
+    Description: The Arn of the secret holding the Google service account email to impersonate
+    Type: String
+    AllowedPattern: 'arn:aws:secretsmanager:.+'
+  GoogleWIFConfig:
+    Description: >-
+      Inline Workload Identity Federation credential configuration for this
+      account's RoleName provider (no secret values), from the staging
+      buildspec's deploy/wif-<AccountId>.json; the app stores it as a secret.
+    Type: String
+  GoogleCustomerIdArn:
+    Description: The Arn of the PipelineGoogleCustomerId secret
+    Type: String
+    AllowedPattern: 'arn:aws:secretsmanager:.+'
+  RoleName:
+    Description: The name of the function's IAM role, the role the GoogleWIFConfig provider trusts
+    Type: String
+  SCIMEndpointUrlArn:
+    Type: String
+  SCIMAccessTokenArn:
+    Type: String
+  GroupMatch:
+    Description: The search string to match Groups in Google Workspace
+    Default: 'name:AWS*'
+    Type: String
+  AttributeMap:
+    Description: >-
+      Inline attribute-map JSON passed to the function's ATTRIBUTE_MAP environment
+      variable. Leave empty to use the built-in default mapping.
+    Default: ''
+    Type: String
+
+Resources:
+  SARApp:
+    Type: AWS::Serverless::Application
+    Properties:
+      Location:
+        ApplicationId: !Ref AppArn
+        SemanticVersion: !Ref AppVersion
+      Parameters:
+        FunctionName: SSOSyncFunction
+        RoleName: !Ref RoleName
+        GoogleImpersonateServiceAccount: !Join ['', ['{{resolve:secretsmanager:', !Ref GoogleImpersonateServiceAccountArn, '}}']]
+        GoogleWIFConfig: !Ref GoogleWIFConfig
+        GoogleCustomerId: !Join ['', ['{{resolve:secretsmanager:', !Ref GoogleCustomerIdArn, '}}']]
+        SCIMEndpointUrl: !Join
+          - ''
+          - - '{{resolve:secretsmanager:'
+            - !Ref SCIMEndpointUrlArn
+            - '}}'
+        SCIMEndpointAccessToken: !Join
+          - ''
+          - - '{{resolve:secretsmanager:'
+            - !Ref SCIMAccessTokenArn
+            - '}}'
+        GoogleGroupMatch: !Ref GroupMatch
+        AttributeMap: !Ref AttributeMap
+        SyncSuspended: sync
+        ScheduleExpression: ""
+        # Olaf's OU has an apostrophe (#401), so the Lambda's precache query must
+        # quote it.
+        PrecacheOrgUnits: '/Catering/,/Maintenance/Vending Machines,/Red Dwarf/Petersen''s Locker'
+        LogLevel: debug
+        LogFormat: json

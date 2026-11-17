@@ -16,13 +16,15 @@ note() { echo "      $*"; }
 
 # --- ssosync -----------------------------------------------------------------
 
+# Keyless (Workload Identity Federation): see tests/wif_account_execution/lib/keyless.sh.
+source "$ROOT/tests/wif_account_execution/lib/keyless.sh"
+
 # run_ssosync <log-file> [extra flags...]; returns ssosync's exit code.
 run_ssosync() {
   local log=$1; shift
   echo ">>> ssosync $* (log: $(basename "$log"))"
   local rc=0
-  "$SSOSYNC" -t "$SCIMAccessToken" -e "$SCIMEndpointUrl" -u "$GoogleAdminEmail" \
-    -c "$ROOT/credentials.json" -s groups -g "$GROUP_MATCH" \
+  keyless_ssosync -t "$SCIMAccessToken" -e "$SCIMEndpointUrl" -s groups -g "$GROUP_MATCH" \
     --log-format json --log-level debug "$@" > "$log" 2>&1 || rc=$?
   cat "$log"
   echo "<<< ssosync exit=$rc"

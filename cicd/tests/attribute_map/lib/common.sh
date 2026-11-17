@@ -9,7 +9,10 @@
 #   tests/attribute_map/          these tests (import.py, export.py, baseline/, maps/, lib/, <test>/)
 #
 # Environment (set by each test's buildspec.yml):
-#   SCIMEndpointUrl, SCIMAccessToken, GoogleAdminEmail   CLI tests only (from Secrets Manager)
+#   SCIMEndpointUrl, SCIMAccessToken, GoogleCustomerId,
+#   GoogleImpersonateServiceAccount   CLI tests only (from Secrets Manager); the
+#                     CLI runs keyless (Workload Identity Federation), see
+#                     tests/wif_account_execution/lib/keyless.sh
 #   GROUP_MATCH       Google group filter (default "name:AWS*")
 #   FUNCTION_NAME     Lambda under test (default "SSOSyncFunction")
 
@@ -25,6 +28,7 @@ LOG_DIR="${LOG_DIR:-$ROOT_DIR/logs}"
 mkdir -p "$LOG_DIR"
 
 assert_log() { python3 "$AM_DIR/lib/assert_log.py" "$@"; }
+source "$ROOT_DIR/tests/wif_account_execution/lib/keyless.sh"
 
 # check <command...>: run an assertion but keep going if it fails, so a test
 # reports every failed assertion. Call finish at the end of run.sh.
@@ -50,15 +54,15 @@ require_env() {
 
 # Python dependencies for import.py / export.py / lambda_logs.py.
 setup_python() {
-  pip3 install --quiet boto3
+  pip3 install --quiet boto3==1.44.0
 }
 
-# Everything a CLI test needs: python deps, SCIM/Google credentials, the binary.
+# Everything a CLI test needs: python deps, SCIM credentials, keyless Google
+# authentication, the binary.
 setup_cli() {
-  require_env SCIMEndpointUrl SCIMAccessToken GoogleAdminEmail
+  require_env SCIMEndpointUrl SCIMAccessToken
   setup_python
-  aws secretsmanager get-secret-value --secret-id SSOSyncGoogleCredentials \
-    --query SecretString --output text > "$ROOT_DIR/credentials.json"
+  keyless_setup "$ROOT_DIR"
   "$SSOSYNC" --version
 }
 
@@ -66,16 +70,19 @@ setup_cli() {
 # Runs the groups sync method over GROUP_MATCH, including suspended users, with
 # JSON debug logs captured to <log-file> (and echoed to the build log).
 # Returns ssosync's exit code. "" for map-file means the built-in default map.
+# A test can set the array SSOSYNC_EXTRA_ARGS (e.g. --precache-ous ...) before
+# calling it; those arguments are appended to every run, convergence included.
+SSOSYNC_EXTRA_ARGS=()
 run_ssosync() {
   local mode=$1 map=$2 log=$3
-  local args=(-t "$SCIMAccessToken" -e "$SCIMEndpointUrl" -u "$GoogleAdminEmail"
-              -c "$ROOT_DIR/credentials.json" -s groups -g "$GROUP_MATCH"
+  local args=(-t "$SCIMAccessToken" -e "$SCIMEndpointUrl" -s groups -g "$GROUP_MATCH"
               --suspended --log-format json --log-level debug)
   if [ -n "$map" ]; then args+=(--attribute-map-file "$map"); fi
   if [ "$mode" = "dry" ]; then args+=(--dry-run); fi
-  echo ">>> ssosync mode=$mode map=${map:-built-in default} log=$log"
+  args+=(${SSOSYNC_EXTRA_ARGS[@]+"${SSOSYNC_EXTRA_ARGS[@]}"})
+  echo ">>> ssosync (keyless) mode=$mode map=${map:-built-in default} log=$log"
   local rc=0
-  "$SSOSYNC" "${args[@]}" > "$log" 2>&1 || rc=$?
+  keyless_ssosync "${args[@]}" > "$log" 2>&1 || rc=$?
   cat "$log"
   echo "<<< ssosync exit=$rc"
   return $rc
@@ -153,4 +160,31 @@ invoke_lambda() {
   python3 "$AM_DIR/lib/lambda_logs.py" --log-group "/aws/lambda/$FUNCTION_NAME" \
     --start "$start" --request-id "$request_id" --out "$log"
   cat "$log"
+}
+
+# readback_users <dir>
+# Exports the Identity Store, every field as ListUsers returns it, to
+# <dir>/users.json (and <dir>/groups.json), so a test can check what IAM
+# Identity Center actually stored.
+readback_users() {
+  python3 "$AM_DIR/export.py" --all-fields --output-dir "$1" --region "$(identity_store_region)"
+}
+
+# assert_user_field <users.json> <username> <jq-path> <expected>
+# The user whose UserName is <username> (compared in lower case; pass it lower
+# case) has <expected> at <jq-path>, such as .NickName or .Name.Formatted. An
+# absent field reads as "". Fails if the user is missing or the value differs.
+assert_user_field() {
+  local file=$1 user=$2 path=$3 want=$4 got
+  if ! got=$(jq -er --arg u "$user" \
+      "[.[] | select(.UserName | ascii_downcase == \$u)] | if length == 1 then .[0] | (($path) // \"\") else error(\"user not found\") end" \
+      "$file"); then
+    echo "FAIL: $user not found once in $file"
+    return 1
+  fi
+  if [ "$got" != "$want" ]; then
+    echo "FAIL: $user $path: want '$want' got '$got'"
+    return 1
+  fi
+  echo "ok: $user $path = '$got'"
 }

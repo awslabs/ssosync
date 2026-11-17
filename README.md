@@ -14,7 +14,7 @@ SSO Sync is a powerful CLI tool and AWS Lambda function that enables automatic p
 
 ## ✨ Key Features
 
-- **🔄 Uni-directional Sync**: Supports both `groups` and `users_groups` sync methods
+- **🔄 Uni-directional Sync**: Supports both `groups` and `users_groups` sync methods (`users_groups` in the CLI and the classic `SSOSync` app only)
 - **🎯 Advanced Filtering**: Flexible user and group filtering with Google API query parameters
 - **🛡️ Dry-Run Mode**: Test synchronization without making actual changes
 - **⚡ High Performance**: Built with AWS SDK v2 for improved performance and reliability
@@ -24,7 +24,30 @@ SSO Sync is a powerful CLI tool and AWS Lambda function that enables automatic p
 - **📈 Scalable**: Supports large directories with user caching and pagination
 
 ## 🚀 Quick Start
-Use one of the [quick start](/quick-start/) templates to simplify the your deployment. Use these templates, with the **Sync from Git** option, to make updates to your deployment far simpler.
+Use one of the [quick start](/quick-start/) templates to simplify your deployment. Use these templates, with the **Sync from Git** option, to make updates to your deployment far simpler.
+
+| Template | Application | Google authentication |
+|---|---|---|
+| [`quick-start/next-gen/single-account.yaml`](/quick-start/next-gen/single-account.yaml) | [`ssosync`](#two-serverless-applications) (next generation) | **Recommended.** Keyless, [Workload Identity Federation](#workload-identity-federation-keyless) (release 2.11.0 or later): no stored key and no Google admin |
+| [`quick-start/next-gen/single-account-attribute-map.yaml`](/quick-start/next-gen/single-account-attribute-map.yaml) | `ssosync` | As above, plus a custom [attribute map](#attribute-mapping) |
+| [`quick-start/single-account.yaml`](/quick-start/single-account.yaml), [`…/single-account-attribute-map.yaml`](/quick-start/single-account-attribute-map.yaml) | [`SSOSync`](#two-serverless-applications) (classic) | [Legacy auth](#legacy-auth-stored-credentials): a stored service-account key and a Google admin. These keep the 2.10.0 parameters (their patterns widened to accept apostrophes), so existing **Sync from Git** deployments of these paths upgrade to 2.11.0 unchanged |
+
+### Two Serverless applications
+
+From 2.11.0 ssosync is published to the AWS Serverless Application Repository as two applications, built from the same code and released with the same version number:
+
+| | [`SSOSync`](https://serverlessrepo.aws.amazon.com/applications/us-east-2/004480582608/SSOSync) (classic) | [`ssosync`](https://serverlessrepo.aws.amazon.com/applications/us-east-2/004480582608/ssosync) (next generation) |
+|---|---|---|
+| Parameters | Those of 2.10.0, with the email, name and OU patterns widened to accept apostrophes (#401) | Keyless only: `GoogleImpersonateServiceAccount`, `GoogleWIFConfig` and `RoleName`; no `GoogleCredentials`, `GoogleAdminEmail`, `SyncMethod`, `IncludeGroups`, or the deprecated `Region` and `IdentityStoreID` |
+| Google authentication | [Legacy auth](#legacy-auth-stored-credentials) (key + admin) | [Workload Identity Federation](#workload-identity-federation-keyless) |
+| Sync method | `groups` or `users_groups` | `groups` only |
+| `GoogleCustomerId` | Optional (`my_customer` by default) | Required, the actual customer ID (`my_customer` is rejected) |
+| Fixed resource names | `SSOSync*` secrets, `AWSSyncSchedule` rule, `alias/SSOSync`, unprefixed exports (`FunctionARN`, …) | `SSOSyncNG*` secrets, `SSOSyncNGSchedule` rule, `alias/SSOSyncNG`, `SSOSyncNG*` exports (`SSOSyncNGFunctionARN`, …) |
+| Quick-starts | [`quick-start/`](/quick-start/) | [`quick-start/next-gen/`](/quick-start/next-gen/) |
+
+New features are added to `ssosync`; `SSOSync` keeps the 2.10.0 configuration. The CLI is unchanged and supports both authentication methods.
+
+**Moving a quick-start deployment to the next generation:** complete the [Workload Identity Federation](#workload-identity-federation-keyless) steps first (use `SSOSync_ExecutionRole` as the role name, the next-gen default `RoleName`), then update the stack, replacing its template with the matching one in `quick-start/next-gen/` (with **Sync from Git**, point the deployment file at the new path), and enter `GoogleCustomerId`, `GoogleImpersonateServiceAccount` and `GoogleWIFConfig`. CloudFormation creates the next-gen function (`SSOSyncNG`) and its resources, then deletes the classic ones; their names differ, so the two do not clash during the update. Anything that imports the classic exports must switch to the `SSOSyncNG*` ones. Once the next-gen function syncs, delete the service-account key in Google Cloud and, if nothing else uses it, the domain-wide delegation entry.
 
 ## 🚀 Step-by-Step Guide
 
@@ -34,7 +57,7 @@ Want to dive straight in? Try this [hands-on lab](https://catalog.workshops.aws/
 
 | Method | Best For | Setup Time |
 |--------|----------|------------|
-| **[AWS Serverless App Repository](https://console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync)** | Production use | 5 minutes |
+| **AWS Serverless App Repository**: [`ssosync`](https://console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/ssosync) (next generation) or [`SSOSync`](https://console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync) (classic), see [Two Serverless applications](#two-serverless-applications) | Production use | 5 minutes |
 | **CLI Binary** | Local testing, CI/CD | 2 minutes |
 | **AWS SAM** | Custom deployments | 10 minutes |
 
@@ -113,7 +136,7 @@ However, in the situation where an email address has been re-assigned to a diffe
 The recommended installation is:
 * [Setup IAM Identity Center](https://docs.aws.amazon.com/singlesignon/latest/userguide/get-started-enable-identity-center.html), in the management account of your organization
 * Create a linked account (for example an `Identity` account) from which to run ssosync
-* Deploy the [SSOSync app](https://console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync) from the AWS Serverless Application Repository into that linked account
+* Deploy the [ssosync app](https://console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/ssosync) (next generation; or the classic [SSOSync app](https://console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync), see [Two Serverless applications](#two-serverless-applications)) from the AWS Serverless Application Repository into that linked account, preferably through a [quick-start](#-quick-start) template
 
 > [!NOTE]
 > From `v2.5.0` ssosync no longer requires IAM Identity Center **delegated administration**. It operates through the Identity Store and SCIM APIs using only the IAM permissions granted to its execution role, so the best practice is now to deploy it in an ordinary linked account without delegating IAM Identity Center administration to that account. Deploying into the management account is still not recommended.
@@ -129,7 +152,160 @@ SSO Sync requires configuration from both Google Workspace and AWS sides.
 
 ### Google Workspace Setup
 
-ssosync reads your directory as a **service account** that impersonates a Google Workspace admin via **domain-wide delegation**. The steps below produce the two things ssosync needs: a `credentials.json` key file and the email address of an admin for the service account to impersonate.
+ssosync reads your directory as a Google **service account**. There are two ways for ssosync to authenticate as that service account. Use exactly one:
+
+| | [Workload Identity Federation](#workload-identity-federation-keyless) (keyless) | [Legacy auth (stored credentials)](#legacy-auth-stored-credentials) |
+|---|---|---|
+| Credential ssosync holds | None long-lived: its AWS role is exchanged for short-lived Google credentials on every run | A downloaded service-account key (`credentials.json`) |
+| Works with the `iam.disableServiceAccountKeyCreation` org policy | Yes | No |
+| Directory access | The service account is assigned a read-only Workspace admin role and acts as itself | The service account acts on behalf of a Workspace admin (domain-wide delegation) |
+| Configure with | `--google-impersonate-service-account` + `--google-wif-config` + `--customer-id` | `--google-credentials` + `--google-admin` |
+| Serverless application | [`ssosync`](#two-serverless-applications) (next generation), `quick-start/next-gen/` | [`SSOSync`](#two-serverless-applications) (classic), `quick-start/` |
+| Status | **Recommended** (2.11.0 or later); planned to become the only method from v3 | Supported in 2.x (and still the CLI default when `--google-impersonate-service-account` is not set); planned for removal in v3 |
+
+#### Workload Identity Federation (keyless)
+
+With Workload Identity Federation (WIF), Google Cloud trusts your AWS account: ssosync presents its AWS role credentials (verified by Google through the AWS `GetCallerIdentity` API), receives a short-lived federated token, and uses it to impersonate the service account. The service account reads the directory with a read-only admin role assigned to it in Google Workspace, so there is no super admin to act on behalf of and no domain-wide delegation. No service-account key is ever created or stored, and nothing needs configuring on the AWS side beyond the role ssosync already runs as.
+
+These steps follow Google's guide [Configure Workload Identity Federation with AWS or Azure VMs](https://docs.cloud.google.com/iam/docs/workload-identity-federation-with-other-clouds) (the *AWS IAM credentials* mechanism, with *service account impersonation*); refer to it for background and console screenshots. One point differs from that guide and is called out in step 6.
+
+> **You need:** a Google Cloud project where you hold *Workload Identity Pool Admin* (`roles/iam.workloadIdentityPoolAdmin`) and *Service Account Admin* (`roles/iam.serviceAccountAdmin`) (or *Owner*); a Google Workspace **super admin** for steps 3 and 7; the `gcloud` CLI ([install](https://cloud.google.com/sdk/docs/install)), or Cloud Shell; and the **AWS account ID** and **IAM role name** ssosync runs as (described below).
+
+> **Tip: use Google Cloud Shell for the following steps.** Click **Activate Cloud Shell** (the `>_` icon) in the [Google Cloud Console](https://console.cloud.google.com/): it opens a terminal in your browser with the `gcloud` CLI already installed and signed in as you, so there is nothing to install, and every command below can be pasted into it as-is. Step 6 writes `wif-config.json` there and shows how to download it. See [Cloud Shell](https://cloud.google.com/shell/docs/using-cloud-shell).
+
+The commands use these values; work them out first:
+
+- **`PROJECT_ID`**: the Google Cloud project that will own the service account and the workload identity pool. Create one in the [Google Cloud Console](https://console.cloud.google.com/) if you need a new project, or reuse an existing one; its ID is shown in the console's project picker.
+- **`PROJECT_NUMBER`**: the project's numeric identifier (for example `123456789012`), which Google uses in workload identity pool names. It is different from the project ID. The block below looks it up from `PROJECT_ID`, so you don't need to enter it. To check it yourself:
+  - **Console:** the **Project number** on the project's [Dashboard](https://console.cloud.google.com/home/dashboard) (*Project info* card), or in **IAM & Admin** > **Settings**.
+  - **gcloud:** `gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)'`. If it prints nothing, `PROJECT_ID` is wrong or you lack access to the project; fix that before continuing, because steps 5 and 6 need the number.
+- **`POOL_ID`** and **`PROVIDER_ID`**: IDs you choose for the workload identity pool and its AWS provider (lowercase letters, digits and hyphens). They cannot be changed later. `ssosync` for both is fine for a single AWS account; with several accounts, give each its own provider ID (see step 4).
+- **`AWS_ACCOUNT_ID`**: the 12-digit ID of the AWS account ssosync runs in (`aws sts get-caller-identity --query Account --output text`).
+- **`AWS_ROLE_NAME`**: the IAM role ssosync runs as. Google matches it in the ARN of ssosync's AWS session, `arn:aws:sts::<account>:assumed-role/<role name>/<session>`.
+  - **If you are using the next-gen quick-start templates (`quick-start/next-gen/`), use `SSOSync_ExecutionRole`.** It is their default `RoleName`, so you can complete these steps before deploying.
+  - **Lambda (SAR deployment of the next-gen `ssosync` app):** set the template's **`RoleName`** parameter (for example `SSOSync_ExecutionRole`) so the role has a predictable name that does not change when the stack is redeployed, and use that name. IAM role names are global in the account, so give each ssosync deployment in an account its own. If you leave `RoleName` empty, CloudFormation generates a name (for example `serverlessrepo-ssosync-SSOSyncRoleLocal-ABC123`); deploy first, then read it from the stack's **`RoleName` output**, and redo steps 4–5 if the stack is ever recreated with a new one.
+  - **CLI:** the role your AWS credentials belong to; `aws sts get-caller-identity` shows it in the `assumed-role/<role name>/...` ARN.
+
+Set them, replacing the example values:
+
+```bash
+PROJECT_ID="my-ssosync-project"
+gcloud config set project "$PROJECT_ID"
+PROJECT_NUMBER="$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')"
+POOL_ID="ssosync"
+PROVIDER_ID="ssosync"
+AWS_ACCOUNT_ID="<account_id>"
+AWS_ROLE_NAME="SSOSync_ExecutionRole"
+```
+
+`SA_EMAIL`, the service account's email address, is set in step 2 by the command that creates the account. Shell variables last only for the session: if Cloud Shell restarts, run this block again, and the lookup in step 2.
+
+1. **Enable the APIs**
+   - ssosync needs the Admin SDK API; federation and impersonation need the IAM, Security Token Service and IAM Service Account Credentials APIs:
+
+     ```bash
+     gcloud services enable admin.googleapis.com iam.googleapis.com \
+       sts.googleapis.com iamcredentials.googleapis.com
+     ```
+
+2. **Create the service account — without a key**
+   - Create it, keeping its email address in `SA_EMAIL`:
+
+     ```bash
+     SA_EMAIL="$(gcloud iam service-accounts create "ssosync" --display-name "ssosync (keyless)" --format='value(email)')"
+     echo "$SA_EMAIL"
+     ```
+
+     `--format='value(email)'` makes the command print only the new account's **email address**; the `echo` shows it (for example `ssosync@my-ssosync-project.iam.gserviceaccount.com`). Keep a copy: it is also the value for `GoogleImpersonateServiceAccount` in step 8.
+   - If the account already exists, or `echo` prints nothing, set it from the existing account instead:
+
+     ```bash
+     SA_EMAIL="$(gcloud iam service-accounts list --filter='email ~ ^ssosync@' --format='value(email)')"
+     echo "$SA_EMAIL"
+     ```
+   - No project roles are required: its access to the directory is granted in Google Workspace (step 3), not in Google Cloud. **Do not create a key** for it.
+
+3. **Assign a read-only admin role to the service account in the Admin console**
+   - Sign in to the [Google Admin console](https://admin.google.com/) as a **super admin**.
+   - Go to **Account** > **Admin roles**, click **Create new role**, name it (for example `ssosync read-only`) and click **Continue**.
+   - Under **Admin API privileges**, select only **Users** > **Read** and **Groups** > **Read**, then click **Continue** and **Create role**.
+   - Back in **Admin roles**, point to the new role and click **Assign admin** > **Assign service accounts**. Enter the service account email (`$SA_EMAIL`, from step 2), then click **Add** > **Assign role**.
+   - No domain-wide delegation entry is needed: the service account calls the Admin SDK as itself, with this role. The assignment can take a while to apply (Google allows up to 24 hours). See [Assign a role to a service account](https://knowledge.workspace.google.com/admin/users/assign-specific-admin-roles).
+
+4. **Create the workload identity pool and AWS provider**
+   - Create the pool:
+
+     ```bash
+     gcloud iam workload-identity-pools create "$POOL_ID" --location=global --display-name="ssosync"
+     ```
+   - Create the AWS provider in it:
+
+     ```bash
+     gcloud iam workload-identity-pools providers create-aws "$PROVIDER_ID" \
+       --location=global --workload-identity-pool="$POOL_ID" \
+       --account-id="$AWS_ACCOUNT_ID" \
+       --attribute-mapping="google.subject=assertion.arn,attribute.account=assertion.account,attribute.aws_role=assertion.arn.extract('assumed-role/{role}/')" \
+       --attribute-condition="assertion.arn.startsWith('arn:aws:sts::${AWS_ACCOUNT_ID}:assumed-role/${AWS_ROLE_NAME}/')"
+     ```
+
+     The mapping makes the role name available as `attribute.aws_role`. The **attribute condition** is the important control: the provider accepts only sessions of that one role in that one account, so no other AWS principal can federate.
+
+   > **Several AWS accounts with the same directory** (for example a dev account and a prod account): an AWS provider trusts exactly one account, so **create one provider per account** in the same pool. Repeat the provider command for each account with its own `PROVIDER_ID` (for example `ssosync-dev`, `ssosync-prod`), `AWS_ACCOUNT_ID` and, if it differs, `AWS_ROLE_NAME`. The pool, the service account and its admin role (steps 2–3) are shared. Step 5's grant matches the role name in any provider of the pool, so it is needed once per distinct role name. Step 6 is per account: repeat it for each provider.
+
+5. **Allow the AWS role to impersonate the service account**
+   - Grant *Workload Identity User* (`roles/iam.workloadIdentityUser`) on the service account, to that role only:
+
+     ```bash
+     gcloud iam service-accounts add-iam-policy-binding "$SA_EMAIL" \
+       --role=roles/iam.workloadIdentityUser \
+       --member="principalSet://iam.googleapis.com/projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/${POOL_ID}/attribute.aws_role/${AWS_ROLE_NAME}"
+     ```
+
+6. **Create the credential configuration** ⚠️ *differs from Google's guide*
+   - Write it to `wif-config.json`:
+
+     ```bash
+     gcloud iam workload-identity-pools create-cred-config \
+       "projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/${POOL_ID}/providers/${PROVIDER_ID}" \
+       --aws --output-file=wif-config.json
+     ```
+   - **Download the file** to your computer, to deploy ssosync with it (step 8). In Cloud Shell, either run:
+
+     ```bash
+     cloudshell download wif-config.json
+     ```
+
+     or click **More** (⋮) > **Download** in the Cloud Shell toolbar and enter the file's path. Cloud Shell can only download from your home directory; it opens there, so the file is in it unless you changed directory (otherwise copy it there first, `cp wif-config.json ~/`). From a local terminal, `gcloud cloud-shell scp cloudshell:~/wif-config.json localhost:./wif-config.json` also works. See [Manage files with Cloud Shell](https://docs.cloud.google.com/shell/docs/uploading-and-downloading-files).
+   - **This step is per AWS account**: the configuration names the provider (`PROVIDER_ID`), and each provider trusts one account. With several accounts (see the note in step 4), run it once per provider, setting `PROVIDER_ID` to that account's provider and writing a separate file each time, for example `--output-file=wif-config-dev.json` and `--output-file=wif-config-prod.json`. Give each account's deployment the file for its own provider; a configuration for another account's provider is rejected.
+   - **Omit `--service-account`**: ssosync impersonates the service account itself (named by `--google-impersonate-service-account`), so the configuration must describe only the federation. A configuration created with `--service-account` contains `service_account_impersonation_url` and makes the impersonation happen twice.
+   - The file contains **no secret**: it says where to get AWS credentials and which pool/provider to use. On AWS Lambda the AWS credentials come from the function's environment (the metadata server it refers to is not used), so the same file works for Lambda and the CLI.
+
+7. **Find your Google Workspace customer ID**
+   - In the [Admin console](https://admin.google.com/), go to **Account** > **Account settings** > **Profile** ([direct link](https://admin.google.com/ac/accountsettings/profile)) and copy the **Customer ID** (for example `C01abcd23`).
+   - It is **required** for keyless authentication: the service account is not a Workspace user, so the `my_customer` alias does not identify your directory. ssosync, and the template, reject `my_customer` here. This is `--customer-id` / `CUSTOMER_ID` / `GoogleCustomerId`.
+
+8. **Configure ssosync**
+   - **Quick start:** deploy [`quick-start/next-gen/single-account.yaml`](quick-start/next-gen/single-account.yaml) (or [`next-gen/single-account-attribute-map.yaml`](quick-start/next-gen/single-account-attribute-map.yaml) for a custom attribute map) with `GoogleCustomerId` (step 7), `GoogleImpersonateServiceAccount` (`$SA_EMAIL`) and `GoogleWIFConfig` (the contents of `wif-config.json`). Its `RoleName` defaults to `SSOSync_ExecutionRole`, the name used in steps 4–5. There is no key and no admin to enter. To switch an existing deployment of the classic `quick-start/single-account.yaml`, replace its template with the next-gen one (see [Two Serverless applications](#two-serverless-applications)).
+   - **Lambda / SAR:** deploy the next-gen [`ssosync`](https://console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/ssosync) app with `GoogleImpersonateServiceAccount` set to the service account email (`$SA_EMAIL`), `GoogleWIFConfig` to the contents of `wif-config.json` (or the Arn of a secret or SSM parameter holding it), `GoogleCustomerId` to the customer ID from step 7, and `RoleName` to the role from steps 4–5. The classic `SSOSync` app does not support keyless authentication.
+   - **CLI:**
+
+     ```bash
+     ./ssosync \
+       --customer-id C01abcd23 \
+       --google-impersonate-service-account "$SA_EMAIL" \
+       --google-wif-config ./wif-config.json \
+       --endpoint https://scim.us-east-1.amazonaws.com/... \
+       --access-token AQoDYXdzE... \
+       --group-match "name:AWS*" --dry-run
+     ```
+
+     The federation reads AWS credentials from `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_SESSION_TOKEN` and the region from `AWS_REGION` (or `AWS_DEFAULT_REGION`) when they are set, and otherwise from the EC2 instance metadata server; it does not read `~/.aws` profiles. For credentials from a named profile (including IAM Identity Center sign-in), export them first: `eval "$(aws configure export-credentials --profile my-profile --format env)"`, and use that profile's role as `AWS_ROLE_NAME` (steps 4–5).
+
+> **Troubleshooting:** `Permission 'iam.serviceAccounts.getAccessToken' denied` means step 5 is missing or names a different role (compare it with the role in `aws sts get-caller-identity`). `The given credential is rejected by the attribute condition` means the role, or account, does not match the provider created in step 4. `Not Authorized to access this resource/api` from the Admin SDK means the admin role (step 3) is not assigned to the service account, lacks a privilege, or has not taken effect yet (Google allows up to 24 hours), or the customer ID (step 7) is wrong. If you delete and recreate the service account, even with the same email, it loses both the step 5 grant and the step 3 role assignment: redo both. Run with `--dry-run --log-level debug` until the sync connects.
+
+#### Legacy auth (stored credentials)
+
+The service account authenticates with a downloaded JSON **key** (`credentials.json`). It remains supported in 2.x by the CLI, the classic [`SSOSync`](#two-serverless-applications) app and the classic `quick-start/` templates; [Workload Identity Federation](#workload-identity-federation-keyless) is recommended instead. The steps below produce the two things ssosync needs: the `credentials.json` key file and the email address of an admin for the service account to act on behalf of.
 
 These steps mirror the [AWS Control Tower workshop](https://catalog.workshops.aws/control-tower/en-US/authentication-authorization/google-workspace/3-provisioning-scim), which you can follow for a fully guided walkthrough.
 
@@ -158,9 +334,8 @@ These steps mirror the [AWS Control Tower workshop](https://catalog.workshops.aw
      - **Client ID**: the Client ID you copied in step 4.
      - **OAuth scopes** (comma-separated, read-only):
        - `https://www.googleapis.com/auth/admin.directory.group.readonly`
-       - `https://www.googleapis.com/auth/admin.directory.group.member.readonly`
        - `https://www.googleapis.com/auth/admin.directory.user.readonly`
-   - Click **Authorize**. Only these three read-only scopes are needed; do not grant broader access.
+   - Click **Authorize**. Only these two read-only scopes are needed; do not grant broader access. (Group memberships are read with `admin.directory.group.readonly`; `admin.directory.group.member.readonly`, listed by earlier versions, is no longer requested and can be removed from an existing entry, but only after upgrading ssosync: earlier versions still request it and fail with `401 unauthorized_client` once it is removed.)
 
 6. **Choose the admin user to impersonate**
    - ssosync must impersonate an existing **Google Workspace admin** that can read the directory. Note that user's email address — it is the value you pass as `--google-admin` (`GOOGLE_ADMIN`). A super admin always works; a custom admin role with the Users and Groups read privileges is sufficient.
@@ -240,22 +415,24 @@ export SSOSYNC_DRY_RUN="true"
 
 | Flag | Environment Variable | Description | Default |
 |------|---------------------|-------------|---------|
-| `--google-admin` / `-u` | `SSOSYNC_GOOGLE_ADMIN` | Google Workspace admin email | Required |
-| `--google-credentials` / `-c` | `SSOSYNC_GOOGLE_CREDENTIALS` | Path to Google credentials JSON | `credentials.json` |
+| `--google-admin` / `-u` | `SSOSYNC_GOOGLE_ADMIN` | Legacy auth only: Google Workspace admin to act on behalf of (domain-wide delegation; required for legacy auth as documented). Rejected with `--google-impersonate-service-account` (keyless never acts on behalf of an admin). Leave empty to have the service account act as itself with its own admin role, which requires `--customer-id`. | `""` |
+| `--google-credentials` / `-c` | `SSOSYNC_GOOGLE_CREDENTIALS` | Legacy auth: path to the Google service-account key JSON. Not read when `--google-impersonate-service-account` is set (giving both explicitly is an error). | `credentials.json` |
+| `--google-impersonate-service-account` | `SSOSYNC_GOOGLE_IMPERSONATE_SERVICE_ACCOUNT` | Keyless auth: email of the service account to impersonate; selects [Workload Identity Federation](#workload-identity-federation-keyless) instead of the key. | `""` |
+| `--google-wif-config` | `SSOSYNC_GOOGLE_WIF_CONFIG` | Keyless auth: path to the Workload Identity Federation credential configuration (`external_account` JSON). When unset, Application Default Credentials are used. | `""` |
 | `--attribute-map-file` | `SSOSYNC_ATTRIBUTE_MAP_FILE` | Path to a JSON file containing the attribute map (`groups` sync method only); when unset the built-in default mapping is used. See [Attribute mapping](#attribute-mapping). | `""` |
-| `--customer-id` | `SSOSYNC_CUSTOMER_ID` | Google Workspace customer ID | `my_customer` |
+| `--customer-id` | `SSOSYNC_CUSTOMER_ID` | Google Workspace customer ID. The actual ID (`Cxxxxxxxx`, not `my_customer`) is required with `--google-impersonate-service-account` and when `--google-admin` is empty. | `my_customer` |
 | `--endpoint` / `-e` | `SSOSYNC_SCIM_ENDPOINT` | AWS SCIM endpoint URL | Required |
 | `--access-token` / `-t` | `SSOSYNC_SCIM_ACCESS_TOKEN` | AWS SCIM access token | Required |
 | `--sync-method` / `-s` | `SSOSYNC_SYNC_METHOD` | Sync method (`groups` or `users_groups`) | `groups` |
-| `--group-match` / `-g` | `SSOSYNC_GROUP_MATCH` | Google Groups filter query | `*` |
-| `--user-match` / `-m` | `SSOSYNC_USER_MATCH` | Google Users filter query | `""` |
+| `--group-match` / `-g` | `SSOSYNC_GROUP_MATCH` | Google Groups filter query, passed to Google verbatim; see [Quoting values in queries](#quoting-values-in-queries) | `*` |
+| `--user-match` / `-m` | `SSOSYNC_USER_MATCH` | Google Users filter query, passed to Google verbatim; see [Quoting values in queries](#quoting-values-in-queries) | `""` |
 | `--ignore-users` | `SSOSYNC_IGNORE_USERS` | Comma-separated list of users to ignore | `[]` |
 | `--ignore-groups` | `SSOSYNC_IGNORE_GROUPS` | Comma-separated list of groups to ignore | `[]` |
 | `--exclude-aws-user-ids` | `SSOSYNC_EXCLUDE_AWS_USER_IDS` | Comma-separated AWS Identity Store user IDs excluded from updates, deletion, and direct membership changes; both sync methods | `[]` |
 | `--exclude-aws-group-ids` | `SSOSYNC_EXCLUDE_AWS_GROUP_IDS` | Comma-separated AWS Identity Store group IDs excluded from updates, deletion, and direct membership changes; both sync methods | `[]` |
 | `--include-groups` | `SSOSYNC_INCLUDE_GROUPS` | Include only these groups (users_groups method only) | `[]` |
-| `--precache-ous` | `SSOSYNC_PRECACHE_ORG_UNITS` | Comma-separated list of Google OrgUnit paths to precache | `[]` |
-| `--cache-metrics` | `SSOSYNC_CACHE_METRICS` | Gather cache hit/miss metrics and output them at the end of the run to help refine `--precache-ous` | `false` |
+| `--precache-ous` | `SSOSYNC_PRECACHE_ORG_UNITS` | Comma-separated list of Google OrgUnit paths to precache users from (e.g. `/OU1,/OU2/OU3`); each path includes its sub-OUs, and `/` is the whole directory. A path that cannot be queried (it may not exist), or has no users matching the filter, is skipped with a warning naming it; the other paths are still precached | `[]` |
+| `--cache-metrics` | `SSOSYNC_CACHE_METRICS` | Gather cache hit/miss metrics and output them at the end of the run, per OU including its sub-OUs, to help refine `--precache-ous` | `false` |
 | `--dry-run` / `-n` | `SSOSYNC_DRY_RUN` | Enable dry-run mode | `false` |
 | `--suspended` | `SSOSYNC_SYNC_SUSPENDED` | Include suspended users when syncing | `false` |
 | `--force-externalid-update` | `SSOSYNC_FORCE_EXTERNAL_ID_UPDATE` | When a Google user shares the same primary email as an existing Identity Store user but has a different ID, update the existing user's `ExternalId` in place instead of deleting and recreating it. Enabling this option carrys the risk of silent permission inheritance, is an email address is re-assigned to a different user in the Google Workspace Directory. See [Preserving assignments when migrating IdPs](#preserving-assignments-when-migrating-idps). | `false` |
@@ -421,7 +598,7 @@ The `--user-match` parameter supports the following query fields and operators:
 
 | Field | Prefix (`:`) | Exact (`=`) | Example |
 |-------|:---:|:---:|---------|
-| `name` | ✓ | ✓ | `name:John*` or `name=John Doe` |
+| `name` | ✓ | ✓ | `name:John*` or `name='John Doe'` |
 | `email` | ✓ | ✓ | `email:admin*` or `email=john@company.com` |
 | `manager` | — | ✓ | `manager=boss@company.com` |
 | `managerId` | ✓ | ✓ | `managerId:abc123*` |
@@ -430,8 +607,8 @@ The `--user-match` parameter supports the following query fields and operators:
 | `orgCostCenter` | ✓ | ✓ | `orgCostCenter=CC-1234` |
 
 - Use `:` for prefix/wildcard matching (e.g. `name:John*`)
-- Use `=` for exact matching (e.g. `name=John Doe` or `email=admin@company.com`)
-- Use `"` for exact values containing spaces (e.g. `orgName="My Department"`)
+- Use `=` for exact matching (e.g. `name='John Doe'` or `email=admin@company.com`)
+- Single-quote values containing spaces or an apostrophe (e.g. `orgName='My Department'`); see [Quoting values in queries](#quoting-values-in-queries)
 - Combine multiple patterns with `,` or space separator
 - Use `*` alone to sync all users
 
@@ -456,6 +633,15 @@ The `--user-match` parameter supports the following query fields and operators:
 
 # Sync all users
 --user-match "*"
+```
+
+#### Quoting values in queries
+
+ssosync passes the `--group-match` and `--user-match` values to Google verbatim; it does not quote or escape them. A value containing spaces or an apostrophe must be single-quoted, with the apostrophe escaped as `\'`, for example `name='Valentine\'s Day'`. Commas still separate queries, so a value cannot contain a comma. An empty query between commas (for example a trailing comma) is ignored with a warning; it no longer matches the whole directory. A match made only of empty queries (such as `,` or a value of only spaces) fails the run with an error, before any group or user is synced for it.
+
+```bash
+# Sync the group named "Valentine's Day"
+--group-match "name='Valentine\'s Day'"
 ```
 
 For complete query syntax, see:
@@ -530,6 +716,8 @@ The validator's allow-lists are the single source of truth for what is valid. Ta
 | `Enterprise.Department` | defaulted | `organizations[primary].department` |
 | `Enterprise.Organization` | defaulted | `organizations[primary].name` |
 | `Enterprise.CostCenter` | defaulted | `organizations[primary].costCenter` |
+| `NickName` | opt-in | — (e.g. `name.displayName`, `name.givenName` or a custom-schema field) |
+| `Name.Formatted` | opt-in | — (e.g. `name.fullName`) |
 | `Enterprise.Manager` | opt-in | — (you choose, e.g. `relations[type=manager].value`) |
 | `Enterprise.Division` | opt-in | — |
 | `Enterprise.EmployeeNumber` | opt-in | — |
@@ -538,11 +726,19 @@ The validator's allow-lists are the single source of truth for what is valid. Ta
 | `Addresses` | opt-in | — |
 | `PhoneNumbers` | opt-in | — |
 
+To populate nicknames and formatted names, copy the default map above and add
+`"NickName": "name.givenName"` and `"Name.Formatted": "name.fullName"` to its `user`
+block. These fields remain empty unless mapped; supplying a `user` block replaces
+the entire default user map. `name.fullName` uses Google's returned full name
+without synthesizing one when it is missing. `name.displayName` is the display
+name an administrator can set on the Google user, and is empty when none is set.
+User `DisplayName` remains derived from the mapped given and family names.
+
 **Supported Google source grammar**
 
 A user source value is one of three shapes:
 
-- **Scalar** — matched exactly. The supported scalar sources are: `name.givenName`, `name.familyName`, `primaryEmail`, `suspended`.
+- **Scalar** — matched exactly. The supported scalar sources are: `name.givenName`, `name.familyName`, `name.fullName`, `name.displayName`, `primaryEmail`, `suspended`.
 - **Multi-valued** — `<field>[<selector>].<subfield>`, where `<selector>` is `primary` or `type=<value>` (see [Selection rule](#selection-rule-for-multi-valued-google-fields)). The supported base fields and their sub-fields are:
 
   | Base field | Supported sub-fields |
@@ -557,6 +753,8 @@ A user source value is one of three shapes:
   Address sub-fields other than `formatted` (`streetAddress`, `locality`, `region`, `postalCode`, `country`) are **not** supported yet, so e.g. `addresses[type=work].streetAddress` is rejected.
 
 - **Custom schema** — `customSchemas.<SchemaName>.<fieldName>`, single-valued custom fields only; multi-valued custom attributes are ignored with a warning (see [User-defined (custom) schema sources](#user-defined-custom-schema-sources)).
+
+The source's type must match its target. `suspended` is the only boolean source, and `Active` is the only boolean target. Every other source, custom-schema fields included (ssosync converts their values to text), is a string and can map only to a string target. A map that breaks this rule, such as `"Title": "suspended"` or `"Active": "primaryEmail"`, is rejected when it is loaded, with an error naming the target and the source, before any sync.
 
 **Group target fields / sources:** `DisplayName` ← `name` (the only supported group mapping). Groups have no custom-schema sources.
 
@@ -676,7 +874,9 @@ go test -tags=integration ./internal -v
 
 ### Serverless Application Repository (Recommended)
 
-Deploy directly from the [AWS Serverless Application Repository](https://console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync).
+Deploy from the AWS Serverless Application Repository: the next-gen [`ssosync`](https://console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/ssosync) app (keyless) or the classic [`SSOSync`](https://console.aws.amazon.com/lambda/home#/create/app?applicationId=arn:aws:serverlessrepo:us-east-2:004480582608:applications/SSOSync) app (2.10.0 parameters). See [Two Serverless applications](#two-serverless-applications); the [quick-start](#-quick-start) templates are the simplest way to deploy and update either.
+
+Both applications are generated from [`template.yaml`](template.yaml), which keeps every parameter: `make sar-variants` applies the patches in `cicd/build/package/` (`legacy.patch` or `next-gen.patch`, then a name patch) and writes the variants to `dist/sar/`.
 
 ### Deployment Patterns
 
@@ -714,11 +914,17 @@ When deployed as Lambda, configuration is managed through environment variables.
 
 ```bash
 # Required secrets (stored in Secrets Manager or SSM Parameter Store)
-GOOGLE_ADMIN=<secret-arn or ssm-parameter-arn>
-GOOGLE_CREDENTIALS=<secret-arn or ssm-parameter-arn>
 SCIM_ENDPOINT=<secret-arn or ssm-parameter-arn>
 SCIM_ACCESS_TOKEN=<secret-arn or ssm-parameter-arn>
-CUSTOMER_ID=<secret-arn, ssm-parameter-arn, or plain value>
+CUSTOMER_ID=<secret-arn, ssm-parameter-arn, or plain value>  # actual ID required for keyless or without GOOGLE_ADMIN
+
+# Google authentication, one of:
+#   Legacy auth (stored credentials)
+GOOGLE_CREDENTIALS=<secret-arn or ssm-parameter-arn>
+GOOGLE_ADMIN=<secret-arn or ssm-parameter-arn>
+#   Workload Identity Federation (keyless)
+GOOGLE_IMPERSONATE_SERVICE_ACCOUNT=<secret-arn or service account email>
+GOOGLE_WIF_CONFIG=<secret-arn, ssm-parameter-arn, or inline JSON>
 
 # Optional attribute map (groups sync method only). Accepts a Secrets Manager ARN,
 # an SSM Parameter Store ARN, or inline attribute-map JSON. Unset => built-in defaults.

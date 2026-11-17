@@ -17,6 +17,7 @@ func TestMapFromGoogleUser_DefaultMap(t *testing.T) {
 		Name: &admin.UserName{
 			GivenName:  "John",
 			FamilyName: "Doe",
+			FullName:   "John Q. Doe",
 		},
 		Suspended: false,
 	}
@@ -34,6 +35,42 @@ func TestMapFromGoogleUser_DefaultMap(t *testing.T) {
 	assert.Equal(t, "G1", got.ExternalId.Id)
 	// DisplayName is derived as "GivenName FamilyName", matching aws.NewUser.
 	assert.Equal(t, "John Doe", got.DisplayName)
+	assert.Empty(t, got.NickName)
+	assert.Empty(t, got.Name.Formatted)
+}
+
+func TestMapFromGoogleUser_OptInNames(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		googleName *admin.UserName
+		nickname   string
+		formatted  string
+	}{
+		{"populated", &admin.UserName{GivenName: "Jane", FamilyName: "Doe", FullName: "Dr. Jane Q. Doe"}, "Jane", "Dr. Jane Q. Doe"},
+		{"nil name", nil, "", ""},
+		{"empty full name", &admin.UserName{GivenName: "Jane", FamilyName: "Doe"}, "Jane", ""},
+		{"zero width space", &admin.UserName{GivenName: "Jane", FullName: "Jane\u200BDoe"}, "Jane", "Jane Doe"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := MapFromGoogleUser(&admin.User{Name: tc.googleName}, config.AttributeMap{
+				"NickName": "name.givenName", "Name.Formatted": "name.fullName",
+			})
+			assert.NoError(t, err)
+			assert.Equal(t, tc.nickname, got.NickName)
+			assert.Equal(t, tc.formatted, got.Name.Formatted)
+		})
+	}
+}
+
+func TestMapFromGoogleUser_OptInNamesRejectBooleanSource(t *testing.T) {
+	for _, target := range []string{"NickName", "Name.Formatted"} {
+		t.Run(target, func(t *testing.T) {
+			assert.NotPanics(t, func() {
+				_, err := MapFromGoogleUser(&admin.User{}, config.AttributeMap{target: "suspended"})
+				assert.ErrorContains(t, err, "string")
+			})
+		})
+	}
 }
 
 func TestMapFromGoogleUser_SuspendedInvertsToInactive(t *testing.T) {
@@ -812,4 +849,63 @@ func TestMapFromGoogleGroup_ZeroWidthSpaceNormalized(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.Equal(t, " ", got.DisplayName)
+}
+
+// #421: Release optional NickName and Name.Formatted mappings (PR #412)
+
+func TestMapFromGoogleUser_DisplayNameSource(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		googleName *admin.UserName
+		want       string
+	}{
+		{"set", &admin.UserName{GivenName: "Dave", FamilyName: "Lister", FullName: "Dave Lister", DisplayName: "Listy"}, "Listy"},
+		{"not set", &admin.UserName{GivenName: "Dave", FamilyName: "Lister", FullName: "Dave Lister"}, ""},
+		{"nil name", nil, ""},
+		{"zero width space", &admin.UserName{DisplayName: "\u200B"}, " "},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := MapFromGoogleUser(&admin.User{Name: tc.googleName}, config.AttributeMap{"NickName": "name.displayName"})
+			assert.NoError(t, err)
+			assert.Equal(t, tc.want, got.NickName)
+		})
+	}
+}
+
+// #420: Attribute map panics when a string target uses a boolean source
+func TestMapFromGoogleUser_SourceTypeMismatchReturnsError(t *testing.T) {
+	u := &admin.User{
+		PrimaryEmail: "mismatch@example.com",
+		Organizations: []interface{}{
+			map[string]interface{}{"primary": true, "title": "Engineer"},
+		},
+		CustomSchemas: cs(map[string]string{
+			"Employment": `{"remote":true}`,
+		}),
+	}
+	for _, tc := range []struct {
+		target, source, wantErr string
+	}{
+		{"Title", "suspended", `target "Title" requires a string source, but source "suspended" resolved to bool`},
+		{"ProfileURL", "suspended", `target "ProfileURL" requires a string source, but source "suspended" resolved to bool`},
+		{"Name.GivenName", "suspended", `target "Name.GivenName" requires a string source, but source "suspended" resolved to bool`},
+		{"Name.FamilyName", "suspended", `target "Name.FamilyName" requires a string source, but source "suspended" resolved to bool`},
+		{"Username", "suspended", `target "Username" requires a string source, but source "suspended" resolved to bool`},
+		{"NickName", "suspended", `target "NickName" requires a string source, but source "suspended" resolved to bool`},
+		{"Enterprise.Department", "suspended", `target "Enterprise.Department" requires a string source, but source "suspended" resolved to bool`},
+		{"Enterprise.Manager", "suspended", `target "Enterprise.Manager" requires a string source, but source "suspended" resolved to bool`},
+		{"Emails", "suspended", `target "Emails" requires a string source, but source "suspended" resolved to bool`},
+		// Custom-schema values resolve to strings (a custom boolean is "true"), so
+		// the mismatch a custom source can cause is on the boolean target Active.
+		{"Active", "customSchemas.Employment.remote", `target "Active" requires a boolean source, but source "customSchemas.Employment.remote" resolved to string`},
+		{"Active", "organizations[primary].title", `target "Active" requires a boolean source, but source "organizations[primary].title" resolved to string`},
+		{"Active", "primaryEmail", `target "Active" requires a boolean source, but source "primaryEmail" resolved to string`},
+	} {
+		t.Run(tc.target+"<-"+tc.source, func(t *testing.T) {
+			assert.NotPanics(t, func() {
+				_, err := mapFromGoogleUser(u, config.AttributeMap{tc.target: tc.source})
+				assert.ErrorContains(t, err, tc.wantErr)
+			})
+		})
+	}
 }

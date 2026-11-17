@@ -1,11 +1,11 @@
---- ../../../template.yaml	2025-08-14 14:37:47
-+++ staging.yaml	2025-08-14 15:04:41
-@@ -45,7 +45,7 @@
-           - PrecacheOrgUnits
+--- legacy.yaml
++++ legacy-release.yaml
+@@ -61,7 +61,7 @@
+ 
  
    AWS::ServerlessRepo::Application:
 -    Name: ssosync
-+    Name: SSOSync-Staging
++    Name: SSOSync
      Description: Helping you populate AWS SSO directly with your Google Apps users.
      Author: Sebastian Doell
      SpdxLicenseId: Apache-2.0

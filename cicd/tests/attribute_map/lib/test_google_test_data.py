@@ -10,6 +10,7 @@ Run from anywhere:
 import json
 import os
 import re
+import shlex
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -32,6 +33,27 @@ def schema(user):
     return user.get("customSchemas", {}).get("SSOSync-Test", {})
 
 
+def in_ou_tree(user_ou, ou):
+    """Google's orgUnitPath query matches the OU and every OU under it."""
+    return ou == "/" or user_ou == ou or user_ou.startswith(ou + "/")
+
+
+def staging_precache_ous(stack):
+    """The PrecacheOrgUnits of a staging stack, normalised as ssosync does
+    (trim; strip a trailing / unless the path is /)."""
+    path = os.path.join(AM_DIR, "..", "..", "account_execution", "staging", stack)
+    with open(path) as f:
+        value = re.search(r"^\s*PrecacheOrgUnits: '((?:[^']|'')*)'", f.read(), re.M).group(1)
+    ous = []
+    for ou in value.replace("''", "'").split(","):
+        ou = ou.strip()
+        if ou != "/" and ou.endswith("/"):
+            ou = ou[:-1]
+        if ou and ou not in ous:
+            ous.append(ou)
+    return ous
+
+
 SELECTOR = re.compile(r"^(\w+)\[(primary|type=([^\]]+))\]\.(\w+)$")
 
 
@@ -49,6 +71,24 @@ def resolve(user, source):
         if type_value is not None and entry.get("type", "").lower() == type_value.lower():
             return entry.get(field, "")
     return ""
+
+
+def full_name(user):
+    """Google's read-only name.fullName: given and family name joined by a space."""
+    return f"{user['name']['givenName']} {user['name']['familyName']}"
+
+
+def readback_expectations(script, var):
+    """{(username, jq-path): value} that a run.sh asserts with assert_user_field
+    on the read-back file in $var, from single lines and `for user in` loops."""
+    out = {}
+    for user, path, value in re.findall(rf'assert_user_field "\${var}" "([^"$]+)" (\.\S+) "([^"]*)"', script):
+        out[(user, path)] = value
+    for loop, body in re.findall(r"^for user in ([^\n]+); do\n(.*?)^done", script, re.S | re.M):
+        for user in shlex.split(loop):
+            for path, value in re.findall(rf'assert_user_field "\${var}" "\$user" (\.\S+) "([^"]*)"', body):
+                out[(user, path)] = value
+    return out
 
 
 class DataRules(unittest.TestCase):
@@ -208,7 +248,7 @@ class SuiteExpectations(unittest.TestCase):
 
     def test_reference_is_a_patch_body(self):
         # Only Directory API user fields; no free-text notes.
-        allowed = {"primaryEmail", "id", "name", "suspended", "organizations", "phones",
+        allowed = {"primaryEmail", "id", "name", "suspended", "orgUnitPath", "organizations", "phones",
                    "addresses", "relations", "customSchemas"}
         for u in users():
             self.assertLessEqual(set(u), allowed, f"{u['primaryEmail']}: unexpected keys {set(u) - allowed}")
@@ -234,12 +274,145 @@ class SuiteExpectations(unittest.TestCase):
         self.assertEqual(absent, int(re.search(r"field=LongValue --min (\d+)", script).group(1)))
         self.assertEqual(len(holders), int(re.search(r"rule=maxLength --field field=userName --min (\d+)", script).group(1)))
 
+    def test_default_map_precaches_an_apostrophe_ou(self):
+        # #401: default_map precaches an OU whose path has an apostrophe, and
+        # that OU holds a test user whose primary email has one too.
+        m = re.search(r"--precache-ous \"([^\"]+)\"", read("default_map", "run.sh"))
+        self.assertIsNotNone(m, "default_map must pass --precache-ous")
+        ou = m.group(1)
+        self.assertIn("'", ou)
+        self.assertNotIn(",", ou, "getUsers splits queries on commas")
+        holders = [u for u in users() if u.get("orgUnitPath") == ou]
+        self.assertEqual(1, len(holders), f"exactly one test user must be in {ou}")
+        self.assertIn("'", holders[0]["primaryEmail"])
+
+    def test_every_user_has_an_org_unit(self):
+        for u in users():
+            self.assertTrue(u.get("orgUnitPath", "").startswith("/"), f"{u['primaryEmail']}: orgUnitPath")
+
+    def test_default_map_missing_ou_holds_no_test_user(self):
+        # #404: default_map's second --precache-ous is an OU that does not
+        # exist, so the per-OU warning is expected for it; and only the first
+        # OU's user may be precached, so no other user is in its tree.
+        ous = re.findall(r"--precache-ous \"([^\"]+)\"", read("default_map", "run.sh"))
+        self.assertEqual(2, len(ous), "default_map passes two --precache-ous")
+        first, missing = ous
+        self.assertNotIn(",", missing, "getUsers splits queries on commas")
+        self.assertEqual([], [u["primaryEmail"] for u in users() if in_ou_tree(u["orgUnitPath"], missing)])
+        self.assertEqual(1, sum(1 for u in users() if in_ou_tree(u["orgUnitPath"], first)),
+                         f"only one test user may be in the tree of {first}")
+        script = read("default_map", "run.sh")
+        self.assertIn(f'PRECACHE_OU="{first}"', script)
+        self.assertIn(f'MISSING_OU="{missing}"', script)
+
+    def test_lambda_default_precache_expectations(self):
+        # #404: the staging stacks' PrecacheOrgUnits, normalised as ssosync
+        # does, are exactly the OUs lambda_default asserts on: the zero-users
+        # OU holds no test user, the others each hold at least one.
+        lists = {name: staging_precache_ous(name) for name in ("stack.yml", "stack-ng.yml")}
+        self.assertEqual(lists["stack.yml"], lists["stack-ng.yml"], "both staging stacks precache the same OUs")
+        configured = lists["stack.yml"]
+        script = read("lambda_default", "run.sh")
+        empty = re.findall(r'"PrecacheOrgUnits: no users found in OrgUnitPath" \\\n\s+--field "orgUnitPath=([^"]+)"', script)
+        loop = script.split("for ou in", 1)[1].split("; do", 1)[0]
+        with_users = re.findall(r'"([^"]+)"', loop)
+        self.assertEqual(["/Catering"], empty)
+        self.assertEqual(sorted(configured), sorted(empty + with_users))
+        for ou in empty:
+            self.assertEqual([], [u["primaryEmail"] for u in users() if in_ou_tree(u["orgUnitPath"], ou)])
+        for ou in with_users:
+            self.assertTrue(any(in_ou_tree(u["orgUnitPath"], ou) for u in users()), f"no test user in {ou}")
+
+    def test_default_map_sees_every_test_user(self):
+        # #413: default_map's exact Cache Stats check expects one key per test
+        # user's OU, so every test user must be a member of a group the suites
+        # sync (GROUP_MATCH name:AWS*). Members are compared case-insensitively,
+        # as the baseline lists some in lower case. The converse holds too: the
+        # AWS* groups hold no user outside the fixture, so the jq key set
+        # (keys == the fixture's OUs) has no OU the fixture doesn't know. The
+        # baseline is the AWS-side seed, so this guards fixture drift, not the
+        # live Google membership.
+        self.assertIn('GROUP_MATCH="${GROUP_MATCH:-name:AWS*}"', read("lib", "common.sh"))
+        self.assertIn('GROUP_MATCH: "name:AWS*"', read("default_map", "buildspec.yml"))
+        self.assertIn("google_test_users.json", read("default_map", "run.sh"))
+        with open(os.path.join(AM_DIR, "baseline", "groups.json")) as f:
+            members = {m.lower() for g in json.load(f) if g["DisplayName"].startswith("AWS") for m in g["Members"]}
+        for u in users():
+            self.assertIn(u["primaryEmail"].lower(), members, f"{u['primaryEmail']} is in no AWS* group")
+        extra = members - {u["primaryEmail"].lower() for u in users()}
+        self.assertEqual(set(), extra, "AWS* groups in baseline/groups.json hold users missing from google_test_users.json")
+
     def test_baseline_matches_google_users(self):
         with open(os.path.join(AM_DIR, "baseline", "users.json")) as f:
             baseline = {b["UserName"].lower(): b for b in json.load(f)}
         self.assertEqual({u["primaryEmail"].lower() for u in users()}, set(baseline))
         for u in users():
             self.assertEqual(u["id"], baseline[u["primaryEmail"].lower()]["ExternalIds"][0]["Id"])
+
+    # #421: Release optional NickName and Name.Formatted mappings (PR #412)
+
+    def test_rich_map_maps_opt_in_names(self):
+        with open(os.path.join(AM_DIR, "maps", "rich.json")) as f:
+            rich = json.load(f)["user"]
+        self.assertEqual("customSchemas.SSOSync-Test.NickName", rich["NickName"])
+        self.assertEqual("name.fullName", rich["Name.Formatted"])
+
+    def test_nickname_holders(self):
+        # NickName is a single-valued custom field: its holders' values are
+        # exactly what rich_map expects resolved, each differs from the
+        # holder's given name (else the suite can't tell the targets apart),
+        # every other user gets the absent-field warning, and lambda_inline_map
+        # expects a holder's value.
+        holders = [u for u in users() if "NickName" in schema(u)]
+        self.assertGreaterEqual(len(holders), 1)
+        for u in holders:
+            value = schema(u)["NickName"]
+            self.assertIsInstance(value, str, f"{u['primaryEmail']}: NickName is single-valued")
+            self.assertTrue(value.strip())
+            self.assertNotEqual(value, u["name"]["givenName"], f"{u['primaryEmail']}: NickName must differ from givenName")
+        script = read("rich_map", "run.sh")
+        source = "customSchemas.SSOSync-Test.NickName"
+        resolved = set(re.findall(rf'^resolved "{re.escape(source)}" "([^"]+)"', script, re.M))
+        self.assertEqual({schema(u)["NickName"] for u in holders}, resolved)
+        m = re.search(r"field=NickName --min (\d+)", script)
+        self.assertIsNotNone(m)
+        self.assertEqual(len(users()) - len(holders), int(m.group(1)))
+        m = re.search(rf'source={re.escape(source)}" --field "resolved=([^"]+)"', read("lambda_inline_map", "run.sh"))
+        self.assertIsNotNone(m, "lambda_inline_map must assert a resolved NickName")
+        self.assertIn(m.group(1), {schema(u)["NickName"] for u in holders})
+
+    def test_rich_map_formatted_names(self):
+        # Name.Formatted <- name.fullName resolves for every user (AceHole's
+        # blank given name gives "  Rimmer"); lambda_inline_map expects one.
+        expected = {full_name(u) for u in users()}
+        self.assertIn("  Rimmer", expected)
+        resolved = set(re.findall(r'^resolved "name\.fullName" "([^"]+)"', read("rich_map", "run.sh"), re.M))
+        self.assertEqual(expected, resolved)
+        m = re.search(r'source=name\.fullName" --field "resolved=([^"]+)"', read("lambda_inline_map", "run.sh"))
+        self.assertIsNotNone(m, "lambda_inline_map must assert a resolved name.fullName")
+        self.assertIn(m.group(1), expected)
+
+    def test_rich_map_update_counts(self):
+        # Every user has a full name, so the rich run (which sets
+        # Name.Formatted) and the default-map run (which clears it) each
+        # update every user.
+        counts = re.findall(r"--users update=(\d+)", read("rich_map", "run.sh"))
+        self.assertEqual(2, len(counts))
+        for c in counts:
+            self.assertEqual(len(users()), int(c))
+
+    def test_rich_map_readback_expectations(self):
+        # The read-back after the rich run expects every user's derived full
+        # name and the holder's NickName ("" for the others); after the
+        # default-map run both are "" for every user.
+        script = read("rich_map", "run.sh")
+        want = {}
+        for u in users():
+            want[(u["primaryEmail"], ".Name.Formatted")] = full_name(u)
+            want[(u["primaryEmail"], ".NickName")] = schema(u).get("NickName", "")
+        self.assertEqual(want, readback_expectations(script, "USERS"))
+        cleared = {key: "" for key in want}
+        self.assertEqual(cleared, readback_expectations(script, "CLEARED"))
 
 
 if __name__ == "__main__":

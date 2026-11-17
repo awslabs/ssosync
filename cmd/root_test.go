@@ -8,6 +8,8 @@ import (
 
 	"ssosync/internal/config"
 
+	log "github.com/sirupsen/logrus"
+	logtest "github.com/sirupsen/logrus/hooks/test"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -117,6 +119,31 @@ func TestAWSExclusionSAMParameters(t *testing.T) {
 	}
 }
 
+// The version line carries the goreleaser-stamped build information at info
+// level, so it is in every run's log and every bug report.
+func TestLogVersion_LogsStampedBuildInfoAtInfo(t *testing.T) {
+	saved := []string{version, commit, date, builtBy}
+	t.Cleanup(func() { version, commit, date, builtBy = saved[0], saved[1], saved[2], saved[3] })
+	version, commit, date, builtBy = "2.11.0", "0123456789abcdef", "2026-01-02T03:04:05Z", "goreleaser"
+
+	hook := logtest.NewGlobal()
+	t.Cleanup(hook.Reset)
+
+	logVersion()
+
+	entry := hook.LastEntry()
+	if assert.NotNil(t, entry) {
+		assert.Equal(t, log.InfoLevel, entry.Level)
+		assert.Equal(t, "ssosync version", entry.Message)
+		assert.Equal(t, log.Fields{
+			"version": "2.11.0",
+			"commit":  "0123456789abcdef",
+			"date":    "2026-01-02T03:04:05Z",
+			"builtBy": "goreleaser",
+		}, entry.Data)
+	}
+}
+
 // The real Issuer stamped by IAM Identity Center keeps the provisioning tenant
 // id's original (mixed) case, and ssosync compares Issuers case-sensitively, so
 // the expected IssuerArn must preserve case (issue #383).
@@ -193,4 +220,28 @@ func TestLambdaAWSConfig_UsesFunctionRegionNotIdentityCenterRegion(t *testing.T)
 		assert.NoError(t, err)
 		assert.Equal(t, "us-east-2", awsCfg.Region, "cfg.Region=%q", identityCenterRegion)
 	}
+}
+
+// Keyless CLI authentication ignores the "credentials.json" default unless a
+// key file was given explicitly (flag or SSOSYNC_GOOGLE_CREDENTIALS).
+func TestGoogleCredentialsExplicit(t *testing.T) {
+	f := rootCmd.Flags().Lookup("google-credentials")
+	if f == nil {
+		t.Fatal("google-credentials flag not registered")
+	}
+	prevChanged := f.Changed
+	t.Cleanup(func() { f.Changed = prevChanged })
+
+	f.Changed = false
+	t.Setenv("SSOSYNC_GOOGLE_CREDENTIALS", "")
+	assert.True(t, googleCredentialsExplicit(), "set in the environment (even empty) counts as explicit")
+
+	t.Setenv("SSOSYNC_GOOGLE_CREDENTIALS", "x") // ensure restore, then unset for the default case
+	if err := os.Unsetenv("SSOSYNC_GOOGLE_CREDENTIALS"); err != nil {
+		t.Fatal(err)
+	}
+	assert.False(t, googleCredentialsExplicit(), "neither flag nor environment: the default")
+
+	f.Changed = true
+	assert.True(t, googleCredentialsExplicit(), "flag given")
 }

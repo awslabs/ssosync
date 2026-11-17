@@ -169,6 +169,8 @@ func initConfig() {
 		"google_admin",
 		"customer_id",
 		"google_credentials",
+		"google_impersonate_service_account",
+		"google_wif_config",
 		"attribute_map_file",
 		"scim_access_token",
 		"scim_endpoint",
@@ -199,6 +201,8 @@ func initConfig() {
 	}
 
 	if cfg.IsLambda {
+		// Before configLambda, which logs each setting it reads.
+		logVersion()
 		configLambda()
 	} else {
 		// CLI path: resolve the attribute map from --attribute-map-file. The
@@ -210,10 +214,30 @@ func initConfig() {
 			log.Fatal(errors.Wrap(err, "cannot load attribute map file").Error())
 		}
 		cfg.AttributeMap = am
+
+		// Keyless Google authentication replaces the key file: unless the key
+		// file was given explicitly (flag or SSOSYNC_GOOGLE_CREDENTIALS), the
+		// default "credentials.json" is not read. Giving both explicitly is
+		// rejected by google.Auth.Validate.
+		if cfg.GoogleImpersonateServiceAccount != "" && !googleCredentialsExplicit() {
+			cfg.GoogleCredentials = ""
+		}
 	}
 
 	// config logger
 	logConfig(cfg)
+
+	if !cfg.IsLambda {
+		// CLI: after logConfig, so the configured log format and level apply,
+		// and before the settings-derived lookups below log.
+		logVersion()
+	}
+
+	// Google treats the whole email address as case-insensitive, and the Admin
+	// UI stores addresses lower-cased, so a mixed-case --ignore-users entry
+	// (flag, SSOSYNC_IGNORE_USERS or Lambda's IGNORE_USERS) would otherwise
+	// silently stop matching; ignoreUser compares lower-cased addresses (#418).
+	cfg.IgnoreUsers = config.LowerCaseAll(cfg.IgnoreUsers)
 
 	if cfg.SyncSuspended {
 		cfg.UserFilter = " isArchived=false"
@@ -403,6 +427,16 @@ func getIssuerArn(identityStoreId string) string {
 	return IssuerArn
 }
 
+// googleCredentialsExplicit reports whether the CLI was given a key file
+// explicitly, by flag or environment, rather than the "credentials.json" default.
+func googleCredentialsExplicit() bool {
+	if f := rootCmd.Flags().Lookup("google-credentials"); f != nil && f.Changed {
+		return true
+	}
+	_, set := os.LookupEnv("SSOSYNC_GOOGLE_CREDENTIALS")
+	return set
+}
+
 // lambdaAWSConfig loads the AWS SDK configuration for the function's own
 // resources: the Secrets Manager secrets and SSM parameters its environment
 // variables reference, and CodePipeline. They live in the function's region
@@ -440,7 +474,18 @@ func configLambda() {
 	// Get retreive sensitive values from envVars/Secrets Manager with caching
 	cfg.CustomerID = getEnvSensitive("CUSTOMER_ID", config.DefaultCustomerID)
 	cfg.GoogleAdmin = getEnvSensitive("GOOGLE_ADMIN", config.DefaultGoogleAdmin)
-	cfg.GoogleCredentials = getEnvSensitive("GOOGLE_CREDENTIALS", config.DefaultGoogleCredentials)
+	// Keyless Google authentication (issue #345): GOOGLE_IMPERSONATE_SERVICE_ACCOUNT
+	// selects it; GOOGLE_WIF_CONFIG is the optional Workload Identity Federation
+	// credential configuration (inline JSON or a Secrets Manager / SSM Arn).
+	// In keyless mode GOOGLE_CREDENTIALS has no default, so an unset value is
+	// not mistaken for a key; setting both is rejected by google.Auth.Validate.
+	cfg.GoogleImpersonateServiceAccount = getEnvSensitive("GOOGLE_IMPERSONATE_SERVICE_ACCOUNT", "")
+	cfg.GoogleWIFConfig = getEnvSensitive("GOOGLE_WIF_CONFIG", "")
+	googleCredentialsDefault := config.DefaultGoogleCredentials
+	if cfg.GoogleImpersonateServiceAccount != "" {
+		googleCredentialsDefault = ""
+	}
+	cfg.GoogleCredentials = getEnvSensitive("GOOGLE_CREDENTIALS", googleCredentialsDefault)
 	// ATTRIBUTE_MAP accepts a Secrets Manager ARN, an SSM Parameter Store ARN
 	// (both resolved to their stored JSON string by getEnvSensitive) or inline
 	// JSON. The resolved string is parsed by the same shared loader used by the
@@ -505,9 +550,11 @@ func addFlags(_ *cobra.Command, cfg *config.Config) {
 	rootCmd.PersistentFlags().BoolVarP(&cfg.SyncSuspended, "suspended", "", config.DefaultSyncSuspended, "included suspended users and their group memberships when syncing")
 	rootCmd.Flags().StringVarP(&cfg.SCIMAccessToken, "access-token", "t", config.DefaultSCIMAccessToken, "AWS SSO SCIM API Access Token")
 	rootCmd.Flags().StringVarP(&cfg.SCIMEndpoint, "endpoint", "e", config.DefaultSCIMEndpoint, "AWS SSO SCIM API Endpoint")
-	rootCmd.Flags().StringVarP(&cfg.GoogleCredentials, "google-credentials", "c", config.DefaultGoogleCredentials, "path to Google Workspace credentials file")
+	rootCmd.Flags().StringVarP(&cfg.GoogleCredentials, "google-credentials", "c", config.DefaultGoogleCredentials, "path to Google Workspace credentials file (service-account key)")
+	rootCmd.Flags().StringVar(&cfg.GoogleImpersonateServiceAccount, "google-impersonate-service-account", "", "keyless authentication (Workload Identity Federation): email of the Google service account to impersonate; replaces --google-credentials and requires --customer-id (not my_customer)")
+	rootCmd.Flags().StringVar(&cfg.GoogleWIFConfig, "google-wif-config", "", "keyless authentication: path to a Workload Identity Federation credential configuration (external_account JSON) for the base credentials; default: Application Default Credentials")
 	rootCmd.Flags().StringVar(&cfg.AttributeMapFile, "attribute-map-file", config.DefaultAttributeMapFile, "path to a JSON file containing the attribute map (groups sync method only); when unset the built-in default mapping is used")
-	rootCmd.Flags().StringVarP(&cfg.GoogleAdmin, "google-admin", "u", config.DefaultGoogleAdmin, "Google Workspace admin user email")
+	rootCmd.Flags().StringVarP(&cfg.GoogleAdmin, "google-admin", "u", config.DefaultGoogleAdmin, "legacy (key) authentication: Google Workspace admin to act on behalf of (domain-wide delegation); leave empty to have the service account call the Admin SDK as itself, with its own admin role (requires --customer-id). Not allowed with --google-impersonate-service-account")
 	rootCmd.Flags().StringVar(&cfg.CustomerID, "customer-id", config.DefaultCustomerID, "Google Workspace customer ID to operate against (defaults to 'my_customer')")
 	rootCmd.Flags().StringSliceVar(&cfg.IgnoreUsers, "ignore-users", config.DefaultIgnoreUsers, "ignores these Google Workspace users")
 	rootCmd.Flags().StringSliceVar(&cfg.IgnoreGroups, "ignore-groups", config.DefaultIgnoreGroups, "ignores these Google Workspace groups")
@@ -517,10 +564,22 @@ func addFlags(_ *cobra.Command, cfg *config.Config) {
 	rootCmd.Flags().StringVarP(&cfg.UserMatch, "user-match", "m", config.DefaultUserMatch, "Google Workspace Users filter query parameter, example: 'name:John*' 'name=John Doe,email:admin*', to sync all users in the directory specify '*'. For query syntax and more examples see: https://developers.google.com/admin-sdk/directory/v1/guides/search-users")
 	rootCmd.Flags().StringVarP(&cfg.GroupMatch, "group-match", "g", config.DefaultGroupMatch, "Google Workspace Groups filter query parameter, example: 'name:Admin*' 'name=AWS-Admins,email:aws*', to sync all groups (and their member users) specify '*'. For query syntax and more examples see: https://developers.google.com/admin-sdk/directory/v1/guides/search-groups")
 	rootCmd.Flags().StringVarP(&cfg.SyncMethod, "sync-method", "s", config.DefaultSyncMethod, "Sync method to use (users_groups|groups)")
-	rootCmd.Flags().StringSliceVar(&cfg.PrecacheOrgUnits, "precache-ous", config.DefaultPrecacheOrgUnits, "A common separated list of Google Workspace OrgUnitPathis e.g.'/', to precache all users within the organization or '/OU_1/OU 2,/OU3'. Precaching is disabled by default.")
+	rootCmd.Flags().StringSliceVar(&cfg.PrecacheOrgUnits, "precache-ous", config.DefaultPrecacheOrgUnits, "A comma separated list of Google Workspace OrgUnitPaths to precache users from, each including its sub-OUs, e.g. '/' to precache all users within the organization or '/OU_1/OU 2,/OU3'. A path that cannot be queried, or has no users, is skipped with a warning. Precaching is disabled by default.")
 	rootCmd.PersistentFlags().BoolVarP(&cfg.CacheMetrics, "cache-metrics", "", config.DefaultCacheMetrics, "Gather metrics for cache hits/miss, and output at end of run to help refine OrgUnitPath string.")
 	rootCmd.PersistentFlags().BoolVarP(&cfg.ForceExternalIdUpdate, "force-externalid-update", "", config.DefaultForceExternalIdUpdate, "By default a when the ExternalId of Identity store user mismatches with the Google Workspace directory user with the same email address, the user id removed and a new user created to prevent inheritance of privileges from the old user. When set this flag forces the existing user to be updated, and means there is a risk of silent permission inheritance. If an email address is re-assigned in the Google Workspace Directory")
 	rootCmd.PersistentFlags().BoolVarP(&cfg.RetainUnmatched, "retain-unmatched", "r", config.DefaultRetainUnmatched, "Retain 'local' users and groups that exist in the IAM Identity Store but cannot be matched to the Google Workspace directory, instead of deleting them. A 'local' user or group is one which has been created in the Identity Store directly and not synced via SCIM, from any external identity provider.")
+}
+
+// logVersion logs the build information goreleaser stamps into this package
+// (see .goreleaser.yml ldflags), so every run's log, and so every bug report,
+// shows which ssosync produced it.
+func logVersion() {
+	log.WithFields(log.Fields{
+		"version": version,
+		"commit":  commit,
+		"date":    date,
+		"builtBy": builtBy,
+	}).Info("ssosync version")
 }
 
 func logConfig(cfg *config.Config) {

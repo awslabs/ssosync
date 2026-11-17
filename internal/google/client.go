@@ -28,14 +28,18 @@ import (
 	"ssosync/internal/interfaces"
 
 	log "github.com/sirupsen/logrus"
+
+	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	admin "google.golang.org/api/admin/directory/v1"
+	"google.golang.org/api/impersonate"
 	"google.golang.org/api/option"
 )
 
 // Client is the Interface for the Client
 type Client interface {
 	GetUsers(string, string) ([]*admin.User, error)
+	CountUsers(string, string) (int, error)
 	GetDeletedUsers() ([]*admin.User, error)
 	GetGroups(string) ([]*admin.Group, error)
 	GetGroupMembers(*admin.Group) ([]*admin.Member, error)
@@ -52,22 +56,179 @@ const (
 	MaxRetries = 5
 )
 
-// NewClient creates a new client for Google's Admin API. customerID is the
-// Google Workspace customer to operate against; pass "my_customer" (or the
-// DefaultCustomerID constant) to target the customer associated with the
-// service account's domain.
-func NewClient(ctx context.Context, adminEmail, customerID string, serviceAccountKey []byte) (Client, error) {
-	config, err := google.JWTConfigFromJSON(serviceAccountKey, admin.AdminDirectoryGroupReadonlyScope,
-		admin.AdminDirectoryGroupMemberReadonlyScope,
-		admin.AdminDirectoryUserReadonlyScope)
+// Scopes are the read-only Admin SDK Directory scopes ssosync requests. When
+// acting on behalf of an admin (legacy domain-wide delegation) they must be
+// authorized for the service account's client ID; when the service account
+// acts as itself (always for keyless), its assigned Workspace admin role
+// governs access.
+//
+// Least privilege (issue #322): groups.list needs admin.directory.group.readonly,
+// which members.list also accepts, so admin.directory.group.member.readonly is
+// not requested; users.list needs admin.directory.user.readonly.
+var Scopes = []string{
+	admin.AdminDirectoryGroupReadonlyScope,
+	admin.AdminDirectoryUserReadonlyScope,
+}
 
+// Auth selects how ssosync authenticates to the Google Admin SDK. Exactly one
+// method is used, chosen explicitly (see Keyless):
+//
+//   - Service-account key (legacy): ServiceAccountKey holds the JSON key of
+//     the service account. With an admin, domain-wide delegation on behalf of
+//     that admin; without, the service account acts as itself (issue #192).
+//   - Keyless (issue #345): ImpersonateServiceAccount names the service
+//     account to impersonate. The base credentials come from WIFConfig, a
+//     Workload Identity Federation credential configuration (for example an
+//     AWS Lambda role federated to Google Cloud), or from Application Default
+//     Credentials when WIFConfig is empty. The service account always acts as
+//     itself, with the Workspace admin role assigned to it: no admin is
+//     impersonated, there is no domain-wide delegation, and no long-lived key
+//     exists.
+type Auth struct {
+	// ServiceAccountKey is the service-account key JSON (key authentication).
+	ServiceAccountKey []byte
+	// ImpersonateServiceAccount is the email of the service account to
+	// impersonate; setting it selects keyless authentication.
+	ImpersonateServiceAccount string
+	// WIFConfig is an optional Workload Identity Federation credential
+	// configuration (type "external_account") used as the base credentials
+	// for keyless authentication. Only that credential type is accepted.
+	WIFConfig []byte
+}
+
+// Keyless reports whether keyless (impersonation) authentication is selected.
+func (a Auth) Keyless() bool {
+	return a.ImpersonateServiceAccount != ""
+}
+
+// Validate checks that exactly one authentication method is configured.
+func (a Auth) Validate() error {
+	switch {
+	case a.Keyless() && len(a.ServiceAccountKey) > 0:
+		return errors.New("google authentication: both a service-account key and a service account to impersonate are set; use one: the key, or keyless impersonation")
+	case !a.Keyless() && len(a.WIFConfig) > 0:
+		return errors.New("google authentication: a Workload Identity Federation configuration is set without a service account to impersonate")
+	case !a.Keyless() && len(a.ServiceAccountKey) == 0:
+		return errors.New("google authentication: no service-account key and no service account to impersonate; provide one")
+	}
+	if len(a.WIFConfig) > 0 {
+		return validateWIFConfig(a.WIFConfig)
+	}
+	return nil
+}
+
+// validateWIFConfig accepts only a Workload Identity Federation credential
+// configuration (type "external_account"). The credential-type option of the
+// Google client library is not enforced on the impersonation path, so any
+// other credential (e.g. a service-account key supplied by mistake) would
+// otherwise be used as the base credentials.
+func validateWIFConfig(b []byte) error {
+	var c struct {
+		Type string `json:"type"`
+	}
+	if err := json.Unmarshal(b, &c); err != nil {
+		return fmt.Errorf("google authentication: the Workload Identity Federation configuration is not valid JSON: %w", err)
+	}
+	if c.Type != "external_account" {
+		return fmt.Errorf("google authentication: the Workload Identity Federation configuration must be of type \"external_account\", got %q", c.Type)
+	}
+	return nil
+}
+
+// DefaultCustomerID is the Admin SDK alias for "the customer of the
+// authenticated user". It only resolves when acting on behalf of a Workspace
+// user (domain-wide delegation); a service account calling as itself must name
+// the customer explicitly (issue #192).
+const DefaultCustomerID = "my_customer"
+
+// validateCustomer requires an explicit Google Workspace customer ID (not the
+// my_customer alias) whenever the service account may call the Admin SDK as
+// itself rather than on behalf of an admin: always for keyless authentication
+// (Workload Identity Federation), and for the key whenever no admin is given
+// (issue #192). The alias only resolves against the acting admin's customer.
+func validateCustomer(adminEmail, customerID string, auth Auth) error {
+	if customerID != "" && customerID != DefaultCustomerID {
+		return nil
+	}
+	switch {
+	case auth.Keyless():
+		return errors.New("google authentication: keyless authentication (Workload Identity Federation) requires the Google Workspace customer ID (--customer-id / CUSTOMER_ID, for example C01234abc, from Admin console > Account > Account settings); my_customer is not accepted")
+	case adminEmail == "":
+		return errors.New("google authentication: without a Google admin to act on behalf of (--google-admin / GOOGLE_ADMIN), the service account calls the Admin SDK as itself, so the Google Workspace customer ID must be set (--customer-id / CUSTOMER_ID, for example C01234abc); my_customer is not accepted")
+	}
+	return nil
+}
+
+// validateAdmin rejects a Google admin with keyless authentication: keyless
+// removes impersonation of a Workspace admin altogether, so the service account
+// always acts as itself (with its own Workspace admin role) and domain-wide
+// delegation is not used.
+func validateAdmin(adminEmail string, auth Auth) error {
+	if auth.Keyless() && adminEmail != "" {
+		return errors.New("google authentication: keyless authentication (Workload Identity Federation) does not act on behalf of a Google admin; leave --google-admin / GOOGLE_ADMIN empty and assign a read-only Workspace admin role to the service account instead")
+	}
+	return nil
+}
+
+// tokenSource returns the token source for the configured authentication
+// method. Key: with adminEmail set, ssosync acts on behalf of that Workspace
+// admin through domain-wide delegation (the admin is the JWT Subject); with
+// adminEmail empty (issue #192), the service account calls the Admin SDK as
+// itself and needs a Google Workspace admin role assigned to it. Keyless: the
+// service account always acts as itself (adminEmail must be empty).
+func tokenSource(ctx context.Context, adminEmail string, auth Auth) (oauth2.TokenSource, error) {
+	if err := auth.Validate(); err != nil {
+		return nil, err
+	}
+	if err := validateAdmin(adminEmail, auth); err != nil {
+		return nil, err
+	}
+	if !auth.Keyless() {
+		// Service-account key; an empty Subject means the service account itself.
+		config, err := google.JWTConfigFromJSON(auth.ServiceAccountKey, Scopes...)
+		if err != nil {
+			return nil, err
+		}
+		config.Subject = adminEmail
+		return config.TokenSource(ctx), nil
+	}
+
+	// Keyless: impersonate the service account, with no Subject: a plain access
+	// token for the service account itself (iam.serviceAccounts.getAccessToken,
+	// roles/iam.workloadIdentityUser).
+	var opts []option.ClientOption
+	if len(auth.WIFConfig) > 0 {
+		opts = append(opts, option.WithAuthCredentialsJSON(option.ExternalAccount, auth.WIFConfig))
+	}
+	ts, err := impersonate.CredentialsTokenSource(ctx, impersonate.CredentialsConfig{
+		TargetPrincipal: auth.ImpersonateServiceAccount,
+		Scopes:          Scopes,
+	}, opts...)
+	if err != nil {
+		return nil, fmt.Errorf("google authentication: cannot impersonate %s: %w", auth.ImpersonateServiceAccount, err)
+	}
+	return ts, nil
+}
+
+// NewClient creates a new client for Google's Admin API, authenticated as
+// described by auth. With the key and adminEmail set it acts on behalf of that
+// Workspace admin (domain-wide delegation); otherwise the service account
+// calls as itself and needs a Google Workspace admin role (issue #192).
+// Keyless authentication never takes an admin. customerID is the Google
+// Workspace customer to operate against. "my_customer" (DefaultCustomerID)
+// targets the acting admin's customer, so it is only valid with the key and
+// adminEmail; otherwise pass the customer ID.
+func NewClient(ctx context.Context, adminEmail, customerID string, auth Auth) (Client, error) {
+	if err := validateAdmin(adminEmail, auth); err != nil {
+		return nil, err
+	}
+	if err := validateCustomer(adminEmail, customerID, auth); err != nil {
+		return nil, err
+	}
+	ts, err := tokenSource(ctx, adminEmail, auth)
 	if err != nil {
 		return nil, err
 	}
-
-	config.Subject = adminEmail
-
-	ts := config.TokenSource(ctx)
 
 	srv, err := admin.NewService(ctx, option.WithTokenSource(ts))
 	if err != nil {
@@ -166,6 +327,9 @@ func (c *client) GetUsers(query string, filter string) ([]*admin.User, error) {
 	var err error
 	var users []*admin.User
 
+	if query, err = dropEmptyQueryElements(query, "users"); err != nil {
+		return nil, err
+	}
 	for iteration := 1; iteration < MaxRetries; iteration++ {
 		users, err = c.getUsers(query, filter)
 		if err == nil {
@@ -173,6 +337,80 @@ func (c *client) GetUsers(query string, filter string) ([]*admin.User, error) {
 		}
 	}
 	return nil, err
+}
+
+// EmptyQueryElementMsg is the Warn logged when a comma-separated users or
+// groups query has an empty element, which is ignored (#414).
+const EmptyQueryElementMsg = "query has an empty comma-separated element, which is ignored"
+
+// ErrAllEmptyQuery is returned, wrapped with the query, by GetUsers and
+// GetGroups for a query made only of empty comma-separated elements, such as
+// "," or " " (#414).
+var ErrAllEmptyQuery = errors.New("query has only empty comma-separated elements; fix the match, or use \"\" for none or \"*\" for all")
+
+// dropEmptyQueryElements returns query without its empty (blank after
+// TrimSpace) comma-separated elements, warning once, naming the original
+// query, if it had any (#414). Sent to Google, an empty element is a
+// filter-only list call that returns the whole directory. "" and "*" are
+// unchanged.
+//
+// A query made only of empty elements is an error, so the run fails closed:
+// treated as "" it would list nothing, and a groups sync would then delete
+// every AWS group (and its users) not found in Google.
+func dropEmptyQueryElements(query, kind string) (string, error) {
+	if query == "" || query == "*" {
+		return query, nil
+	}
+	elements := strings.Split(query, ",")
+	kept := make([]string, 0, len(elements))
+	for _, e := range elements {
+		if strings.TrimSpace(e) != "" {
+			kept = append(kept, e)
+		}
+	}
+	if len(kept) == len(elements) {
+		return query, nil
+	}
+	if len(kept) == 0 {
+		return "", fmt.Errorf("%s %w: %q", kind, ErrAllEmptyQuery, query)
+	}
+	log.WithFields(log.Fields{
+		"query": query,
+		"kind":  kind,
+	}).Warn(EmptyQueryElementMsg)
+	return strings.Join(kept, ","), nil
+}
+
+// CountUsers returns how many users match the query plus filter, asking Google
+// for user ids only, 500 per page, rather than listing full user objects (#416).
+// query is one term: unlike GetUsers it is not split on commas.
+func (c *client) CountUsers(query string, filter string) (int, error) {
+	var err error
+	var count int
+
+	for iteration := 1; iteration < MaxRetries; iteration++ {
+		count, err = c.countUsers(query, filter)
+		if err == nil {
+			return count, nil
+		}
+	}
+	return 0, err
+}
+
+func (c *client) countUsers(query string, filter string) (int, error) {
+	// If we have an empty query, count nothing, as getUsers returns nothing.
+	if query == "" {
+		return 0, nil
+	}
+
+	count := 0
+	if err := c.service.Users.List().Query(query+filter).Customer(c.customerID).MaxResults(500).Fields("nextPageToken", "users(id)").Pages(c.ctx, func(users *admin.Users) error {
+		count += len(users.Users)
+		return nil
+	}); err != nil {
+		return 0, err
+	}
+	return count, nil
 }
 
 func (c *client) getUsers(query string, filter string) ([]*admin.User, error) {
@@ -253,6 +491,9 @@ func (c *client) GetGroups(query string) ([]*admin.Group, error) {
 	var err error
 	var groups []*admin.Group
 
+	if query, err = dropEmptyQueryElements(query, "groups"); err != nil {
+		return nil, err
+	}
 	for iteration := 1; iteration < MaxRetries; iteration++ {
 		groups, err = c.getGroups(query)
 		if err == nil {
@@ -341,11 +582,13 @@ func (c *client) getGroups(query string) ([]*admin.Group, error) {
 // the time it reaches here every entry is a known target<-source pair. A
 // genuinely-unexpected unresolved entry is therefore an internal invariant
 // breach, reported via the returned error rather than silently dropping the
-// field.
+// field. Likewise a resolved value whose type does not match the target (a
+// boolean for a string target, or a string for Active) is returned as an error
+// naming the target, the source and the actual type, never a panic (#420).
 //
 // Resolvable source paths this phase:
-//   - Scalar admin.User fields: name.givenName, name.familyName, primaryEmail,
-//     suspended (inverted to Active).
+//   - Scalar admin.User fields: name.givenName, name.familyName, name.fullName,
+//     name.displayName, primaryEmail, suspended (inverted to Active).
 //   - Multi-valued interface{} fields (organizations, relations, websites,
 //     emails, phones, addresses), resolved by a JSON round-trip into the SDK
 //     typed struct and a TYPE-QUALIFIED selector (see resolveGoogleUserSource):
@@ -390,55 +633,98 @@ func mapFromGoogleUser(u *admin.User, attrMap config.AttributeMap) (interfaces.U
 
 	for targetField, sourceAttr := range attrMap {
 		switch targetField {
+		case "NickName", "Name.Formatted":
+			v, found, err := resolveGoogleUserSource(u, sourceAttr)
+			if err != nil {
+				return interfaces.User{}, err
+			}
+			warnCustomSource(u, targetField, sourceAttr, found)
+			value, err := stringValue(targetField, sourceAttr, v)
+			if err != nil {
+				return interfaces.User{}, err
+			}
+			if targetField == "NickName" {
+				user.NickName = value
+			} else {
+				user.Name.Formatted = value
+			}
 		case "Name.GivenName":
 			v, found, err := resolveGoogleUserSource(u, sourceAttr)
 			if err != nil {
 				return interfaces.User{}, err
 			}
 			warnCustomSource(u, targetField, sourceAttr, found)
-			user.Name.GivenName = v.(string)
+			s, err := stringValue(targetField, sourceAttr, v)
+			if err != nil {
+				return interfaces.User{}, err
+			}
+			user.Name.GivenName = s
 		case "Name.FamilyName":
 			v, found, err := resolveGoogleUserSource(u, sourceAttr)
 			if err != nil {
 				return interfaces.User{}, err
 			}
 			warnCustomSource(u, targetField, sourceAttr, found)
-			user.Name.FamilyName = v.(string)
+			s, err := stringValue(targetField, sourceAttr, v)
+			if err != nil {
+				return interfaces.User{}, err
+			}
+			user.Name.FamilyName = s
 		case "Username":
 			v, found, err := resolveGoogleUserSource(u, sourceAttr)
 			if err != nil {
 				return interfaces.User{}, err
 			}
 			warnCustomSource(u, targetField, sourceAttr, found)
-			user.Username = v.(string)
+			s, err := stringValue(targetField, sourceAttr, v)
+			if err != nil {
+				return interfaces.User{}, err
+			}
+			user.Username = s
 		case "Active":
 			v, found, err := resolveGoogleUserSource(u, sourceAttr)
 			if err != nil {
 				return interfaces.User{}, err
 			}
 			warnCustomSource(u, targetField, sourceAttr, found)
-			user.Active = v.(bool)
+			b, err := boolValue(targetField, sourceAttr, v)
+			if err != nil {
+				return interfaces.User{}, err
+			}
+			user.Active = b
 		case "Title":
 			v, found, err := resolveGoogleUserSource(u, sourceAttr)
 			if err != nil {
 				return interfaces.User{}, err
 			}
 			warnCustomSource(u, targetField, sourceAttr, found)
-			user.Title = v.(string)
+			s, err := stringValue(targetField, sourceAttr, v)
+			if err != nil {
+				return interfaces.User{}, err
+			}
+			user.Title = s
 		case "ProfileURL":
 			v, found, err := resolveGoogleUserSource(u, sourceAttr)
 			if err != nil {
 				return interfaces.User{}, err
 			}
 			warnCustomSource(u, targetField, sourceAttr, found)
-			user.ProfileURL = v.(string)
+			s, err := stringValue(targetField, sourceAttr, v)
+			if err != nil {
+				return interfaces.User{}, err
+			}
+			user.ProfileURL = s
 		case "Enterprise.Department":
 			v, found, err := resolveGoogleUserSource(u, sourceAttr)
 			if err != nil {
 				return interfaces.User{}, err
 			}
 			warnCustomSource(u, targetField, sourceAttr, found)
-			if s := v.(string); s != "" {
+			s, err := stringValue(targetField, sourceAttr, v)
+			if err != nil {
+				return interfaces.User{}, err
+			}
+			if s != "" {
 				ensureEnterprise(&user).Department = s
 			}
 		case "Enterprise.Organization":
@@ -447,7 +733,11 @@ func mapFromGoogleUser(u *admin.User, attrMap config.AttributeMap) (interfaces.U
 				return interfaces.User{}, err
 			}
 			warnCustomSource(u, targetField, sourceAttr, found)
-			if s := v.(string); s != "" {
+			s, err := stringValue(targetField, sourceAttr, v)
+			if err != nil {
+				return interfaces.User{}, err
+			}
+			if s != "" {
 				ensureEnterprise(&user).Organization = s
 			}
 		case "Enterprise.CostCenter":
@@ -456,7 +746,11 @@ func mapFromGoogleUser(u *admin.User, attrMap config.AttributeMap) (interfaces.U
 				return interfaces.User{}, err
 			}
 			warnCustomSource(u, targetField, sourceAttr, found)
-			if s := v.(string); s != "" {
+			s, err := stringValue(targetField, sourceAttr, v)
+			if err != nil {
+				return interfaces.User{}, err
+			}
+			if s != "" {
 				ensureEnterprise(&user).CostCenter = s
 			}
 		case "Enterprise.Division":
@@ -465,7 +759,11 @@ func mapFromGoogleUser(u *admin.User, attrMap config.AttributeMap) (interfaces.U
 				return interfaces.User{}, err
 			}
 			warnCustomSource(u, targetField, sourceAttr, found)
-			if s := v.(string); s != "" {
+			s, err := stringValue(targetField, sourceAttr, v)
+			if err != nil {
+				return interfaces.User{}, err
+			}
+			if s != "" {
 				ensureEnterprise(&user).Division = s
 			}
 		case "Enterprise.EmployeeNumber":
@@ -474,7 +772,11 @@ func mapFromGoogleUser(u *admin.User, attrMap config.AttributeMap) (interfaces.U
 				return interfaces.User{}, err
 			}
 			warnCustomSource(u, targetField, sourceAttr, found)
-			if s := v.(string); s != "" {
+			s, err := stringValue(targetField, sourceAttr, v)
+			if err != nil {
+				return interfaces.User{}, err
+			}
+			if s != "" {
 				ensureEnterprise(&user).EmployeeNumber = s
 			}
 		case "Enterprise.Manager":
@@ -483,7 +785,11 @@ func mapFromGoogleUser(u *admin.User, attrMap config.AttributeMap) (interfaces.U
 				return interfaces.User{}, err
 			}
 			warnCustomSource(u, targetField, sourceAttr, found)
-			if s := v.(string); s != "" {
+			s, err := stringValue(targetField, sourceAttr, v)
+			if err != nil {
+				return interfaces.User{}, err
+			}
+			if s != "" {
 				ensureEnterprise(&user).Manager = &interfaces.EnterpriseManager{Value: s}
 			}
 		case "Emails":
@@ -492,7 +798,11 @@ func mapFromGoogleUser(u *admin.User, attrMap config.AttributeMap) (interfaces.U
 				return interfaces.User{}, err
 			}
 			warnCustomSource(u, targetField, sourceAttr, found)
-			if s := v.(string); s != "" {
+			s, err := stringValue(targetField, sourceAttr, v)
+			if err != nil {
+				return interfaces.User{}, err
+			}
+			if s != "" {
 				user.Emails = []interfaces.UserEmail{{
 					Value:   s,
 					Type:    scimTypeOrWork(googleEntryType(u, sourceAttr)),
@@ -505,7 +815,11 @@ func mapFromGoogleUser(u *admin.User, attrMap config.AttributeMap) (interfaces.U
 				return interfaces.User{}, err
 			}
 			warnCustomSource(u, targetField, sourceAttr, found)
-			if s := v.(string); s != "" {
+			s, err := stringValue(targetField, sourceAttr, v)
+			if err != nil {
+				return interfaces.User{}, err
+			}
+			if s != "" {
 				user.Addresses = []interfaces.UserAddress{{
 					Formatted: s,
 					Type:      scimTypeOrWork(googleEntryType(u, sourceAttr)),
@@ -518,7 +832,11 @@ func mapFromGoogleUser(u *admin.User, attrMap config.AttributeMap) (interfaces.U
 				return interfaces.User{}, err
 			}
 			warnCustomSource(u, targetField, sourceAttr, found)
-			if s := v.(string); s != "" {
+			s, err := stringValue(targetField, sourceAttr, v)
+			if err != nil {
+				return interfaces.User{}, err
+			}
+			if s != "" {
 				user.PhoneNumbers = []interfaces.UserPhoneNumber{{
 					Value:   s,
 					Type:    scimTypeOrWork(googleEntryType(u, sourceAttr)),
@@ -548,6 +866,27 @@ func ensureEnterprise(u *interfaces.User) *interfaces.EnterpriseUser {
 		u.Enterprise = &interfaces.EnterpriseUser{}
 	}
 	return u.Enterprise
+}
+
+// stringValue returns a resolved source value for a string target, or an error
+// naming the target, the source and the value's actual type when it is not a
+// string (#420). The load-time validator rejects the mismatches it can see, so
+// this catches the rest instead of panicking.
+func stringValue(target, source string, v interface{}) (string, error) {
+	s, ok := v.(string)
+	if !ok {
+		return "", fmt.Errorf("mapFromGoogleUser: target %q requires a string source, but source %q resolved to %T", target, source, v)
+	}
+	return s, nil
+}
+
+// boolValue is stringValue for the boolean target Active (#420).
+func boolValue(target, source string, v interface{}) (bool, error) {
+	b, ok := v.(bool)
+	if !ok {
+		return false, fmt.Errorf("mapFromGoogleUser: target %q requires a boolean source, but source %q resolved to %T", target, source, v)
+	}
+	return b, nil
 }
 
 // scimTypeOrWork returns the Google entry's own type, defaulting to "work" when
@@ -890,6 +1229,17 @@ func resolveGoogleUserSource(u *admin.User, sourceAttr string) (value interface{
 			return "", true, nil
 		}
 		return strings.ReplaceAll(u.Name.FamilyName, string('\u200B'), " "), true, nil
+	case "name.fullName":
+		if u.Name == nil {
+			return "", true, nil
+		}
+		return strings.ReplaceAll(u.Name.FullName, string('\u200B'), " "), true, nil
+	case "name.displayName":
+		// Google's settable display name; "" when the directory sets none.
+		if u.Name == nil {
+			return "", true, nil
+		}
+		return strings.ReplaceAll(u.Name.DisplayName, string('\u200B'), " "), true, nil
 	case "primaryEmail":
 		return u.PrimaryEmail, true, nil
 	case "suspended":

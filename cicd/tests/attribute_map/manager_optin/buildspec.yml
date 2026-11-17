@@ -4,9 +4,11 @@ version: 0.2
 env:
   shell: bash
   secrets-manager:
-    GoogleAdminEmail: SSOSyncGoogleAdminEmail
-    SCIMEndpointUrl: SSOSyncSCIMEndpointUrl
-    SCIMAccessToken: SSOSyncSCIMAccessToken
+    # Keyless Google authentication (tests/wif_account_execution/lib/keyless.sh).
+    GoogleCustomerId: SSOSyncNGGoogleCustomerId
+    GoogleImpersonateServiceAccount: SSOSyncNGGoogleImpersonateServiceAccount
+    SCIMEndpointUrl: SSOSyncNGSCIMEndpointUrl
+    SCIMAccessToken: SSOSyncNGSCIMAccessToken
   variables:
     GROUP_MATCH: "name:AWS*"
 

@@ -1,7 +1,10 @@
 // Package config ...
 package config
 
-import "errors"
+import (
+	"errors"
+	"strings"
+)
 
 // Config ...
 type Config struct {
@@ -22,6 +25,17 @@ type Config struct {
 	// ATTRIBUTE_MAP env var for Lambda), not by viper, so it carries no
 	// mapstructure tag.
 	AttributeMap AttributeMaps
+	// GoogleImpersonateServiceAccount is the email of the Google service
+	// account to impersonate for keyless authentication (issue #345). Setting
+	// it selects keyless authentication instead of the service-account key in
+	// GoogleCredentials (the 2.x default).
+	GoogleImpersonateServiceAccount string `mapstructure:"google_impersonate_service_account"`
+	// GoogleWIFConfig is the optional Workload Identity Federation credential
+	// configuration ("external_account" JSON) used as the base credentials for
+	// keyless authentication: a file path for the CLI, the resolved contents
+	// for Lambda (inline JSON, or a Secrets Manager / SSM Parameter Store Arn).
+	// Empty means Application Default Credentials.
+	GoogleWIFConfig string `mapstructure:"google_wif_config"`
 	// GoogleAdmin ...
 	GoogleAdmin string `mapstructure:"google_admin"`
 	// CustomerID is the Google Workspace customer ID to operate against.
@@ -220,6 +234,19 @@ var (
 	}
 )
 
+// LowerCaseAll returns a copy of values with each value lower-cased; nil stays
+// nil. Used for --ignore-users, as Google email addresses are case-insensitive (#418).
+func LowerCaseAll(values []string) []string {
+	if values == nil {
+		return nil
+	}
+	lowered := make([]string, len(values))
+	for i, v := range values {
+		lowered[i] = strings.ToLower(v)
+	}
+	return lowered
+}
+
 // New returns a new Config
 func New() *Config {
 	return &Config{
@@ -236,8 +263,17 @@ func New() *Config {
 
 // Validate checks if the configuration is valid
 func (c *Config) Validate() error {
-	if c.GoogleAdmin == "" {
-		return errors.New("google admin email is required")
+	// Keyless authentication never acts on behalf of a Google admin: the
+	// service account acts as itself (issue #345).
+	if c.GoogleImpersonateServiceAccount != "" && c.GoogleAdmin != "" {
+		return errors.New("keyless authentication (google impersonate service account) does not take a google admin email; the service account acts as itself with its own Workspace admin role")
+	}
+
+	// GoogleAdmin is optional (issue #192). The customer ID must be explicit
+	// (not my_customer) for keyless authentication, and without an admin.
+	if (c.GoogleImpersonateServiceAccount != "" || c.GoogleAdmin == "") &&
+		(c.CustomerID == "" || c.CustomerID == DefaultCustomerID) {
+		return errors.New("the Google Workspace customer ID must be set (not my_customer) for keyless authentication or when no google admin email is given")
 	}
 
 	if c.SCIMEndpoint == "" {

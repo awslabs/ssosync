@@ -32,7 +32,7 @@
         ]
     },
     {
-        "UserName": "AceHole@nothing2see.info",
+        "UserName": "acehole@nothing2see.info",
         "DisplayName": "  Rimmer",
         "GivenName": " ",
         "FamilyName": "Rimmer",
@@ -45,7 +45,7 @@
         ],
         "Emails": [
             {
-                "Value": "AceHole@nothing2see.info",
+                "Value": "acehole@nothing2see.info",
                 "Type": "work",
                 "Primary": true
             }
@@ -96,7 +96,7 @@
         ]
     },
     {
-        "UserName": "olaf@nothing2see.info",
+        "UserName": "olaf.o'petersen@nothing2see.info",
         "DisplayName": "Olaf Petersen",
         "GivenName": "Olaf",
         "FamilyName": "Petersen",
@@ -109,7 +109,7 @@
         ],
         "Emails": [
             {
-                "Value": "olaf@nothing2see.info",
+                "Value": "olaf.o'petersen@nothing2see.info",
                 "Type": "work",
                 "Primary": true
             }

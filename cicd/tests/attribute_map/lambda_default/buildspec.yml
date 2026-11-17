@@ -6,7 +6,7 @@ env:
   secrets-manager:
     # Only for the Identity Store region (lib/common.sh identity_store_region),
     # used by the baseline reset.
-    SCIMEndpointUrl: SSOSyncSCIMEndpointUrl
+    SCIMEndpointUrl: SSOSyncNGSCIMEndpointUrl
   variables:
     FUNCTION_NAME: SSOSyncFunction
 

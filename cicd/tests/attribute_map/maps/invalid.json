@@ -1,6 +1,7 @@
 {
   "user": {
     "Name.Givenname": "name.givenName",
-    "Title": "organizations[type=work].nosuchsubfield"
+    "Title": "organizations[type=work].nosuchsubfield",
+    "NickName": "suspended"
   }
 }
