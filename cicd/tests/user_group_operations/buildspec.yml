@@ -19,9 +19,6 @@ env:
     # Store ids. Required; those scenarios fail if they are not set.
     UGO_TEST_USER: "acehole@nothing2see.info"
     UGO_TEST_GROUP: "AWSOperationsTest"
-    # "true": fail (instead of skip) the foreign-issuer scenarios when the
-    # Identity Store API cannot write ExternalIds.
-    UGO_FOREIGN_REQUIRED: "false"
     # S9 (#429): the Google groups RateTest_00..RateTest_29, each with members
     # crpates@, acehole@ and dave2@nothing2see.info (never Olaf). S9 syncs them
     # alongside GROUP_MATCH and deletes them again; it is skipped if unset.
