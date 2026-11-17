@@ -4,4 +4,5 @@
 - Use that tool directly, in plain readable steps. Transparency and portability (GNU on CodeBuild, BSD on macOS) beat clever scripting.
 - Only write a script when no existing tool fits, keep it short, and say why the existing tools were not enough. A script that works around tool differences (regex dialects, newline handling, `sed -i`) is a sign the wrong approach was chosen.
 - When proposing options to the user, present the established-tool option first and do not recommend a custom script over it without a clear reason.
+- Don't install software on the user's machine (brew, pip --user, global npm, and so on) without asking first. Prefer tools already present, `go run <module>@<version>`, or a throwaway venv under /tmp.
 - Example: the SAR variants (#406) are produced with `patch -N -F 0` and checked with `diff`, not with a custom script that edits the template.
