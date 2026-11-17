@@ -92,14 +92,6 @@ ids_delete_group_if_exists() {
 # passed_since <S_FAIL snapshot>: true when no assertion failed since then.
 passed_since() { [ "$S_FAIL" -eq 0 ] && [ "$1" -eq 0 ]; }
 
-# ids_set_external_ids <user|group> <id> <json array of {Issuer,Id}>
-ids_set_external_ids() {
-  local ops
-  ops=$(jq -cn --argjson v "$3" '[{AttributePath:"externalIds",AttributeValue:$v}]')
-  if [ "$1" = user ]; then ids update-user --user-id "$2" --operations "$ops" > /dev/null
-  else ids update-group --group-id "$2" --operations "$ops" > /dev/null; fi
-}
-ext_json() { jq -cn --arg i "$1" --arg d "$2" '[{Issuer:$i,Id:$d}]'; } # <issuer> <id>
 
 # --- Cleanup registry --------------------------------------------------------
 # Every change registers the command that undoes it. A scenario's pending undos

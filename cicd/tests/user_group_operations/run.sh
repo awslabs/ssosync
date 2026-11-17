@@ -14,9 +14,6 @@
 #   S5  Delete / Retain    local (Identity Store API) record not in Google; Retain with -r
 #   S6  AdoptLocal         dedicated test user/group re-created as local records
 #   S7  Create             dedicated test user/group deleted from the Identity Store
-#   S8a AdoptForeign       managed record given a foreign-issuer ExternalId
-#   S8b Delete / Retain    foreign record not in Google; Retain with -r
-#   S8c Multi-ExternalId   record with a foreign AND this tenant's ExternalId is Equal
 #   S9  Pacing (#429)      UGO_RATE_GROUPS Google groups matched by UGO_RATE_GROUP_MATCH
 #                          (RateTest_00..RateTest_29; members crpates, acehole and
 #                          dave2, never Olaf) are synced, their memberships read at
@@ -24,11 +21,12 @@
 #                          throttled, then deleted again. Runs last, so the groups
 #                          never exist while S6/S7 re-create UGO_TEST_USER.
 #
-# S8 needs the Identity Store API to write ExternalIds; a probe checks that first
-# and the S8 scenarios are SKIPPED (with the API error) if it cannot, unless
-# UGO_FOREIGN_REQUIRED=true, which makes a skip fail the test.
+# There is no S8: the foreign-issuer outcomes (AdoptForeign, Delete/Retain of a
+# foreign record, multiple ExternalIds) need records whose ExternalIds carry
+# another tenant's issuer, which the test cannot set up (#440). Unit tests in
+# internal/sync_issuer_test.go and internal/sync_test.go cover them.
 #
-# S5/S6 (and S8) create LOCAL records, which only the Identity Store API can do.
+# S5/S6 create LOCAL records, which only the Identity Store API can do.
 # Its writes are refused from an account outside the instance owner without
 # delegated administration (NonDelegated): there S5/S6 are SKIPPED and proven by
 # the Management/Delegated runs; a refusal in any other account FAILS the test.
@@ -40,7 +38,7 @@
 # permission-set assignments:
 #   UGO_TEST_USER   primary email of a Google test user in an in-scope group
 #   UGO_TEST_GROUP  name of an in-scope Google test group
-# S2/S3/S8 use them too when set, else the first managed user/group by name.
+# S2/S3 use them too when set, else the first managed user/group by name.
 #
 # Environment: SCIMEndpointUrl, SCIMAccessToken, GoogleCustomerId,
 # GoogleImpersonateServiceAccount (Secrets Manager; ssosync runs keyless, see
@@ -79,7 +77,6 @@ s1_baseline() {
   source=$(check field "$live" --msg "getIssuerArn()" --key AccountSource) || return 1
   issuer_account=$(check field "$live" --msg "getIssuerArn()" --key AccountId) || return 1
   caller=$(aws sts get-caller-identity --query Account --output text) || return 1
-  FOREIGN_ISSUER="arn:aws:identitystore::${OWNER}:identitystore/${STORE_ID}/provisioningtenant/ssosync-ugo-foreign"
   echo "Expected IssuerArn: $EXPECTED"
   echo "Identity Store: $STORE_ID ($REGION); instance owner: $OWNER; ssosync ran in: $caller (type: ${TEST_ACCOUNT_TYPE:-not set})"
 
@@ -257,7 +254,7 @@ s7_create() {
 }
 
 # --- Identity Store API write access -------------------------------------------
-# S5, S6 and S8 must create records with the Identity Store API (only it can
+# S5 and S6 must create records with the Identity Store API (only it can
 # create LOCAL records; SCIM always creates managed ones). Those writes are
 # refused when the test runs in an account outside the instance owner without
 # delegated administration (no resource-based policy allows them), while
@@ -272,78 +269,6 @@ probe_identity_store_writes() {
     IDS_WRITE_SKIP="the Identity Store API refused writes from this account: $(tr '\n' ' ' < "$err")"
     echo "NOTE: $IDS_WRITE_SKIP"
   fi
-}
-
-# --- S8: foreign issuers (needs the Identity Store API to write ExternalIds) --
-FOREIGN_SKIP=""
-probe_foreign() {
-  local gid err="$LOG_DIR/S8_probe.err"
-  if [ -n "$IDS_WRITE_SKIP" ]; then FOREIGN_SKIP="$IDS_WRITE_SKIP"; return 0; fi
-  gid=$(ids_create_group "ugo-probe-$TS") || { FOREIGN_SKIP="could not create the probe group"; return 0; }
-  if ids_set_external_ids group "$gid" "$(ext_json "$FOREIGN_ISSUER" "ugo-probe-$TS")" 2> "$err"; then
-    echo "ok:   the Identity Store API can write a foreign-issuer ExternalId"
-  else
-    FOREIGN_SKIP="the Identity Store API rejected writing ExternalIds: $(tr '\n' ' ' < "$err")"
-  fi
-  ids_delete_group "$gid" || echo "ERROR: could not delete probe group $gid"
-}
-
-restore_ext_user() { ids_set_external_ids user "$TU_ID" "$(ext_json "$EXPECTED" "$TU_EXT")"; }
-restore_ext_group() { ids_set_external_ids group "$TG_ID" "$(ext_json "$EXPECTED" "$TG_EXT")"; }
-
-s8c_multi_external_id() {
-  local two
-  undo user restore_ext_user
-  two=$(jq -cn --arg f "$FOREIGN_ISSUER" --arg e "$EXPECTED" --arg d "$TU_EXT" '[{Issuer:$f,Id:"ugo-other"},{Issuer:$e,Id:$d}]')
-  ids_set_external_ids user "$TU_ID" "$two" || return 1
-  undo group restore_ext_group
-  two=$(jq -cn --arg f "$FOREIGN_ISSUER" --arg e "$EXPECTED" --arg d "$TG_EXT" '[{Issuer:$f,Id:"ugo-other"},{Issuer:$e,Id:$d}]')
-  ids_set_external_ids group "$TG_ID" "$two" || return 1
-
-  # This tenant's entry is the second one: ssosync must select it and see Equal.
-  local dry="$LOG_DIR/S8c_dry.log"
-  expect run_ssosync "$dry" --dry-run
-  expect check converged "$dry"
-  expect check record "$dry" --kind user --name "$TU_NAME" --field externalIdCount=2 --field externalIdSelectedBy=issuerMatch --field issuerMatch=true --field externalIdMatch=true
-  expect check record "$dry" --kind group --name "$TG_NAME" --field externalIdCount=2 --field externalIdSelectedBy=issuerMatch --field issuerMatch=true --field externalIdMatch=true
-  ids list-users > "$LOG_DIR/S8c_users.json" && ids list-groups > "$LOG_DIR/S8c_groups.json" || return 1
-  expect check truth "$dry" --expected "$EXPECTED" --users "$LOG_DIR/S8c_users.json" --groups "$LOG_DIR/S8c_groups.json"
-}
-
-s8a_adopt_foreign() {
-  undo user restore_ext_user
-  ids_set_external_ids user "$TU_ID" "$(ext_json "$FOREIGN_ISSUER" "$TU_EXT")" || return 1
-  undo group restore_ext_group
-  ids_set_external_ids group "$TG_ID" "$(ext_json "$FOREIGN_ISSUER" "$TG_EXT")" || return 1
-
-  local dry="$LOG_DIR/S8a_dry.log" live="$LOG_DIR/S8a_live.log"
-  expect run_ssosync "$dry" --dry-run
-  expect check counts "$dry" --users adoptForeign=1 --groups adoptForeign=1
-  expect check record "$dry" --kind user --name "$TU_NAME" --field issuerMatch=false --field "issuer=$FOREIGN_ISSUER"
-  expect run_ssosync "$live"
-  expect check counts "$live" --users adoptForeign=1 --groups adoptForeign=1
-  # After adopting, ssosync owns the records: nothing further to change.
-  converge "$LOG_DIR/S8a_converge.log"
-}
-
-s8b_foreign_unmatched() {
-  local name="ugo-foreign-$TS" uid gid
-  uid=$(ids_create_user "$name@example.invalid" ugo foreign) || return 1
-  undo user ids_delete_user_if_exists "$uid"
-  ids_set_external_ids user "$uid" "$(ext_json "$FOREIGN_ISSUER" "$name")" || return 1
-  gid=$(ids_create_group "$name") || return 1
-  undo group ids_delete_group_if_exists "$gid"
-  ids_set_external_ids group "$gid" "$(ext_json "$FOREIGN_ISSUER" "$name")" || return 1
-
-  local dry="$LOG_DIR/S8b_dry.log" retain="$LOG_DIR/S8b_dry_retain.log" live="$LOG_DIR/S8b_live.log"
-  expect run_ssosync "$dry" --dry-run
-  expect check counts "$dry" --users delete=1 --groups delete=1
-  expect run_ssosync "$retain" --dry-run --retain-unmatched
-  expect check counts "$retain" --users retain=1 --groups retain=1
-  if run_ssosync "$live"; then
-    expect check counts "$live" --users delete=1 --groups delete=1
-  else S_FAIL=1; fi
-  converge "$LOG_DIR/S8b_converge.log"
 }
 
 # S9 (#429): every Identity Store attempt is paced to 18 a second. Each run
@@ -439,12 +364,6 @@ else
   scenario S6 "AdoptLocal (local, in Google)" s6_adopt_local "$LOCAL_SKIP"
   scenario S7 "Create (missing, in Google)" s7_create
 fi
-
-probe_foreign
-if [ -n "$FOREIGN_SKIP" ] && [ "${UGO_FOREIGN_REQUIRED:-false}" = true ]; then FAILED=1; fi
-scenario S8c "Equal with multiple ExternalIds (this tenant's entry not first)" s8c_multi_external_id "$FOREIGN_SKIP"
-scenario S8a "AdoptForeign (foreign issuer, in Google)" s8a_adopt_foreign "$FOREIGN_SKIP"
-scenario S8b "Delete / Retain (foreign issuer, not in Google)" s8b_foreign_unmatched "$FOREIGN_SKIP"
 
 RATE_SKIP=""
 if [ -z "${UGO_RATE_GROUP_MATCH:-}" ] || [ -z "${UGO_RATE_GROUPS:-}" ]; then
