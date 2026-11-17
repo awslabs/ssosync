@@ -1,3 +1,6 @@
+## Unreleased
+- CI/CD only: the tag's chore PR renames `## Unreleased` in `CHANGELOG.md` to the tag's version, `## vX.Y.Z`, changing only that line (#435). The changelog-updater action is removed. For v2.12.0 it put a list of commit hashes above `## Unreleased` and reformatted older sections (#434). The GitHub release notes still come from goreleaser.
+
 ## v2.12.0
 - The attribute map can populate the user's SCIM `nickName` and `name.formatted`, with the opt-in user targets `NickName` and `Name.Formatted`, and Google's `name.fullName` (the given and family names joined by a space) is a supported source (#421, from #412 by @dSmithShmog). Neither target is in the default map, so with the default map nothing changes. Mapping a target to a boolean source such as `suspended` fails the run with an error.
 - Google's `name.displayName`, the display name an administrator can set on a user, is a supported attribute-map source, for example `"NickName": "name.displayName"` (#421). A user with no display name set resolves to an empty value.

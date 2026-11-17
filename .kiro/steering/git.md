@@ -13,7 +13,7 @@
 
 ## CHANGELOG entries
 - Feature and bugfix branches add their CHANGELOG lines under a `## Unreleased` section at the top of `CHANGELOG.md` (create it if missing), never under an already-tagged version.
-- At release time the user renames `## Unreleased` to the version being tagged (for example `## v2.12.0`); only then do entries belong to a version heading.
+- At release time the tag's chore PR renames `## Unreleased` to the version being tagged (for example `## v2.12.0`); nobody renames it by hand. Only then do entries belong to a version heading.
 - Keep one CHANGELOG line in the same commit as the change it describes, so a revert removes both.
 
 ## Versioning
@@ -22,14 +22,14 @@
   - **Y (minor):** minor behaviour changes, such as features.
   - **X (major):** significant behaviour changes that require user action to upgrade safely.
 - Each issue and PR names its target release as a GitHub milestone `vX.Y.Z` (create the milestone if it is missing).
-- At release, `## Unreleased` in `CHANGELOG.md` is renamed to that version (see CHANGELOG entries).
+- At release, the tag's chore PR renames `## Unreleased` in `CHANGELOG.md` to that version (see CHANGELOG entries).
 - Release sequence, for each release:
   1. **Dry run:** the user triggers the release pipeline (`SSOSync-Build`) by hand on the master commit to be released, untagged. It isn't triggered automatically, to avoid multiple executions. It tests in all three staging accounts; the public release is skipped.
-  2. **CHANGELOG section:** in a small docs-only PR (its own issue, on the release's milestone), rename `## Unreleased` in `CHANGELOG.md` to `## vX.Y.Z` and merge it. The release workflow's changelog-updater action then finds an existing section and doesn't generate a duplicate. Being docs-only, it needs no new dry run.
-  3. **Tag:** the user tags the resulting master commit `vX.Y.Z`.
-  4. **Release run:** the tag triggers the release pipeline. It publishes publicly, and the GitHub release workflow opens a chore PR ("Update CHANGELOG and Quick Start templates") that adds the release to the quick-start `#SemanticVersion` lists. Review its `CHANGELOG.md` diff (it should be empty or trivial), then merge it.
-  5. **Clear:** once the release pipeline has completed the release run, the shared test environment is clear for developer-pipeline runs. Open feature branches are behind master by then (the CHANGELOG and chore-PR merges) and must be rebased (see "Before merging a PR") before their dev run.
-- The dry run comes first so that, if it fails, fixes can be iterated on master (each in its own PR) until it passes. Only then is the release content final, and the CHANGELOG section is renamed to the version.
+  2. **Tag:** after a green dry run, the user tags that master commit `vX.Y.Z`. Pre-tag check: the top of `CHANGELOG.md` is `## Unreleased`, holding this release's notes.
+  3. **Release run:** the tag triggers the release pipeline, which publishes publicly. The GitHub release workflow's `post_release` job opens a chore PR ("Update CHANGELOG and Quick Start templates") that renames `## Unreleased` to `## vX.Y.Z` and adds the release to the quick-start `#SemanticVersion` lists. It skips the rename, with a log line, if `## vX.Y.Z` already exists or `## Unreleased` is missing.
+  4. **Review:** check the chore PR (its `CHANGELOG.md` diff should be only the heading rename), then merge it.
+  5. **Clear:** once the release pipeline has completed the release run, the shared test environment is clear for developer-pipeline runs. Open feature branches are behind master by then (the chore-PR merge) and must be rebased (see "Before merging a PR") before their dev run.
+- The dry run comes first so that, if it fails, fixes can be iterated on master (each in its own PR) until it passes. Only then is the release content final and ready to tag.
 - Feature branches add a fresh `## Unreleased` section at the top of `CHANGELOG.md` if there isn't one.
 
 ## Changing a branch that has already been merged
