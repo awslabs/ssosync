@@ -88,6 +88,13 @@ ids_delete_user_if_exists() {
 ids_delete_group_if_exists() {
   if ids_group_exists "$1"; then ids_delete_group "$1"; else echo "      (group $1 already gone)"; fi
 }
+ids_add_member() { # <groupId> <userId>
+  ids create-group-membership --group-id "$1" --member-id UserId="$2" > /dev/null
+}
+ids_is_member() { # <groupId> <userId>
+  ids list-group-memberships --group-id "$1" |
+    jq -e --arg u "$2" 'any(.GroupMemberships[]; .MemberId.UserId == $u)' > /dev/null
+}
 
 # passed_since <S_FAIL snapshot>: true when no assertion failed since then.
 passed_since() { [ "$S_FAIL" -eq 0 ] && [ "$1" -eq 0 ]; }
