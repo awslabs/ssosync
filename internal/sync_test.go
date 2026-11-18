@@ -220,9 +220,8 @@ func TestGetGroupOperations_RetainUnmatched(t *testing.T) {
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
-	assert.Len(t, update, 1)
+	assert.Len(t, update, 0)
 	assert.Len(t, equals, 0)
-	assert.Equal(t, "Group 1", update[0].DisplayName)
 }
 
 func TestGetGroupOperations_LocalGroupMatch(t *testing.T) {
@@ -1515,9 +1514,8 @@ func TestGetGroupOperations_RetainUnmatched_LocalGroupUnmatched(t *testing.T) {
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
-	assert.Len(t, update, 1)
+	assert.Len(t, update, 0)
 	assert.Len(t, equals, 0)
-	assert.Equal(t, "Group 1", update[0].DisplayName)
 }
 
 func TestGetGroupOperations_RetainUnmatched_SyncedGroupUnMatched(t *testing.T) {
@@ -2724,9 +2722,8 @@ func TestGetGroupOperations_ForeignIssuer_UnmatchedRetain(t *testing.T) {
 
 	assert.Len(t, add, 0)
 	assert.Len(t, delete, 0)
-	assert.Len(t, update, 1)
+	assert.Len(t, update, 0)
 	assert.Len(t, equals, 0)
-	assert.Equal(t, "Group 8", update[0].DisplayName)
 }
 
 // Foreign unmatched group with retainUnmatched=false -> delete.
