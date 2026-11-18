@@ -435,6 +435,15 @@ class AssertLogTest(unittest.TestCase):
         rc, out = run_am("dryrun", p)
         self.assertEqual(rc, 0, out)
 
+    # #442: retained groups are counted but not updated, so they owe no
+    # 'Would update group' line; retained users are still updated.
+    def test_dryrun_retained_groups_not_updated(self):
+        base = [self.MARKER, users(retain=1), groups(retain=1),
+                {"msg": "DRY RUN: Would update user", "user": "u1"}]
+        self.assertEqual(run_am("dryrun", self.log(base))[0], 0)
+        extra = self.log(base + [{"msg": "DRY RUN: Would update group", "group": "g1"}])
+        self.assertEqual(run_am("dryrun", extra)[0], 1)
+
     def test_dryrun_no_changes(self):
         p = self.log([self.MARKER, users(equal=4), groups(equal=2)])
         self.assertEqual(run_am("dryrun", p)[0], 0)
