@@ -580,12 +580,19 @@ func (c *client) UpdateGroup(g *interfaces.Group) (*interfaces.Group, error) {
 				Path:      "displayName",
 				Value:     string(g.DisplayName),
 			},
-			{
-				Operation: OperationReplace,
-				Path:      "externalId",
-				Value:     g.ExternalId.Id,
-			},
 		},
+	}
+
+	// A local group (for example one created by AWS Control Tower) that is
+	// retained under --retain-unmatched has no ExternalId. IAM Identity Center
+	// rejects `replace externalId ""` with a 400, which aborts the whole sync, so
+	// only send the operation when there is a value to set.
+	if g.ExternalId.Id != "" {
+		gc.Operations = append(gc.Operations, interfaces.GroupChangeOperation{
+			Operation: OperationReplace,
+			Path:      "externalId",
+			Value:     g.ExternalId.Id,
+		})
 	}
 
 	_, err := c.patch(fmt.Sprintf("/Groups/%s", g.ID), gc)
