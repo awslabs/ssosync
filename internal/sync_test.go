@@ -4218,6 +4218,109 @@ func TestOutputCacheMetrics_Issue401_OrgUnitQueryQuoted(t *testing.T) {
 	assert.Equal(t, 2, entry.TotalUsers)
 }
 
+// #442: BUG: --retain-unmatched PATCHes unmatched local groups with an empty externalId (400 aborts the sync)
+// Reported in #439 by @gabrielbiasi.
+
+// issue442MembershipsOutput returns one page of user memberships.
+func issue442MembershipsOutput(userIDs ...string) *identitystore.ListGroupMembershipsOutput {
+	out := &identitystore.ListGroupMembershipsOutput{}
+	for _, id := range userIDs {
+		out.GroupMemberships = append(out.GroupMemberships, types.GroupMembership{
+			MemberId: &types.MemberIdMemberUserId{Value: id},
+		})
+	}
+	return out
+}
+
+// Retained groups (local and foreign-issuer) are counted in the Change
+// Summary but returned in no list, so Sync sends nothing for them.
+func TestGetGroupOperations_Issue442_RetainCountedNotListed(t *testing.T) {
+	hook := test.NewGlobal()
+	defer hook.Reset()
+	issuerArn := "arn:aws:identitystore::920862271044:identitystore/d-9a671d7705/provisioningtenant/ssosync"
+	awsGroups := []*interfaces.Group{
+		{ID: "ct-1", DisplayName: "AWSControlTowerAdmins"},
+		{
+			ID:          "A8",
+			DisplayName: "Group 8",
+			ExternalId: interfaces.ExternalId{
+				Id:     "G8",
+				Issuer: "arn:aws:identitystore::111111111111:identitystore/d-other/provisioningtenant/other",
+			},
+		},
+	}
+	add, delete, update, equals := getGroupOperations(awsGroups, []*admin.Group{}, opsConfig(false, true, issuerArn), config.DefaultGroupAttributeMap)
+	assert.Empty(t, add)
+	assert.Empty(t, delete)
+	assert.Empty(t, update)
+	assert.Empty(t, equals)
+	var summary *log.Entry
+	for _, e := range hook.AllEntries() {
+		if e.Message == "Change Summary: Groups" {
+			summary = e
+		}
+	}
+	require.NotNil(t, summary, "expected a Change Summary: Groups entry")
+	assert.EqualValues(t, 2, summary.Data["retain"])
+	assert.EqualValues(t, 0, summary.Data["equal"])
+	assert.EqualValues(t, 0, summary.Data["update"])
+}
+
+// A full Sync with --retain-unmatched makes no update or membership call for
+// a retained local group, while a managed group's members are still synced.
+// The strict mocks fail the test on any unexpected UpdateGroup,
+// AddUserToGroup or RemoveUserFromGroup.
+func TestSync_Issue442_RetainedLocalGroupUntouched(t *testing.T) {
+	cfg := issue401Config()
+	cfg.RetainUnmatched = true
+	googleClient := mocks.NewMockGoogleClient(t)
+	group := &admin.Group{Id: "gg1", Name: "Group1", Email: "g1@example.com"}
+	googleClient.EXPECT().GetGroups("group-q").Return([]*admin.Group{group}, nil)
+	googleClient.EXPECT().GetGroupMembers(group).Return([]*admin.Member{
+		{Email: "jane@example.com", Type: "USER", Status: "ACTIVE"},
+	}, nil)
+	googleClient.EXPECT().GetUsers(`email='jane@example.com'`, cfg.UserFilter).
+		Return([]*admin.User{gUser("gid-1", "jane@example.com", "Jane", "Doe", false)}, nil).Once()
+	// Group1 is managed and equal; AWSControlTowerAdmins is a local group with
+	// no Google match, so it is retained. Bob is managed and not in Google, so
+	// he is deleted (user Retain applies only to local or foreign users).
+	identityStore := mocks.NewMockIdentityStoreAPI(t)
+	identityStore.EXPECT().ListGroups(mock.Anything, mock.Anything, mock.Anything).
+		Return(&identitystore.ListGroupsOutput{Groups: []types.Group{
+			sdkGroup("aws-1", "Group1", "gg1"),
+			sdkGroup("ct-1", "AWSControlTowerAdmins", ""),
+		}}, nil)
+	identityStore.EXPECT().ListUsers(mock.Anything, mock.Anything, mock.Anything).
+		Return(&identitystore.ListUsersOutput{Users: []types.User{
+			sdkUser("is-1", "jane@example.com", "Jane", "Doe", "gid-1"),
+			sdkUser("is-2", "bob@example.com", "Bob", "Smith", "gid-2"),
+		}}, nil)
+	identityStore.EXPECT().ListGroupMemberships(mock.Anything,
+		mock.MatchedBy(func(in *identitystore.ListGroupMembershipsInput) bool { return *in.GroupId == "aws-1" }),
+		mock.Anything).Return(issue442MembershipsOutput("is-1", "is-2"), nil)
+	identityStore.EXPECT().ListGroupMemberships(mock.Anything,
+		mock.MatchedBy(func(in *identitystore.ListGroupMembershipsInput) bool { return *in.GroupId == "ct-1" }),
+		mock.Anything).Return(issue442MembershipsOutput("is-1"), nil)
+	awsClient := mocks.NewMockAwsClient(t)
+	awsClient.EXPECT().FindUserByEmail("jane@example.com").
+		Return(&interfaces.User{ID: "is-1", Username: "jane@example.com", Active: true}, nil)
+	bob := &interfaces.User{ID: "is-2", Username: "bob@example.com", Active: true}
+	awsClient.EXPECT().FindUserByEmail("bob@example.com").Return(bob, nil)
+	awsClient.EXPECT().RemoveUserFromGroup(
+		mock.MatchedBy(func(u *interfaces.User) bool { return u.ID == "is-2" }),
+		mock.MatchedBy(func(g *interfaces.Group) bool { return g.ID == "aws-1" }),
+	).Return(nil).Once()
+	awsClient.EXPECT().DeleteUser(bob).Return(nil).Once()
+	s := &syncGSuite{
+		aws:           awsClient,
+		google:        googleClient,
+		identityStore: identityStore,
+		cfg:           cfg,
+		users:         make(map[string]*interfaces.User),
+	}
+	require.NoError(t, s.Sync("group-q", ""))
+}
+
 // #404: PrecacheOrgUnits query starts with a comma, likely caching all users
 
 // Log messages of the PrecacheOrgUnits user precache (#404).
