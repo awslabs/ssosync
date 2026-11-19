@@ -12,6 +12,7 @@
 #       UpdateForced       UpdateForced with --force-externalid-update
 #   S4  Delete (managed)   SCIM-created orphan not in Google; never retained, even with -r
 #   S5  Delete / Retain    local (Identity Store API) record not in Google; Retain with -r
+#                          (dry and live: the retained group and its member are kept, #442)
 #   S6  AdoptLocal         dedicated test user/group re-created as local records
 #   S7  Create             dedicated test user/group deleted from the Identity Store
 #   S9  Pacing (#429)      UGO_RATE_GROUPS Google groups matched by UGO_RATE_GROUP_MATCH
@@ -30,6 +31,8 @@
 # Its writes are refused from an account outside the instance owner without
 # delegated administration (NonDelegated): there S5/S6 are SKIPPED and proven by
 # the Management/Delegated runs; a refusal in any other account FAILS the test.
+# S5 also adds a membership, and runs only in the Delegated account and the
+# developer pipeline; Management and NonDelegated skip it (#442, #408).
 # Everything else, including S7, changes records through SCIM, which works from
 # every account (as ssosync itself does).
 #
@@ -201,12 +204,24 @@ s5_local_unmatched() {
   undo user ids_delete_user_if_exists "$uid"
   gid=$(ids_create_group "$name") || return 1
   undo group ids_delete_group_if_exists "$gid"
+  # Deleting the group (undo above) also removes this membership.
+  ids_add_member "$gid" "$uid" || return 1
 
   local dry="$LOG_DIR/S5_dry.log" retain="$LOG_DIR/S5_dry_retain.log" live="$LOG_DIR/S5_live.log"
+  local live_retain="$LOG_DIR/S5_live_retain.log"
   expect run_ssosync "$dry" --dry-run
   expect check counts "$dry" --users delete=1 --groups delete=1
   expect run_ssosync "$retain" --dry-run --retain-unmatched
   expect check counts "$retain" --users retain=1 --groups retain=1
+  # A live retain run leaves the local group and its member as they are; it
+  # used to PATCH the group with an empty externalId, and the 400 ended the
+  # run (#442). The retained local user is PUT with Active=false.
+  if run_ssosync "$live_retain" --retain-unmatched; then
+    expect check counts "$live_retain" --users retain=1 --groups retain=1
+    expect ids_group_exists "$gid"
+    expect ids_is_member "$gid" "$uid"
+  else S_FAIL=1; fi
+  # The live run without -r then deletes both.
   if run_ssosync "$live"; then
     expect check counts "$live" --users delete=1 --groups delete=1
   else S_FAIL=1; fi
@@ -351,7 +366,16 @@ if [ -n "$IDS_WRITE_SKIP" ]; then
     FAILED=1
   fi
 fi
-scenario S5 "Delete / Retain (local, not in Google)" s5_local_unmatched "$LOCAL_SKIP"
+# S5 needs Identity Store API memberships as well as records (#442), so it runs
+# only where tests that manipulate the Identity Store API belong: the Delegated
+# release account and the developer pipeline (TEST_ACCOUNT_TYPE not set).
+# Management keeps execution tests, NonDelegated the recommended deployment (#408).
+S5_SKIP="$LOCAL_SKIP"
+case "${TEST_ACCOUNT_TYPE:-}" in
+  ""|Delegated) ;;
+  *) S5_SKIP="S5 runs only in the Delegated account and the developer pipeline (Identity Store API tests, #408); this is the $TEST_ACCOUNT_TYPE account" ;;
+esac
+scenario S5 "Delete / Retain (local, not in Google)" s5_local_unmatched "$S5_SKIP"
 
 DEDICATED=""
 if [ -z "${UGO_TEST_USER:-}" ] || [ -z "${UGO_TEST_GROUP:-}" ]; then

@@ -1638,7 +1638,8 @@ func getGroupOperation(awsGroup *interfaces.Group, googleGroup *interfaces.Group
 	return AdoptForeign, desiredFromGoogle()
 }
 
-// getGroupOperations returns the groups of AWS that must be added, deleted, updated, are equals and retained
+// getGroupOperations returns the groups of AWS that must be added, deleted, updated and are equals.
+// Retained groups are counted in the Change Summary but returned in no list (#442).
 func getGroupOperations(awsGroups []*interfaces.Group, googleGroups []*admin.Group, cfg *config.Config, attrMap config.AttributeMap) (add []*interfaces.Group, delete []*interfaces.Group, update []*interfaces.Group, equals []*interfaces.Group) {
 
 	log.Debug("getGroupOperations()")
@@ -1729,7 +1730,6 @@ func getGroupOperations(awsGroups []*interfaces.Group, googleGroups []*admin.Gro
 			update = append(update, group)
 		case Retain:
 			stats.Retain++
-			update = append(update, group)
 		}
 	}
 
@@ -1750,9 +1750,11 @@ func getGroupOperations(awsGroups []*interfaces.Group, googleGroups []*admin.Gro
 		case Delete:
 			stats.Delete++
 			delete = append(delete, group)
+		// A retained group is left as it is: it is counted but put in no list.
+		// Updating it sent `replace externalId ""`, which SCIM rejects (#442),
+		// and in equals the membership step would remove all its members.
 		case Retain:
 			stats.Retain++
-			update = append(update, group)
 		}
 	}
 

@@ -343,8 +343,9 @@ def cmd_same(a):
 # Sync then calls the dry client for each change, which logs one line per
 # action instead of writing. Each action line is therefore owed by these
 # Change Summary counters (internal/sync.go: the update list carries Update,
-# UpdateForced, AdoptLocal, AdoptForeign and Retain; Recreate is a delete plus a
-# create).
+# UpdateForced, AdoptLocal and AdoptForeign, and for users also Retain;
+# retained groups are counted but not updated (#442); Recreate is a delete plus
+# a create).
 DRYRUN_ACTIONS = {
     "Change Summary: Users": {
         "DRY RUN: Would create user": ["create", "recreate"],
@@ -353,7 +354,7 @@ DRYRUN_ACTIONS = {
     },
     "Change Summary: Groups": {
         "DRY RUN: Would create group": ["create", "recreate"],
-        "DRY RUN: Would update group": ["update", "updateForced", "adoptLocal", "adoptForeign", "retain"],
+        "DRY RUN: Would update group": ["update", "updateForced", "adoptLocal", "adoptForeign"],
         "DRY RUN: Would delete group": ["delete", "recreate"],
     },
 }

@@ -484,6 +484,53 @@ func TestClient_CreateGroup(t *testing.T) {
 	}
 }
 
+// A group with an ExternalId (adopted or synced) still sends the externalId replace.
+func TestClient_UpdateGroup_WithExternalId(t *testing.T) {
+	x := mocks.NewMockHttpClient(t)
+
+	c, err := NewClient(x, &Config{Endpoint: baseUrl, Token: "bearerToken"})
+	require.NoError(t, err)
+
+	g := &interfaces.Group{
+		ID:          "groupId",
+		DisplayName: "testGroup",
+		ExternalId:  interfaces.ExternalId{Id: "google-id"},
+	}
+
+	expectedBody := `{"schemas":["urn:ietf:params:scim:api:messages:2.0:PatchOp"],"Operations":[{"op":"replace","path":"displayName","value":"testGroup"},{"op":"replace","path":"externalId","value":"google-id"}]}`
+
+	x.EXPECT().Do(mock.MatchedBy(requestMatcher(http.MethodPatch, "/Groups/groupId", "", []byte(expectedBody)))).Return(&http.Response{
+		Status:     "OK",
+		StatusCode: 204,
+		Body:       nopCloser{bytes.NewBufferString("")},
+	}, nil).Once()
+
+	_, err = c.UpdateGroup(g)
+	assert.NoError(t, err)
+}
+
+// A local group with no ExternalId (e.g. a retained Control Tower group) must not
+// send `replace externalId ""`; IAM Identity Center rejects it with a 400.
+func TestClient_UpdateGroup_NoExternalId_OmitsExternalIdOperation(t *testing.T) {
+	x := mocks.NewMockHttpClient(t)
+
+	c, err := NewClient(x, &Config{Endpoint: baseUrl, Token: "bearerToken"})
+	require.NoError(t, err)
+
+	g := &interfaces.Group{ID: "groupId", DisplayName: "testGroup"}
+
+	expectedBody := `{"schemas":["urn:ietf:params:scim:api:messages:2.0:PatchOp"],"Operations":[{"op":"replace","path":"displayName","value":"testGroup"}]}`
+
+	x.EXPECT().Do(mock.MatchedBy(requestMatcher(http.MethodPatch, "/Groups/groupId", "", []byte(expectedBody)))).Return(&http.Response{
+		Status:     "OK",
+		StatusCode: 204,
+		Body:       nopCloser{bytes.NewBufferString("")},
+	}, nil).Once()
+
+	_, err = c.UpdateGroup(g)
+	assert.NoError(t, err)
+}
+
 func TestClient_AddUserToGroup(t *testing.T) {
 	x := mocks.NewMockHttpClient(t)
 
