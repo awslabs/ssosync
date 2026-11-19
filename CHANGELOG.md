@@ -1,4 +1,4 @@
-## Unreleased
+## v2.12.2
 - With `--retain-unmatched`, an unmatched local (or other-IdP) group is no longer updated (#442, from PR/439 by @gabrielbiasi). ssosync sent it `replace externalId ""`, which IAM Identity Center rejected with a 400, ending the run partway, so later changes (such as group memberships) were never made. The group's name and members are left as they are, it is still counted as `retain` in `Change Summary: Groups`, and a dry run no longer logs `Would update group` for it. `UpdateGroup` also no longer sends an empty `externalId`.
 - CI/CD only: user/group operations scenario S5 puts its local user in its local group and adds a live `--retain-unmatched` run, which checks `retain=1` for users and groups and that the group and its member are still there (#442). S5 now runs only in the Delegated release account and the developer pipeline, and is skipped in the Management and NonDelegated accounts (#408).
 
