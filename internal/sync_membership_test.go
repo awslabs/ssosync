@@ -94,6 +94,79 @@ func memberOf(userID string) types.GroupMembership {
 	return types.GroupMembership{MemberId: &types.MemberIdMemberUserId{Value: userID}}
 }
 
+func TestSync_ExcludedAWSUserMemberships(t *testing.T) {
+	tests := []struct {
+		name        string
+		groups      []types.Group
+		memberships []types.GroupMembership
+		create      bool
+		update      bool
+	}{
+		{name: "new group", create: true},
+		{name: "updated group", groups: []types.Group{sdkGroup("grp-1", "Old name", "gg1")}, update: true},
+		{name: "missing membership", groups: []types.Group{sdkGroup("grp-1", "Group1", "gg1")}},
+		{name: "existing membership", groups: []types.Group{sdkGroup("grp-1", "Group1", "gg1")}, memberships: []types.GroupMembership{memberOf("is-1")}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			sync, awsClient := membershipSuite(t, test.groups, []types.User{janeAWSUser("Jane")}, test.memberships)
+			sync.cfg.ExcludeAWSUserIDs = []string{"is-1"}
+			if test.create {
+				awsClient.EXPECT().CreateGroup(mock.Anything).Return(&interfaces.Group{ID: "grp-1", DisplayName: "Group1"}, nil)
+			}
+			if test.update {
+				awsClient.EXPECT().UpdateGroup(mock.Anything).Return(&interfaces.Group{ID: "grp-1", DisplayName: "Group1"}, nil)
+			}
+			require.NoError(t, sync.Sync("group-q", ""))
+		})
+	}
+}
+
+func TestSync_ExcludedAWSUserAbsentFromGoogleGroup(t *testing.T) {
+	sync, awsClient := membershipSuite(t,
+		[]types.Group{sdkGroup("grp-1", "Group1", "gg1")},
+		[]types.User{janeAWSUser("Jane"), sdkUser("is-2", "Manual", "Manual", "User", "manual-id")},
+		[]types.GroupMembership{memberOf("is-1"), memberOf("is-2")})
+	sync.cfg.ExcludeAWSUserIDs = []string{"is-2"}
+	awsClient.EXPECT().FindUserByEmail("Jane").Return(&interfaces.User{ID: "is-1", Username: "Jane", Active: true}, nil)
+	require.NoError(t, sync.Sync("group-q", ""))
+}
+
+func TestSync_ExcludedAWSGroupMemberships(t *testing.T) {
+	for _, displayName := range []string{"Old name", "Group1"} {
+		t.Run(displayName, func(t *testing.T) {
+			sync, awsClient := membershipSuite(t,
+				[]types.Group{sdkGroup("grp-1", displayName, "gg1")},
+				[]types.User{janeAWSUser("Jane")}, nil)
+			sync.cfg.ExcludeAWSGroupIDs = []string{"grp-1"}
+			awsClient.EXPECT().FindUserByEmail("Jane").Return(&interfaces.User{ID: "is-1", Username: "Jane", Active: true}, nil)
+			require.NoError(t, sync.Sync("group-q", ""))
+		})
+	}
+}
+
+func TestSync_ExcludedAWSUserResolvedBeforeDeletion(t *testing.T) {
+	sync, awsClient := membershipSuite(t,
+		[]types.Group{sdkGroup("grp-1", "Group1", "gg1")},
+		[]types.User{janeAWSUser("Jane"), sdkUser("is-2", "Other", "Other", "User", "gid-2")},
+		[]types.GroupMembership{memberOf("is-1")})
+	sync.cfg.ExcludeAWSUserIDs = []string{"protected-user"}
+	awsClient.EXPECT().FindUserByEmail("Jane").Return(&interfaces.User{ID: "is-1", Username: "Jane", Active: true}, nil)
+	awsClient.EXPECT().FindUserByEmail("Other").Return(&interfaces.User{ID: "protected-user", Username: "Other", Active: true}, nil).Twice()
+	require.NoError(t, sync.Sync("group-q", ""))
+}
+
+func TestSync_ExcludedAWSGroupResolvedBeforeDeletion(t *testing.T) {
+	sync, awsClient := membershipSuite(t,
+		[]types.Group{sdkGroup("grp-1", "Group1", "gg1"), sdkGroup("grp-2", "Manual", "manual-id")},
+		[]types.User{janeAWSUser("Jane")},
+		[]types.GroupMembership{memberOf("is-1")})
+	sync.cfg.ExcludeAWSGroupIDs = []string{"protected-group"}
+	awsClient.EXPECT().FindUserByEmail("Jane").Return(&interfaces.User{ID: "is-1", Username: "Jane", Active: true}, nil)
+	awsClient.EXPECT().FindGroupByDisplayName("Manual").Return(&interfaces.Group{ID: "protected-group", DisplayName: "Manual"}, nil)
+	require.NoError(t, sync.Sync("group-q", ""))
+}
+
 func TestSync_RemappedUsername_NewGroupMemberAdd(t *testing.T) {
 	s, awsClient := membershipSuite(t, nil, []types.User{janeAWSUser("Jane")}, nil)
 
